@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - MFS Literacy Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-primary: #003D6C;
+            --navy-dark: #002847;
+            --navy-light: #0056A3;
+            --gold-accent: #D4AF37;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --medium-gray: #E0E0E0;
+            --text-gray: #333333;
+            --success: #28A745;
+            --danger: #DC3545;
+            --warning: #FFC107;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: var(--light-gray);
+            color: var(--text-gray);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+            color: var(--navy-primary);
+        }
+        
+        /* Dashboard Layout */
+        .dashboard {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 2rem 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .logo {
+            padding: 0 2rem;
+            margin-bottom: 3rem;
+            font-size: 1.3rem;
+            font-weight: 700;
+            font-family: 'Merriweather', serif;
+        }
+        
+        .user-info {
+            padding: 0 2rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 1.5rem;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .user-level {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .nav-menu {
+            list-style: none;
+        }
+        
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: var(--white);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255,255,255,0.1);
+            border-left-color: var(--gold-accent);
+        }
+        
+        .logout-btn {
+            margin: 2rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid var(--white);
+            color: var(--white);
+            border-radius: 4px;
+            cursor: pointer;
+            width: calc(100% - 4rem);
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: var(--white);
+            color: var(--navy-primary);
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 2rem;
+            width: calc(100% - 280px);
+        }
+        
+        .header {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: var(--text-gray);
+            opacity: 0.8;
+        }
+        
+        /* Cards */
+        .card {
+            background: var(--white);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .card h2 {
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+        
+        /* Progress Overview */
+        .progress-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .progress-card {
+            background: linear-gradient(135deg, var(--navy-light) 0%, var(--navy-primary) 100%);
+            color: var(--white);
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .progress-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--gold-accent);
+        }
+        
+        .progress-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        /* Assessment Questions */
+        .question-card {
+            background: var(--light-gray);
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .question-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--navy-primary);
+        }
+        
+        .options {
+            display: grid;
+            gap: 1rem;
+        }
+        
+        .option {
+            padding: 1rem 1.5rem;
+            background: var(--white);
+            border: 2px solid var(--medium-gray);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .option:hover {
+            border-color: var(--navy-primary);
+            transform: translateX(5px);
+        }
+        
+        .option.selected {
+            border-color: var(--navy-primary);
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        /* Lesson Content */
+        .lesson-content {
+            line-height: 1.8;
+            font-size: 1.1rem;
+            padding: 2rem;
+            background: var(--light-gray);
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        
+        .lesson-content p {
+            margin-bottom: 1rem;
+        }
+        
+        .vocabulary-box {
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+        
+        .vocabulary-box h4 {
+            color: var(--gold-accent);
+            margin-bottom: 1rem;
+        }
+        
+        .vocab-item {
+            margin-bottom: 0.75rem;
+        }
+        
+        .vocab-word {
+            font-weight: 700;
+            color: var(--gold-accent);
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+        
+        .btn-primary {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .btn-primary:hover {
+            background: var(--navy-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,61,108,0.3);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: var(--white);
+        }
+        
+        .btn-secondary {
+            background: var(--medium-gray);
+            color: var(--text-gray);
+        }
+        
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+        
+        .spinner {
+            border: 4px solid var(--light-gray);
+            border-top: 4px solid var(--navy-primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        /* Alert */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">MFS Literacy</div>
+            <div class="user-info">
+                <div class="user-name" id="userName">Loading...</div>
+                <div class="user-level" id="userLevel">Getting started</div>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" onclick="showSection('overview')">
+                        <span>📊</span> Overview
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('assessment')">
+                        <span>📝</span> Take Assessment
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('lessons')">
+                        <span>📚</span> My Lessons
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('progress')">
+                        <span>📈</span> Progress
+                    </a>
+                </li>
+            </ul>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Section -->
+            <div id="overviewSection">
+                <div class="header">
+                    <h1>Welcome, <span id="welcomeName">Student</span>!</h1>
+                    <p>Your personalized literacy journey starts here</p>
+                </div>
+
+                <div class="progress-grid">
+                    <div class="progress-card">
+                        <span class="progress-value" id="lessonsCompleted">0</span>
+                        <span class="progress-label">Lessons Completed</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="averageScore">-</span>
+                        <span class="progress-label">Average Score</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="currentLevel">-</span>
+                        <span class="progress-label">Reading Level</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="streak">0</span>
+                        <span class="progress-label">Day Streak</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Getting Started</h2>
+                    <div id="gettingStarted">
+                        <div class="alert alert-info">
+                            <strong>Welcome to your literacy journey!</strong> Start by taking our assessment to help us understand your interests and reading level.
+                        </div>
+                        <button class="btn btn-primary" onclick="showSection('assessment')">Take Assessment</button>
+                    </div>
+                    <div id="continuelearning" class="hidden">
+                        <p>Ready to continue your learning journey?</p>
+                        <button class="btn btn-primary" onclick="loadNextLesson()">Continue Learning</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assessment Section -->
+            <div id="assessmentSection" class="hidden">
+                <div class="header">
+                    <h1>Interest & Reading Assessment</h1>
+                    <p>Help us personalize your learning experience</p>
+                </div>
+
+                <div class="card" id="assessmentCard">
+                    <div id="assessmentLoading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Generating your personalized assessment...</p>
+                    </div>
+                    <div id="assessmentQuestions" class="hidden"></div>
+                    <div id="assessmentComplete" class="hidden">
+                        <div class="alert alert-success">
+                            <strong>Assessment Complete!</strong> We're analyzing your responses to create your personalized learning plan.
+                        </div>
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Analyzing your responses...</p>
+                        </div>
+                    </div>
+                    <div id="assessmentResults" class="hidden">
+                        <h3>Your Learning Profile</h3>
+                        <div id="resultsContent"></div>
+                        <button class="btn btn-primary" onclick="showSection('lessons')">Start Learning</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lessons Section -->
+            <div id="lessonsSection" class="hidden">
+                <div class="header">
+                    <h1>Your Personalized Lessons</h1>
+                    <p>Adaptive content based on your interests and skill level</p>
+                </div>
+
+                <div class="card">
+                    <div id="lessonLoading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading your next lesson...</p>
+                    </div>
+                    <div id="lessonContent" class="hidden">
+                        <h2 id="lessonTitle"></h2>
+                        <div id="lessonText" class="lesson-content"></div>
+                        <div id="lessonVocab" class="vocabulary-box"></div>
+                        <div id="lessonQuestions"></div>
+                        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                            <button class="btn btn-success" onclick="completeLesson()">Complete Lesson</button>
+                            <button class="btn btn-secondary" onclick="loadNextLesson()">Skip to Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="progressSection" class="hidden">
+                <div class="header">
+                    <h1>Your Progress</h1>
+                    <p>Track your literacy journey</p>
+                </div>
+
+                <div class="card">
+                    <h2>Recent Activity</h2>
+                    <div id="progressList">
+                        <p>Complete your first lesson to see your progress!</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentAssessment = [];
+        let assessmentAnswers = [];
+        let currentLesson = null;
+        let lessonStartTime = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            if (!token || !user.id) {
+                window.location.href = '/';
+                return;
+            }
+            
+            if (user.role === 'admin') {
+                window.location.href = '/admin-dashboard';
+                return;
+            }
+            
+            currentUser = user;
+            document.getElementById('userName').textContent = user.full_name;
+            document.getElementById('welcomeName').textContent = user.full_name.split(' ')[0];
+            
+            if (user.reading_level) {
+                document.getElementById('userLevel').textContent = `Reading Level: ${formatReadingLevel(user.reading_level)}`;
+                document.getElementById('currentLevel').textContent = formatReadingLevel(user.reading_level);
+                document.getElementById('gettingStarted').classList.add('hidden');
+                document.getElementById('continuelearning').classList.remove('hidden');
+            }
+        });
+
+        function formatReadingLevel(level) {
+            const levels = {
+                'elementary': 'Elementary',
+                'middle': 'Middle School',
+                'high_school': 'High School',
+                'adult': 'Adult'
+            };
+            return levels[level] || level;
+        }
+
+        function showSection(section) {
+            // Hide all sections
+            document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
+            
+            // Update nav links
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            
+            // Show selected section
+            const sectionId = section + 'Section';
+            document.getElementById(sectionId).classList.remove('hidden');
+            
+            // Update active nav
+            event.target.closest('.nav-link').classList.add('active');
+            
+            // Load section data
+            if (section === 'assessment') {
+                loadAssessment();
+            } else if (section === 'lessons') {
+                loadNextLesson();
+            }
+        }
+
+        async function loadAssessment() {
+            const loading = document.getElementById('assessmentLoading');
+            const questions = document.getElementById('assessmentQuestions');
+            
+            loading.classList.remove('hidden');
+            questions.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/assessment/interest');
+                const data = await response.json();
+                
+                currentAssessment = data.questions;
+                assessmentAnswers = [];
+                renderAssessment();
+                
+                loading.classList.add('hidden');
+                questions.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading assessment:', error);
+                loading.innerHTML = '<p>Error loading assessment. Please try again.</p>';
+            }
+        }
+
+        function renderAssessment() {
+            const container = document.getElementById('assessmentQuestions');
+            container.innerHTML = '<h3>Please answer the following questions to help us personalize your experience:</h3>';
+            
+            currentAssessment.forEach((q, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'question-card';
+                questionDiv.innerHTML = `
+                    <div class="question-text">${index + 1}. ${q.question}</div>
+                    <div class="options" id="options-${q.id}">
+                        ${q.options.map((opt, i) => `
+                            <div class="option" onclick="selectOption(${q.id}, ${i}, '${opt}')">${opt}</div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(questionDiv);
+            });
+            
+            const submitBtn = document.createElement('button');
+            submitBtn.className = 'btn btn-primary';
+            submitBtn.style.marginTop = '2rem';
+            submitBtn.textContent = 'Submit Assessment';
+            submitBtn.onclick = submitAssessment;
+            container.appendChild(submitBtn);
+        }
+
+        function selectOption(questionId, optionIndex, optionText) {
+            const options = document.getElementById(`options-${questionId}`).querySelectorAll('.option');
+            options.forEach(opt => opt.classList.remove('selected'));
+            options[optionIndex].classList.add('selected');
+            
+            const existingIndex = assessmentAnswers.findIndex(a => a.question_id === questionId);
+            if (existingIndex >= 0) {
+                assessmentAnswers[existingIndex] = { question_id: questionId, answer: optionText };
+            } else {
+                assessmentAnswers.push({ question_id: questionId, answer: optionText });
+            }
+        }
+
+        async function submitAssessment() {
+            if (assessmentAnswers.length < currentAssessment.length) {
+                alert('Please answer all questions before submitting.');
+                return;
+            }
+            
+            document.getElementById('assessmentQuestions').classList.add('hidden');
+            document.getElementById('assessmentComplete').classList.remove('hidden');
+            
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch('/api/assessment/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, answers: assessmentAnswers })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update user data
+                    currentUser.reading_level = data.analysis.reading_level;
+                    currentUser.interests = data.analysis.interests;
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    
+                    // Show results
+                    displayAssessmentResults(data.analysis);
+                }
+            } catch (error) {
+                console.error('Error submitting assessment:', error);
+            }
+        }
+
+        function displayAssessmentResults(analysis) {
+            document.getElementById('assessmentComplete').classList.add('hidden');
+            document.getElementById('assessmentResults').classList.remove('hidden');
+            
+            const content = document.getElementById('resultsContent');
+            content.innerHTML = `
+                <div style="background: var(--light-gray); padding: 2rem; border-radius: 8px; margin: 1.5rem 0;">
+                    <h4 style="color: var(--navy-primary); margin-bottom: 1rem;">Reading Level: ${formatReadingLevel(analysis.reading_level)}</h4>
+                    <h4 style="color: var(--navy-primary); margin-bottom: 1rem;">Your Interests:</h4>
+                    <ul style="margin-left: 2rem;">
+                        ${analysis.interests.map(interest => `<li style="margin-bottom: 0.5rem;">${interest}</li>`).join('')}
+                    </ul>
+                    <h4 style="color: var(--navy-primary); margin: 1.5rem 0 1rem;">Recommended Topics:</h4>
+                    <ul style="margin-left: 2rem;">
+                        ${analysis.recommended_topics.map(topic => `<li style="margin-bottom: 0.5rem;">${topic}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+            
+            // Update UI
+            document.getElementById('userLevel').textContent = `Reading Level: ${formatReadingLevel(analysis.reading_level)}`;
+            document.getElementById('currentLevel').textContent = formatReadingLevel(analysis.reading_level);
+            document.getElementById('gettingStarted').classList.add('hidden');
+            document.getElementById('continuelearning').classList.remove('hidden');
+        }
+
+        async function loadNextLesson() {
+            showSection('lessons');
+            const token = localStorage.getItem('token');
+            const loading = document.getElementById('lessonLoading');
+            const content = document.getElementById('lessonContent');
+            
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+            
+            try {
+                const response = await fetch(`/api/lessons/next?token=${token}`);
+                const lesson = await response.json();
+                
+                currentLesson = lesson;
+                lessonStartTime = Date.now();
+                renderLesson(lesson);
+                
+                loading.classList.add('hidden');
+                content.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading lesson:', error);
+                loading.innerHTML = '<p>Error loading lesson. Please try again.</p>';
+            }
+        }
+
+        function renderLesson(lesson) {
+            document.getElementById('lessonTitle').textContent = lesson.title;
+            document.getElementById('lessonText').textContent = lesson.content;
+            
+            // Vocabulary
+            const vocabDiv = document.getElementById('lessonVocab');
+            if (lesson.vocabulary && Object.keys(lesson.vocabulary).length > 0) {
+                vocabDiv.innerHTML = '<h4>Key Vocabulary</h4>';
+                Object.entries(lesson.vocabulary).forEach(([word, def]) => {
+                    vocabDiv.innerHTML += `
+                        <div class="vocab-item">
+                            <span class="vocab-word">${word}</span>: ${def}
+                        </div>
+                    `;
+                });
+                vocabDiv.classList.remove('hidden');
+            } else {
+                vocabDiv.classList.add('hidden');
+            }
+            
+            // Questions
+            const questionsDiv = document.getElementById('lessonQuestions');
+            if (lesson.questions && lesson.questions.length > 0) {
+                questionsDiv.innerHTML = '<h3 style="margin-top: 2rem; margin-bottom: 1.5rem;">Comprehension Questions</h3>';
+                lesson.questions.forEach((q, index) => {
+                    questionsDiv.innerHTML += `
+                        <div class="question-card">
+                            <div class="question-text">${index + 1}. ${q.question}</div>
+                            <div class="options" id="q-${index}">
+                                ${q.options.map((opt, i) => `
+                                    <div class="option" onclick="selectLessonAnswer(${index}, ${i})">${opt}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function selectLessonAnswer(questionIndex, optionIndex) {
+            const options = document.getElementById(`q-${questionIndex}`).querySelectorAll('.option');
+            options.forEach(opt => opt.classList.remove('selected'));
+            options[optionIndex].classList.add('selected');
+        }
+
+        async function completeLesson() {
+            const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
+            const token = localStorage.getItem('token');
+            
+            try {
+                await fetch('/api/lessons/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        lesson_id: currentLesson.id,
+                        completed: true,
+                        score: 85, // Calculate based on answers
+                        time_spent: timeSpent
+                    })
+                });
+                
+                alert('Great job! Lesson completed!');
+                loadNextLesson();
+            } catch (error) {
+                console.error('Error saving progress:', error);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

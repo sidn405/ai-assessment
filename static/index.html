@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFS Literacy Assessment Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-primary: #003D6C;
+            --navy-dark: #002847;
+            --navy-light: #0056A3;
+            --gold-accent: #D4AF37;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --medium-gray: #E0E0E0;
+            --text-gray: #333333;
+            --success: #28A745;
+            --danger: #DC3545;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Open Sans', sans-serif;
+            color: var(--text-gray);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        
+        /* Header */
+        header {
+            background: var(--white);
+            border-bottom: 2px solid var(--medium-gray);
+            padding: 1rem 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--navy-primary);
+            text-decoration: none;
+            font-family: 'Merriweather', serif;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: var(--text-gray);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover {
+            color: var(--navy-primary);
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .btn-primary:hover {
+            background: var(--navy-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 61, 108, 0.3);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: var(--navy-primary);
+            border: 2px solid var(--navy-primary);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--navy-primary) 0%, var(--navy-dark) 100%);
+            color: var(--white);
+            padding: 8rem 2rem 6rem;
+            margin-top: 76px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.5;
+        }
+        
+        .hero-content {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        .hero p {
+            font-size: 1.3rem;
+            margin-bottom: 2.5rem;
+            opacity: 0.95;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Features Section */
+        .features {
+            padding: 5rem 2rem;
+            background: var(--white);
+        }
+        
+        .features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            color: var(--navy-primary);
+            margin-bottom: 3rem;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 3rem;
+            margin-top: 3rem;
+        }
+        
+        .feature-card {
+            background: var(--light-gray);
+            padding: 2.5rem;
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--navy-primary);
+            box-shadow: 0 10px 30px rgba(0, 61, 108, 0.15);
+        }
+        
+        .feature-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--navy-primary);
+            color: var(--white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 1.5rem;
+        }
+        
+        .feature-card h3 {
+            color: var(--navy-primary);
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .feature-card p {
+            color: var(--text-gray);
+            line-height: 1.8;
+        }
+        
+        /* Impact Section */
+        .impact {
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 5rem 2rem;
+            text-align: center;
+        }
+        
+        .impact-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .impact h2 {
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 3rem;
+            margin-top: 3rem;
+        }
+        
+        .stat-card {
+            padding: 2rem;
+        }
+        
+        .stat-number {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: var(--gold-accent);
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        /* CTA Section */
+        .cta {
+            background: var(--light-gray);
+            padding: 5rem 2rem;
+            text-align: center;
+        }
+        
+        .cta-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .cta h2 {
+            font-size: 2.5rem;
+            color: var(--navy-primary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .cta p {
+            font-size: 1.2rem;
+            margin-bottom: 2.5rem;
+            color: var(--text-gray);
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: var(--white);
+            padding: 3rem;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: var(--text-gray);
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--navy-primary);
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--medium-gray);
+            border-radius: 4px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--navy-primary);
+        }
+        
+        .form-error {
+            color: var(--danger);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+        
+        .form-error.active {
+            display: block;
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--navy-dark);
+            color: var(--white);
+            padding: 3rem 2rem 1.5rem;
+            text-align: center;
+        }
+        
+        footer p {
+            opacity: 0.8;
+            margin-top: 1rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .hero p {
+                font-size: 1.1rem;
+            }
+            
+            .hero-buttons {
+                flex-direction: column;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+            
+            .section-title {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav>
+            <a href="/" class="logo">MFS Literacy Platform</a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#impact">Impact</a></li>
+                <li><a href="#" onclick="openModal('login')">Login</a></li>
+            </ul>
+            <button class="btn btn-primary" onclick="openModal('register')">Get Started</button>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Empowering Youth Through Literacy</h1>
+            <p>An AI-powered assessment platform that personalizes learning to help pre-adults discover their interests and advance their reading skills.</p>
+            <div class="hero-buttons">
+                <button class="btn btn-primary" onclick="openModal('register')">Start Your Journey</button>
+                <button class="btn btn-secondary" onclick="openModal('login')">Already Have an Account?</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="features-container">
+            <h2 class="section-title">How It Works</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>AI Assessment</h3>
+                    <p>Our intelligent system evaluates reading interests and skill levels through engaging, personalized assessments.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📚</div>
+                    <h3>Personalized Content</h3>
+                    <p>Receive reading materials tailored to your interests and current reading level, keeping you engaged and motivated.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <h3>Adaptive Learning</h3>
+                    <p>As you progress, lessons automatically adjust in difficulty to challenge you appropriately and accelerate growth.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Track Progress</h3>
+                    <p>Monitor your improvement over time with detailed analytics and personalized recommendations for continued growth.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>Career Pathways</h3>
+                    <p>Connect literacy skills to real-world career opportunities, supporting job placement and professional development.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌟</div>
+                    <h3>Inclusive Support</h3>
+                    <p>Designed to support all learners, including those with criminal history backgrounds, toward educational success.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Impact Section -->
+    <section class="impact" id="impact">
+        <div class="impact-container">
+            <h2>The MFS Impact</h2>
+            <p style="font-size: 1.2rem; max-width: 800px; margin: 0 auto 2rem;">MFS Professional Workforce Services provides federal government support services. Our literacy program is part of our commitment to workforce innovation and opportunity for youth and adults.</p>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-number">365</span>
+                    <span class="stat-label">Days of Support</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">100%</span>
+                    <span class="stat-label">Personalized</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">AI</span>
+                    <span class="stat-label">Powered Learning</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">∞</span>
+                    <span class="stat-label">Potential</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="cta-container">
+            <h2>Ready to Begin Your Literacy Journey?</h2>
+            <p>Join MFS Professional Workforce Services in transforming lives through education and opportunity.</p>
+            <button class="btn btn-primary" onclick="openModal('register')" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Get Started Today</button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <h3 style="margin-bottom: 1rem;">MFS Professional Workforce Services</h3>
+        <p>&copy; 2024 MFS Professional Workforce Services. Empowering youth and adults to discover, develop, and maximize their potential.</p>
+    </footer>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('login')">&times;</button>
+            <h2 style="color: var(--navy-primary); margin-bottom: 2rem;">Welcome Back</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <div class="form-error" id="loginError"></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Login</button>
+            </form>
+            <p style="text-align: center; margin-top: 1.5rem;">
+                Don't have an account? <a href="#" onclick="closeModal('login'); openModal('register')" style="color: var(--navy-primary); font-weight: 600;">Register here</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('register')">&times;</button>
+            <h2 style="color: var(--navy-primary); margin-bottom: 2rem;">Create Your Account</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email</label>
+                    <input type="email" id="registerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="registerRole">I am a...</label>
+                    <select id="registerRole" required>
+                        <option value="student">Student</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+                <div class="form-error" id="registerError"></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Create Account</button>
+            </form>
+            <p style="text-align: center; margin-top: 1.5rem;">
+                Already have an account? <a href="#" onclick="closeModal('register'); openModal('login')" style="color: var(--navy-primary); font-weight: 600;">Login here</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function openModal(type) {
+            const modal = type === 'login' ? 'loginModal' : 'registerModal';
+            document.getElementById(modal).classList.add('active');
+        }
+
+        function closeModal(type) {
+            const modal = type === 'login' ? 'loginModal' : 'registerModal';
+            document.getElementById(modal).classList.remove('active');
+        }
+
+        // Close modal on outside click
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        // Login form handler
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    if (data.user.role === 'admin') {
+                        window.location.href = '/admin-dashboard';
+                    } else {
+                        window.location.href = '/dashboard';
+                    }
+                } else {
+                    errorDiv.textContent = data.detail || 'Login failed';
+                    errorDiv.classList.add('active');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'An error occurred. Please try again.';
+                errorDiv.classList.add('active');
+            }
+        });
+
+        // Register form handler
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const full_name = document.getElementById('registerName').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const role = document.getElementById('registerRole').value;
+            const errorDiv = document.getElementById('registerError');
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email, password, full_name, role })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    if (data.user.role === 'admin') {
+                        window.location.href = '/admin-dashboard';
+                    } else {
+                        window.location.href = '/dashboard';
+                    }
+                } else {
+                    errorDiv.textContent = data.detail || 'Registration failed';
+                    errorDiv.classList.add('active');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'An error occurred. Please try again.';
+                errorDiv.classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>
