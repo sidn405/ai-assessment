@@ -584,8 +584,24 @@
             questions.classList.add('hidden');
             
             try {
-                const response = await fetch('/api/assessment/interest');
+                // Add 30 second timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                
+                const response = await fetch('/api/assessment/interest', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
+                
+                if (!data.questions || data.questions.length === 0) {
+                    throw new Error('No questions received');
+                }
                 
                 currentAssessment = data.questions;
                 assessmentAnswers = [];
@@ -595,7 +611,26 @@
                 questions.classList.remove('hidden');
             } catch (error) {
                 console.error('Error loading assessment:', error);
-                loading.innerHTML = '<p>Error loading assessment. Please try again.</p>';
+                loading.classList.add('hidden');
+                questions.classList.remove('hidden');
+                
+                if (error.name === 'AbortError') {
+                    questions.innerHTML = `
+                        <div class="alert alert-info">
+                            <strong>Loading is taking longer than expected.</strong>
+                            <p>This might be due to high API load. Please try again.</p>
+                            <button class="btn btn-primary" onclick="loadAssessment()">Retry</button>
+                        </div>
+                    `;
+                } else {
+                    questions.innerHTML = `
+                        <div class="alert alert-info">
+                            <strong>Unable to load assessment right now.</strong>
+                            <p>Error: ${error.message}</p>
+                            <button class="btn btn-primary" onclick="loadAssessment()">Try Again</button>
+                        </div>
+                    `;
+                }
             }
         }
 

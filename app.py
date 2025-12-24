@@ -258,30 +258,105 @@ def verify_token(token: str) -> dict:
 # OpenAI integration functions
 async def generate_interest_assessment() -> List[Dict]:
     """Generate questions to assess student's reading interests"""
-    prompt = """Generate 10 multiple-choice questions to assess a student's reading interests.
-    Each question should help identify topics they enjoy (sports, technology, history, fiction, science, etc.).
     
-    Return a JSON array with this structure:
-    [
+    # Comprehensive fallback questions (always work!)
+    fallback_questions = [
         {
             "id": 1,
             "question": "What type of stories interest you most?",
-            "options": ["Adventure stories", "Real-life stories", "Science topics", "Sports news"],
+            "options": ["Adventure and action", "Real-life stories and biographies", "Science and technology", "Sports and fitness"],
             "category": "genre"
+        },
+        {
+            "id": 2,
+            "question": "Which topic sounds most interesting to you?",
+            "options": ["Technology and computers", "History and culture", "Nature and animals", "Music and arts"],
+            "category": "topic"
+        },
+        {
+            "id": 3,
+            "question": "What do you enjoy reading about?",
+            "options": ["How things work", "Famous people's lives", "Fantasy and imagination", "Current events and news"],
+            "category": "interest"
+        },
+        {
+            "id": 4,
+            "question": "Which activity interests you most?",
+            "options": ["Playing sports", "Using technology", "Creating art", "Helping others"],
+            "category": "activity"
+        },
+        {
+            "id": 5,
+            "question": "What would you like to learn more about?",
+            "options": ["Space and planets", "Business and money", "Health and fitness", "Entertainment and movies"],
+            "category": "learning"
+        },
+        {
+            "id": 6,
+            "question": "What kind of book would you pick up?",
+            "options": ["A mystery to solve", "A guide or how-to book", "A story about real events", "A book with pictures and graphics"],
+            "category": "format"
+        },
+        {
+            "id": 7,
+            "question": "Which career field sounds interesting?",
+            "options": ["Medicine and healthcare", "Engineering and building", "Law and justice", "Creative arts and design"],
+            "category": "career"
+        },
+        {
+            "id": 8,
+            "question": "What do you do in your free time?",
+            "options": ["Watch videos online", "Play games", "Read or research", "Spend time outdoors"],
+            "category": "hobby"
+        },
+        {
+            "id": 9,
+            "question": "Which subject was your favorite in school?",
+            "options": ["Math and numbers", "English and writing", "Science experiments", "Social studies and history"],
+            "category": "subject"
+        },
+        {
+            "id": 10,
+            "question": "What type of content do you enjoy most?",
+            "options": ["Short articles and posts", "Long detailed explanations", "Visual content with images", "Step-by-step instructions"],
+            "category": "content_type"
         }
     ]
     
-    Make questions engaging and appropriate for diverse reading levels."""
+    # Try OpenAI first, but don't fail if it doesn't work
+    if not OPENAI_API_KEY or OPENAI_API_KEY == "":
+        print("No OpenAI API key - using fallback questions")
+        return fallback_questions
     
     try:
+        print("Calling OpenAI to generate assessment questions...")
+        
+        prompt = """Generate 10 multiple-choice questions to assess a student's reading interests.
+        Each question should help identify topics they enjoy (sports, technology, history, fiction, science, etc.).
+        
+        Return a JSON array with this structure:
+        [
+            {
+                "id": 1,
+                "question": "What type of stories interest you most?",
+                "options": ["Adventure stories", "Real-life stories", "Science topics", "Sports news"],
+                "category": "genre"
+            }
+        ]
+        
+        Make questions engaging and appropriate for diverse reading levels."""
+        
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert educator creating reading assessments."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.7,
+            timeout=10  # 10 second timeout
         )
+        
+        print("OpenAI response received, parsing...")
         
         content = response.choices[0].message.content
         # Extract JSON from markdown if present
@@ -289,24 +364,23 @@ async def generate_interest_assessment() -> List[Dict]:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
-            
-        return json.loads(content)
+        
+        questions = json.loads(content)
+        print(f"Successfully parsed {len(questions)} AI-generated questions")
+        return questions
+        
+    except openai.error.Timeout:
+        print("OpenAI timeout - using fallback questions")
+        return fallback_questions
+    except openai.error.AuthenticationError:
+        print("OpenAI authentication failed - check API key")
+        return fallback_questions
+    except openai.error.RateLimitError:
+        print("OpenAI rate limit exceeded - using fallback questions")
+        return fallback_questions
     except Exception as e:
-        # Fallback questions
-        return [
-            {
-                "id": 1,
-                "question": "What type of stories interest you most?",
-                "options": ["Adventure stories", "Real-life stories", "Science topics", "Sports news"],
-                "category": "genre"
-            },
-            {
-                "id": 2,
-                "question": "Which topic sounds most interesting to you?",
-                "options": ["Technology and computers", "History and culture", "Nature and animals", "Music and arts"],
-                "category": "topic"
-            }
-        ]
+        print(f"OpenAI error: {e} - using fallback questions")
+        return fallback_questions
 
 async def generate_reading_level_test(interests: str) -> List[Dict]:
     """Generate adaptive reading level assessment based on interests"""
@@ -556,8 +630,14 @@ async def login(credentials: UserLogin):
 # Assessment endpoints
 @app.get("/api/assessment/interest")
 async def get_interest_assessment():
-    questions = await generate_interest_assessment()
-    return {"questions": questions}
+    print("Assessment endpoint called - generating questions...")
+    try:
+        questions = await generate_interest_assessment()
+        print(f"Generated {len(questions)} questions")
+        return {"questions": questions}
+    except Exception as e:
+        print(f"Error generating assessment: {e}")
+        raise HTTPException(status_code=500, detail=f"Assessment generation failed: {str(e)}")
 
 @app.post("/api/assessment/submit")
 async def submit_assessment(request: Request):
