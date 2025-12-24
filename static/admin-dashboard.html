@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - MFS Literacy Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-primary: #003D6C;
+            --navy-dark: #002847;
+            --navy-light: #0056A3;
+            --gold-accent: #D4AF37;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --medium-gray: #E0E0E0;
+            --text-gray: #333333;
+            --success: #28A745;
+            --danger: #DC3545;
+            --warning: #FFC107;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: var(--light-gray);
+            color: var(--text-gray);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+            color: var(--navy-primary);
+        }
+        
+        /* Dashboard Layout */
+        .dashboard {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 2rem 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .logo {
+            padding: 0 2rem;
+            margin-bottom: 3rem;
+            font-size: 1.3rem;
+            font-weight: 700;
+            font-family: 'Merriweather', serif;
+        }
+        
+        .admin-badge {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: 0.5rem;
+        }
+        
+        .user-info {
+            padding: 0 2rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 1.5rem;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-menu {
+            list-style: none;
+        }
+        
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: var(--white);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255,255,255,0.1);
+            border-left-color: var(--gold-accent);
+        }
+        
+        .logout-btn {
+            margin: 2rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid var(--white);
+            color: var(--white);
+            border-radius: 4px;
+            cursor: pointer;
+            width: calc(100% - 4rem);
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: var(--white);
+            color: var(--navy-primary);
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 2rem;
+            width: calc(100% - 280px);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--navy-primary) 0%, var(--navy-dark) 100%);
+            color: var(--white);
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            color: var(--white);
+        }
+        
+        .header p {
+            opacity: 0.9;
+        }
+        
+        /* Cards */
+        .card {
+            background: var(--white);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .card h2 {
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--navy-primary);
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--navy-primary);
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            color: var(--text-gray);
+            font-size: 0.95rem;
+            opacity: 0.8;
+        }
+        
+        .stat-change {
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+        
+        .stat-change.positive {
+            color: var(--success);
+        }
+        
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: var(--light-gray);
+        }
+        
+        th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--navy-primary);
+            border-bottom: 2px solid var(--medium-gray);
+        }
+        
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--medium-gray);
+        }
+        
+        tbody tr:hover {
+            background: var(--light-gray);
+        }
+        
+        .badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        /* Action Buttons */
+        .btn {
+            padding: 0.5rem 1.2rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .btn-primary:hover {
+            background: var(--navy-dark);
+        }
+        
+        .btn-small {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+        
+        /* Charts placeholder */
+        .chart-container {
+            background: var(--light-gray);
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .chart-placeholder {
+            color: var(--text-gray);
+            opacity: 0.6;
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+        
+        .spinner {
+            border: 4px solid var(--light-gray);
+            border-top: 4px solid var(--navy-primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close-modal {
+            float: right;
+            font-size: 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                MFS Admin
+                <span class="admin-badge">ADMIN</span>
+            </div>
+            <div class="user-info">
+                <div class="user-name" id="adminName">Administrator</div>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" onclick="showSection('overview')">
+                        <span>📊</span> Overview
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('students')">
+                        <span>👥</span> Students
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('analytics')">
+                        <span>📈</span> Analytics
+                    </a>
+                </li>
+            </ul>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Section -->
+            <div id="overviewSection">
+                <div class="header">
+                    <h1>Welcome, Administrator</h1>
+                    <p>Monitor student progress and platform performance</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value" id="totalStudents">0</span>
+                        <span class="stat-label">Total Students</span>
+                        <div class="stat-change positive" id="studentChange"></div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="activeStudents">0</span>
+                        <span class="stat-label">Active This Week</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="totalLessons">0</span>
+                        <span class="stat-label">Lessons Completed</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="avgScore">0%</span>
+                        <span class="stat-label">Average Score</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Platform Activity</h2>
+                    <div class="chart-container">
+                        <div class="chart-placeholder">
+                            📊 Student engagement and completion rate visualization<br>
+                            <small>Chart visualization would go here</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Recent Student Activity</h2>
+                    <div id="recentActivity">
+                        <p>Loading recent activity...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Students Section -->
+            <div id="studentsSection" class="hidden">
+                <div class="header">
+                    <h1>Student Management</h1>
+                    <p>View and manage all enrolled students</p>
+                </div>
+
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2 style="margin: 0;">All Students</h2>
+                        <input type="text" id="searchStudents" placeholder="Search students..." 
+                               style="padding: 0.5rem 1rem; border: 2px solid var(--medium-gray); border-radius: 4px; width: 300px;">
+                    </div>
+                    
+                    <div id="studentsLoading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading students...</p>
+                    </div>
+                    
+                    <div id="studentsTable" class="hidden">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Reading Level</th>
+                                    <th>Joined</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Section -->
+            <div id="analyticsSection" class="hidden">
+                <div class="header">
+                    <h1>Platform Analytics</h1>
+                    <p>Detailed insights into program effectiveness</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value">87%</span>
+                        <span class="stat-label">Completion Rate</span>
+                        <div class="stat-change positive">↑ 5% from last month</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">4.2</span>
+                        <span class="stat-label">Avg Lessons/Student</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">23min</span>
+                        <span class="stat-label">Avg Session Time</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">92%</span>
+                        <span class="stat-label">Satisfaction Score</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Reading Level Distribution</h2>
+                    <div class="chart-container">
+                        <div class="chart-placeholder">
+                            📊 Distribution of students across reading levels<br>
+                            <small>Pie chart or bar graph would display here</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Interest Topics Breakdown</h2>
+                    <div class="chart-container">
+                        <div class="chart-placeholder">
+                            📊 Most popular interest areas among students<br>
+                            <small>Horizontal bar chart would display here</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Student Detail Modal -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeStudentModal()">&times;</button>
+            <h2 id="studentModalName" style="margin-bottom: 2rem;"></h2>
+            
+            <div id="studentProgressLoading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading student progress...</p>
+            </div>
+            
+            <div id="studentProgressContent" class="hidden">
+                <h3>Progress Overview</h3>
+                <div id="studentProgressData"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let allStudents = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            if (!token || !user.id) {
+                window.location.href = '/';
+                return;
+            }
+            
+            if (user.role !== 'admin') {
+                window.location.href = '/dashboard';
+                return;
+            }
+            
+            currentUser = user;
+            document.getElementById('adminName').textContent = user.full_name;
+            
+            loadAnalytics();
+        });
+
+        async function loadAnalytics() {
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/admin/analytics?token=${token}`);
+                const data = await response.json();
+                
+                document.getElementById('totalStudents').textContent = data.total_students;
+                document.getElementById('activeStudents').textContent = data.active_students;
+                document.getElementById('totalLessons').textContent = data.total_lessons_completed;
+                document.getElementById('avgScore').textContent = data.average_score + '%';
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        function showSection(section) {
+            // Hide all sections
+            document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
+            
+            // Update nav links
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            
+            // Show selected section
+            const sectionId = section + 'Section';
+            document.getElementById(sectionId).classList.remove('hidden');
+            
+            // Update active nav
+            event.target.closest('.nav-link').classList.add('active');
+            
+            // Load section data
+            if (section === 'students') {
+                loadStudents();
+            }
+        }
+
+        async function loadStudents() {
+            const token = localStorage.getItem('token');
+            const loading = document.getElementById('studentsLoading');
+            const table = document.getElementById('studentsTable');
+            
+            loading.classList.remove('hidden');
+            table.classList.add('hidden');
+            
+            try {
+                const response = await fetch(`/api/admin/students?token=${token}`);
+                const data = await response.json();
+                
+                allStudents = data.students;
+                renderStudentsTable(allStudents);
+                
+                loading.classList.add('hidden');
+                table.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading students:', error);
+                loading.innerHTML = '<p>Error loading students. Please try again.</p>';
+            }
+        }
+
+        function renderStudentsTable(students) {
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '';
+            
+            students.forEach(student => {
+                const tr = document.createElement('tr');
+                const level = student.reading_level || 'Not assessed';
+                const levelBadge = student.reading_level ? 
+                    `<span class="badge badge-info">${formatReadingLevel(student.reading_level)}</span>` :
+                    `<span class="badge badge-warning">Pending</span>`;
+                
+                const joinDate = new Date(student.created_at).toLocaleDateString();
+                
+                tr.innerHTML = `
+                    <td><strong>${student.full_name}</strong></td>
+                    <td>${student.email}</td>
+                    <td>${levelBadge}</td>
+                    <td>${joinDate}</td>
+                    <td><span class="badge badge-success">Active</span></td>
+                    <td>
+                        <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name}')">
+                            View Progress
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function formatReadingLevel(level) {
+            const levels = {
+                'elementary': 'Elementary',
+                'middle': 'Middle School',
+                'high_school': 'High School',
+                'adult': 'Adult'
+            };
+            return levels[level] || level;
+        }
+
+        // Search functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('searchStudents');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase();
+                    const filtered = allStudents.filter(s => 
+                        s.full_name.toLowerCase().includes(query) ||
+                        s.email.toLowerCase().includes(query)
+                    );
+                    renderStudentsTable(filtered);
+                });
+            }
+        });
+
+        async function viewStudentProgress(studentId, studentName) {
+            document.getElementById('studentModal').classList.add('active');
+            document.getElementById('studentModalName').textContent = studentName + "'s Progress";
+            document.getElementById('studentProgressLoading').classList.remove('hidden');
+            document.getElementById('studentProgressContent').classList.add('hidden');
+            
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/admin/student/${studentId}/progress?token=${token}`);
+                const data = await response.json();
+                
+                renderStudentProgress(data.progress);
+                
+                document.getElementById('studentProgressLoading').classList.add('hidden');
+                document.getElementById('studentProgressContent').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading student progress:', error);
+            }
+        }
+
+        function renderStudentProgress(progress) {
+            const container = document.getElementById('studentProgressData');
+            
+            if (progress.length === 0) {
+                container.innerHTML = '<p>No lessons completed yet.</p>';
+                return;
+            }
+            
+            const completed = progress.filter(p => p.completed).length;
+            const avgScore = progress.filter(p => p.score).reduce((sum, p) => sum + p.score, 0) / progress.filter(p => p.score).length || 0;
+            
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 2rem 0;">
+                    <div style="background: var(--light-gray); padding: 1.5rem; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--navy-primary);">${completed}</div>
+                        <div style="font-size: 0.9rem; color: var(--text-gray);">Completed</div>
+                    </div>
+                    <div style="background: var(--light-gray); padding: 1.5rem; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--navy-primary);">${avgScore.toFixed(1)}%</div>
+                        <div style="font-size: 0.9rem; color: var(--text-gray);">Avg Score</div>
+                    </div>
+                </div>
+                
+                <h4 style="margin: 2rem 0 1rem;">Recent Lessons</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Lesson</th>
+                            <th>Topic</th>
+                            <th>Score</th>
+                            <th>Completed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${progress.slice(0, 10).map(p => `
+                            <tr>
+                                <td>${p.title || 'Untitled'}</td>
+                                <td>${p.topic || 'General'}</td>
+                                <td>${p.score ? p.score + '%' : 'N/A'}</td>
+                                <td>${p.completed_at ? new Date(p.completed_at).toLocaleDateString() : 'In Progress'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function closeStudentModal() {
+            document.getElementById('studentModal').classList.remove('active');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>
