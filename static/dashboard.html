@@ -554,7 +554,7 @@
             return levels[level] || level;
         }
 
-        function showSection(section) {
+        function showSection(section, event) {
             // Hide all sections
             document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
             
@@ -566,13 +566,9 @@
             document.getElementById(sectionId).classList.remove('hidden');
             
             // Update active nav
-            event.target.closest('.nav-link').classList.add('active');
-            
-            // Load section data
-            if (section === 'assessment') {
-                loadAssessment();
-            } else if (section === 'lessons') {
-                loadNextLesson();
+            if (event && event.target) {
+                const navLink = event.target.closest('.nav-link');
+                if (navLink) navLink.classList.add('active');
             }
         }
 
