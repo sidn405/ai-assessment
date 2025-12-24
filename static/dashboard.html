@@ -39,13 +39,11 @@
             color: var(--navy-primary);
         }
         
-        /* Dashboard Layout */
         .dashboard {
             display: flex;
             min-height: 100vh;
         }
         
-        /* Sidebar */
         .sidebar {
             width: 280px;
             background: var(--navy-primary);
@@ -125,7 +123,6 @@
             color: var(--navy-primary);
         }
         
-        /* Main Content */
         .main-content {
             margin-left: 280px;
             flex: 1;
@@ -151,7 +148,6 @@
             opacity: 0.8;
         }
         
-        /* Cards */
         .card {
             background: var(--white);
             border-radius: 8px;
@@ -165,7 +161,6 @@
             font-size: 1.5rem;
         }
         
-        /* Progress Overview */
         .progress-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -194,7 +189,6 @@
             opacity: 0.9;
         }
         
-        /* Assessment Questions */
         .question-card {
             background: var(--light-gray);
             padding: 2rem;
@@ -234,43 +228,6 @@
             color: var(--white);
         }
         
-        /* Lesson Content */
-        .lesson-content {
-            line-height: 1.8;
-            font-size: 1.1rem;
-            padding: 2rem;
-            background: var(--light-gray);
-            border-radius: 8px;
-            margin-bottom: 2rem;
-        }
-        
-        .lesson-content p {
-            margin-bottom: 1rem;
-        }
-        
-        .vocabulary-box {
-            background: var(--navy-primary);
-            color: var(--white);
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin: 2rem 0;
-        }
-        
-        .vocabulary-box h4 {
-            color: var(--gold-accent);
-            margin-bottom: 1rem;
-        }
-        
-        .vocab-item {
-            margin-bottom: 0.75rem;
-        }
-        
-        .vocab-word {
-            font-weight: 700;
-            color: var(--gold-accent);
-        }
-        
-        /* Buttons */
         .btn {
             padding: 0.75rem 2rem;
             border: none;
@@ -292,17 +249,6 @@
             box-shadow: 0 4px 12px rgba(0,61,108,0.3);
         }
         
-        .btn-success {
-            background: var(--success);
-            color: var(--white);
-        }
-        
-        .btn-secondary {
-            background: var(--medium-gray);
-            color: var(--text-gray);
-        }
-        
-        /* Loading State */
         .loading {
             text-align: center;
             padding: 3rem;
@@ -327,17 +273,10 @@
             display: none;
         }
         
-        /* Alert */
         .alert {
             padding: 1rem 1.5rem;
             border-radius: 6px;
             margin-bottom: 1.5rem;
-        }
-        
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
         }
         
         .alert-info {
@@ -346,7 +285,6 @@
             border: 1px solid #bee5eb;
         }
         
-        /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -363,7 +301,6 @@
 </head>
 <body>
     <div class="dashboard">
-        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">MFS Literacy</div>
             <div class="user-info">
@@ -372,22 +309,22 @@
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active" onclick="showSection('overview')">
+                    <a href="#" class="nav-link active" onclick="showSection('overview', event); return false;">
                         <span>📊</span> Overview
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('assessment')">
+                    <a href="#" class="nav-link" onclick="showSection('assessment', event); return false;">
                         <span>📝</span> Take Assessment
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('lessons')">
+                    <a href="#" class="nav-link" onclick="showSection('lessons', event); return false;">
                         <span>📚</span> My Lessons
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('progress')">
+                    <a href="#" class="nav-link" onclick="showSection('progress', event); return false;">
                         <span>📈</span> Progress
                     </a>
                 </li>
@@ -395,7 +332,6 @@
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
 
-        <!-- Main Content -->
         <main class="main-content">
             <!-- Overview Section -->
             <div id="overviewSection">
@@ -429,11 +365,7 @@
                         <div class="alert alert-info">
                             <strong>Welcome to your literacy journey!</strong> Start by taking our assessment to help us understand your interests and reading level.
                         </div>
-                        <button class="btn btn-primary" onclick="showSection('assessment')">Take Assessment</button>
-                    </div>
-                    <div id="continuelearning" class="hidden">
-                        <p>Ready to continue your learning journey?</p>
-                        <button class="btn btn-primary" onclick="loadNextLesson()">Continue Learning</button>
+                        <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">Take Assessment</button>
                     </div>
                 </div>
             </div>
@@ -451,20 +383,6 @@
                         <p>Generating your personalized assessment...</p>
                     </div>
                     <div id="assessmentQuestions" class="hidden"></div>
-                    <div id="assessmentComplete" class="hidden">
-                        <div class="alert alert-success">
-                            <strong>Assessment Complete!</strong> We're analyzing your responses to create your personalized learning plan.
-                        </div>
-                        <div class="loading">
-                            <div class="spinner"></div>
-                            <p>Analyzing your responses...</p>
-                        </div>
-                    </div>
-                    <div id="assessmentResults" class="hidden">
-                        <h3>Your Learning Profile</h3>
-                        <div id="resultsContent"></div>
-                        <button class="btn btn-primary" onclick="showSection('lessons')">Start Learning</button>
-                    </div>
                 </div>
             </div>
 
@@ -474,22 +392,8 @@
                     <h1>Your Personalized Lessons</h1>
                     <p>Adaptive content based on your interests and skill level</p>
                 </div>
-
                 <div class="card">
-                    <div id="lessonLoading" class="loading">
-                        <div class="spinner"></div>
-                        <p>Loading your next lesson...</p>
-                    </div>
-                    <div id="lessonContent" class="hidden">
-                        <h2 id="lessonTitle"></h2>
-                        <div id="lessonText" class="lesson-content"></div>
-                        <div id="lessonVocab" class="vocabulary-box"></div>
-                        <div id="lessonQuestions"></div>
-                        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                            <button class="btn btn-success" onclick="completeLesson()">Complete Lesson</button>
-                            <button class="btn btn-secondary" onclick="loadNextLesson()">Skip to Next</button>
-                        </div>
-                    </div>
+                    <p>Lessons will appear here after you complete your assessment.</p>
                 </div>
             </div>
 
@@ -499,12 +403,9 @@
                     <h1>Your Progress</h1>
                     <p>Track your literacy journey</p>
                 </div>
-
                 <div class="card">
                     <h2>Recent Activity</h2>
-                    <div id="progressList">
-                        <p>Complete your first lesson to see your progress!</p>
-                    </div>
+                    <p>Complete your first lesson to see your progress!</p>
                 </div>
             </div>
         </main>
@@ -514,20 +415,24 @@
         let currentUser = null;
         let currentAssessment = [];
         let assessmentAnswers = [];
-        let currentLesson = null;
-        let lessonStartTime = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('=== PAGE LOADED ===');
             const token = localStorage.getItem('token');
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             
+            console.log('Token exists:', !!token);
+            console.log('User:', user);
+            
             if (!token || !user.id) {
+                console.log('No auth - redirecting to login');
                 window.location.href = '/';
                 return;
             }
             
             if (user.role === 'admin') {
+                console.log('Admin user - redirecting');
                 window.location.href = '/admin-dashboard';
                 return;
             }
@@ -537,63 +442,103 @@
             document.getElementById('welcomeName').textContent = user.full_name.split(' ')[0];
             
             if (user.reading_level) {
-                document.getElementById('userLevel').textContent = `Reading Level: ${formatReadingLevel(user.reading_level)}`;
-                document.getElementById('currentLevel').textContent = formatReadingLevel(user.reading_level);
-                document.getElementById('gettingStarted').classList.add('hidden');
-                document.getElementById('continuelearning').classList.remove('hidden');
+                document.getElementById('userLevel').textContent = `Reading Level: ${user.reading_level}`;
+                document.getElementById('currentLevel').textContent = user.reading_level;
             }
+            
+            console.log('=== INITIALIZATION COMPLETE ===');
         });
 
-        function formatReadingLevel(level) {
-            const levels = {
-                'elementary': 'Elementary',
-                'middle': 'Middle School',
-                'high_school': 'High School',
-                'adult': 'Adult'
-            };
-            return levels[level] || level;
-        }
-
         function showSection(section, event) {
+            console.log('=== showSection called ===');
+            console.log('Section:', section);
+            console.log('Event:', event);
+            
+            if (event) {
+                event.preventDefault();
+            }
+            
             // Hide all sections
-            document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id$="Section"]').forEach(el => {
+                console.log('Hiding:', el.id);
+                el.classList.add('hidden');
+            });
             
             // Update nav links
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
             
             // Show selected section
             const sectionId = section + 'Section';
-            document.getElementById(sectionId).classList.remove('hidden');
+            console.log('Showing section:', sectionId);
+            const targetSection = document.getElementById(sectionId);
+            console.log('Target section element:', targetSection);
+            
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+                console.log('Section shown successfully');
+            } else {
+                console.error('Section not found:', sectionId);
+            }
             
             // Update active nav
             if (event && event.target) {
                 const navLink = event.target.closest('.nav-link');
-                if (navLink) navLink.classList.add('active');
+                if (navLink) {
+                    navLink.classList.add('active');
+                    console.log('Nav link activated');
+                }
             }
+            
+            // Load section data
+            if (section === 'assessment') {
+                console.log('Triggering loadAssessment...');
+                loadAssessment();
+            } else if (section === 'lessons') {
+                console.log('Lessons section - not implemented yet');
+            }
+            
+            console.log('=== showSection complete ===');
         }
 
         async function loadAssessment() {
+            console.log('=== loadAssessment START ===');
             const loading = document.getElementById('assessmentLoading');
             const questions = document.getElementById('assessmentQuestions');
             
+            console.log('Loading element:', loading);
+            console.log('Questions element:', questions);
+            
+            if (!loading || !questions) {
+                console.error('Required elements not found!');
+                return;
+            }
+            
             loading.classList.remove('hidden');
             questions.classList.add('hidden');
+            console.log('UI state updated - showing loading');
             
             try {
-                // Add 30 second timeout
+                console.log('Making API call to /api/assessment/interest...');
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                const timeoutId = setTimeout(() => {
+                    console.log('Request timeout - aborting');
+                    controller.abort();
+                }, 30000);
                 
                 const response = await fetch('/api/assessment/interest', {
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
                 
+                console.log('Response received:', response.status, response.statusText);
+                
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
+                console.log('Data received:', data);
+                console.log('Number of questions:', data.questions ? data.questions.length : 0);
                 
                 if (!data.questions || data.questions.length === 0) {
                     throw new Error('No questions received');
@@ -601,12 +546,20 @@
                 
                 currentAssessment = data.questions;
                 assessmentAnswers = [];
+                
+                console.log('Rendering assessment questions...');
                 renderAssessment();
                 
                 loading.classList.add('hidden');
                 questions.classList.remove('hidden');
+                console.log('Assessment rendered successfully');
+                
             } catch (error) {
-                console.error('Error loading assessment:', error);
+                console.error('=== ERROR in loadAssessment ===');
+                console.error('Error type:', error.name);
+                console.error('Error message:', error.message);
+                console.error('Full error:', error);
+                
                 loading.classList.add('hidden');
                 questions.classList.remove('hidden');
                 
@@ -628,20 +581,24 @@
                     `;
                 }
             }
+            
+            console.log('=== loadAssessment END ===');
         }
 
         function renderAssessment() {
+            console.log('=== renderAssessment START ===');
             const container = document.getElementById('assessmentQuestions');
-            container.innerHTML = '<h3>Please answer the following questions to help us personalize your experience:</h3>';
+            container.innerHTML = '<h3>Please answer the following questions:</h3>';
             
             currentAssessment.forEach((q, index) => {
+                console.log(`Rendering question ${index + 1}:`, q.question);
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'question-card';
                 questionDiv.innerHTML = `
                     <div class="question-text">${index + 1}. ${q.question}</div>
                     <div class="options" id="options-${q.id}">
                         ${q.options.map((opt, i) => `
-                            <div class="option" onclick="selectOption(${q.id}, ${i}, '${opt}')">${opt}</div>
+                            <div class="option" onclick="selectOption(${q.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">${opt}</div>
                         `).join('')}
                     </div>
                 `;
@@ -654,9 +611,12 @@
             submitBtn.textContent = 'Submit Assessment';
             submitBtn.onclick = submitAssessment;
             container.appendChild(submitBtn);
+            
+            console.log('=== renderAssessment COMPLETE ===');
         }
 
         function selectOption(questionId, optionIndex, optionText) {
+            console.log('Option selected:', questionId, optionIndex, optionText);
             const options = document.getElementById(`options-${questionId}`).querySelectorAll('.option');
             options.forEach(opt => opt.classList.remove('selected'));
             options[optionIndex].classList.add('selected');
@@ -667,163 +627,23 @@
             } else {
                 assessmentAnswers.push({ question_id: questionId, answer: optionText });
             }
+            console.log('Current answers:', assessmentAnswers.length);
         }
 
-        async function submitAssessment() {
+        function submitAssessment() {
+            console.log('Submit assessment clicked');
+            console.log('Answers:', assessmentAnswers.length, '/', currentAssessment.length);
+            
             if (assessmentAnswers.length < currentAssessment.length) {
                 alert('Please answer all questions before submitting.');
                 return;
             }
             
-            document.getElementById('assessmentQuestions').classList.add('hidden');
-            document.getElementById('assessmentComplete').classList.remove('hidden');
-            
-            const token = localStorage.getItem('token');
-            
-            try {
-                const response = await fetch('/api/assessment/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token, answers: assessmentAnswers })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Update user data
-                    currentUser.reading_level = data.analysis.reading_level;
-                    currentUser.interests = data.analysis.interests;
-                    localStorage.setItem('user', JSON.stringify(currentUser));
-                    
-                    // Show results
-                    displayAssessmentResults(data.analysis);
-                }
-            } catch (error) {
-                console.error('Error submitting assessment:', error);
-            }
-        }
-
-        function displayAssessmentResults(analysis) {
-            document.getElementById('assessmentComplete').classList.add('hidden');
-            document.getElementById('assessmentResults').classList.remove('hidden');
-            
-            const content = document.getElementById('resultsContent');
-            content.innerHTML = `
-                <div style="background: var(--light-gray); padding: 2rem; border-radius: 8px; margin: 1.5rem 0;">
-                    <h4 style="color: var(--navy-primary); margin-bottom: 1rem;">Reading Level: ${formatReadingLevel(analysis.reading_level)}</h4>
-                    <h4 style="color: var(--navy-primary); margin-bottom: 1rem;">Your Interests:</h4>
-                    <ul style="margin-left: 2rem;">
-                        ${analysis.interests.map(interest => `<li style="margin-bottom: 0.5rem;">${interest}</li>`).join('')}
-                    </ul>
-                    <h4 style="color: var(--navy-primary); margin: 1.5rem 0 1rem;">Recommended Topics:</h4>
-                    <ul style="margin-left: 2rem;">
-                        ${analysis.recommended_topics.map(topic => `<li style="margin-bottom: 0.5rem;">${topic}</li>`).join('')}
-                    </ul>
-                </div>
-            `;
-            
-            // Update UI
-            document.getElementById('userLevel').textContent = `Reading Level: ${formatReadingLevel(analysis.reading_level)}`;
-            document.getElementById('currentLevel').textContent = formatReadingLevel(analysis.reading_level);
-            document.getElementById('gettingStarted').classList.add('hidden');
-            document.getElementById('continuelearning').classList.remove('hidden');
-        }
-
-        async function loadNextLesson() {
-            showSection('lessons');
-            const token = localStorage.getItem('token');
-            const loading = document.getElementById('lessonLoading');
-            const content = document.getElementById('lessonContent');
-            
-            loading.classList.remove('hidden');
-            content.classList.add('hidden');
-            
-            try {
-                const response = await fetch(`/api/lessons/next?token=${token}`);
-                const lesson = await response.json();
-                
-                currentLesson = lesson;
-                lessonStartTime = Date.now();
-                renderLesson(lesson);
-                
-                loading.classList.add('hidden');
-                content.classList.remove('hidden');
-            } catch (error) {
-                console.error('Error loading lesson:', error);
-                loading.innerHTML = '<p>Error loading lesson. Please try again.</p>';
-            }
-        }
-
-        function renderLesson(lesson) {
-            document.getElementById('lessonTitle').textContent = lesson.title;
-            document.getElementById('lessonText').textContent = lesson.content;
-            
-            // Vocabulary
-            const vocabDiv = document.getElementById('lessonVocab');
-            if (lesson.vocabulary && Object.keys(lesson.vocabulary).length > 0) {
-                vocabDiv.innerHTML = '<h4>Key Vocabulary</h4>';
-                Object.entries(lesson.vocabulary).forEach(([word, def]) => {
-                    vocabDiv.innerHTML += `
-                        <div class="vocab-item">
-                            <span class="vocab-word">${word}</span>: ${def}
-                        </div>
-                    `;
-                });
-                vocabDiv.classList.remove('hidden');
-            } else {
-                vocabDiv.classList.add('hidden');
-            }
-            
-            // Questions
-            const questionsDiv = document.getElementById('lessonQuestions');
-            if (lesson.questions && lesson.questions.length > 0) {
-                questionsDiv.innerHTML = '<h3 style="margin-top: 2rem; margin-bottom: 1.5rem;">Comprehension Questions</h3>';
-                lesson.questions.forEach((q, index) => {
-                    questionsDiv.innerHTML += `
-                        <div class="question-card">
-                            <div class="question-text">${index + 1}. ${q.question}</div>
-                            <div class="options" id="q-${index}">
-                                ${q.options.map((opt, i) => `
-                                    <div class="option" onclick="selectLessonAnswer(${index}, ${i})">${opt}</div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-        }
-
-        function selectLessonAnswer(questionIndex, optionIndex) {
-            const options = document.getElementById(`q-${questionIndex}`).querySelectorAll('.option');
-            options.forEach(opt => opt.classList.remove('selected'));
-            options[optionIndex].classList.add('selected');
-        }
-
-        async function completeLesson() {
-            const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
-            const token = localStorage.getItem('token');
-            
-            try {
-                await fetch('/api/lessons/progress', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token,
-                        lesson_id: currentLesson.id,
-                        completed: true,
-                        score: 85, // Calculate based on answers
-                        time_spent: timeSpent
-                    })
-                });
-                
-                alert('Great job! Lesson completed!');
-                loadNextLesson();
-            } catch (error) {
-                console.error('Error saving progress:', error);
-            }
+            alert('Assessment submitted! (Full submission logic coming next)');
         }
 
         function logout() {
+            console.log('Logging out...');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/';
