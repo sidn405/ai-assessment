@@ -482,13 +482,14 @@ async def register(user: UserCreate):
                 "INSERT INTO users (email, password_hash, full_name, role) VALUES (%s, %s, %s, %s) RETURNING id",
                 (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
             )
-            user_id = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            user_id = result['id']  # PostgreSQL with RealDictCursor returns dict
         else:
             cursor.execute(
                 "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
                 (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
             )
-            user_id = cursor.lastrowid
+            user_id = cursor.lastrowid  # SQLite uses lastrowid
         
         conn.commit()
         
@@ -507,6 +508,10 @@ async def register(user: UserCreate):
     except (sqlite3.IntegrityError, psycopg2.errors.UniqueViolation):
         conn.rollback()
         raise HTTPException(status_code=400, detail="Email already registered")
+    except Exception as e:
+        conn.rollback()
+        print(f"Registration error: {e}")  # Debug logging
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
     finally:
         conn.close()
 
@@ -658,13 +663,14 @@ async def get_next_lesson(token: str):
             "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (%s, %s, %s, %s, %s) RETURNING id",
             (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
         )
-        lesson_id = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        lesson_id = result['id']  # PostgreSQL with RealDictCursor returns dict
     else:
         cursor.execute(
             "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (?, ?, ?, ?, ?)",
             (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
         )
-        lesson_id = cursor.lastrowid
+        lesson_id = cursor.lastrowid  # SQLite uses lastrowid
     
     conn.commit()
     conn.close()
