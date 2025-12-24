@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import sqlite3
+import psycopg2
+import psycopg2.extras
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
@@ -30,7 +32,17 @@ SECRET_KEY = os.getenv("SECRET_KEY", "mfs-literacy-platform-secret-key-change-in
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 openai.api_key = OPENAI_API_KEY
 
-DATABASE = "mfs_literacy.db"
+# Database configuration - Use PostgreSQL if available, otherwise SQLite
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+USE_POSTGRES = DATABASE_URL is not None
+DATABASE = DATABASE_URL if USE_POSTGRES else "mfs_literacy.db"
+
+print(f"Using {'PostgreSQL' if USE_POSTGRES else 'SQLite'} database")
+if USE_POSTGRES:
+    print(f"Database URL configured")
 
 # Pydantic models
 class UserCreate(BaseModel):
@@ -55,75 +67,148 @@ class LessonProgress(BaseModel):
 
 # Database initialization
 def init_db():
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    
-    # Users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            reading_level TEXT,
-            interests TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Assessment results table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS assessments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            assessment_type TEXT NOT NULL,
-            questions TEXT NOT NULL,
-            answers TEXT NOT NULL,
-            reading_level TEXT,
-            interests TEXT,
-            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    
-    # Lessons table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS lessons (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            reading_level TEXT NOT NULL,
-            topic TEXT NOT NULL,
-            difficulty INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Student progress table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS progress (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            lesson_id INTEGER NOT NULL,
-            completed BOOLEAN DEFAULT 0,
-            score REAL,
-            time_spent INTEGER,
-            completed_at TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id),
-            FOREIGN KEY (lesson_id) REFERENCES lessons (id)
-        )
-    ''')
-    
-    # Admin account (password: admin123)
-    admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
-    try:
-        cursor.execute(
-            "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
-            ("admin@mfs.org", admin_hash.decode('utf-8'), "MFS Administrator", "admin")
-        )
-    except sqlite3.IntegrityError:
-        pass  # Admin already exists
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                reading_level TEXT,
+                interests TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Assessment results table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS assessments (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                assessment_type TEXT NOT NULL,
+                questions TEXT NOT NULL,
+                answers TEXT NOT NULL,
+                reading_level TEXT,
+                interests TEXT,
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        
+        # Lessons table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lessons (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                reading_level TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                difficulty INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Student progress table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS progress (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                lesson_id INTEGER NOT NULL,
+                completed BOOLEAN DEFAULT FALSE,
+                score REAL,
+                time_spent INTEGER,
+                completed_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id),
+                FOREIGN KEY (lesson_id) REFERENCES lessons (id)
+            )
+        ''')
+        
+        # Admin account
+        admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
+        try:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role) VALUES (%s, %s, %s, %s)",
+                ("admin@mfs.org", admin_hash.decode('utf-8'), "MFS Administrator", "admin")
+            )
+        except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+        
+    else:
+        conn = sqlite3.connect(DATABASE, timeout=30.0)
+        conn.execute('PRAGMA journal_mode=WAL')
+        cursor = conn.cursor()
+        
+        # Users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                reading_level TEXT,
+                interests TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Assessment results table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS assessments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                assessment_type TEXT NOT NULL,
+                questions TEXT NOT NULL,
+                answers TEXT NOT NULL,
+                reading_level TEXT,
+                interests TEXT,
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        
+        # Lessons table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lessons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                reading_level TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                difficulty INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Student progress table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lesson_id INTEGER NOT NULL,
+                completed BOOLEAN DEFAULT 0,
+                score REAL,
+                time_spent INTEGER,
+                completed_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id),
+                FOREIGN KEY (lesson_id) REFERENCES lessons (id)
+            )
+        ''')
+        
+        # Admin account
+        admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
+        try:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
+                ("admin@mfs.org", admin_hash.decode('utf-8'), "MFS Administrator", "admin")
+            )
+        except sqlite3.IntegrityError:
+            pass
     
     conn.commit()
     conn.close()
@@ -133,9 +218,26 @@ init_db()
 
 # Helper functions
 def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE)
+        conn.cursor_factory = psycopg2.extras.RealDictCursor
+        return conn
+    else:
+        conn = sqlite3.connect(DATABASE, timeout=30.0, check_same_thread=False)
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def db_execute(cursor, query, params=None, is_postgres=USE_POSTGRES):
+    """Execute query with proper parameter substitution for SQLite or PostgreSQL"""
+    if is_postgres:
+        # PostgreSQL uses %s for all parameters
+        query = query.replace('?', '%s')
+    if params:
+        cursor.execute(query, params)
+    else:
+        cursor.execute(query)
+    return cursor
 
 def create_token(user_id: int, role: str) -> str:
     payload = {
@@ -375,12 +477,20 @@ async def register(user: UserCreate):
     password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
     
     try:
-        cursor.execute(
-            "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
-            (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
-        )
+        if USE_POSTGRES:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role) VALUES (%s, %s, %s, %s) RETURNING id",
+                (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
+            )
+            user_id = cursor.fetchone()[0]
+        else:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
+                (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
+            )
+            user_id = cursor.lastrowid
+        
         conn.commit()
-        user_id = cursor.lastrowid
         
         token = create_token(user_id, user.role)
         
@@ -394,7 +504,8 @@ async def register(user: UserCreate):
                 "role": user.role
             }
         }
-    except sqlite3.IntegrityError:
+    except (sqlite3.IntegrityError, psycopg2.errors.UniqueViolation):
+        conn.rollback()
         raise HTTPException(status_code=400, detail="Email already registered")
     finally:
         conn.close()
@@ -404,15 +515,22 @@ async def login(credentials: UserLogin):
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM users WHERE email = ?", (credentials.email,))
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM users WHERE email = %s", (credentials.email,))
+    else:
+        cursor.execute("SELECT * FROM users WHERE email = ?", (credentials.email,))
+    
     user = cursor.fetchone()
     conn.close()
     
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
+    # Get password_hash - works for both dict (Postgres) and Row (SQLite)
+    password_hash = user['password_hash'] if USE_POSTGRES else user['password_hash']
+    
     # Verify password
-    if not bcrypt.checkpw(credentials.password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+    if not bcrypt.checkpw(credentials.password.encode('utf-8'), password_hash.encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_token(user['id'], user['role'])
@@ -454,16 +572,29 @@ async def submit_assessment(request: Request):
     # Update user profile
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE users SET reading_level = ?, interests = ? WHERE id = ?",
-        (analysis['reading_level'], json.dumps(analysis['interests']), user_id)
-    )
     
-    # Save assessment
-    cursor.execute(
-        "INSERT INTO assessments (user_id, assessment_type, questions, answers, reading_level, interests) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, "initial", json.dumps([]), json.dumps(answers), analysis['reading_level'], json.dumps(analysis['interests']))
-    )
+    if USE_POSTGRES:
+        cursor.execute(
+            "UPDATE users SET reading_level = %s, interests = %s WHERE id = %s",
+            (analysis['reading_level'], json.dumps(analysis['interests']), user_id)
+        )
+        
+        # Save assessment
+        cursor.execute(
+            "INSERT INTO assessments (user_id, assessment_type, questions, answers, reading_level, interests) VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, "initial", json.dumps([]), json.dumps(answers), analysis['reading_level'], json.dumps(analysis['interests']))
+        )
+    else:
+        cursor.execute(
+            "UPDATE users SET reading_level = ?, interests = ? WHERE id = ?",
+            (analysis['reading_level'], json.dumps(analysis['interests']), user_id)
+        )
+        
+        # Save assessment
+        cursor.execute(
+            "INSERT INTO assessments (user_id, assessment_type, questions, answers, reading_level, interests) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, "initial", json.dumps([]), json.dumps(answers), analysis['reading_level'], json.dumps(analysis['interests']))
+        )
     
     conn.commit()
     conn.close()
@@ -483,14 +614,25 @@ async def get_next_lesson(token: str):
     cursor = conn.cursor()
     
     # Get user profile
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    
     user = cursor.fetchone()
     
     # Get recent performance
-    cursor.execute(
-        "SELECT * FROM progress WHERE user_id = ? ORDER BY completed_at DESC LIMIT 5",
-        (user_id,)
-    )
+    if USE_POSTGRES:
+        cursor.execute(
+            "SELECT * FROM progress WHERE user_id = %s ORDER BY completed_at DESC LIMIT 5",
+            (user_id,)
+        )
+    else:
+        cursor.execute(
+            "SELECT * FROM progress WHERE user_id = ? ORDER BY completed_at DESC LIMIT 5",
+            (user_id,)
+        )
+    
     recent = cursor.fetchall()
     conn.close()
     
@@ -510,11 +652,20 @@ async def get_next_lesson(token: str):
     # Save lesson to database
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (?, ?, ?, ?, ?)",
-        (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
-    )
-    lesson_id = cursor.lastrowid
+    
+    if USE_POSTGRES:
+        cursor.execute(
+            "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
+        )
+        lesson_id = cursor.fetchone()[0]
+    else:
+        cursor.execute(
+            "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (?, ?, ?, ?, ?)",
+            (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
+        )
+        lesson_id = cursor.lastrowid
+    
     conn.commit()
     conn.close()
     
@@ -528,10 +679,18 @@ async def save_progress(data: dict, token: str):
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO progress (user_id, lesson_id, completed, score, time_spent, completed_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, data['lesson_id'], data['completed'], data.get('score'), data.get('time_spent'), datetime.utcnow())
-    )
+    
+    if USE_POSTGRES:
+        cursor.execute(
+            "INSERT INTO progress (user_id, lesson_id, completed, score, time_spent, completed_at) VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, data['lesson_id'], data['completed'], data.get('score'), data.get('time_spent'), datetime.utcnow())
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO progress (user_id, lesson_id, completed, score, time_spent, completed_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, data['lesson_id'], data['completed'], data.get('score'), data.get('time_spent'), datetime.utcnow())
+        )
+    
     conn.commit()
     conn.close()
     
@@ -560,14 +719,26 @@ async def get_student_progress(student_id: int, token: str):
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        """SELECT p.*, l.title, l.topic 
-        FROM progress p 
-        JOIN lessons l ON p.lesson_id = l.id 
-        WHERE p.user_id = ? 
-        ORDER BY p.completed_at DESC""",
-        (student_id,)
-    )
+    
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT p.*, l.title, l.topic 
+            FROM progress p 
+            JOIN lessons l ON p.lesson_id = l.id 
+            WHERE p.user_id = %s 
+            ORDER BY p.completed_at DESC""",
+            (student_id,)
+        )
+    else:
+        cursor.execute(
+            """SELECT p.*, l.title, l.topic 
+            FROM progress p 
+            JOIN lessons l ON p.lesson_id = l.id 
+            WHERE p.user_id = ? 
+            ORDER BY p.completed_at DESC""",
+            (student_id,)
+        )
+    
     progress = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
@@ -584,21 +755,33 @@ async def get_analytics(token: str):
     
     # Total students
     cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'")
-    total_students = cursor.fetchone()['count']
+    total_students = cursor.fetchone()['count'] if USE_POSTGRES else cursor.fetchone()[0]
     
     # Total lessons completed
-    cursor.execute("SELECT COUNT(*) as count FROM progress WHERE completed = 1")
-    total_completed = cursor.fetchone()['count']
+    if USE_POSTGRES:
+        cursor.execute("SELECT COUNT(*) as count FROM progress WHERE completed = TRUE")
+        total_completed = cursor.fetchone()['count']
+    else:
+        cursor.execute("SELECT COUNT(*) as count FROM progress WHERE completed = 1")
+        total_completed = cursor.fetchone()[0]
     
     # Average score
     cursor.execute("SELECT AVG(score) as avg_score FROM progress WHERE score IS NOT NULL")
-    avg_score = cursor.fetchone()['avg_score'] or 0
+    result = cursor.fetchone()
+    avg_score = result['avg_score'] if USE_POSTGRES else result[0]
+    avg_score = avg_score or 0
     
     # Active students (completed lesson in last 7 days)
-    cursor.execute(
-        "SELECT COUNT(DISTINCT user_id) as count FROM progress WHERE completed_at >= datetime('now', '-7 days')"
-    )
-    active_students = cursor.fetchone()['count']
+    if USE_POSTGRES:
+        cursor.execute(
+            "SELECT COUNT(DISTINCT user_id) as count FROM progress WHERE completed_at >= NOW() - INTERVAL '7 days'"
+        )
+        active_students = cursor.fetchone()['count']
+    else:
+        cursor.execute(
+            "SELECT COUNT(DISTINCT user_id) as count FROM progress WHERE completed_at >= datetime('now', '-7 days')"
+        )
+        active_students = cursor.fetchone()[0]
     
     conn.close()
     
