@@ -358,7 +358,7 @@ async def generate_interest_assessment() -> List[Dict]:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            timeout=10
+            timeout=20  # Increased from 10 to 20 seconds
         )
         
         print("OpenAI response received, parsing...")
