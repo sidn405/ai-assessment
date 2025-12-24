@@ -10,7 +10,7 @@ import psycopg2.extras
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
-import openai
+from openai import OpenAI
 import os
 import json
 from pathlib import Path
@@ -30,7 +30,9 @@ app.add_middleware(
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "mfs-literacy-platform-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-openai.api_key = OPENAI_API_KEY
+
+# Initialize OpenAI client (v1.0+)
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -321,7 +323,7 @@ async def generate_interest_assessment() -> List[Dict]:
         
         Make questions engaging and appropriate for diverse reading levels."""
         
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert educator creating reading assessments."},
@@ -380,7 +382,7 @@ async def analyze_assessment_results(answers: List[dict]) -> Dict[str, Any]:
     }}"""
     
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert in literacy assessment and education."},
@@ -461,7 +463,7 @@ async def generate_adaptive_lesson(user_profile: dict, previous_performance: dic
     }}"""
     
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert educator creating personalized reading lessons."},
