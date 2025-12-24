@@ -367,6 +367,10 @@
                         </div>
                         <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">Take Assessment</button>
                     </div>
+                    <div id="continuelearning" class="hidden">
+                        <p>Ready to continue your learning journey?</p>
+                        <button class="btn btn-primary" onclick="showSection('lessons', event)">Continue Learning</button>
+                    </div>
                 </div>
             </div>
 
@@ -523,7 +527,7 @@
                 const timeoutId = setTimeout(() => {
                     console.log('Request timeout - aborting');
                     controller.abort();
-                }, 30000);
+                }, 45000); // Increased to 45 seconds to allow for OpenAI timeout + fallback
                 
                 const response = await fetch('/api/assessment/interest', {
                     signal: controller.signal
@@ -541,7 +545,7 @@
                 console.log('Number of questions:', data.questions ? data.questions.length : 0);
                 
                 if (!data.questions || data.questions.length === 0) {
-                    throw new Error('No questions received');
+                    throw new Error('No questions received from server');
                 }
                 
                 currentAssessment = data.questions;
@@ -567,7 +571,7 @@
                     questions.innerHTML = `
                         <div class="alert alert-info">
                             <strong>Loading is taking longer than expected.</strong>
-                            <p>This might be due to high API load. Please try again.</p>
+                            <p>The assessment questions are being generated. This might take a moment.</p>
                             <button class="btn btn-primary" onclick="loadAssessment()">Retry</button>
                         </div>
                     `;
@@ -630,7 +634,8 @@
             console.log('Current answers:', assessmentAnswers.length);
         }
 
-        function submitAssessment() {
+        async function submitAssessment() {
+            console.log('=== submitAssessment START ===');
             console.log('Submit assessment clicked');
             console.log('Answers:', assessmentAnswers.length, '/', currentAssessment.length);
             
@@ -639,7 +644,112 @@
                 return;
             }
             
-            alert('Assessment submitted! (Full submission logic coming next)');
+            // Hide questions and show completion message
+            document.getElementById('assessmentQuestions').classList.add('hidden');
+            
+            const completionDiv = document.createElement('div');
+            completionDiv.id = 'assessmentComplete';
+            completionDiv.className = 'loading';
+            completionDiv.innerHTML = `
+                <div class="alert alert-info" style="background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; padding: 1rem 1.5rem; border-radius: 6px; margin-bottom: 1.5rem;">
+                    <strong>Assessment Complete!</strong> We're analyzing your responses to create your personalized learning plan.
+                </div>
+                <div class="spinner" style="border: 4px solid var(--light-gray); border-top: 4px solid var(--navy-primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 1rem;"></div>
+                <p>Analyzing your responses...</p>
+            `;
+            document.getElementById('assessmentCard').appendChild(completionDiv);
+            
+            const token = localStorage.getItem('token');
+            
+            try {
+                console.log('Submitting assessment to API...');
+                const response = await fetch('/api/assessment/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, answers: assessmentAnswers })
+                });
+                
+                console.log('Submit response:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Analysis received:', data);
+                
+                if (data.success) {
+                    // Update user data
+                    currentUser.reading_level = data.analysis.reading_level;
+                    currentUser.interests = data.analysis.interests;
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    
+                    // Show results
+                    displayAssessmentResults(data.analysis);
+                } else {
+                    throw new Error('Submission failed');
+                }
+            } catch (error) {
+                console.error('Error submitting assessment:', error);
+                completionDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>Error submitting assessment.</strong>
+                        <p>${error.message}</p>
+                        <button class="btn btn-primary" onclick="submitAssessment()">Try Again</button>
+                    </div>
+                `;
+            }
+            
+            console.log('=== submitAssessment END ===');
+        }
+
+        function displayAssessmentResults(analysis) {
+            console.log('=== displayAssessmentResults START ===');
+            
+            const assessmentCard = document.getElementById('assessmentCard');
+            assessmentCard.innerHTML = `
+                <div class="alert alert-success" style="background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 1rem 1.5rem; border-radius: 6px; margin-bottom: 1.5rem;">
+                    <strong>✅ Assessment Complete!</strong>
+                </div>
+                <h3>Your Learning Profile</h3>
+                <div style="background: var(--light-gray); padding: 2rem; border-radius: 8px; margin: 1.5rem 0;">
+                    <h4 style="color: var(--navy-primary); margin-bottom: 1rem;">Reading Level: ${formatReadingLevel(analysis.reading_level)}</h4>
+                    <h4 style="color: var(--navy-primary); margin-bottom: 1rem;">Your Interests:</h4>
+                    <ul style="margin-left: 2rem;">
+                        ${analysis.interests.map(interest => `<li style="margin-bottom: 0.5rem;">${interest}</li>`).join('')}
+                    </ul>
+                    ${analysis.recommended_topics && analysis.recommended_topics.length > 0 ? `
+                        <h4 style="color: var(--navy-primary); margin: 1.5rem 0 1rem;">Recommended Topics:</h4>
+                        <ul style="margin-left: 2rem;">
+                            ${analysis.recommended_topics.map(topic => `<li style="margin-bottom: 0.5rem;">${topic}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+                </div>
+                <button class="btn btn-primary" onclick="showSection('lessons', event)">Start Learning</button>
+            `;
+            
+            // Update UI
+            document.getElementById('userLevel').textContent = `Reading Level: ${formatReadingLevel(analysis.reading_level)}`;
+            document.getElementById('currentLevel').textContent = formatReadingLevel(analysis.reading_level);
+            document.getElementById('gettingStarted').classList.add('hidden');
+            
+            // Show continue learning if it exists
+            const continueDiv = document.getElementById('continuelearning');
+            if (continueDiv) {
+                continueDiv.classList.remove('hidden');
+            }
+            
+            console.log('=== displayAssessmentResults END ===');
+        }
+
+        function formatReadingLevel(level) {
+            const levels = {
+                'elementary': 'Elementary',
+                'middle': 'Middle School',
+                'high_school': 'High School',
+                'adult': 'Adult'
+            };
+            return levels[level] || level;
         }
 
         function logout() {
