@@ -31,8 +31,36 @@ app.add_middleware(
 SECRET_KEY = os.getenv("SECRET_KEY", "mfs-literacy-platform-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# Initialize OpenAI client (v1.0+)
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# Debug: Print API key status (first few characters only for security)
+if OPENAI_API_KEY:
+    print(f"OpenAI API Key found: {OPENAI_API_KEY[:7]}..." if len(OPENAI_API_KEY) > 7 else "Key too short")
+else:
+    print("No OpenAI API Key found in environment")
+
+# Initialize OpenAI client only if API key is provided
+openai_client = None
+if OPENAI_API_KEY and OPENAI_API_KEY.strip() and len(OPENAI_API_KEY) > 10:
+    try:
+        # Try to initialize with just the API key, let it handle httpx internally
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        print("✅ OpenAI client initialized successfully")
+    except TypeError as e:
+        # If there's a httpx compatibility issue, try with default_headers
+        print(f"⚠️ OpenAI client initialization issue (httpx compatibility): {e}")
+        try:
+            openai_client = OpenAI(
+                api_key=OPENAI_API_KEY,
+                default_headers={"User-Agent": "MFS-Literacy-Platform"}
+            )
+            print("✅ OpenAI client initialized with custom headers")
+        except Exception as e2:
+            print(f"❌ Failed to initialize OpenAI client: {e2}")
+            openai_client = None
+    except Exception as e:
+        print(f"❌ Failed to initialize OpenAI client: {e}")
+        openai_client = None
+else:
+    print("ℹ️ No valid OpenAI API key provided - will use fallback responses")
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -301,8 +329,8 @@ async def generate_interest_assessment() -> List[Dict]:
         }
     ]
     
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "":
-        print("No OpenAI API key - using fallback questions")
+    if not openai_client:
+        print("No OpenAI client available - using fallback questions")
         return fallback_questions
     
     try:
@@ -361,8 +389,8 @@ async def analyze_assessment_results(answers: List[dict]) -> Dict[str, Any]:
         "recommended_topics": ["tech innovation", "sports history", "space exploration"]
     }
     
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "":
-        print("No OpenAI API key - using fallback analysis")
+    if not openai_client:
+        print("No OpenAI client available - using fallback analysis")
         return fallback_analysis
     
     prompt = f"""Analyze these assessment answers and determine:
@@ -430,8 +458,8 @@ async def generate_adaptive_lesson(user_profile: dict, previous_performance: dic
         "next_steps": "Practice with more complex passages"
     }
     
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "":
-        print("No OpenAI API key - using fallback lesson")
+    if not openai_client:
+        print("No OpenAI client available - using fallback lesson")
         return fallback_lesson
     
     prompt = f"""Create an engaging reading lesson for a student with this profile:
@@ -496,6 +524,16 @@ async def serve_dashboard():
 @app.get("/admin-dashboard", response_class=HTMLResponse)
 async def serve_admin():
     return FileResponse("static/admin-dashboard.html")
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint to verify API status"""
+    return {
+        "status": "healthy",
+        "database": "PostgreSQL" if USE_POSTGRES else "SQLite",
+        "openai_configured": openai_client is not None,
+        "openai_status": "active" if openai_client else "using_fallback"
+    }
 
 @app.post("/api/register")
 async def register(user: UserCreate):
