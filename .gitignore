@@ -1,0 +1,7 @@
+*.db
+*.db-journal
+.venv/
+venv/
+__pycache__/
+.env
+.railway/
