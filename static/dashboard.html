@@ -817,29 +817,37 @@
                 return;
             }
             
-            // Hide all lesson elements
-            document.getElementById('noLessons').classList.add('hidden');
-            document.getElementById('lessonContentCard')?.classList.add('hidden');
-            document.getElementById('questionsCard')?.classList.add('hidden');
-            document.getElementById('lessonResultsCard')?.classList.add('hidden');
+            // Hide everything
+            const elements = ['noLessons', 'lessonContentCard', 'questionsCard', 'lessonResultsCard'];
+            elements.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
             
             // Show loading
-            document.getElementById('lessonLoading').classList.remove('hidden');
+            const loading = document.getElementById('lessonLoading');
+            if (loading) loading.classList.remove('hidden');
             
             lessonStartTime = Date.now();
             
             try {
-                console.log('Fetching lesson from API...');
+                console.log('Fetching lesson...');
                 const response = await fetch(`/api/lessons/next?token=${token}`);
                 
-                console.log('Lesson response status:', response.status);
+                console.log('Response status:', response.status);
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
                 
                 const lesson = await response.json();
-                console.log('Lesson received:', lesson.title);
+                console.log('Lesson received:', lesson);
+                
+                // Validate lesson has required fields
+                if (!lesson || !lesson.title || !lesson.content) {
+                    throw new Error('Invalid lesson format - missing title or content');
+                }
                 
                 currentLesson = lesson;
                 lessonAnswers = [];
@@ -848,191 +856,296 @@
                 
             } catch (error) {
                 console.error('Error loading lesson:', error);
-                document.getElementById('lessonLoading').classList.add('hidden');
                 
-                // Show error in card
-                const errorCard = document.createElement('div');
-                errorCard.className = 'card';
-                errorCard.innerHTML = `
-                    <div class="alert alert-info">
-                        <strong>Unable to load lesson</strong>
-                        <p>${error.message}</p>
-                        <button class="btn btn-primary" onclick="loadNextLesson()">Try Again</button>
+                // Hide loading
+                if (loading) loading.classList.add('hidden');
+                
+                // Show friendly error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'card';
+                errorDiv.innerHTML = `
+                    <div style="background: #f8d7da; padding: 1.5rem; border-radius: 6px; margin-bottom: 1rem;">
+                        <strong>⚠️ Unable to load lesson</strong>
+                        <p style="margin-top: 0.5rem;">${error.message}</p>
                     </div>
+                    <button class="btn btn-primary" onclick="loadNextLesson()">Try Again</button>
+                    <button class="btn" onclick="showSection('overview', event)" style="margin-left: 1rem;">Go to Overview</button>
                 `;
-                document.getElementById('lessonsSection').appendChild(errorCard);
+                
+                const section = document.getElementById('lessonsSection');
+                if (section) {
+                    // Remove any existing error cards
+                    const existingError = section.querySelector('.error-card');
+                    if (existingError) existingError.remove();
+                    
+                    errorDiv.classList.add('error-card');
+                    section.appendChild(errorDiv);
+                }
             }
             
             console.log('=== loadNextLesson END ===');
         }
 
         function displayLesson(lesson) {
-            console.log('=== displayLesson START ===');
+            console.log('=== displayLesson START ===', lesson);
             
-            // Hide loading
-            document.getElementById('lessonLoading').classList.add('hidden');
-            
-            // Show lesson content card
-            const contentCard = document.getElementById('lessonContentCard');
-            contentCard.classList.remove('hidden');
-            
-            // Set lesson data
-            document.getElementById('lessonTitle').textContent = lesson.title;
-            document.getElementById('lessonLevel').textContent = lesson.difficulty_level || 'intermediate';
-            
-            // Handle word count - could be in different formats
-            const wordCount = lesson.word_count || (lesson.content ? lesson.content.split(/\s+/).length : 0);
-            document.getElementById('lessonWords').textContent = wordCount;
-            
-            // Display content - split into paragraphs
-            const contentDiv = document.getElementById('lessonText');
-            const paragraphs = lesson.content.split('\n\n').filter(p => p.trim());
-            contentDiv.innerHTML = paragraphs.map(p => `<p style="margin-bottom: 1rem;">${p.trim()}</p>`).join('');
-            
-            // Display vocabulary if available
-            if (lesson.vocabulary && lesson.vocabulary.length > 0) {
-                document.getElementById('vocabularySection').classList.remove('hidden');
-                const vocabList = document.getElementById('vocabularyList');
-                vocabList.innerHTML = lesson.vocabulary.map(v => `
-                    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 4px;">
-                        <strong style="color: var(--gold-accent); font-size: 1.1rem;">${v.word}</strong>
-                        <p style="margin-top: 0.5rem;">${v.definition}</p>
-                    </div>
-                `).join('');
-            }
-            
-            // Display questions if available
-            if (lesson.questions && lesson.questions.length > 0) {
-                displayLessonQuestions(lesson.questions);
+            try {
+                // Hide loading
+                const loading = document.getElementById('lessonLoading');
+                if (loading) loading.classList.add('hidden');
                 
-                // Scroll to questions
-                setTimeout(() => {
-                    document.getElementById('questionsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 500);
+                // Show content card
+                const contentCard = document.getElementById('lessonContentCard');
+                if (!contentCard) {
+                    throw new Error('lessonContentCard element not found');
+                }
+                contentCard.classList.remove('hidden');
+                
+                // Set title
+                const titleEl = document.getElementById('lessonTitle');
+                if (titleEl) titleEl.textContent = lesson.title || 'Untitled Lesson';
+                
+                // Set level
+                const levelEl = document.getElementById('lessonLevel');
+                if (levelEl) levelEl.textContent = lesson.difficulty_level || 'intermediate';
+                
+                // Calculate word count safely
+                let wordCount = 0;
+                if (lesson.word_count) {
+                    wordCount = lesson.word_count;
+                } else if (lesson.content) {
+                    wordCount = lesson.content.split(/\s+/).filter(w => w.trim().length > 0).length;
+                }
+                const wordsEl = document.getElementById('lessonWords');
+                if (wordsEl) wordsEl.textContent = wordCount;
+                
+                // Display content
+                const contentEl = document.getElementById('lessonText');
+                if (contentEl && lesson.content) {
+                    // Split into paragraphs - handle different line break formats
+                    let paragraphs = [];
+                    
+                    if (lesson.content.includes('\n\n')) {
+                        paragraphs = lesson.content.split('\n\n');
+                    } else if (lesson.content.includes('\n')) {
+                        paragraphs = lesson.content.split('\n');
+                    } else {
+                        paragraphs = [lesson.content];
+                    }
+                    
+                    // Filter and format paragraphs
+                    paragraphs = paragraphs
+                        .map(p => p.trim())
+                        .filter(p => p.length > 0)
+                        .map(p => `<p style="margin-bottom: 1rem;">${p}</p>`);
+                    
+                    contentEl.innerHTML = paragraphs.join('');
+                }
+                
+                // Display vocabulary if available
+                const vocabSection = document.getElementById('vocabularySection');
+                const vocabList = document.getElementById('vocabularyList');
+                
+                if (lesson.vocabulary && Array.isArray(lesson.vocabulary) && lesson.vocabulary.length > 0) {
+                    if (vocabSection) vocabSection.classList.remove('hidden');
+                    if (vocabList) {
+                        vocabList.innerHTML = lesson.vocabulary.map(v => `
+                            <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 4px; margin-bottom: 0.5rem;">
+                                <strong style="color: #D4AF37; font-size: 1.1rem;">${v.word || 'Word'}</strong>
+                                <p style="margin-top: 0.5rem; margin-bottom: 0;">${v.definition || ''}</p>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    if (vocabSection) vocabSection.classList.add('hidden');
+                }
+                
+                // Display questions if available
+                if (lesson.questions && Array.isArray(lesson.questions) && lesson.questions.length > 0) {
+                    console.log('Displaying questions:', lesson.questions.length);
+                    displayLessonQuestions(lesson.questions);
+                    
+                    // Scroll to questions after a moment
+                    setTimeout(() => {
+                        const qCard = document.getElementById('questionsCard');
+                        if (qCard) qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 800);
+                } else {
+                    console.log('No questions in lesson');
+                }
+                
+            } catch (error) {
+                console.error('Error displaying lesson:', error);
+                alert('Error displaying lesson: ' + error.message);
             }
             
             console.log('=== displayLesson END ===');
         }
 
         function displayLessonQuestions(questions) {
-            console.log('=== displayLessonQuestions START ===');
+            console.log('=== displayLessonQuestions START ===', questions);
             
-            const questionsCard = document.getElementById('questionsCard');
-            questionsCard.classList.remove('hidden');
-            
-            const questionsDiv = document.getElementById('lessonQuestions');
-            questionsDiv.innerHTML = '';
-            
-            questions.forEach((q, index) => {
-                const questionDiv = document.createElement('div');
-                questionDiv.className = 'question-card';
-                questionDiv.innerHTML = `
-                    <div class="question-text">${index + 1}. ${q.question}</div>
-                    <div class="options" id="lesson-options-${index}" data-question-index="${index}">
-                        ${(q.options || []).map((opt, i) => `
-                            <div class="option" data-option-index="${i}" data-option-text="${opt.replace(/"/g, '&quot;')}">
-                                ${opt}
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-                questionsDiv.appendChild(questionDiv);
-            });
-            
-            // Add event delegation for option clicks
-            questionsDiv.addEventListener('click', function(e) {
-                const optionEl = e.target.closest('.option');
-                if (!optionEl) return;
+            try {
+                const questionsCard = document.getElementById('questionsCard');
+                if (!questionsCard) {
+                    throw new Error('questionsCard element not found');
+                }
                 
-                const questionIndex = parseInt(optionEl.parentElement.dataset.questionIndex);
-                const optionIndex = parseInt(optionEl.dataset.optionIndex);
-                const optionText = optionEl.dataset.optionText;
+                questionsCard.classList.remove('hidden');
                 
-                selectLessonOption(questionIndex, optionIndex, optionText);
-            });
+                const questionsDiv = document.getElementById('lessonQuestions');
+                if (!questionsDiv) {
+                    throw new Error('lessonQuestions element not found');
+                }
+                
+                questionsDiv.innerHTML = '';
+                
+                questions.forEach((q, index) => {
+                    const questionDiv = document.createElement('div');
+                    questionDiv.className = 'question-card';
+                    
+                    // Build options HTML safely
+                    let optionsHTML = '';
+                    if (q.options && Array.isArray(q.options)) {
+                        optionsHTML = q.options.map((opt, i) => {
+                            // Escape HTML in option text
+                            const safeOpt = opt.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                            return `
+                                <div class="option" data-question-index="${index}" data-option-index="${i}" data-option-text="${safeOpt}">
+                                    ${opt}
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                    
+                    questionDiv.innerHTML = `
+                        <div class="question-text">${index + 1}. ${q.question || 'Question'}</div>
+                        <div class="options" id="lesson-options-${index}">
+                            ${optionsHTML}
+                        </div>
+                    `;
+                    
+                    questionsDiv.appendChild(questionDiv);
+                });
+                
+                // Add click handlers using event delegation
+                questionsDiv.onclick = function(e) {
+                    const optionEl = e.target.closest('.option');
+                    if (!optionEl) return;
+                    
+                    const questionIndex = parseInt(optionEl.dataset.questionIndex);
+                    const optionIndex = parseInt(optionEl.dataset.optionIndex);
+                    const optionText = optionEl.dataset.optionText;
+                    
+                    selectLessonOption(questionIndex, optionIndex, optionText);
+                };
+                
+                console.log('Questions rendered successfully');
+                
+            } catch (error) {
+                console.error('Error displaying questions:', error);
+            }
             
             console.log('=== displayLessonQuestions END ===');
         }
 
         function selectLessonOption(questionIndex, optionIndex, optionText) {
-            console.log('Lesson option selected:', questionIndex, optionText);
+            console.log('Option selected:', questionIndex, optionText);
             
-            const options = document.getElementById(`lesson-options-${questionIndex}`).querySelectorAll('.option');
-            options.forEach(opt => opt.classList.remove('selected'));
-            options[optionIndex].classList.add('selected');
-            
-            const question = currentLesson.questions[questionIndex];
-            const correct = question.correct_answer || question.correct;
-            
-            lessonAnswers[questionIndex] = {
-                question: question.question,
-                selected: optionText,
-                correct: correct,
-                is_correct: optionText === correct
-            };
-            
-            console.log('Lesson answers:', lessonAnswers.length, '/', currentLesson.questions.length);
+            try {
+                // Highlight selected option
+                const allOptions = document.querySelectorAll(`#lesson-options-${questionIndex} .option`);
+                allOptions.forEach((opt, i) => {
+                    opt.classList.toggle('selected', i === optionIndex);
+                });
+                
+                // Store answer
+                const question = currentLesson.questions[questionIndex];
+                const correctAnswer = question.correct_answer || question.correct;
+                
+                lessonAnswers[questionIndex] = {
+                    question: question.question,
+                    selected: optionText,
+                    correct: correctAnswer,
+                    is_correct: optionText === correctAnswer
+                };
+                
+                console.log('Answers:', lessonAnswers.length, '/', currentLesson.questions.length);
+                
+            } catch (error) {
+                console.error('Error selecting option:', error);
+            }
         }
 
         async function submitLessonAnswers() {
             console.log('=== submitLessonAnswers START ===');
+            
+            if (!currentLesson || !currentLesson.questions) {
+                alert('No lesson loaded');
+                return;
+            }
             
             if (lessonAnswers.length < currentLesson.questions.length) {
                 alert('Please answer all questions before submitting.');
                 return;
             }
             
-            const token = localStorage.getItem('token');
-            const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
-            
-            // Calculate score
-            const correctCount = lessonAnswers.filter(a => a.is_correct).length;
-            const score = (correctCount / lessonAnswers.length) * 100;
-            
-            // Visual feedback on questions
-            lessonAnswers.forEach((answer, index) => {
-                const options = document.getElementById(`lesson-options-${index}`).querySelectorAll('.option');
-                options.forEach(opt => {
-                    const text = opt.textContent.trim();
-                    if (text === answer.correct) {
-                        opt.style.background = '#d4edda';
-                        opt.style.borderColor = '#28a745';
-                    } else if (text === answer.selected && !answer.is_correct) {
-                        opt.style.background = '#f8d7da';
-                        opt.style.borderColor = '#dc3545';
-                    }
-                    opt.style.pointerEvents = 'none';
-                });
-            });
-            
-            // Hide submit button
-            document.querySelector('#questionsCard button').classList.add('hidden');
-            
             try {
-                // Save progress to backend
-                await fetch('/api/lessons/progress', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: token,
-                        lesson_id: currentLesson.id,
-                        completed: true,
-                        score: score,
-                        time_spent: timeSpent,
-                        answers: lessonAnswers
-                    })
+                const token = localStorage.getItem('token');
+                const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
+                
+                // Calculate score
+                const correctCount = lessonAnswers.filter(a => a.is_correct).length;
+                const score = Math.round((correctCount / lessonAnswers.length) * 100);
+                
+                console.log('Score:', score, '% (', correctCount, '/', lessonAnswers.length, ')');
+                
+                // Visual feedback on questions
+                lessonAnswers.forEach((answer, index) => {
+                    const options = document.querySelectorAll(`#lesson-options-${index} .option`);
+                    options.forEach(opt => {
+                        const text = opt.dataset.optionText;
+                        if (text === answer.correct) {
+                            opt.style.background = '#d4edda';
+                            opt.style.borderColor = '#28a745';
+                        } else if (text === answer.selected && !answer.is_correct) {
+                            opt.style.background = '#f8d7da';
+                            opt.style.borderColor = '#dc3545';
+                        }
+                        opt.style.pointerEvents = 'none';
+                    });
                 });
+                
+                // Hide submit button
+                const submitBtn = document.querySelector('#questionsCard button');
+                if (submitBtn) submitBtn.classList.add('hidden');
+                
+                // Save progress to backend
+                try {
+                    await fetch('/api/lessons/progress', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            token: token,
+                            lesson_id: currentLesson.id,
+                            completed: true,
+                            score: score,
+                            time_spent: timeSpent,
+                            answers: lessonAnswers
+                        })
+                    });
+                    console.log('Progress saved');
+                } catch (saveError) {
+                    console.error('Error saving progress:', saveError);
+                    // Continue anyway - show results
+                }
                 
                 // Show results
                 displayLessonResults(score, correctCount, lessonAnswers.length);
                 
-                // Update stats
-                document.getElementById('lessonsCompleted').textContent = 
-                    parseInt(document.getElementById('lessonsCompleted').textContent) + 1;
-                
             } catch (error) {
-                console.error('Error submitting lesson:', error);
-                displayLessonResults(score, correctCount, lessonAnswers.length);
+                console.error('Error submitting answers:', error);
+                alert('Error submitting answers: ' + error.message);
             }
             
             console.log('=== submitLessonAnswers END ===');
@@ -1041,51 +1154,73 @@
         function displayLessonResults(score, correct, total) {
             console.log('=== displayLessonResults START ===');
             
-            const resultsCard = document.getElementById('lessonResultsCard');
-            resultsCard.classList.remove('hidden');
-            
-            let message = '';
-            if (score >= 80) {
-                message = `Excellent work! You got ${correct} out of ${total} questions correct (${Math.round(score)}%). You're really understanding the material!`;
-            } else if (score >= 60) {
-                message = `Good job! You got ${correct} out of ${total} questions correct (${Math.round(score)}%). Keep practicing and you'll keep improving!`;
-            } else {
-                message = `You got ${correct} out of ${total} questions correct (${Math.round(score)}%). Don't worry - every lesson helps you learn. Let's try another one!`;
+            try {
+                const resultsCard = document.getElementById('lessonResultsCard');
+                if (!resultsCard) {
+                    throw new Error('lessonResultsCard not found');
+                }
+                
+                resultsCard.classList.remove('hidden');
+                
+                // Generate encouraging message
+                let message = '';
+                if (score >= 80) {
+                    message = `Excellent work! You got ${correct} out of ${total} questions correct (${score}%). You're really understanding the material!`;
+                } else if (score >= 60) {
+                    message = `Good job! You got ${correct} out of ${total} questions correct (${score}%). Keep practicing and you'll keep improving!`;
+                } else {
+                    message = `You got ${correct} out of ${total} questions correct (${score}%). Don't worry - every lesson helps you learn. Let's try another one!`;
+                }
+                
+                const messageEl = document.getElementById('resultsMessage');
+                if (messageEl) messageEl.textContent = message;
+                
+                // Scroll to results
+                setTimeout(() => {
+                    resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 300);
+                
+            } catch (error) {
+                console.error('Error displaying results:', error);
             }
-            
-            document.getElementById('resultsMessage').textContent = message;
-            
-            // Scroll to results
-            setTimeout(() => {
-                resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 300);
             
             console.log('=== displayLessonResults END ===');
         }
 
-        // Modify showSection to load lesson when lessons section is shown
-        const originalShowSection = showSection;
-        showSection = function(sectionName, event) {
-            if (event) event.preventDefault();
+        // Hook into existing showSection function
+        (function() {
+            const originalShowSection = window.showSection;
             
-            // Call original function
-            originalShowSection(sectionName, event);
-            
-            // If showing lessons section and user has completed assessment, load lesson
-            if (sectionName === 'lessons') {
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                if (user.reading_level || user.level_estimate) {
-                    // User has completed assessment, load a lesson
-                    document.getElementById('noLessons').classList.add('hidden');
-                    loadNextLesson();
-                } else {
-                    // Show "complete assessment first" message
-                    document.getElementById('noLessons').classList.remove('hidden');
+            window.showSection = function(sectionName, event) {
+                if (event) event.preventDefault();
+                
+                // Call original function
+                if (originalShowSection) {
+                    originalShowSection(sectionName, event);
                 }
-            }
-        };
+                
+                // If showing lessons section, auto-load lesson if assessment completed
+                if (sectionName === 'lessons') {
+                    try {
+                        const user = JSON.parse(localStorage.getItem('user') || '{}');
+                        if (user.reading_level || user.level_estimate) {
+                            // User has completed assessment
+                            const noLessons = document.getElementById('noLessons');
+                            if (noLessons) noLessons.classList.add('hidden');
+                            loadNextLesson();
+                        } else {
+                            // Show "complete assessment first"
+                            const noLessons = document.getElementById('noLessons');
+                            if (noLessons) noLessons.classList.remove('hidden');
+                        }
+                    } catch (error) {
+                        console.error('Error in showSection hook:', error);
+                    }
+                }
+            };
+        })();
 
-        console.log('Lesson management functions loaded successfully');
+        console.log('✅ Bulletproof lesson loading code installed');
 
         function logout() {
             console.log('Logging out...');
