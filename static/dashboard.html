@@ -1064,12 +1064,27 @@
                     correct: correctAnswer,
                     is_correct: optionText === correctAnswer
                 };
+        
+                // ========== ADD SUBMIT BUTTON ==========
+                // Check if button already exists
+                let submitBtn = questionsCard.querySelector('.submit-lesson-btn');
+                if (!submitBtn) {
+                    submitBtn = document.createElement('button');
+                    submitBtn.className = 'btn btn-primary submit-lesson-btn';
+                    submitBtn.style.marginTop = '1.5rem';
+                    submitBtn.textContent = 'Submit Answers';
+                    submitBtn.onclick = submitLessonAnswers;
+                    questionsCard.appendChild(submitBtn);
+                }
+                // ========================================
                 
-                console.log('Answers:', lessonAnswers.length, '/', currentLesson.questions.length);
+                console.log('Questions rendered successfully');
                 
             } catch (error) {
-                console.error('Error selecting option:', error);
+                console.error('Error displaying questions:', error);
             }
+            
+            console.log('=== displayLessonQuestions END ===');
         }
 
         async function submitLessonAnswers() {
