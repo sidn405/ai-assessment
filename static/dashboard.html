@@ -1034,6 +1034,12 @@
                     
                     selectLessonOption(questionIndex, optionIndex, optionText);
                 };
+                // Make sure submit button is visible for new lesson
+                const submitBtn = questionsCard.querySelector('button');
+                if (submitBtn) {
+                    submitBtn.classList.remove('hidden');
+                    submitBtn.disabled = false; // Also re-enable it
+                }
                 
                 console.log('Questions rendered successfully');
                 
@@ -1119,13 +1125,10 @@
                     });
                 });
                 
-                // Hide submit button
-                const submitBtn = document.querySelector('#questionsCard button');
-                if (submitBtn) submitBtn.classList.add('hidden');
-                
-                // Save progress to backend
                 try {
-                    await fetch('/api/lessons/progress', {
+                    console.log('Saving progress to backend...');
+                    
+                    const response = await fetch('/api/lessons/progress', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1134,10 +1137,24 @@
                             completed: true,
                             score: score,
                             time_spent: timeSpent,
-                            answers: lessonAnswers
+                            answers: lessonAnswers.filter(a => a) // Remove empty slots
                         })
                     });
-                    console.log('Progress saved');
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    console.log('✓ Progress saved:', result);
+                    
+                    // Update stats on page
+                    const completedEl = document.getElementById('lessonsCompleted');
+                    if (completedEl) {
+                        const current = parseInt(completedEl.textContent) || 0;
+                        completedEl.textContent = current + 1;
+                    }
+                    
                 } catch (saveError) {
                     console.error('Error saving progress:', saveError);
                     // Continue anyway - show results

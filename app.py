@@ -1508,87 +1508,65 @@ async def get_writing_history(token: str, limit: int = 10):
 # PHASE 2: ENHANCED ANALYTICS
 # ============================================
 
-@app.get("/api/student/progress")
-async def get_student_progress(token: str):
-    """Get detailed progress for current student"""
-    user_data = verify_token(token)
-    user_id = user_data["user_id"]
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Get user stats
-    if USE_POSTGRES:
-        cursor.execute(
-            """SELECT total_passages_read, words_per_session, comprehension_score, level_estimate
-               FROM users WHERE id = %s""",
-            (user_id,)
-        )
-    else:
-        cursor.execute(
-            """SELECT total_passages_read, words_per_session, comprehension_score, level_estimate
-               FROM users WHERE id = ?""",
-            (user_id,)
-        )
-    
-    user_stats = dict(cursor.fetchone())
-    
-    # Get recent sessions
-    if USE_POSTGRES:
-        cursor.execute(
-            """SELECT sl.*, p.title, p.word_count
-               FROM session_logs sl
-               JOIN passages p ON sl.passage_id = p.id
-               WHERE sl.user_id = %s AND sl.completed_at IS NOT NULL
-               ORDER BY sl.completed_at DESC
-               LIMIT 10""",
-            (user_id,)
-        )
-    else:
-        cursor.execute(
-            """SELECT sl.*, p.title, p.word_count
-               FROM session_logs sl
-               JOIN passages p ON sl.passage_id = p.id
-               WHERE sl.user_id = ? AND sl.completed_at IS NOT NULL
-               ORDER BY sl.completed_at DESC
-               LIMIT 10""",
-            (user_id,)
-        )
-    
-    recent_sessions = [dict(row) for row in cursor.fetchall()]
-    
-    # Calculate Day-1 metric (passages completed today)
-    if USE_POSTGRES:
-        cursor.execute(
-            """SELECT COUNT(*) as count
-               FROM session_logs
-               WHERE user_id = %s 
-               AND completion_status = 'completed'
-               AND started_at >= CURRENT_DATE""",
-            (user_id,)
-        )
-        result = cursor.fetchone()
-        today_count = result['count']
-    else:
-        cursor.execute(
-            """SELECT COUNT(*) as count
-               FROM session_logs
-               WHERE user_id = ? 
-               AND completion_status = 'completed'
-               AND DATE(started_at) = DATE('now')""",
-            (user_id,)
-        )
-        result = cursor.fetchone()
-        today_count = result[0]
-    
-    conn.close()
-    
-    return {
-        "user_stats": user_stats,
-        "recent_sessions": recent_sessions,
-        "today_completed": today_count,
-        "day1_goal_met": today_count >= 3
-    }
+@app.get("/api/student/dashboard")
+async def get_student_dashboard(token: str):
+    """Get student dashboard stats"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get user info
+        if USE_POSTGRES:
+            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        
+        user = cursor.fetchone()
+        
+        # Get stats from session_logs
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT 
+                   COUNT(*) as lessons_completed,
+                   AVG(comprehension_score) as average_score,
+                   SUM(time_spent_seconds) as total_time
+                   FROM session_logs 
+                   WHERE user_id = %s AND completion_status = 'completed'""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT 
+                   COUNT(*) as lessons_completed,
+                   AVG(comprehension_score) as average_score,
+                   SUM(time_spent_seconds) as total_time
+                   FROM session_logs 
+                   WHERE user_id = ? AND completion_status = 'completed'""",
+                (user_id,)
+            )
+        
+        stats = cursor.fetchone()
+        
+        conn.close()
+        
+        return {
+            "user": {
+                "name": user.get('full_name'),
+                "reading_level": user.get('level_estimate') or user.get('reading_level'),
+                "total_passages_read": user.get('total_passages_read', 0)
+            },
+            "stats": {
+                "lessons_completed": stats.get('lessons_completed', 0),
+                "average_score": round(stats.get('average_score', 0), 1) if stats.get('average_score') else 0,
+                "total_time_minutes": round((stats.get('total_time', 0) or 0) / 60, 1)
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/admin/analytics-v2")
 async def get_enhanced_analytics(token: str):
@@ -2095,63 +2073,89 @@ async def debug_lesson_generation(token: str):
 
 @app.post("/api/lessons/progress")
 async def save_lesson_progress(request: Request):
-    """Save lesson progress"""
+    """Save student's lesson progress"""
     data = await request.json()
     token = data.get("token")
+    lesson_id = data.get("lesson_id")
+    completed = data.get("completed", False)
+    score = data.get("score", 0)
+    time_spent = data.get("time_spent", 0)
+    answers = data.get("answers", [])
     
-    if not token:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    print(f"=== Saving Progress ===")
+    print(f"Lesson ID: {lesson_id}")
+    print(f"Completed: {completed}")
+    print(f"Score: {score}")
+    print(f"Time spent: {time_spent}s")
     
-    user_data = verify_token(token)
-    user_id = user_data["user_id"]
-    
-    lesson_id = data.get('lesson_id')
-    completed = data.get('completed', False)
-    score = data.get('score')
-    time_spent = data.get('time_spent', 0)
-    
-    # Save to session_logs
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    if USE_POSTGRES:
-        cursor.execute(
-            """INSERT INTO session_logs 
-               (user_id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at)
-               VALUES (%s, %s, %s, %s, %s, %s)""",
-            (user_id, lesson_id, 'completed' if completed else 'partial', score, time_spent, 
-             datetime.utcnow() if completed else None)
-        )
+    try:
+        # Verify token
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
         
-        # Update user stats
-        cursor.execute(
-            """UPDATE users 
-               SET total_passages_read = total_passages_read + 1,
-                   last_active = NOW()
-               WHERE id = %s""",
-            (user_id,)
-        )
-    else:
-        cursor.execute(
-            """INSERT INTO session_logs 
-               (user_id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (user_id, lesson_id, 'completed' if completed else 'partial', score, time_spent,
-             datetime.utcnow() if completed else None)
-        )
+        conn = get_db()
+        cursor = conn.cursor()
         
-        cursor.execute(
-            """UPDATE users 
-               SET total_passages_read = total_passages_read + 1,
-                   last_active = CURRENT_TIMESTAMP
-               WHERE id = ?""",
-            (user_id,)
-        )
-    
-    conn.commit()
-    conn.close()
-    
-    return {"success": True, "message": "Great work! Keep it up!"}
+        # Save to session_logs table
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO session_logs 
+                   (user_id, passage_id, completed_at, completion_status, 
+                    time_spent_seconds, comprehension_score, answers)
+                   VALUES (%s, %s, NOW(), %s, %s, %s, %s)
+                   RETURNING id""",
+                (user_id, lesson_id, 'completed' if completed else 'in_progress',
+                 time_spent, score, json.dumps(answers))
+            )
+            result = cursor.fetchone()
+            session_id = result['id'] if result else None
+        else:
+            cursor.execute(
+                """INSERT INTO session_logs 
+                   (user_id, passage_id, completed_at, completion_status, 
+                    time_spent_seconds, comprehension_score, answers)
+                   VALUES (?, ?, datetime('now'), ?, ?, ?, ?)""",
+                (user_id, lesson_id, 'completed' if completed else 'in_progress',
+                 time_spent, score, json.dumps(answers))
+            )
+            session_id = cursor.lastrowid
+        
+        # Update user's total passages read
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE users 
+                   SET total_passages_read = COALESCE(total_passages_read, 0) + 1,
+                       last_active = NOW()
+                   WHERE id = %s""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """UPDATE users 
+                   SET total_passages_read = COALESCE(total_passages_read, 0) + 1,
+                       last_active = datetime('now')
+                   WHERE id = ?""",
+                (user_id,)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✓ Progress saved! Session ID: {session_id}")
+        
+        return {
+            "success": True,
+            "message": "Progress saved successfully",
+            "session_id": session_id,
+            "score": score
+        }
+        
+    except Exception as e:
+        print(f"✗ Error saving progress: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        raise HTTPException(status_code=500, detail=f"Failed to save progress: {str(e)}")
 
 # ============================================
 # ADMIN ENDPOINTS (Original + Enhanced)
