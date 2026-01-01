@@ -1684,6 +1684,115 @@ async def get_enhanced_analytics(token: str):
         "comprehension_by_type": comprehension_by_type,
         "stamina_trend": stamina_trend
     }
+    
+# ============================================
+# PROGRESS DATA (Phase 2 - AI Generated)
+# ============================================
+    
+@app.get("/api/student/progress")
+async def get_student_progress(token: str):
+    """Get detailed student progress with recent sessions"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get recent sessions with passage details
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT 
+                   sl.id,
+                   sl.completed_at,
+                   sl.comprehension_score,
+                   sl.time_spent_seconds,
+                   p.title as passage_title,
+                   p.difficulty_level,
+                   p.word_count
+                   FROM session_logs sl
+                   JOIN passages p ON sl.passage_id = p.id
+                   WHERE sl.user_id = %s
+                   AND sl.completion_status = 'completed'
+                   ORDER BY sl.completed_at DESC
+                   LIMIT 10""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT 
+                   sl.id,
+                   sl.completed_at,
+                   sl.comprehension_score,
+                   sl.time_spent_seconds,
+                   p.title as passage_title,
+                   p.difficulty_level,
+                   p.word_count
+                   FROM session_logs sl
+                   JOIN passages p ON sl.passage_id = p.id
+                   WHERE sl.user_id = ?
+                   AND sl.completion_status = 'completed'
+                   ORDER BY sl.completed_at DESC
+                   LIMIT 10""",
+                (user_id,)
+            )
+        
+        sessions = []
+        for row in cursor.fetchall():
+            sessions.append({
+                'id': row[0] if isinstance(row, tuple) else row['id'],
+                'completed_at': row[1] if isinstance(row, tuple) else row['completed_at'],
+                'score': row[2] if isinstance(row, tuple) else row['comprehension_score'],
+                'time_spent': row[3] if isinstance(row, tuple) else row['time_spent_seconds'],
+                'passage_title': row[4] if isinstance(row, tuple) else row['passage_title'],
+                'difficulty': row[5] if isinstance(row, tuple) else row['difficulty_level'],
+                'word_count': row[6] if isinstance(row, tuple) else row['word_count']
+            })
+        
+        # Get overall stats
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT 
+                   COUNT(*) as total_lessons,
+                   AVG(comprehension_score) as avg_score,
+                   SUM(time_spent_seconds) as total_time,
+                   MAX(completed_at) as last_activity
+                   FROM session_logs 
+                   WHERE user_id = %s AND completion_status = 'completed'""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT 
+                   COUNT(*) as total_lessons,
+                   AVG(comprehension_score) as avg_score,
+                   SUM(time_spent_seconds) as total_time,
+                   MAX(completed_at) as last_activity
+                   FROM session_logs 
+                   WHERE user_id = ? AND completion_status = 'completed'""",
+                (user_id,)
+            )
+        
+        stats = cursor.fetchone()
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "sessions": sessions,
+            "stats": {
+                "total_lessons": stats[0] if isinstance(stats, tuple) else stats['total_lessons'] or 0,
+                "average_score": round(stats[1], 1) if (isinstance(stats, tuple) and stats[1]) or (not isinstance(stats, tuple) and stats['avg_score']) else 0,
+                "total_time_minutes": round((stats[2] or 0) / 60, 1) if isinstance(stats, tuple) else round((stats['total_time'] or 0) / 60, 1),
+                "last_activity": stats[3] if isinstance(stats, tuple) else stats['last_activity']
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error getting progress: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
 # LESSONS ENDPOINTS (Phase 2 - AI Generated)

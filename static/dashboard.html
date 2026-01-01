@@ -453,9 +453,29 @@
                     <h1>Your Progress</h1>
                     <p>Track your literacy journey</p>
                 </div>
+
+                <!-- Stats Cards -->
+                <div class="progress-grid">
+                    <div class="progress-card">
+                        <span class="progress-value" id="progressTotalLessons">0</span>
+                        <span class="progress-label">Lessons Completed</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="progressAvgScore">0%</span>
+                        <span class="progress-label">Average Score</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="progressTotalTime">0</span>
+                        <span class="progress-label">Minutes Practiced</span>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
                 <div class="card">
                     <h2>Recent Activity</h2>
-                    <p>Complete your first lesson to see your progress!</p>
+                    <div id="recentActivityList">
+                        <p>Loading your progress...</p>
+                    </div>
                 </div>
             </div>
         </main>
@@ -544,10 +564,23 @@
                 console.log('Triggering loadAssessment...');
                 loadAssessment();
             } else if (section === 'lessons') {
-                console.log('Lessons section - not implemented yet');
+                console.log('Lessons section - loading lesson...');
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                if (user.reading_level || user.level_estimate) {
+                    // User has completed assessment
+                    const noLessons = document.getElementById('noLessons');
+                    if (noLessons) noLessons.classList.add('hidden');
+                    loadNextLesson();
+                } else {
+                    // Show "complete assessment first"
+                    const noLessons = document.getElementById('noLessons');
+                    if (noLessons) noLessons.classList.remove('hidden');
+                }
+            } else if (section === 'progress') {
+                console.log('Progress section - loading data...');
+                loadProgressData();
             }
-            
-            console.log('=== showSection complete ===');
+
         }
 
         async function loadAssessment() {
@@ -1205,6 +1238,67 @@
             }
             
             console.log('=== displayLessonResults END ===');
+        }
+
+        async function loadProgressData() {
+            console.log('Loading progress data...');
+            
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                const response = await fetch(`/api/student/progress?token=${token}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                console.log('Progress data:', data);
+                
+                // Update stats
+                document.getElementById('progressTotalLessons').textContent = data.stats.total_lessons;
+                document.getElementById('progressAvgScore').textContent = `${data.stats.average_score}%`;
+                document.getElementById('progressTotalTime').textContent = data.stats.total_time_minutes;
+                
+                // Display recent sessions
+                const activityList = document.getElementById('recentActivityList');
+                
+                if (data.sessions.length === 0) {
+                    activityList.innerHTML = '<p>Complete your first lesson to see your progress!</p>';
+                } else {
+                    activityList.innerHTML = data.sessions.map(session => {
+                        const date = new Date(session.completed_at);
+                        const formattedDate = date.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit'
+                        });
+                        
+                        return `
+                            <div style="padding: 1rem; border-bottom: 1px solid var(--medium-gray); display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: var(--navy-primary);">${session.passage_title}</strong>
+                                    <div style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+                                        ${formattedDate} • ${session.difficulty} • ${session.word_count} words
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: ${session.score >= 80 ? '#28A745' : session.score >= 60 ? '#FFC107' : '#DC3545'};">
+                                        ${Math.round(session.score)}%
+                                    </div>
+                                    <div style="color: #666; font-size: 0.85rem;">
+                                        ${Math.round(session.time_spent / 60)} min
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                
+            } catch (error) {
+                console.error('Error loading progress:', error);
+                document.getElementById('recentActivityList').innerHTML = 
+                    '<p>Unable to load progress data.</p>';
+            }
         }
 
         // Hook into existing showSection function
