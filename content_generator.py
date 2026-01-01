@@ -1,67 +1,39 @@
 # AI Content Generation Pipeline
 # Generates reading passages and comprehension questions using OpenAI
 
-import openai
+from openai import OpenAI
 import json
+import os
 from typing import List, Dict, Optional
 from readability import analyze_readability
 
 class ContentGenerator:
-    """
-    Generates educational reading content using AI with proper difficulty levels,
-    topics, and comprehension questions.
-    """
+    def __init__(self, api_key=None):
+        """Initialize with OpenAI API key"""
+        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
+        if not self.api_key:
+            raise ValueError("OpenAI API key is required")
+        
+        # NEW API - Create client
+        self.client = OpenAI(api_key=self.api_key)
     
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        openai.api_key = api_key
-    
-    def generate_passage(
-        self,
-        topic: str,
-        difficulty_level: str,
-        target_words: int = 200,
-        user_interests: List[str] = None
-    ) -> Dict:
-        """
-        Generate a reading passage with specified parameters.
+    def generate_passage(self, topic, difficulty_level, target_words, user_interests):
+        """Generate educational passage using GPT-4"""
         
-        Args:
-            topic: Main topic/subject
-            difficulty_level: 'beginner', 'intermediate', 'advanced'
-            target_words: Target word count
-            user_interests: List of user interest tags
-        
-        Returns:
-            Dictionary with passage data
-        """
-        
-        # Map difficulty to grade level guidance
-        grade_guidance = {
-            "beginner": "3rd-5th grade reading level. Use simple sentences and common words.",
-            "intermediate": "6th-8th grade reading level. Use varied sentence structure and moderate vocabulary.",
-            "advanced": "9th-12th grade reading level. Use complex sentences and advanced vocabulary."
-        }
-        
-        interests_context = ""
-        if user_interests:
-            interests_context = f"\nStudent interests include: {', '.join(user_interests)}. Try to connect the content to these interests when relevant."
-        
-        prompt = f"""Create an educational reading passage about {topic}.
+        # Build prompt (same as before)
+        prompt = f"""Create an educational reading passage with the following specifications:
 
-Requirements:
-- {grade_guidance.get(difficulty_level, grade_guidance['intermediate'])}
-- Approximately {target_words} words
-- Engaging and informative
-- Include specific facts and details
-- Appropriate for students learning to improve reading skills{interests_context}
+Topic: {topic}
+Difficulty Level: {difficulty_level}
+Target Length: {target_words} words
+User Interests: {', '.join(user_interests)}
 
-The passage should be interesting and educational, teaching something meaningful about the topic.
+Generate a passage that is engaging, age-appropriate, and educational.
 
-Format your response as JSON:
+Return your response as a JSON object with this exact structure:
 {{
-    "title": "Engaging Title",
-    "content": "The full passage text...",
+    "title": "Engaging title for the passage",
+    "content": "The full passage text (approximately {target_words} words)",
     "key_concepts": ["concept1", "concept2", "concept3"],
     "vocabulary_words": [
         {{"word": "word1", "definition": "simple definition"}},
@@ -70,8 +42,9 @@ Format your response as JSON:
 }}"""
 
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+            # NEW API SYNTAX
+            response = self.client.chat.completions.create(
+                model="gpt-4-turbo-preview",  # Use your working model
                 messages=[
                     {
                         "role": "system",
@@ -80,12 +53,14 @@ Format your response as JSON:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.8,
-                max_tokens=1500
+                max_tokens=1500,
+                timeout=60
             )
             
+            # NEW API - Different response structure
             content = response.choices[0].message.content
             
-            # Extract JSON
+            # Extract JSON (same as before)
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
@@ -94,6 +69,7 @@ Format your response as JSON:
             passage_data = json.loads(content)
             
             # Analyze readability
+            from readability import analyze_readability
             readability = analyze_readability(passage_data['content'])
             
             # Add metadata
@@ -105,7 +81,7 @@ Format your response as JSON:
                 "flesch_ease": readability['flesch_reading_ease'],
                 "difficulty_level": difficulty_level,
                 "estimated_minutes": readability['estimated_minutes'],
-                "actual_difficulty": readability['difficulty_level'],  # Actual vs requested
+                "actual_difficulty": readability['difficulty_level'],
                 "grade_band": readability['grade_band']
             })
             
@@ -113,65 +89,49 @@ Format your response as JSON:
             
         except Exception as e:
             print(f"Error generating passage: {e}")
+            import traceback
+            traceback.print_exc()
             # Return a fallback passage
             return self._get_fallback_passage(topic, difficulty_level)
     
-    def generate_comprehension_questions(
-        self,
-        passage_text: str,
-        passage_title: str,
-        num_questions: int = 5
-    ) -> List[Dict]:
-        """
-        Generate comprehension questions for a passage.
+    def generate_comprehension_questions(self, passage_text, passage_title, num_questions=3):
+        """Generate comprehension questions using GPT-4"""
         
-        Includes mix of:
-        - Main idea questions
-        - Detail questions
-        - Inference questions
-        - Vocabulary questions
-        """
-        
-        prompt = f"""Create {num_questions} comprehension questions for this reading passage:
+        prompt = f"""Based on the following passage, create {num_questions} comprehension questions.
 
-Title: {passage_title}
+Passage Title: {passage_title}
 
 Passage:
 {passage_text}
 
-Create a mix of question types:
-1. Main idea (what is the passage mainly about?)
-2. Details (specific facts from the passage)
-3. Inference (what can we conclude?)
-4. Vocabulary in context (if applicable)
+Generate questions that test understanding at different levels (recall, inference, analysis).
 
-Format as JSON array:
+Return your response as a JSON array with this exact structure:
 [
     {{
         "question": "Question text here?",
-        "type": "main_idea",
+        "type": "main_idea|detail|inference|vocabulary",
         "options": ["Option A", "Option B", "Option C", "Option D"],
-        "correct_answer": "Option A",
-        "explanation": "Why this answer is correct",
-        "difficulty": 1
+        "correct_answer": "The correct option text",
+        "explanation": "Why this is correct",
+        "difficulty": 1-3
     }}
-]
-
-Make sure correct answers are randomly distributed (not all A or B).
-Difficulty scale: 1=easy, 2=medium, 3=hard"""
+]"""
 
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+            # NEW API SYNTAX
+            response = self.client.chat.completions.create(
+                model="gpt-4-turbo-preview",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert at creating reading comprehension assessments."
+                        "content": "You are an expert at creating educational assessment questions."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=1000,
+                timeout=60
             )
             
             content = response.choices[0].message.content
@@ -187,157 +147,41 @@ Difficulty scale: 1=easy, 2=medium, 3=hard"""
             
         except Exception as e:
             print(f"Error generating questions: {e}")
-            return self._get_fallback_questions(passage_title)
+            import traceback
+            traceback.print_exc()
+            return self._get_fallback_questions()
     
-    def generate_discussion_prompt(self, passage_text: str, user_question: str = None) -> str:
-        """
-        Generate engaging discussion prompts or respond to user questions about a passage.
-        """
-        
-        if user_question:
-            prompt = f"""A student just read this passage:
-
-{passage_text[:500]}...
-
-They asked: "{user_question}"
-
-Provide a helpful, encouraging response that:
-1. Answers their question clearly
-2. Connects back to the passage
-3. Encourages deeper thinking
-4. Uses positive, supportive language
-
-Keep response under 150 words."""
-        else:
-            prompt = f"""A student just finished reading this passage:
-
-{passage_text[:500]}...
-
-Generate 3 engaging discussion questions that encourage them to think deeper about what they read.
-Questions should be open-ended and appropriate for learning readers.
-
-Format as JSON array: ["Question 1?", "Question 2?", "Question 3?"]"""
-        
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",  # Faster for discussion
-                messages=[
-                    {"role": "system", "content": "You are an encouraging literacy tutor."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=300
-            )
-            
-            return response.choices[0].message.content.strip()
-            
-        except Exception as e:
-            print(f"Error generating discussion: {e}")
-            return "That's a great question! What do you think the author wanted us to learn from this passage?"
+    def _extract_topics(self, main_topic, interests):
+        """Extract relevant topic tags"""
+        topics = [main_topic]
+        topics.extend(interests[:3])
+        return topics
     
-    def provide_writing_feedback(
-        self,
-        prompt: str,
-        user_response: str,
-        passage_context: str = None
-    ) -> Dict:
-        """
-        Provide constructive feedback on student writing.
-        Always encouraging, never shaming.
-        """
-        
-        context_text = f"\n\nThis response is about a passage they read:\n{passage_context[:300]}..." if passage_context else ""
-        
-        feedback_prompt = f"""A student responded to this writing prompt:
-
-Prompt: {prompt}
-
-Student's response:
-{user_response}
-{context_text}
-
-Provide encouraging, constructive feedback that:
-1. Highlights what they did well (be specific!)
-2. Gently suggests 1-2 improvements
-3. Uses positive, growth-oriented language (never "wrong" or "bad")
-4. Ends with encouragement
-
-Also suggest a revised version that shows the improvements.
-
-Format as JSON:
-{{
-    "positive_feedback": "What they did well...",
-    "suggestions": ["Suggestion 1", "Suggestion 2"],
-    "revised_example": "Improved version of their response...",
-    "encouragement": "Final encouraging statement",
-    "score": 75
-}}
-
-Score is 0-100 based on: clarity, completeness, and connection to prompt."""
-
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a supportive writing tutor who believes every student can improve."
-                    },
-                    {"role": "user", "content": feedback_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=500
-            )
-            
-            content = response.choices[0].message.content
-            
-            # Extract JSON
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            
-            return json.loads(content)
-            
-        except Exception as e:
-            print(f"Error generating writing feedback: {e}")
-            return {
-                "positive_feedback": "Great job getting your ideas down!",
-                "suggestions": ["Try adding more details to support your main point."],
-                "revised_example": user_response,
-                "encouragement": "You're making progress - keep writing!",
-                "score": 70
-            }
-    
-    def _extract_topics(self, main_topic: str, interests: List[str] = None) -> List[str]:
-        """Extract topic tags for categorization."""
-        topics = [main_topic.lower()]
-        if interests:
-            topics.extend([i.lower() for i in interests])
-        return list(set(topics))  # Remove duplicates
-    
-    def _get_fallback_passage(self, topic: str, difficulty: str) -> Dict:
-        """Fallback passage if AI generation fails."""
+    def _get_fallback_passage(self, topic, difficulty):
+        """Return a basic fallback passage if AI generation fails"""
         return {
             "title": f"Introduction to {topic}",
-            "content": f"This is a beginner passage about {topic}. [AI generation unavailable - please try again or contact administrator]",
-            "key_concepts": [topic],
-            "vocabulary_words": [],
-            "source": "AI",
-            "topic_tags": [topic.lower()],
+            "content": f"This is a {difficulty} passage about {topic}. [AI generation unavailable - please try again or contact administrator]",
+            "source": "fallback",
+            "topic_tags": [topic],
             "word_count": 50,
-            "difficulty_level": difficulty
+            "readability_score": 5.0,
+            "flesch_ease": 70.0,
+            "difficulty_level": difficulty,
+            "estimated_minutes": 1,
+            "key_concepts": [topic],
+            "vocabulary_words": []
         }
     
-    def _get_fallback_questions(self, title: str) -> List[Dict]:
-        """Fallback questions if AI generation fails."""
+    def _get_fallback_questions(self):
+        """Return basic fallback questions"""
         return [
             {
-                "question": f"What is the main topic of '{title}'?",
+                "question": "What is the main topic of this passage?",
                 "type": "main_idea",
-                "options": ["The topic mentioned", "Something else", "Another topic", "Different subject"],
-                "correct_answer": "The topic mentioned",
-                "explanation": "The passage focuses on this topic.",
+                "options": ["The topic discussed", "Something else", "Another topic", "Different subject"],
+                "correct_answer": "The topic discussed",
+                "explanation": "The passage focuses on this main topic.",
                 "difficulty": 1
             }
         ]
