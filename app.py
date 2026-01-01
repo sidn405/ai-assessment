@@ -1431,170 +1431,355 @@ async def get_enhanced_analytics(token: str):
 
 @app.get("/api/lessons/next")
 async def get_next_lesson(token: str):
-    """Get next AI-generated lesson based on user profile"""
-    user_data = verify_token(token)
-    user_id = user_data["user_id"]
+    """Get next AI-generated lesson - SIMPLIFIED VERSION"""
     
-    if not content_generator:
-        raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Get user profile
-    if USE_POSTGRES:
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-    else:
-        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    
-    user = cursor.fetchone()
-    
-    if not user:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Parse user interests
-    interest_tags = user.get('interest_tags') or user.get('interests') or '[]'
-    if isinstance(interest_tags, str):
-        try:
-            interests = json.loads(interest_tags)
-        except:
-            interests = []
-    else:
-        interests = interest_tags if interest_tags else []
-    
-    if not interests:
-        interests = ['general reading', 'education']
-    
-    level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
-    total_read = user.get('total_passages_read') or 0
-    
-    # Get recent performance
-    if USE_POSTGRES:
-        cursor.execute(
-            "SELECT * FROM session_logs WHERE user_id = %s ORDER BY completed_at DESC LIMIT 5",
-            (user_id,)
-        )
-    else:
-        cursor.execute(
-            "SELECT * FROM session_logs WHERE user_id = ? ORDER BY completed_at DESC LIMIT 5",
-            (user_id,)
-        )
-    
-    recent = cursor.fetchall()
-    conn.close()
-    
-    user_profile = {
-        "reading_level": level_estimate,
-        "interests": interests
-    }
-    
-    performance = {
-        "average_score": sum([r.get('score') or r.get('comprehension_score') or 0 for r in recent]) / len(recent) if recent else 0,
-        "completed_count": len(recent)
-    }
-    
-    # Determine difficulty and topic
-    topic = random.choice(interests) if interests else "reading skills"
-    difficulty = level_estimate
-    
-    # Make first lesson easier (quick win)
-    if total_read == 0:
-        difficulty = "beginner" if level_estimate == "intermediate" else level_estimate
-        target_words = 150
-    else:
-        target_words = 200
-    
-    print(f"Generating lesson: topic={topic}, difficulty={difficulty}, words={target_words}")
+    print("=" * 50)
+    print("LESSON REQUEST RECEIVED")
+    print("=" * 50)
     
     try:
-        # Generate passage (this is the lesson content)
-        passage_data = content_generator.generate_passage(
-            topic=topic,
-            difficulty_level=difficulty,
-            target_words=target_words,
-            user_interests=interests
-        )
+        # Step 1: Verify token
+        print("Step 1: Verifying token...")
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        print(f"✓ User ID: {user_id}")
         
-        # Save to database as a lesson
+        # Step 2: Check content generator
+        print("Step 2: Checking content generator...")
+        if not content_generator:
+            error_msg = "Content generator not initialized. OpenAI API key may be missing."
+            print(f"✗ ERROR: {error_msg}")
+            raise HTTPException(status_code=503, detail=error_msg)
+        print("✓ Content generator available")
+        
+        # Step 3: Get user profile
+        print("Step 3: Fetching user from database...")
         conn = get_db()
         cursor = conn.cursor()
         
         if USE_POSTGRES:
-            cursor.execute(
-                """INSERT INTO passages 
-                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
-                    difficulty_level, estimated_minutes, approved, created_by)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                (passage_data['title'], passage_data['content'], passage_data['source'],
-                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                 True, user_id)
-            )
-            result = cursor.fetchone()
-            lesson_id = result['id']
+            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
         else:
-            cursor.execute(
-                """INSERT INTO passages 
-                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                    difficulty_level, estimated_minutes, approved, created_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (passage_data['title'], passage_data['content'], passage_data['source'],
-                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                 True, user_id)
-            )
-            lesson_id = cursor.lastrowid
+            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         
-        # Generate comprehension questions
-        questions = content_generator.generate_comprehension_questions(
-            passage_text=passage_data['content'],
-            passage_title=passage_data['title'],
-            num_questions=3
-        )
+        user = cursor.fetchone()
         
-        # Save questions to database
-        for q in questions:
-            if USE_POSTGRES:
-                cursor.execute(
-                    """INSERT INTO passage_questions 
-                       (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                    (lesson_id, q['question'], q.get('type'), q['correct_answer'],
-                     json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
-                )
+        if not user:
+            conn.close()
+            error_msg = f"User {user_id} not found"
+            print(f"✗ ERROR: {error_msg}")
+            raise HTTPException(status_code=404, detail=error_msg)
+        
+        print(f"✓ User found: {user.get('full_name') or user.get('email')}")
+        
+        # Step 4: Parse user interests
+        print("Step 4: Parsing user interests...")
+        interest_tags = user.get('interest_tags') or user.get('interests') or '[]'
+        
+        try:
+            if isinstance(interest_tags, str):
+                interests = json.loads(interest_tags)
             else:
-                cursor.execute(
-                    """INSERT INTO passage_questions 
-                       (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (lesson_id, q['question'], q.get('type'), q['correct_answer'],
-                     json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
-                )
+                interests = list(interest_tags) if interest_tags else []
+        except Exception as e:
+            print(f"Warning: Could not parse interests: {e}")
+            interests = []
         
-        conn.commit()
+        if not interests:
+            interests = ['general reading', 'education']
+        
+        print(f"✓ Interests: {interests}")
+        
+        # Step 5: Determine difficulty
+        print("Step 5: Determining difficulty level...")
+        level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
+        total_read = user.get('total_passages_read') or 0
+        
+        difficulty = level_estimate
+        target_words = 200
+        
+        # First lesson should be easier
+        if total_read == 0:
+            if level_estimate == "intermediate":
+                difficulty = "beginner"
+            target_words = 150
+        
+        print(f"✓ Difficulty: {difficulty}, Target words: {target_words}")
+        
+        # Step 6: Select topic
+        print("Step 6: Selecting topic...")
+        import random
+        topic = random.choice(interests)
+        print(f"✓ Selected topic: {topic}")
+        
         conn.close()
         
+        # Step 7: Generate passage
+        print("Step 7: Generating passage with OpenAI...")
+        print(f"   Topic: {topic}")
+        print(f"   Difficulty: {difficulty}")
+        print(f"   Words: {target_words}")
+        print(f"   Interests: {interests}")
+        
+        try:
+            passage_data = content_generator.generate_passage(
+                topic=topic,
+                difficulty_level=difficulty,
+                target_words=target_words,
+                user_interests=interests
+            )
+            print("✓ Passage generated successfully")
+            print(f"   Title: {passage_data.get('title')}")
+            print(f"   Word count: {passage_data.get('word_count')}")
+            
+        except Exception as gen_error:
+            print(f"✗ ERROR generating passage: {gen_error}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(gen_error)}")
+        
+        # Step 8: Save to database
+        print("Step 8: Saving passage to database...")
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        try:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """INSERT INTO passages 
+                       (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
+                        difficulty_level, estimated_minutes, approved, created_by)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                    (passage_data['title'], passage_data['content'], passage_data['source'],
+                     json.dumps(passage_data['topic_tags']), passage_data['word_count'],
+                     passage_data.get('readability_score'), passage_data.get('flesch_ease'),
+                     passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                     True, user_id)
+                )
+                result = cursor.fetchone()
+                lesson_id = result['id']
+            else:
+                cursor.execute(
+                    """INSERT INTO passages 
+                       (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
+                        difficulty_level, estimated_minutes, approved, created_by)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (passage_data['title'], passage_data['content'], passage_data['source'],
+                     json.dumps(passage_data['topic_tags']), passage_data['word_count'],
+                     passage_data.get('readability_score'), passage_data.get('flesch_ease'),
+                     passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                     True, user_id)
+                )
+                lesson_id = cursor.lastrowid
+            
+            print(f"✓ Passage saved with ID: {lesson_id}")
+            
+        except Exception as db_error:
+            print(f"✗ ERROR saving passage: {db_error}")
+            import traceback
+            traceback.print_exc()
+            conn.close()
+            raise HTTPException(status_code=500, detail=f"Failed to save passage: {str(db_error)}")
+        
+        # Step 9: Generate questions
+        print("Step 9: Generating comprehension questions...")
+        try:
+            questions = content_generator.generate_comprehension_questions(
+                passage_text=passage_data['content'],
+                passage_title=passage_data['title'],
+                num_questions=3
+            )
+            print(f"✓ Generated {len(questions)} questions")
+            
+        except Exception as q_error:
+            print(f"✗ ERROR generating questions: {q_error}")
+            import traceback
+            traceback.print_exc()
+            # Use fallback questions instead of failing
+            questions = [
+                {
+                    "question": "What is the main topic of this passage?",
+                    "type": "main_idea",
+                    "options": ["The topic discussed", "Something else", "Another topic", "Different subject"],
+                    "correct_answer": "The topic discussed",
+                    "explanation": "The passage focuses on this main topic.",
+                    "difficulty": 1
+                }
+            ]
+            print("Using fallback questions")
+        
+        # Step 10: Save questions
+        print("Step 10: Saving questions to database...")
+        try:
+            for q in questions:
+                if USE_POSTGRES:
+                    cursor.execute(
+                        """INSERT INTO passage_questions 
+                           (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                        (lesson_id, q['question'], q.get('type'), q['correct_answer'],
+                         json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO passage_questions 
+                           (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (lesson_id, q['question'], q.get('type'), q['correct_answer'],
+                         json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                    )
+            
+            conn.commit()
+            print(f"✓ Saved {len(questions)} questions")
+            
+        except Exception as save_q_error:
+            print(f"✗ ERROR saving questions: {save_q_error}")
+            import traceback
+            traceback.print_exc()
+            conn.rollback()
+            # Continue anyway - we have the passage
+        
+        conn.close()
+        
+        # Step 11: Update user activity
+        print("Step 11: Updating user activity...")
         update_user_activity(user_id)
         
-        # Format for frontend (Phase 1 dashboard expects specific format)
-        return {
+        # Step 12: Format response
+        print("Step 12: Formatting response...")
+        response = {
             'id': lesson_id,
             'title': passage_data['title'],
             'content': passage_data['content'],
             'difficulty_level': passage_data['difficulty_level'],
+            'word_count': passage_data['word_count'],
             'key_points': passage_data.get('key_concepts', []),
             'vocabulary': passage_data.get('vocabulary_words', []),
             'questions': questions
         }
         
+        print("=" * 50)
+        print("✓ LESSON GENERATED SUCCESSFULLY")
+        print("=" * 50)
+        
+        return response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        print(f"Error generating lesson: {e}")
+        # Catch all other errors
+        print("=" * 50)
+        print(f"✗ UNEXPECTED ERROR: {e}")
+        print("=" * 50)
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to generate lesson: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    
+@app.get("/api/lessons/debug")
+async def debug_lesson_generation(token: str):
+    """Debug endpoint to see what's failing"""
+    import sys
+    
+    debug_info = {
+        "step": "starting",
+        "error": None,
+        "details": {}
+    }
+    
+    try:
+        # Step 1: Verify token
+        debug_info["step"] = "verifying_token"
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        debug_info["details"]["user_id"] = user_id
+        
+        # Step 2: Check content generator
+        debug_info["step"] = "checking_content_generator"
+        debug_info["details"]["content_generator_exists"] = content_generator is not None
+        debug_info["details"]["openai_key_configured"] = bool(OPENAI_API_KEY)
+        
+        if not content_generator:
+            raise Exception("Content generator is None - OpenAI API key issue")
+        
+        # Step 3: Get user from database
+        debug_info["step"] = "fetching_user"
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        
+        user = cursor.fetchone()
+        
+        if not user:
+            raise Exception(f"User {user_id} not found in database")
+        
+        debug_info["details"]["user_found"] = True
+        debug_info["details"]["user_level"] = user.get('level_estimate') or user.get('reading_level')
+        
+        # Step 4: Parse interests
+        debug_info["step"] = "parsing_interests"
+        interest_tags = user.get('interest_tags') or user.get('interests') or '[]'
+        
+        try:
+            if isinstance(interest_tags, str):
+                interests = json.loads(interest_tags)
+            else:
+                interests = interest_tags
+        except:
+            interests = []
+        
+        if not interests:
+            interests = ['general reading', 'education']
+        
+        debug_info["details"]["interests"] = interests
+        
+        # Step 5: Select topic
+        debug_info["step"] = "selecting_topic"
+        import random
+        topic = random.choice(interests)
+        debug_info["details"]["selected_topic"] = topic
+        
+        # Step 6: Test content generator
+        debug_info["step"] = "testing_content_generator"
+        
+        # Try to generate a simple passage
+        passage_data = content_generator.generate_passage(
+            topic=topic,
+            difficulty_level="intermediate",
+            target_words=100,
+            user_interests=interests
+        )
+        
+        debug_info["details"]["passage_generated"] = True
+        debug_info["details"]["passage_title"] = passage_data.get('title')
+        debug_info["details"]["passage_word_count"] = passage_data.get('word_count')
+        
+        conn.close()
+        
+        debug_info["step"] = "success"
+        return {
+            "success": True,
+            "debug_info": debug_info,
+            "message": "All checks passed! Lesson generation should work."
+        }
+        
+    except Exception as e:
+        debug_info["error"] = str(e)
+        debug_info["error_type"] = type(e).__name__
+        
+        # Get full traceback
+        import traceback
+        debug_info["traceback"] = traceback.format_exc()
+        
+        return {
+            "success": False,
+            "debug_info": debug_info,
+            "message": f"Error at step: {debug_info['step']}"
+        }
 
 @app.post("/api/lessons/progress")
 async def save_lesson_progress(request: Request):
