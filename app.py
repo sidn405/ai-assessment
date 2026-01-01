@@ -1936,6 +1936,187 @@ async def get_student_details(student_id: int, token: str):
         "sessions": sessions,
         "writing": writing
     }
+    
+# ADD THIS ENDPOINT TO YOUR app.py
+# Put it anywhere after your other endpoints
+
+@app.post("/api/admin/migrate")
+async def run_migration(request: Request):
+    """Run database migration - ADMIN ONLY"""
+    data = await request.json()
+    token = data.get("token")
+    
+    # Verify admin
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    results = []
+    
+    try:
+        # Create passages table
+        results.append("Creating passages table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS passages (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                content TEXT NOT NULL,
+                source VARCHAR(50) NOT NULL,
+                topic_tags TEXT,
+                word_count INTEGER NOT NULL,
+                readability_score REAL,
+                flesch_ease REAL,
+                difficulty_level VARCHAR(20),
+                estimated_minutes INTEGER,
+                approved BOOLEAN DEFAULT FALSE,
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                metadata TEXT
+            )
+        """)
+        results.append("✓ Passages table created")
+        
+        # Create indexes for passages
+        results.append("Creating indexes for passages...")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_difficulty ON passages(difficulty_level)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_word_count ON passages(word_count)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_approved ON passages(approved)")
+        results.append("✓ Passages indexes created")
+        
+        # Create passage_questions table
+        results.append("Creating passage_questions table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS passage_questions (
+                id SERIAL PRIMARY KEY,
+                passage_id INTEGER NOT NULL,
+                question_text TEXT NOT NULL,
+                question_type VARCHAR(50),
+                correct_answer TEXT NOT NULL,
+                options TEXT,
+                explanation TEXT,
+                difficulty INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (passage_id) REFERENCES passages(id) ON DELETE CASCADE
+            )
+        """)
+        results.append("✓ Passage_questions table created")
+        
+        # Create index for questions
+        results.append("Creating index for questions...")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_questions_passage ON passage_questions(passage_id)")
+        results.append("✓ Questions index created")
+        
+        # Create session_logs table
+        results.append("Creating session_logs table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS session_logs (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                passage_id INTEGER NOT NULL,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                completion_status VARCHAR(20),
+                time_spent_seconds INTEGER,
+                feedback VARCHAR(20),
+                comprehension_score REAL,
+                answers TEXT,
+                notes TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (passage_id) REFERENCES passages(id)
+            )
+        """)
+        results.append("✓ Session_logs table created")
+        
+        # Create indexes for session_logs
+        results.append("Creating indexes for session_logs...")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_user ON session_logs(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_passage ON session_logs(passage_id)")
+        results.append("✓ Session_logs indexes created")
+        
+        # Create writing_exercises table
+        results.append("Creating writing_exercises table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS writing_exercises (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                passage_id INTEGER,
+                prompt TEXT NOT NULL,
+                user_response TEXT NOT NULL,
+                ai_feedback TEXT,
+                score REAL,
+                revised_response TEXT,
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                revision_submitted_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (passage_id) REFERENCES passages(id)
+            )
+        """)
+        results.append("✓ Writing_exercises table created")
+        
+        # Create vocabulary_tracker table
+        results.append("Creating vocabulary_tracker table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vocabulary_tracker (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                word VARCHAR(100) NOT NULL,
+                definition TEXT,
+                encountered_count INTEGER DEFAULT 1,
+                mastered BOOLEAN DEFAULT FALSE,
+                context_passage_id INTEGER,
+                first_encountered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_reviewed TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (context_passage_id) REFERENCES passages(id)
+            )
+        """)
+        results.append("✓ Vocabulary_tracker table created")
+        
+        # Create discussions table
+        results.append("Creating discussions table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS discussions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                passage_id INTEGER NOT NULL,
+                message_role VARCHAR(20) NOT NULL,
+                message_content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (passage_id) REFERENCES passages(id)
+            )
+        """)
+        results.append("✓ Discussions table created")
+        
+        conn.commit()
+        results.append("=" * 50)
+        results.append("✓✓✓ MIGRATION COMPLETE ✓✓✓")
+        results.append("=" * 50)
+        
+        return {
+            "success": True,
+            "message": "Migration completed successfully",
+            "details": results
+        }
+        
+    except Exception as e:
+        conn.rollback()
+        results.append(f"✗ ERROR: {str(e)}")
+        import traceback
+        results.append(traceback.format_exc())
+        
+        return {
+            "success": False,
+            "message": "Migration failed",
+            "details": results,
+            "error": str(e)
+        }
+    finally:
+        conn.close()
 
 @app.get("/api/admin/analytics")
 async def get_analytics(token: str):
