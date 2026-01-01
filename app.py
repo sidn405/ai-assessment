@@ -701,6 +701,54 @@ async def run_migration(request: Request):
         }
     finally:
         conn.close()
+        
+# ADD THIS TO app.py - Simple table checker
+
+@app.get("/api/admin/check-tables")
+async def check_tables():
+    """Check which tables exist in the database"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Query to get all table names
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """)
+        
+        tables = [row[0] if isinstance(row, tuple) else row['table_name'] for row in cursor.fetchall()]
+        
+        # Check which Phase 2 tables exist
+        required_tables = [
+            'passages',
+            'passage_questions', 
+            'session_logs',
+            'writing_exercises',
+            'vocabulary_tracker',
+            'discussions'
+        ]
+        
+        missing_tables = [t for t in required_tables if t not in tables]
+        
+        conn.close()
+        
+        return {
+            "all_tables": tables,
+            "required_tables": required_tables,
+            "missing_tables": missing_tables,
+            "migration_needed": len(missing_tables) > 0,
+            "status": "incomplete" if missing_tables else "complete"
+        }
+        
+    except Exception as e:
+        conn.close()
+        return {
+            "error": str(e),
+            "status": "error"
+        }
 
 # ============================================
 # PHASE 2: ONBOARDING ENDPOINTS
