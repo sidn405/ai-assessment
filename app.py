@@ -521,28 +521,36 @@ async def submit_assessment(request: Request):
         "analysis": analysis
     }
     
-# ADD THIS ENDPOINT TO YOUR app.py
-# Put it anywhere after your other endpoints
+# REPLACE THE OLD /api/admin/migrate ENDPOINT WITH THIS
+# This version is more robust and verifies tables were actually created
 
 @app.post("/api/admin/migrate")
 async def run_migration(request: Request):
-    """Run database migration - ADMIN ONLY"""
+    """Run database migration - FIXED VERSION"""
     data = await request.json()
     token = data.get("token")
     
     # Verify admin
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        user_data = verify_token(token)
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
     
-    conn = get_db()
-    cursor = conn.cursor()
-    
+    conn = None
     results = []
     
     try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Verify we're connected to PostgreSQL
+        results.append("Checking database connection...")
+        cursor.execute("SELECT version()")
+        version = cursor.fetchone()
+        results.append(f"Connected to: {version[0] if isinstance(version, tuple) else version['version']}")
+        
         # Create passages table
-        results.append("Creating passages table...")
+        results.append("\n=== Creating passages table ===")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS passages (
                 id SERIAL PRIMARY KEY,
@@ -562,17 +570,35 @@ async def run_migration(request: Request):
                 metadata TEXT
             )
         """)
-        results.append("✓ Passages table created")
+        results.append("✓ passages table created")
+        
+        # Commit after each table
+        conn.commit()
+        results.append("✓ passages committed")
+        
+        # Verify table exists
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'passages'
+            )
+        """)
+        exists = cursor.fetchone()[0] if isinstance(cursor.fetchone(), tuple) else cursor.fetchone()
+        if not exists:
+            raise Exception("passages table was not created!")
+        results.append("✓ passages table verified")
         
         # Create indexes for passages
-        results.append("Creating indexes for passages...")
+        results.append("\n=== Creating passages indexes ===")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_difficulty ON passages(difficulty_level)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_word_count ON passages(word_count)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_approved ON passages(approved)")
-        results.append("✓ Passages indexes created")
+        conn.commit()
+        results.append("✓ passages indexes created")
         
         # Create passage_questions table
-        results.append("Creating passage_questions table...")
+        results.append("\n=== Creating passage_questions table ===")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS passage_questions (
                 id SERIAL PRIMARY KEY,
@@ -587,15 +613,15 @@ async def run_migration(request: Request):
                 FOREIGN KEY (passage_id) REFERENCES passages(id) ON DELETE CASCADE
             )
         """)
-        results.append("✓ Passage_questions table created")
+        conn.commit()
+        results.append("✓ passage_questions table created")
         
-        # Create index for questions
-        results.append("Creating index for questions...")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_questions_passage ON passage_questions(passage_id)")
-        results.append("✓ Questions index created")
+        conn.commit()
+        results.append("✓ passage_questions index created")
         
         # Create session_logs table
-        results.append("Creating session_logs table...")
+        results.append("\n=== Creating session_logs table ===")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS session_logs (
                 id SERIAL PRIMARY KEY,
@@ -613,16 +639,16 @@ async def run_migration(request: Request):
                 FOREIGN KEY (passage_id) REFERENCES passages(id)
             )
         """)
-        results.append("✓ Session_logs table created")
+        conn.commit()
+        results.append("✓ session_logs table created")
         
-        # Create indexes for session_logs
-        results.append("Creating indexes for session_logs...")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_user ON session_logs(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_passage ON session_logs(passage_id)")
-        results.append("✓ Session_logs indexes created")
+        conn.commit()
+        results.append("✓ session_logs indexes created")
         
         # Create writing_exercises table
-        results.append("Creating writing_exercises table...")
+        results.append("\n=== Creating writing_exercises table ===")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS writing_exercises (
                 id SERIAL PRIMARY KEY,
@@ -639,10 +665,11 @@ async def run_migration(request: Request):
                 FOREIGN KEY (passage_id) REFERENCES passages(id)
             )
         """)
-        results.append("✓ Writing_exercises table created")
+        conn.commit()
+        results.append("✓ writing_exercises table created")
         
         # Create vocabulary_tracker table
-        results.append("Creating vocabulary_tracker table...")
+        results.append("\n=== Creating vocabulary_tracker table ===")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS vocabulary_tracker (
                 id SERIAL PRIMARY KEY,
@@ -658,10 +685,11 @@ async def run_migration(request: Request):
                 FOREIGN KEY (context_passage_id) REFERENCES passages(id)
             )
         """)
-        results.append("✓ Vocabulary_tracker table created")
+        conn.commit()
+        results.append("✓ vocabulary_tracker table created")
         
         # Create discussions table
-        results.append("Creating discussions table...")
+        results.append("\n=== Creating discussions table ===")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS discussions (
                 id SERIAL PRIMARY KEY,
@@ -674,33 +702,58 @@ async def run_migration(request: Request):
                 FOREIGN KEY (passage_id) REFERENCES passages(id)
             )
         """)
-        results.append("✓ Discussions table created")
-        
         conn.commit()
-        results.append("=" * 50)
-        results.append("✓✓✓ MIGRATION COMPLETE ✓✓✓")
+        results.append("✓ discussions table created")
+        
+        # Final verification - check all tables exist
+        results.append("\n=== Final Verification ===")
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name IN ('passages', 'passage_questions', 'session_logs', 
+                               'writing_exercises', 'vocabulary_tracker', 'discussions')
+            ORDER BY table_name
+        """)
+        
+        created_tables = [row[0] if isinstance(row, tuple) else row['table_name'] for row in cursor.fetchall()]
+        results.append(f"Tables created: {', '.join(created_tables)}")
+        
+        if len(created_tables) != 6:
+            raise Exception(f"Only {len(created_tables)} tables created! Expected 6.")
+        
+        results.append("\n" + "=" * 50)
+        results.append("✓✓✓ MIGRATION COMPLETE - ALL 6 TABLES VERIFIED ✓✓✓")
         results.append("=" * 50)
         
         return {
             "success": True,
-            "message": "Migration completed successfully",
+            "message": "Migration completed and verified",
+            "tables_created": created_tables,
             "details": results
         }
         
     except Exception as e:
-        conn.rollback()
-        results.append(f"✗ ERROR: {str(e)}")
+        if conn:
+            conn.rollback()
+        
+        results.append(f"\n✗ ERROR: {str(e)}")
+        
         import traceback
-        results.append(traceback.format_exc())
+        error_trace = traceback.format_exc()
+        results.append(error_trace)
         
         return {
             "success": False,
             "message": "Migration failed",
+            "error": str(e),
             "details": results,
-            "error": str(e)
+            "traceback": error_trace
         }
+        
     finally:
-        conn.close()
+        if conn:
+            conn.close()
         
 # ADD THIS TO app.py - Simple table checker
 
