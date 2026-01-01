@@ -1425,26 +1425,235 @@ async def get_enhanced_analytics(token: str):
     }
 
 # ============================================
-# LESSONS ENDPOINTS (Phase 1 compatibility)
+# LESSONS ENDPOINTS (Phase 2 - AI Generated)
 # ============================================
 
 @app.get("/api/lessons/next")
 async def get_next_lesson(token: str):
-    """Get next lesson (Phase 1 compatibility - redirects to Phase 2 reading)"""
-    # For Phase 1 compatibility, redirect to reading sample
-    return await get_reading_sample(token, "appropriate")
+    """Get next AI-generated lesson based on user profile"""
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    if not content_generator:
+        raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get user profile
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Parse user interests
+    interest_tags = user.get('interest_tags') or user.get('interests') or '[]'
+    if isinstance(interest_tags, str):
+        try:
+            interests = json.loads(interest_tags)
+        except:
+            interests = []
+    else:
+        interests = interest_tags if interest_tags else []
+    
+    if not interests:
+        interests = ['general reading', 'education']
+    
+    level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
+    total_read = user.get('total_passages_read') or 0
+    
+    # Get recent performance
+    if USE_POSTGRES:
+        cursor.execute(
+            "SELECT * FROM session_logs WHERE user_id = %s ORDER BY completed_at DESC LIMIT 5",
+            (user_id,)
+        )
+    else:
+        cursor.execute(
+            "SELECT * FROM session_logs WHERE user_id = ? ORDER BY completed_at DESC LIMIT 5",
+            (user_id,)
+        )
+    
+    recent = cursor.fetchall()
+    conn.close()
+    
+    user_profile = {
+        "reading_level": level_estimate,
+        "interests": interests
+    }
+    
+    performance = {
+        "average_score": sum([r.get('score') or r.get('comprehension_score') or 0 for r in recent]) / len(recent) if recent else 0,
+        "completed_count": len(recent)
+    }
+    
+    # Determine difficulty and topic
+    topic = random.choice(interests) if interests else "reading skills"
+    difficulty = level_estimate
+    
+    # Make first lesson easier (quick win)
+    if total_read == 0:
+        difficulty = "beginner" if level_estimate == "intermediate" else level_estimate
+        target_words = 150
+    else:
+        target_words = 200
+    
+    print(f"Generating lesson: topic={topic}, difficulty={difficulty}, words={target_words}")
+    
+    try:
+        # Generate passage (this is the lesson content)
+        passage_data = content_generator.generate_passage(
+            topic=topic,
+            difficulty_level=difficulty,
+            target_words=target_words,
+            user_interests=interests
+        )
+        
+        # Save to database as a lesson
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO passages 
+                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
+                    difficulty_level, estimated_minutes, approved, created_by)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (passage_data['title'], passage_data['content'], passage_data['source'],
+                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
+                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
+                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                 True, user_id)
+            )
+            result = cursor.fetchone()
+            lesson_id = result['id']
+        else:
+            cursor.execute(
+                """INSERT INTO passages 
+                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
+                    difficulty_level, estimated_minutes, approved, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (passage_data['title'], passage_data['content'], passage_data['source'],
+                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
+                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
+                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                 True, user_id)
+            )
+            lesson_id = cursor.lastrowid
+        
+        # Generate comprehension questions
+        questions = content_generator.generate_comprehension_questions(
+            passage_text=passage_data['content'],
+            passage_title=passage_data['title'],
+            num_questions=3
+        )
+        
+        # Save questions to database
+        for q in questions:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """INSERT INTO passage_questions 
+                       (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (lesson_id, q['question'], q.get('type'), q['correct_answer'],
+                     json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                )
+            else:
+                cursor.execute(
+                    """INSERT INTO passage_questions 
+                       (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (lesson_id, q['question'], q.get('type'), q['correct_answer'],
+                     json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                )
+        
+        conn.commit()
+        conn.close()
+        
+        update_user_activity(user_id)
+        
+        # Format for frontend (Phase 1 dashboard expects specific format)
+        return {
+            'id': lesson_id,
+            'title': passage_data['title'],
+            'content': passage_data['content'],
+            'difficulty_level': passage_data['difficulty_level'],
+            'key_points': passage_data.get('key_concepts', []),
+            'vocabulary': passage_data.get('vocabulary_words', []),
+            'questions': questions
+        }
+        
+    except Exception as e:
+        print(f"Error generating lesson: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate lesson: {str(e)}")
 
 @app.post("/api/lessons/progress")
 async def save_lesson_progress(request: Request):
-    """Save lesson progress (Phase 1 compatibility)"""
+    """Save lesson progress"""
     data = await request.json()
     token = data.get("token")
     
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")
     
-    # For Phase 1 compatibility, just acknowledge
-    return {"success": True, "message": "Progress saved"}
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    lesson_id = data.get('lesson_id')
+    completed = data.get('completed', False)
+    score = data.get('score')
+    time_spent = data.get('time_spent', 0)
+    
+    # Save to session_logs
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute(
+            """INSERT INTO session_logs 
+               (user_id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            (user_id, lesson_id, 'completed' if completed else 'partial', score, time_spent, 
+             datetime.utcnow() if completed else None)
+        )
+        
+        # Update user stats
+        cursor.execute(
+            """UPDATE users 
+               SET total_passages_read = total_passages_read + 1,
+                   last_active = NOW()
+               WHERE id = %s""",
+            (user_id,)
+        )
+    else:
+        cursor.execute(
+            """INSERT INTO session_logs 
+               (user_id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user_id, lesson_id, 'completed' if completed else 'partial', score, time_spent,
+             datetime.utcnow() if completed else None)
+        )
+        
+        cursor.execute(
+            """UPDATE users 
+               SET total_passages_read = total_passages_read + 1,
+                   last_active = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (user_id,)
+        )
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": "Great work! Keep it up!"}
 
 # ============================================
 # ADMIN ENDPOINTS (Original + Enhanced)
