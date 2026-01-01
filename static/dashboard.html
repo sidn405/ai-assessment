@@ -393,11 +393,57 @@
             <!-- Lessons Section -->
             <div id="lessonsSection" class="hidden">
                 <div class="header">
-                    <h1>Your Personalized Lessons</h1>
+                    <h1>📚 Your Personalized Lessons</h1>
                     <p>Adaptive content based on your interests and skill level</p>
                 </div>
-                <div class="card">
+                
+                <!-- Loading State -->
+                <div id="lessonLoading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Generating your personalized lesson...</p>
+                </div>
+                
+                <!-- Lesson Content Card -->
+                <div id="lessonContentCard" class="card hidden">
+                    <div class="lesson-header" style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 2px solid var(--light-gray);">
+                        <h2 id="lessonTitle" style="color: var(--navy-primary); margin-bottom: 0.5rem;"></h2>
+                        <div style="display: flex; gap: 2rem; color: var(--text-gray); font-size: 0.9rem;">
+                            <span>📊 Level: <span id="lessonLevel" style="font-weight: 600;"></span></span>
+                            <span>📝 <span id="lessonWords" style="font-weight: 600;"></span> words</span>
+                        </div>
+                    </div>
+                    
+                    <div id="lessonText" style="font-size: 1.1rem; line-height: 1.8; margin-bottom: 2rem;"></div>
+                    
+                    <!-- Vocabulary Section -->
+                    <div id="vocabularySection" class="hidden" style="background: var(--navy-primary); color: var(--white); padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+                        <h3 style="color: var(--gold-accent); margin-bottom: 1rem;">📚 Key Vocabulary</h3>
+                        <div id="vocabularyList" style="display: grid; gap: 1rem;"></div>
+                    </div>
+                </div>
+                
+                <!-- Questions Card -->
+                <div id="questionsCard" class="card hidden">
+                    <h2 style="margin-bottom: 1.5rem;">Check Your Understanding</h2>
+                    <div id="lessonQuestions"></div>
+                    <button class="btn btn-primary" onclick="submitLessonAnswers()" style="margin-top: 1.5rem;">
+                        Submit Answers
+                    </button>
+                </div>
+                
+                <!-- Results Card -->
+                <div id="lessonResultsCard" class="card hidden">
+                    <div class="alert alert-success" style="background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 1.5rem; border-radius: 6px; margin-bottom: 1.5rem;">
+                        <strong>🎉 Great Job!</strong>
+                        <p id="resultsMessage" style="margin-top: 0.5rem;"></p>
+                    </div>
+                    <button class="btn btn-primary" onclick="loadNextLesson()">Next Lesson</button>
+                </div>
+                
+                <!-- No Lessons Yet -->
+                <div id="noLessons" class="card">
                     <p>Lessons will appear here after you complete your assessment.</p>
+                    <button class="btn btn-primary" onclick="showSection('assessment', event)">Take Assessment</button>
                 </div>
             </div>
 
@@ -752,12 +798,302 @@
             return levels[level] || level;
         }
 
+        // ============================================
+        // ADD THIS JAVASCRIPT TO dashboard.html 
+        // Insert before the closing </script> tag (around line 760)
+        // ============================================
+
+        // Lesson Management
+        let currentLesson = null;
+        let lessonAnswers = [];
+        let lessonStartTime = null;
+
+        async function loadNextLesson() {
+            console.log('=== loadNextLesson START ===');
+            
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+            
+            // Hide all lesson elements
+            document.getElementById('noLessons').classList.add('hidden');
+            document.getElementById('lessonContentCard')?.classList.add('hidden');
+            document.getElementById('questionsCard')?.classList.add('hidden');
+            document.getElementById('lessonResultsCard')?.classList.add('hidden');
+            
+            // Show loading
+            document.getElementById('lessonLoading').classList.remove('hidden');
+            
+            lessonStartTime = Date.now();
+            
+            try {
+                console.log('Fetching lesson from API...');
+                const response = await fetch(`/api/lessons/next?token=${token}`);
+                
+                console.log('Lesson response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const lesson = await response.json();
+                console.log('Lesson received:', lesson.title);
+                
+                currentLesson = lesson;
+                lessonAnswers = [];
+                
+                displayLesson(lesson);
+                
+            } catch (error) {
+                console.error('Error loading lesson:', error);
+                document.getElementById('lessonLoading').classList.add('hidden');
+                
+                // Show error in card
+                const errorCard = document.createElement('div');
+                errorCard.className = 'card';
+                errorCard.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>Unable to load lesson</strong>
+                        <p>${error.message}</p>
+                        <button class="btn btn-primary" onclick="loadNextLesson()">Try Again</button>
+                    </div>
+                `;
+                document.getElementById('lessonsSection').appendChild(errorCard);
+            }
+            
+            console.log('=== loadNextLesson END ===');
+        }
+
+        function displayLesson(lesson) {
+            console.log('=== displayLesson START ===');
+            
+            // Hide loading
+            document.getElementById('lessonLoading').classList.add('hidden');
+            
+            // Show lesson content card
+            const contentCard = document.getElementById('lessonContentCard');
+            contentCard.classList.remove('hidden');
+            
+            // Set lesson data
+            document.getElementById('lessonTitle').textContent = lesson.title;
+            document.getElementById('lessonLevel').textContent = lesson.difficulty_level || 'intermediate';
+            
+            // Handle word count - could be in different formats
+            const wordCount = lesson.word_count || (lesson.content ? lesson.content.split(/\s+/).length : 0);
+            document.getElementById('lessonWords').textContent = wordCount;
+            
+            // Display content - split into paragraphs
+            const contentDiv = document.getElementById('lessonText');
+            const paragraphs = lesson.content.split('\n\n').filter(p => p.trim());
+            contentDiv.innerHTML = paragraphs.map(p => `<p style="margin-bottom: 1rem;">${p.trim()}</p>`).join('');
+            
+            // Display vocabulary if available
+            if (lesson.vocabulary && lesson.vocabulary.length > 0) {
+                document.getElementById('vocabularySection').classList.remove('hidden');
+                const vocabList = document.getElementById('vocabularyList');
+                vocabList.innerHTML = lesson.vocabulary.map(v => `
+                    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 4px;">
+                        <strong style="color: var(--gold-accent); font-size: 1.1rem;">${v.word}</strong>
+                        <p style="margin-top: 0.5rem;">${v.definition}</p>
+                    </div>
+                `).join('');
+            }
+            
+            // Display questions if available
+            if (lesson.questions && lesson.questions.length > 0) {
+                displayLessonQuestions(lesson.questions);
+                
+                // Scroll to questions
+                setTimeout(() => {
+                    document.getElementById('questionsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 500);
+            }
+            
+            console.log('=== displayLesson END ===');
+        }
+
+        function displayLessonQuestions(questions) {
+            console.log('=== displayLessonQuestions START ===');
+            
+            const questionsCard = document.getElementById('questionsCard');
+            questionsCard.classList.remove('hidden');
+            
+            const questionsDiv = document.getElementById('lessonQuestions');
+            questionsDiv.innerHTML = '';
+            
+            questions.forEach((q, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'question-card';
+                questionDiv.innerHTML = `
+                    <div class="question-text">${index + 1}. ${q.question}</div>
+                    <div class="options" id="lesson-options-${index}" data-question-index="${index}">
+                        ${(q.options || []).map((opt, i) => `
+                            <div class="option" data-option-index="${i}" data-option-text="${opt.replace(/"/g, '&quot;')}">
+                                ${opt}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                questionsDiv.appendChild(questionDiv);
+            });
+            
+            // Add event delegation for option clicks
+            questionsDiv.addEventListener('click', function(e) {
+                const optionEl = e.target.closest('.option');
+                if (!optionEl) return;
+                
+                const questionIndex = parseInt(optionEl.parentElement.dataset.questionIndex);
+                const optionIndex = parseInt(optionEl.dataset.optionIndex);
+                const optionText = optionEl.dataset.optionText;
+                
+                selectLessonOption(questionIndex, optionIndex, optionText);
+            });
+            
+            console.log('=== displayLessonQuestions END ===');
+        }
+
+        function selectLessonOption(questionIndex, optionIndex, optionText) {
+            console.log('Lesson option selected:', questionIndex, optionText);
+            
+            const options = document.getElementById(`lesson-options-${questionIndex}`).querySelectorAll('.option');
+            options.forEach(opt => opt.classList.remove('selected'));
+            options[optionIndex].classList.add('selected');
+            
+            const question = currentLesson.questions[questionIndex];
+            const correct = question.correct_answer || question.correct;
+            
+            lessonAnswers[questionIndex] = {
+                question: question.question,
+                selected: optionText,
+                correct: correct,
+                is_correct: optionText === correct
+            };
+            
+            console.log('Lesson answers:', lessonAnswers.length, '/', currentLesson.questions.length);
+        }
+
+        async function submitLessonAnswers() {
+            console.log('=== submitLessonAnswers START ===');
+            
+            if (lessonAnswers.length < currentLesson.questions.length) {
+                alert('Please answer all questions before submitting.');
+                return;
+            }
+            
+            const token = localStorage.getItem('token');
+            const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
+            
+            // Calculate score
+            const correctCount = lessonAnswers.filter(a => a.is_correct).length;
+            const score = (correctCount / lessonAnswers.length) * 100;
+            
+            // Visual feedback on questions
+            lessonAnswers.forEach((answer, index) => {
+                const options = document.getElementById(`lesson-options-${index}`).querySelectorAll('.option');
+                options.forEach(opt => {
+                    const text = opt.textContent.trim();
+                    if (text === answer.correct) {
+                        opt.style.background = '#d4edda';
+                        opt.style.borderColor = '#28a745';
+                    } else if (text === answer.selected && !answer.is_correct) {
+                        opt.style.background = '#f8d7da';
+                        opt.style.borderColor = '#dc3545';
+                    }
+                    opt.style.pointerEvents = 'none';
+                });
+            });
+            
+            // Hide submit button
+            document.querySelector('#questionsCard button').classList.add('hidden');
+            
+            try {
+                // Save progress to backend
+                await fetch('/api/lessons/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: token,
+                        lesson_id: currentLesson.id,
+                        completed: true,
+                        score: score,
+                        time_spent: timeSpent,
+                        answers: lessonAnswers
+                    })
+                });
+                
+                // Show results
+                displayLessonResults(score, correctCount, lessonAnswers.length);
+                
+                // Update stats
+                document.getElementById('lessonsCompleted').textContent = 
+                    parseInt(document.getElementById('lessonsCompleted').textContent) + 1;
+                
+            } catch (error) {
+                console.error('Error submitting lesson:', error);
+                displayLessonResults(score, correctCount, lessonAnswers.length);
+            }
+            
+            console.log('=== submitLessonAnswers END ===');
+        }
+
+        function displayLessonResults(score, correct, total) {
+            console.log('=== displayLessonResults START ===');
+            
+            const resultsCard = document.getElementById('lessonResultsCard');
+            resultsCard.classList.remove('hidden');
+            
+            let message = '';
+            if (score >= 80) {
+                message = `Excellent work! You got ${correct} out of ${total} questions correct (${Math.round(score)}%). You're really understanding the material!`;
+            } else if (score >= 60) {
+                message = `Good job! You got ${correct} out of ${total} questions correct (${Math.round(score)}%). Keep practicing and you'll keep improving!`;
+            } else {
+                message = `You got ${correct} out of ${total} questions correct (${Math.round(score)}%). Don't worry - every lesson helps you learn. Let's try another one!`;
+            }
+            
+            document.getElementById('resultsMessage').textContent = message;
+            
+            // Scroll to results
+            setTimeout(() => {
+                resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 300);
+            
+            console.log('=== displayLessonResults END ===');
+        }
+
+        // Modify showSection to load lesson when lessons section is shown
+        const originalShowSection = showSection;
+        showSection = function(sectionName, event) {
+            if (event) event.preventDefault();
+            
+            // Call original function
+            originalShowSection(sectionName, event);
+            
+            // If showing lessons section and user has completed assessment, load lesson
+            if (sectionName === 'lessons') {
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                if (user.reading_level || user.level_estimate) {
+                    // User has completed assessment, load a lesson
+                    document.getElementById('noLessons').classList.add('hidden');
+                    loadNextLesson();
+                } else {
+                    // Show "complete assessment first" message
+                    document.getElementById('noLessons').classList.remove('hidden');
+                }
+            }
+        };
+
+        console.log('Lesson management functions loaded successfully');
+
         function logout() {
             console.log('Logging out...');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/';
         }
+
     </script>
 </body>
 </html>
