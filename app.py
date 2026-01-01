@@ -416,7 +416,7 @@ async def generate_interest_assessment() -> List[Dict]:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            timeout=10
+            timeout=30
         )
         
         print("OpenAI response received, parsing...")
@@ -1957,6 +1957,36 @@ async def get_next_lesson(token: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    
+@app.get("/api/test-openai")
+async def test_openai():
+    """Test if OpenAI integration works"""
+    try:
+        if not content_generator:
+            return {"error": "content_generator is None"}
+        
+        # Try to generate a simple passage
+        result = content_generator.generate_passage(
+            topic="reading",
+            difficulty_level="beginner", 
+            target_words=50,
+            user_interests=["reading"]
+        )
+        
+        return {
+            "success": True,
+            "title": result.get('title'),
+            "content_length": len(result.get('content', '')),
+            "has_questions": len(result.get('questions', [])) > 0
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
     
 @app.get("/api/lessons/debug")
 async def debug_lesson_generation(token: str):
