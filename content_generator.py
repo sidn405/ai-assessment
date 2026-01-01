@@ -143,6 +143,15 @@ Return your response as a JSON array with this exact structure:
                 content = content.split("```")[1].split("```")[0].strip()
             
             questions = json.loads(content)
+            # ========== ADD THIS SECTION ==========
+            # Shuffle options for each question to randomize correct answer position
+            import random
+            for q in questions:
+                if 'options' in q and isinstance(q['options'], list):
+                    # Shuffle the options
+                    random.shuffle(q['options'])
+            # =====================================
+            
             return questions
             
         except Exception as e:

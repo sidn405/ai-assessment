@@ -1045,7 +1045,7 @@
         }
 
         function selectLessonOption(questionIndex, optionIndex, optionText) {
-            console.log('Option selected:', questionIndex, optionText);
+            console.log('Option selected:', questionIndex, optionIndex, optionText);
             
             try {
                 // Highlight selected option
@@ -1054,34 +1054,24 @@
                     opt.classList.toggle('selected', i === optionIndex);
                 });
                 
-                // Store answer
+                // Get the question data
                 const question = currentLesson.questions[questionIndex];
-                const correctAnswer = question.correct_answer || question.correct;
                 
+                // IMPORTANT: Store with question index as the key
+                // This ensures answers stay matched to their questions
                 lessonAnswers[questionIndex] = {
+                    questionIndex: questionIndex,  // Add this to track position
                     question: question.question,
                     selected: optionText,
-                    correct: correctAnswer,
-                    is_correct: optionText === correctAnswer
+                    correct: question.correct_answer || question.correct,
+                    is_correct: optionText === (question.correct_answer || question.correct)
                 };
-        
-                // ========== ADD SUBMIT BUTTON ==========
-                // Check if button already exists
-                let submitBtn = questionsCard.querySelector('.submit-lesson-btn');
-                if (!submitBtn) {
-                    submitBtn = document.createElement('button');
-                    submitBtn.className = 'btn btn-primary submit-lesson-btn';
-                    submitBtn.style.marginTop = '1.5rem';
-                    submitBtn.textContent = 'Submit Answers';
-                    submitBtn.onclick = submitLessonAnswers;
-                    questionsCard.appendChild(submitBtn);
-                }
-                // ========================================
                 
-                console.log('Questions rendered successfully');
+                console.log('Answer stored at index:', questionIndex);
+                console.log('Total answers:', lessonAnswers.filter(a => a).length, '/', currentLesson.questions.length);
                 
             } catch (error) {
-                console.error('Error displaying questions:', error);
+                console.error('Error selecting option:', error);
             }
             
             console.log('=== displayLessonQuestions END ===');
@@ -1095,8 +1085,11 @@
                 return;
             }
             
-            if (lessonAnswers.length < currentLesson.questions.length) {
-                alert('Please answer all questions before submitting.');
+            // Filter out empty slots and check if all questions answered
+            const answeredCount = lessonAnswers.filter(a => a).length;
+            
+            if (answeredCount < currentLesson.questions.length) {
+                alert(`Please answer all questions before submitting. (${answeredCount}/${currentLesson.questions.length} answered)`);
                 return;
             }
             
