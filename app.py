@@ -1,6 +1,9 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+# MFS Literacy Platform - Phase 2: Complete Backend
+# AI-Powered Adaptive Learning System
+
+from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -10,13 +13,18 @@ import psycopg2.extras
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
-from openai import OpenAI
+import openai
 import os
 import json
 from pathlib import Path
+import random
+
+# Import our new utilities
+from readability import analyze_readability, get_difficulty_for_user
+from content_generator import ContentGenerator
 
 # Initialize FastAPI
-app = FastAPI(title="MFS Literacy Assessment Platform")
+app = FastAPI(title="MFS Literacy Assessment Platform - Phase 2")
 
 # CORS middleware
 app.add_middleware(
@@ -30,37 +38,7 @@ app.add_middleware(
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "mfs-literacy-platform-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-
-# Debug: Print API key status (first few characters only for security)
-if OPENAI_API_KEY:
-    print(f"OpenAI API Key found: {OPENAI_API_KEY[:7]}..." if len(OPENAI_API_KEY) > 7 else "Key too short")
-else:
-    print("No OpenAI API Key found in environment")
-
-# Initialize OpenAI client only if API key is provided
-openai_client = None
-if OPENAI_API_KEY and OPENAI_API_KEY.strip() and len(OPENAI_API_KEY) > 10:
-    try:
-        # Try to initialize with just the API key, let it handle httpx internally
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print("✅ OpenAI client initialized successfully")
-    except TypeError as e:
-        # If there's a httpx compatibility issue, try with default_headers
-        print(f"⚠️ OpenAI client initialization issue (httpx compatibility): {e}")
-        try:
-            openai_client = OpenAI(
-                api_key=OPENAI_API_KEY,
-                default_headers={"User-Agent": "MFS-Literacy-Platform"}
-            )
-            print("✅ OpenAI client initialized with custom headers")
-        except Exception as e2:
-            print(f"❌ Failed to initialize OpenAI client: {e2}")
-            openai_client = None
-    except Exception as e:
-        print(f"❌ Failed to initialize OpenAI client: {e}")
-        openai_client = None
-else:
-    print("ℹ️ No valid OpenAI API key provided - will use fallback responses")
+openai.api_key = OPENAI_API_KEY
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -70,30 +48,53 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 USE_POSTGRES = DATABASE_URL is not None
 DATABASE = DATABASE_URL if USE_POSTGRES else "mfs_literacy.db"
 
-print(f"Using {'PostgreSQL' if USE_POSTGRES else 'SQLite'} database")
-if USE_POSTGRES:
-    print(f"Database URL configured")
+# Initialize content generator
+content_generator = ContentGenerator(OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# Pydantic models
+print(f"Using {'PostgreSQL' if USE_POSTGRES else 'SQLite'} database")
+print(f"OpenAI API {'configured' if OPENAI_API_KEY else 'NOT configured'}")
+
+# Pydantic models (existing + new)
 class UserCreate(BaseModel):
     email: str
     password: str
     full_name: str
     role: str = "student"
+    age_band: Optional[str] = None
     
 class UserLogin(BaseModel):
     email: str
     password: str
 
-class AssessmentResponse(BaseModel):
-    question_id: int
-    answer: str
-    
-class LessonProgress(BaseModel):
-    lesson_id: int
+class InterestOnboarding(BaseModel):
+    interests: List[str]
+    topics: List[str]
+    age_band: Optional[str] = None
+    grade_preference: Optional[str] = None
+
+class ReadingFeedback(BaseModel):
+    passage_id: int
+    feedback: str  # 'too_easy', 'just_right', 'too_hard'
+    time_spent: int
     completed: bool
-    score: Optional[float] = None
-    time_spent: Optional[int] = None
+
+class ComprehensionAnswers(BaseModel):
+    passage_id: int
+    answers: List[Dict]
+    time_spent: int
+
+class DiscussionMessage(BaseModel):
+    passage_id: Optional[int] = None
+    message: str
+
+class WritingSubmission(BaseModel):
+    prompt: str
+    response: str
+    passage_id: Optional[int] = None
+
+class WritingRevision(BaseModel):
+    exercise_id: int
+    revised_response: str
 
 # Database initialization
 def init_db():
@@ -101,66 +102,21 @@ def init_db():
         conn = psycopg2.connect(DATABASE)
         cursor = conn.cursor()
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                full_name TEXT NOT NULL,
-                role TEXT NOT NULL,
-                reading_level TEXT,
-                interests TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+        # Original tables (simplified - assume migration ran)
+        # Users, assessments, lessons, progress tables exist
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS assessments (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                assessment_type TEXT NOT NULL,
-                questions TEXT NOT NULL,
-                answers TEXT NOT NULL,
-                reading_level TEXT,
-                interests TEXT,
-                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS lessons (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                reading_level TEXT NOT NULL,
-                topic TEXT NOT NULL,
-                difficulty INTEGER NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS progress (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                lesson_id INTEGER NOT NULL,
-                completed BOOLEAN DEFAULT FALSE,
-                score REAL,
-                time_spent INTEGER,
-                completed_at TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id),
-                FOREIGN KEY (lesson_id) REFERENCES lessons (id)
-            )
-        ''')
-        
-        admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
+        # Ensure new columns exist in users table
         try:
-            cursor.execute(
-                "INSERT INTO users (email, password_hash, full_name, role) VALUES (%s, %s, %s, %s)",
-                ("admin@mfs.org", admin_hash.decode('utf-8'), "MFS Administrator", "admin")
-            )
-        except psycopg2.errors.UniqueViolation:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS age_band VARCHAR(20)")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS grade_band VARCHAR(20)")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS interest_tags TEXT")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS level_estimate VARCHAR(20)")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS words_per_session INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS total_passages_read INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS comprehension_score REAL DEFAULT 0")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP")
+            conn.commit()
+        except:
             conn.rollback()
         
     else:
@@ -168,6 +124,7 @@ def init_db():
         conn.execute('PRAGMA journal_mode=WAL')
         cursor = conn.cursor()
         
+        # Create all tables for SQLite (for local development)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,50 +134,19 @@ def init_db():
                 role TEXT NOT NULL,
                 reading_level TEXT,
                 interests TEXT,
+                age_band TEXT,
+                grade_band TEXT,
+                interest_tags TEXT,
+                level_estimate TEXT,
+                words_per_session INTEGER DEFAULT 0,
+                total_passages_read INTEGER DEFAULT 0,
+                comprehension_score REAL DEFAULT 0,
+                last_active TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS assessments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                assessment_type TEXT NOT NULL,
-                questions TEXT NOT NULL,
-                answers TEXT NOT NULL,
-                reading_level TEXT,
-                interests TEXT,
-                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS lessons (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                reading_level TEXT NOT NULL,
-                topic TEXT NOT NULL,
-                difficulty INTEGER NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                lesson_id INTEGER NOT NULL,
-                completed BOOLEAN DEFAULT 0,
-                score REAL,
-                time_spent INTEGER,
-                completed_at TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id),
-                FOREIGN KEY (lesson_id) REFERENCES lessons (id)
-            )
-        ''')
-        
+        # Create admin
         admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
         try:
             cursor.execute(
@@ -235,6 +161,7 @@ def init_db():
 
 init_db()
 
+# Helper functions
 def get_db():
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE)
@@ -262,257 +189,21 @@ def verify_token(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# OpenAI integration functions
-async def generate_interest_assessment() -> List[Dict]:
-    """Generate questions to assess student's reading interests"""
-    
-    fallback_questions = [
-        {
-            "id": 1,
-            "question": "What type of stories interest you most?",
-            "options": ["Adventure and action", "Real-life stories and biographies", "Science and technology", "Sports and fitness"],
-            "category": "genre"
-        },
-        {
-            "id": 2,
-            "question": "Which topic sounds most interesting to you?",
-            "options": ["Technology and computers", "History and culture", "Nature and animals", "Music and arts"],
-            "category": "topic"
-        },
-        {
-            "id": 3,
-            "question": "What do you enjoy reading about?",
-            "options": ["How things work", "Famous people's lives", "Fantasy and imagination", "Current events and news"],
-            "category": "interest"
-        },
-        {
-            "id": 4,
-            "question": "Which activity interests you most?",
-            "options": ["Playing sports", "Using technology", "Creating art", "Helping others"],
-            "category": "activity"
-        },
-        {
-            "id": 5,
-            "question": "What would you like to learn more about?",
-            "options": ["Space and planets", "Business and money", "Health and fitness", "Entertainment and movies"],
-            "category": "learning"
-        },
-        {
-            "id": 6,
-            "question": "What kind of book would you pick up?",
-            "options": ["A mystery to solve", "A guide or how-to book", "A story about real events", "A book with pictures and graphics"],
-            "category": "format"
-        },
-        {
-            "id": 7,
-            "question": "Which career field sounds interesting?",
-            "options": ["Medicine and healthcare", "Engineering and building", "Law and justice", "Creative arts and design"],
-            "category": "career"
-        },
-        {
-            "id": 8,
-            "question": "What do you do in your free time?",
-            "options": ["Watch videos online", "Play games", "Read or research", "Spend time outdoors"],
-            "category": "hobby"
-        },
-        {
-            "id": 9,
-            "question": "Which subject was your favorite in school?",
-            "options": ["Math and numbers", "English and writing", "Science experiments", "Social studies and history"],
-            "category": "subject"
-        },
-        {
-            "id": 10,
-            "question": "What type of content do you enjoy most?",
-            "options": ["Short articles and posts", "Long detailed explanations", "Visual content with images", "Step-by-step instructions"],
-            "category": "content_type"
-        }
-    ]
-    
-    if not openai_client:
-        print("No OpenAI client available - using fallback questions")
-        return fallback_questions
-    
-    try:
-        print("Calling OpenAI to generate assessment questions...")
-        
-        prompt = """Generate 10 multiple-choice questions to assess a student's reading interests.
-        Each question should help identify topics they enjoy (sports, technology, history, fiction, science, etc.).
-        
-        Return a JSON array with this structure:
-        [
-            {
-                "id": 1,
-                "question": "What type of stories interest you most?",
-                "options": ["Adventure stories", "Real-life stories", "Science topics", "Sports news"],
-                "category": "genre"
-            }
-        ]
-        
-        Make questions engaging and appropriate for diverse reading levels."""
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert educator creating reading assessments."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            timeout=20  # Increased from 10 to 20 seconds
-        )
-        
-        print("OpenAI response received, parsing...")
-        
-        content = response.choices[0].message.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        
-        questions = json.loads(content)
-        print(f"Successfully parsed {len(questions)} AI-generated questions")
-        return questions
-        
-    except Exception as e:
-        print(f"OpenAI error: {type(e).__name__}: {str(e)} - using fallback questions")
-        return fallback_questions
+def update_user_activity(user_id: int):
+    """Update last_active timestamp"""
+    conn = get_db()
+    cursor = conn.cursor()
+    if USE_POSTGRES:
+        cursor.execute("UPDATE users SET last_active = NOW() WHERE id = %s", (user_id,))
+    else:
+        cursor.execute("UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
 
-async def analyze_assessment_results(answers: List[dict]) -> Dict[str, Any]:
-    """Use AI to analyze assessment results and determine reading level and interests"""
-    
-    # Fallback analysis based on answers
-    fallback_analysis = {
-        "reading_level": "middle",
-        "interests": ["technology", "sports", "science"],
-        "strengths": ["comprehension", "vocabulary"],
-        "areas_for_improvement": ["inference", "critical_thinking"],
-        "recommended_topics": ["tech innovation", "sports history", "space exploration"]
-    }
-    
-    if not openai_client:
-        print("No OpenAI client available - using fallback analysis")
-        return fallback_analysis
-    
-    prompt = f"""Analyze these assessment answers and determine:
-    1. Reading level (elementary, middle, high_school, adult)
-    2. Top 3 interest areas
-    3. Recommended starting lessons
-    
-    Answers: {json.dumps(answers)}
-    
-    Return JSON:
-    {{
-        "reading_level": "middle",
-        "interests": ["technology", "sports", "science"],
-        "strengths": ["comprehension", "vocabulary"],
-        "areas_for_improvement": ["inference", "critical_thinking"],
-        "recommended_topics": ["tech innovation", "sports history", "space exploration"]
-    }}"""
-    
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert in literacy assessment and education."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.5,
-            timeout=10
-        )
-        
-        content = response.choices[0].message.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-            
-        return json.loads(content)
-    except Exception as e:
-        print(f"Error analyzing assessment: {type(e).__name__}: {str(e)}")
-        return fallback_analysis
+# ============================================
+# STATIC FILE ROUTES
+# ============================================
 
-async def generate_adaptive_lesson(user_profile: dict, previous_performance: dict) -> Dict:
-    """Generate personalized lesson content based on student profile and performance"""
-    
-    fallback_lesson = {
-        "title": "Introduction to Reading Comprehension",
-        "content": "Reading comprehension is the ability to understand and interpret what you read. This skill is essential for success in school and in everyday life. When you read, your brain processes the words on the page and connects them to your existing knowledge and experiences.",
-        "difficulty_level": 5,
-        "questions": [
-            {
-                "question": "What is reading comprehension?",
-                "options": [
-                    "The ability to read quickly",
-                    "The ability to understand and interpret text",
-                    "The ability to memorize words",
-                    "The ability to write well"
-                ],
-                "correct": 1,
-                "explanation": "Reading comprehension is about understanding and making sense of what you read."
-            }
-        ],
-        "vocabulary": {
-            "comprehension": "Understanding or grasping the meaning of something",
-            "interpret": "To explain or understand the meaning of something"
-        },
-        "next_steps": "Practice with more complex passages"
-    }
-    
-    if not openai_client:
-        print("No OpenAI client available - using fallback lesson")
-        return fallback_lesson
-    
-    prompt = f"""Create an engaging reading lesson for a student with this profile:
-    - Reading Level: {user_profile.get('reading_level', 'middle')}
-    - Interests: {user_profile.get('interests', 'general')}
-    - Recent Performance: {previous_performance}
-    
-    The lesson should:
-    1. Match their reading level
-    2. Relate to their interests
-    3. Include comprehension questions
-    4. Gradually increase difficulty if they're performing well
-    
-    Return JSON:
-    {{
-        "title": "Lesson title",
-        "content": "Engaging passage text...",
-        "difficulty_level": 5,
-        "questions": [
-            {{
-                "question": "Question text",
-                "options": ["A", "B", "C", "D"],
-                "correct": 0,
-                "explanation": "Why this is correct"
-            }}
-        ],
-        "vocabulary": {{"word1": "definition1"}},
-        "next_steps": "Recommendation for next lesson"
-    }}"""
-    
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert educator creating personalized reading lessons."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8,
-            timeout=15
-        )
-        
-        content = response.choices[0].message.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-            
-        return json.loads(content)
-    except Exception as e:
-        print(f"Error generating lesson: {type(e).__name__}: {str(e)}")
-        return fallback_lesson
-
-# API Routes
 @app.get("/", response_class=HTMLResponse)
 async def serve_landing():
     return FileResponse("static/index.html")
@@ -525,15 +216,17 @@ async def serve_dashboard():
 async def serve_admin():
     return FileResponse("static/admin-dashboard.html")
 
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint to verify API status"""
-    return {
-        "status": "healthy",
-        "database": "PostgreSQL" if USE_POSTGRES else "SQLite",
-        "openai_configured": openai_client is not None,
-        "openai_status": "active" if openai_client else "using_fallback"
-    }
+@app.get("/reading", response_class=HTMLResponse)
+async def serve_reading():
+    return FileResponse("static/reading.html")
+
+@app.get("/writing", response_class=HTMLResponse)
+async def serve_writing():
+    return FileResponse("static/writing.html")
+
+# ============================================
+# AUTHENTICATION (Original)
+# ============================================
 
 @app.post("/api/register")
 async def register(user: UserCreate):
@@ -545,20 +238,20 @@ async def register(user: UserCreate):
     try:
         if USE_POSTGRES:
             cursor.execute(
-                "INSERT INTO users (email, password_hash, full_name, role) VALUES (%s, %s, %s, %s) RETURNING id",
-                (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
+                """INSERT INTO users (email, password_hash, full_name, role, age_band) 
+                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                (user.email, password_hash.decode('utf-8'), user.full_name, user.role, user.age_band)
             )
             result = cursor.fetchone()
             user_id = result['id']
         else:
             cursor.execute(
-                "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
-                (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
+                "INSERT INTO users (email, password_hash, full_name, role, age_band) VALUES (?, ?, ?, ?, ?)",
+                (user.email, password_hash.decode('utf-8'), user.full_name, user.role, user.age_band)
             )
             user_id = cursor.lastrowid
         
         conn.commit()
-        
         token = create_token(user_id, user.role)
         
         return {
@@ -602,6 +295,9 @@ async def login(credentials: UserLogin):
     if not bcrypt.checkpw(credentials.password.encode('utf-8'), password_hash.encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
+    # Update last active
+    update_user_activity(user['id'])
+    
     token = create_token(user['id'], user['role'])
     
     return {
@@ -612,27 +308,24 @@ async def login(credentials: UserLogin):
             "email": user['email'],
             "full_name": user['full_name'],
             "role": user['role'],
-            "reading_level": user['reading_level'],
-            "interests": user['interests']
+            "reading_level": user.get('reading_level'),
+            "interests": user.get('interests'),
+            "level_estimate": user.get('level_estimate')
         }
     }
 
-@app.get("/api/assessment/interest")
-async def get_interest_assessment():
-    print("Assessment endpoint called - generating questions...")
-    try:
-        questions = await generate_interest_assessment()
-        print(f"Generated {len(questions)} questions")
-        return {"questions": questions}
-    except Exception as e:
-        print(f"Error generating assessment: {e}")
-        raise HTTPException(status_code=500, detail=f"Assessment generation failed: {str(e)}")
+# ============================================
+# PHASE 2: ONBOARDING ENDPOINTS
+# ============================================
 
-@app.post("/api/assessment/submit")
-async def submit_assessment(request: Request):
+@app.post("/api/onboard/interests")
+async def onboard_interests(request: Request):
+    """Process interest onboarding and update user profile"""
     data = await request.json()
     token = data.get("token")
-    answers = data.get("answers", [])
+    interests = data.get("interests", [])
+    topics = data.get("topics", [])
+    age_band = data.get("age_band")
     
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -640,48 +333,76 @@ async def submit_assessment(request: Request):
     user_data = verify_token(token)
     user_id = user_data["user_id"]
     
-    analysis = await analyze_assessment_results(answers)
+    # Combine interests and topics
+    all_interests = list(set(interests + topics))
     
+    # Determine initial level estimate based on age
+    level_map = {
+        "18-24": "intermediate",
+        "25-34": "intermediate",
+        "35-44": "intermediate",
+        "45+": "intermediate",
+        "under-18": "beginner"
+    }
+    level_estimate = level_map.get(age_band, "intermediate")
+    
+    # Determine grade band
+    grade_map = {
+        "under-18": "high",
+        "18-24": "adult",
+        "25-34": "adult",
+        "35-44": "adult",
+        "45+": "adult"
+    }
+    grade_band = grade_map.get(age_band, "adult")
+    
+    # Update user profile
     conn = get_db()
     cursor = conn.cursor()
     
     if USE_POSTGRES:
         cursor.execute(
-            "UPDATE users SET reading_level = %s, interests = %s WHERE id = %s",
-            (analysis['reading_level'], json.dumps(analysis['interests']), user_id)
-        )
-        
-        cursor.execute(
-            "INSERT INTO assessments (user_id, assessment_type, questions, answers, reading_level, interests) VALUES (%s, %s, %s, %s, %s, %s)",
-            (user_id, "initial", json.dumps([]), json.dumps(answers), analysis['reading_level'], json.dumps(analysis['interests']))
+            """UPDATE users 
+               SET interest_tags = %s, age_band = %s, level_estimate = %s, grade_band = %s, last_active = NOW()
+               WHERE id = %s""",
+            (json.dumps(all_interests), age_band, level_estimate, grade_band, user_id)
         )
     else:
         cursor.execute(
-            "UPDATE users SET reading_level = ?, interests = ? WHERE id = ?",
-            (analysis['reading_level'], json.dumps(analysis['interests']), user_id)
-        )
-        
-        cursor.execute(
-            "INSERT INTO assessments (user_id, assessment_type, questions, answers, reading_level, interests) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, "initial", json.dumps([]), json.dumps(answers), analysis['reading_level'], json.dumps(analysis['interests']))
+            """UPDATE users 
+               SET interest_tags = ?, age_band = ?, level_estimate = ?, grade_band = ?, last_active = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (json.dumps(all_interests), age_band, level_estimate, grade_band, user_id)
         )
     
     conn.commit()
     conn.close()
     
+    update_user_activity(user_id)
+    
     return {
         "success": True,
-        "analysis": analysis
+        "profile": {
+            "interests": all_interests,
+            "level_estimate": level_estimate,
+            "grade_band": grade_band
+        }
     }
 
-@app.get("/api/lessons/next")
-async def get_next_lesson(token: str):
+# ============================================
+# PHASE 2: READING ENDPOINTS
+# ============================================
+
+@app.get("/api/read/sample")
+async def get_reading_sample(token: str, challenge: str = "appropriate"):
+    """Get a reading passage matched to user's level and interests"""
     user_data = verify_token(token)
     user_id = user_data["user_id"]
     
     conn = get_db()
     cursor = conn.cursor()
     
+    # Get user profile
     if USE_POSTGRES:
         cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
     else:
@@ -689,57 +410,147 @@ async def get_next_lesson(token: str):
     
     user = cursor.fetchone()
     
-    if USE_POSTGRES:
-        cursor.execute(
-            "SELECT * FROM progress WHERE user_id = %s ORDER BY completed_at DESC LIMIT 5",
-            (user_id,)
-        )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    level_estimate = user.get('level_estimate') or 'intermediate'
+    interest_tags = json.loads(user.get('interest_tags') or '[]')
+    total_read = user.get('total_passages_read') or 0
+    
+    # For first passage, make it easier (quick win strategy)
+    if total_read == 0:
+        challenge = "easier"
+        target_words = 150
     else:
-        cursor.execute(
-            "SELECT * FROM progress WHERE user_id = ? ORDER BY completed_at DESC LIMIT 5",
-            (user_id,)
-        )
+        target_words = 200
     
-    recent = cursor.fetchall()
-    conn.close()
+    # Try to get a passage from database first
+    # TODO: Implement database passage retrieval with matching
+    # For now, generate a new one
     
-    user_profile = {
-        "reading_level": user['reading_level'] or "middle",
-        "interests": json.loads(user['interests']) if user['interests'] else ["general"]
+    if not content_generator:
+        raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
+    
+    # Pick a topic from interests or random
+    topic = random.choice(interest_tags) if interest_tags else random.choice(["science", "technology", "history", "nature"])
+    
+    # Adjust difficulty based on challenge parameter
+    difficulty_map = {
+        "easier": "beginner" if level_estimate == "intermediate" else level_estimate,
+        "appropriate": level_estimate,
+        "challenging": "advanced" if level_estimate == "intermediate" else level_estimate
     }
+    difficulty = difficulty_map.get(challenge, level_estimate)
     
-    performance = {
-        "average_score": sum([r['score'] or 0 for r in recent]) / len(recent) if recent else 0,
-        "completed_count": len(recent)
-    }
+    print(f"Generating passage: topic={topic}, difficulty={difficulty}, words={target_words}")
     
-    lesson = await generate_adaptive_lesson(user_profile, performance)
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    if USE_POSTGRES:
-        cursor.execute(
-            "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
+    try:
+        # Generate passage
+        passage_data = content_generator.generate_passage(
+            topic=topic,
+            difficulty_level=difficulty,
+            target_words=target_words,
+            user_interests=interest_tags
         )
-        result = cursor.fetchone()
-        lesson_id = result['id']
-    else:
-        cursor.execute(
-            "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (?, ?, ?, ?, ?)",
-            (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
+        
+        # Save to database
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO passages 
+                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
+                    difficulty_level, estimated_minutes, approved, created_by)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (passage_data['title'], passage_data['content'], passage_data['source'],
+                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
+                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
+                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                 True, 1)  # Auto-approve AI content for now
+            )
+            result = cursor.fetchone()
+            passage_id = result['id']
+        else:
+            cursor.execute(
+                """INSERT INTO passages 
+                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
+                    difficulty_level, estimated_minutes, approved, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (passage_data['title'], passage_data['content'], passage_data['source'],
+                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
+                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
+                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                 True, 1)
+            )
+            passage_id = cursor.lastrowid
+        
+        # Generate comprehension questions
+        questions = content_generator.generate_comprehension_questions(
+            passage_text=passage_data['content'],
+            passage_title=passage_data['title'],
+            num_questions=3  # Start with 3 questions
         )
-        lesson_id = cursor.lastrowid
-    
-    conn.commit()
-    conn.close()
-    
-    lesson['id'] = lesson_id
-    return lesson
+        
+        # Save questions
+        for q in questions:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """INSERT INTO passage_questions 
+                       (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (passage_id, q['question'], q.get('type'), q['correct_answer'],
+                     json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                )
+            else:
+                cursor.execute(
+                    """INSERT INTO passage_questions 
+                       (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (passage_id, q['question'], q.get('type'), q['correct_answer'],
+                     json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                )
+        
+        # Create session log
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO session_logs (user_id, passage_id, started_at)
+                   VALUES (%s, %s, NOW()) RETURNING id""",
+                (user_id, passage_id)
+            )
+            result = cursor.fetchone()
+            session_id = result['id']
+        else:
+            cursor.execute(
+                """INSERT INTO session_logs (user_id, passage_id, started_at)
+                   VALUES (?, ?, CURRENT_TIMESTAMP)""",
+                (user_id, passage_id)
+            )
+            session_id = cursor.lastrowid
+        
+        conn.commit()
+        conn.close()
+        
+        update_user_activity(user_id)
+        
+        return {
+            "passage_id": passage_id,
+            "session_id": session_id,
+            "title": passage_data['title'],
+            "content": passage_data['content'],
+            "word_count": passage_data['word_count'],
+            "estimated_minutes": passage_data.get('estimated_minutes', 2),
+            "difficulty_level": passage_data['difficulty_level'],
+            "vocabulary": passage_data.get('vocabulary_words', []),
+            "questions": questions,
+            "is_first_passage": total_read == 0
+        }
+        
+    except Exception as e:
+        conn.close()
+        print(f"Error generating passage: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(e)}")
 
-@app.post("/api/lessons/progress")
-async def save_progress(request: Request):
+@app.post("/api/read/feedback")
+async def submit_reading_feedback(request: Request):
+    """Submit feedback on passage difficulty"""
     data = await request.json()
     token = data.get("token")
     
@@ -749,24 +560,667 @@ async def save_progress(request: Request):
     user_data = verify_token(token)
     user_id = user_data["user_id"]
     
+    session_id = data.get("session_id")
+    feedback = data.get("feedback")  # 'too_easy', 'just_right', 'too_hard'
+    time_spent = data.get("time_spent", 0)
+    completed = data.get("completed", True)
+    
     conn = get_db()
     cursor = conn.cursor()
     
+    # Update session log
+    completion_status = 'completed' if completed else 'partial'
+    
     if USE_POSTGRES:
         cursor.execute(
-            "INSERT INTO progress (user_id, lesson_id, completed, score, time_spent, completed_at) VALUES (%s, %s, %s, %s, %s, %s)",
-            (user_id, data['lesson_id'], data['completed'], data.get('score'), data.get('time_spent'), datetime.utcnow())
+            """UPDATE session_logs 
+               SET completed_at = NOW(), completion_status = %s, time_spent_seconds = %s, feedback = %s
+               WHERE id = %s""",
+            (completion_status, time_spent, feedback, session_id)
+        )
+        
+        # Get passage to update user stats
+        cursor.execute(
+            """SELECT p.word_count FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.id = %s""",
+            (session_id,)
         )
     else:
         cursor.execute(
-            "INSERT INTO progress (user_id, lesson_id, completed, score, time_spent, completed_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, data['lesson_id'], data['completed'], data.get('score'), data.get('time_spent'), datetime.utcnow())
+            """UPDATE session_logs 
+               SET completed_at = CURRENT_TIMESTAMP, completion_status = ?, time_spent_seconds = ?, feedback = ?
+               WHERE id = ?""",
+            (completion_status, time_spent, feedback, session_id)
+        )
+        
+        cursor.execute(
+            """SELECT p.word_count FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.id = ?""",
+            (session_id,)
+        )
+    
+    result = cursor.fetchone()
+    word_count = result['word_count'] if USE_POSTGRES else result[0]
+    
+    # Update user stats
+    if USE_POSTGRES:
+        cursor.execute(
+            """UPDATE users 
+               SET total_passages_read = total_passages_read + 1,
+                   words_per_session = (words_per_session + %s) / 2,
+                   last_active = NOW()
+               WHERE id = %s""",
+            (word_count, user_id)
+        )
+        
+        # Adjust level estimate based on feedback
+        if feedback == 'too_easy':
+            cursor.execute(
+                """UPDATE users 
+                   SET level_estimate = CASE 
+                       WHEN level_estimate = 'beginner' THEN 'intermediate'
+                       WHEN level_estimate = 'intermediate' THEN 'advanced'
+                       ELSE level_estimate
+                   END
+                   WHERE id = %s""",
+                (user_id,)
+            )
+        elif feedback == 'too_hard':
+            cursor.execute(
+                """UPDATE users 
+                   SET level_estimate = CASE 
+                       WHEN level_estimate = 'advanced' THEN 'intermediate'
+                       WHEN level_estimate = 'intermediate' THEN 'beginner'
+                       ELSE level_estimate
+                   END
+                   WHERE id = %s""",
+                (user_id,)
+            )
+    else:
+        cursor.execute(
+            """UPDATE users 
+               SET total_passages_read = total_passages_read + 1,
+                   words_per_session = (words_per_session + ?) / 2,
+                   last_active = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (word_count, user_id)
+        )
+        
+        # Adjust level based on feedback (SQLite version)
+        if feedback == 'too_easy':
+            cursor.execute("SELECT level_estimate FROM users WHERE id = ?", (user_id,))
+            current_level = cursor.fetchone()[0]
+            new_level = 'intermediate' if current_level == 'beginner' else 'advanced' if current_level == 'intermediate' else current_level
+            cursor.execute("UPDATE users SET level_estimate = ? WHERE id = ?", (new_level, user_id))
+        elif feedback == 'too_hard':
+            cursor.execute("SELECT level_estimate FROM users WHERE id = ?", (user_id,))
+            current_level = cursor.fetchone()[0]
+            new_level = 'beginner' if current_level == 'intermediate' else 'intermediate' if current_level == 'advanced' else current_level
+            cursor.execute("UPDATE users SET level_estimate = ? WHERE id = ?", (new_level, user_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": "Feedback recorded"}
+
+@app.post("/api/read/comprehension")
+async def submit_comprehension_answers(request: Request):
+    """Submit answers to comprehension questions"""
+    data = await request.json()
+    token = data.get("token")
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    session_id = data.get("session_id")
+    answers = data.get("answers", [])
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Calculate score
+    correct_count = sum(1 for ans in answers if ans.get('is_correct', False))
+    total_questions = len(answers)
+    score = (correct_count / total_questions * 100) if total_questions > 0 else 0
+    
+    # Update session log
+    if USE_POSTGRES:
+        cursor.execute(
+            """UPDATE session_logs 
+               SET answers = %s, comprehension_score = %s
+               WHERE id = %s""",
+            (json.dumps(answers), score, session_id)
+        )
+        
+        # Update user comprehension score (rolling average)
+        cursor.execute(
+            """UPDATE users 
+               SET comprehension_score = (comprehension_score + %s) / 2
+               WHERE id = %s""",
+            (score, user_id)
+        )
+    else:
+        cursor.execute(
+            """UPDATE session_logs 
+               SET answers = ?, comprehension_score = ?
+               WHERE id = ?""",
+            (json.dumps(answers), score, session_id)
+        )
+        
+        cursor.execute(
+            """UPDATE users 
+               SET comprehension_score = (comprehension_score + ?) / 2
+               WHERE id = ?""",
+            (score, user_id)
         )
     
     conn.commit()
     conn.close()
     
-    return {"success": True}
+    # Generate encouraging feedback
+    if score >= 80:
+        message = "Excellent work! You really understood the passage!"
+    elif score >= 60:
+        message = "Good job! You're getting it!"
+    else:
+        message = "Keep practicing! Let's try another passage to build your skills."
+    
+    return {
+        "success": True,
+        "score": round(score, 1),
+        "correct": correct_count,
+        "total": total_questions,
+        "message": message
+    }
+
+# ============================================
+# PHASE 2: DISCUSSION ENDPOINTS
+# ============================================
+
+@app.post("/api/discuss")
+async def discuss_passage(request: Request):
+    """Have a discussion about a passage with AI"""
+    data = await request.json()
+    token = data.get("token")
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    passage_id = data.get("passage_id")
+    user_message = data.get("message")
+    
+    if not content_generator:
+        raise HTTPException(status_code=503, detail="Discussion feature requires OpenAI API key")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get passage content
+    if USE_POSTGRES:
+        cursor.execute("SELECT content FROM passages WHERE id = %s", (passage_id,))
+    else:
+        cursor.execute("SELECT content FROM passages WHERE id = ?", (passage_id,))
+    
+    passage = cursor.fetchone()
+    
+    if not passage:
+        raise HTTPException(status_code=404, detail="Passage not found")
+    
+    passage_text = passage['content'] if USE_POSTGRES else passage[0]
+    
+    # Generate AI response
+    try:
+        ai_response = content_generator.generate_discussion_prompt(passage_text, user_message)
+        
+        # Save conversation
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO discussions (user_id, passage_id, message_role, message_content)
+                   VALUES (%s, %s, %s, %s)""",
+                (user_id, passage_id, 'user', user_message)
+            )
+            cursor.execute(
+                """INSERT INTO discussions (user_id, passage_id, message_role, message_content)
+                   VALUES (%s, %s, %s, %s)""",
+                (user_id, passage_id, 'assistant', ai_response)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO discussions (user_id, passage_id, message_role, message_content)
+                   VALUES (?, ?, ?, ?)""",
+                (user_id, passage_id, 'user', user_message)
+            )
+            cursor.execute(
+                """INSERT INTO discussions (user_id, passage_id, message_role, message_content)
+                   VALUES (?, ?, ?, ?)""",
+                (user_id, passage_id, 'assistant', ai_response)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        update_user_activity(user_id)
+        
+        return {
+            "success": True,
+            "response": ai_response
+        }
+        
+    except Exception as e:
+        conn.close()
+        print(f"Discussion error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate response")
+
+@app.get("/api/discuss/history")
+async def get_discussion_history(token: str, passage_id: int):
+    """Get discussion history for a passage"""
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT message_role, message_content, created_at 
+               FROM discussions 
+               WHERE user_id = %s AND passage_id = %s 
+               ORDER BY created_at ASC""",
+            (user_id, passage_id)
+        )
+    else:
+        cursor.execute(
+            """SELECT message_role, message_content, created_at 
+               FROM discussions 
+               WHERE user_id = ? AND passage_id = ? 
+               ORDER BY created_at ASC""",
+            (user_id, passage_id)
+        )
+    
+    messages = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return {"messages": messages}
+
+# ============================================
+# PHASE 2: WRITING ENDPOINTS
+# ============================================
+
+@app.post("/api/write/submit")
+async def submit_writing(request: Request):
+    """Submit a writing response for AI feedback"""
+    data = await request.json()
+    token = data.get("token")
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    prompt = data.get("prompt")
+    user_response = data.get("response")
+    passage_id = data.get("passage_id")
+    
+    if not content_generator:
+        return {
+            "success": True,
+            "feedback": {
+                "positive_feedback": "Great job getting your ideas down!",
+                "suggestions": ["Try adding more details to support your main point."],
+                "revised_example": user_response,
+                "encouragement": "Keep writing - you're doing well!",
+                "score": 75
+            },
+            "exercise_id": None
+        }
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get passage context if provided
+    passage_context = None
+    if passage_id:
+        if USE_POSTGRES:
+            cursor.execute("SELECT content FROM passages WHERE id = %s", (passage_id,))
+        else:
+            cursor.execute("SELECT content FROM passages WHERE id = ?", (passage_id,))
+        
+        passage = cursor.fetchone()
+        passage_context = passage['content'] if passage else None
+    
+    # Generate feedback
+    try:
+        feedback = content_generator.provide_writing_feedback(
+            prompt=prompt,
+            user_response=user_response,
+            passage_context=passage_context
+        )
+        
+        # Save exercise
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO writing_exercises 
+                   (user_id, passage_id, prompt, user_response, ai_feedback, score)
+                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+                (user_id, passage_id, prompt, user_response, json.dumps(feedback), feedback.get('score'))
+            )
+            result = cursor.fetchone()
+            exercise_id = result['id']
+        else:
+            cursor.execute(
+                """INSERT INTO writing_exercises 
+                   (user_id, passage_id, prompt, user_response, ai_feedback, score)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (user_id, passage_id, prompt, user_response, json.dumps(feedback), feedback.get('score'))
+            )
+            exercise_id = cursor.lastrowid
+        
+        conn.commit()
+        conn.close()
+        
+        update_user_activity(user_id)
+        
+        return {
+            "success": True,
+            "feedback": feedback,
+            "exercise_id": exercise_id
+        }
+        
+    except Exception as e:
+        conn.close()
+        print(f"Writing feedback error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate feedback")
+
+@app.post("/api/write/revise")
+async def submit_revision(request: Request):
+    """Submit a revised writing response"""
+    data = await request.json()
+    token = data.get("token")
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    exercise_id = data.get("exercise_id")
+    revised_response = data.get("revised_response")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Update exercise
+    if USE_POSTGRES:
+        cursor.execute(
+            """UPDATE writing_exercises 
+               SET revised_response = %s, revision_submitted_at = NOW()
+               WHERE id = %s AND user_id = %s""",
+            (revised_response, exercise_id, user_id)
+        )
+    else:
+        cursor.execute(
+            """UPDATE writing_exercises 
+               SET revised_response = ?, revision_submitted_at = CURRENT_TIMESTAMP
+               WHERE id = ? AND user_id = ?""",
+            (revised_response, exercise_id, user_id)
+        )
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        "success": True,
+        "message": "Excellent! Your revision shows real improvement!"
+    }
+
+@app.get("/api/write/history")
+async def get_writing_history(token: str, limit: int = 10):
+    """Get user's writing exercise history"""
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT id, prompt, user_response, score, submitted_at, revised_response
+               FROM writing_exercises 
+               WHERE user_id = %s 
+               ORDER BY submitted_at DESC 
+               LIMIT %s""",
+            (user_id, limit)
+        )
+    else:
+        cursor.execute(
+            """SELECT id, prompt, user_response, score, submitted_at, revised_response
+               FROM writing_exercises 
+               WHERE user_id = ? 
+               ORDER BY submitted_at DESC 
+               LIMIT ?""",
+            (user_id, limit)
+        )
+    
+    exercises = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return {"exercises": exercises}
+
+# ============================================
+# PHASE 2: ENHANCED ANALYTICS
+# ============================================
+
+@app.get("/api/student/progress")
+async def get_student_progress(token: str):
+    """Get detailed progress for current student"""
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get user stats
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT total_passages_read, words_per_session, comprehension_score, level_estimate
+               FROM users WHERE id = %s""",
+            (user_id,)
+        )
+    else:
+        cursor.execute(
+            """SELECT total_passages_read, words_per_session, comprehension_score, level_estimate
+               FROM users WHERE id = ?""",
+            (user_id,)
+        )
+    
+    user_stats = dict(cursor.fetchone())
+    
+    # Get recent sessions
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT sl.*, p.title, p.word_count
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.user_id = %s AND sl.completed_at IS NOT NULL
+               ORDER BY sl.completed_at DESC
+               LIMIT 10""",
+            (user_id,)
+        )
+    else:
+        cursor.execute(
+            """SELECT sl.*, p.title, p.word_count
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.user_id = ? AND sl.completed_at IS NOT NULL
+               ORDER BY sl.completed_at DESC
+               LIMIT 10""",
+            (user_id,)
+        )
+    
+    recent_sessions = [dict(row) for row in cursor.fetchall()]
+    
+    # Calculate Day-1 metric (passages completed today)
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT COUNT(*) as count
+               FROM session_logs
+               WHERE user_id = %s 
+               AND completion_status = 'completed'
+               AND started_at >= CURRENT_DATE""",
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        today_count = result['count']
+    else:
+        cursor.execute(
+            """SELECT COUNT(*) as count
+               FROM session_logs
+               WHERE user_id = ? 
+               AND completion_status = 'completed'
+               AND DATE(started_at) = DATE('now')""",
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        today_count = result[0]
+    
+    conn.close()
+    
+    return {
+        "user_stats": user_stats,
+        "recent_sessions": recent_sessions,
+        "today_completed": today_count,
+        "day1_goal_met": today_count >= 3
+    }
+
+@app.get("/api/admin/analytics-v2")
+async def get_enhanced_analytics(token: str):
+    """Enhanced analytics for admin dashboard"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Basic stats
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
+    result = cursor.fetchone()
+    total_students = result['count'] if USE_POSTGRES else result[0]
+    
+    # Day-1 Success Rate
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT 
+                COUNT(DISTINCT user_id) as total,
+                COUNT(DISTINCT CASE WHEN passages >= 3 THEN user_id END) as met_goal
+               FROM (
+                   SELECT user_id, COUNT(*) as passages
+                   FROM session_logs
+                   WHERE completion_status = 'completed'
+                   AND started_at >= CURRENT_DATE
+                   GROUP BY user_id
+               ) daily_stats"""
+        )
+        result = cursor.fetchone()
+        day1_total = result['total']
+        day1_met = result['met_goal']
+    else:
+        cursor.execute(
+            """SELECT 
+                COUNT(DISTINCT user_id) as total,
+                SUM(CASE WHEN passages >= 3 THEN 1 ELSE 0 END) as met_goal
+               FROM (
+                   SELECT user_id, COUNT(*) as passages
+                   FROM session_logs
+                   WHERE completion_status = 'completed'
+                   AND DATE(started_at) = DATE('now')
+                   GROUP BY user_id
+               )"""
+        )
+        result = cursor.fetchone()
+        day1_total = result[0]
+        day1_met = result[1]
+    
+    day1_success_rate = (day1_met / day1_total * 100) if day1_total > 0 else 0
+    
+    # Average comprehension by question type
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT 
+                pq.question_type,
+                COUNT(*) as total_questions,
+                AVG(sl.comprehension_score) as avg_score
+               FROM session_logs sl
+               JOIN passage_questions pq ON sl.passage_id = pq.passage_id
+               WHERE sl.comprehension_score IS NOT NULL
+               GROUP BY pq.question_type"""
+        )
+    else:
+        cursor.execute(
+            """SELECT 
+                pq.question_type,
+                COUNT(*) as total_questions,
+                AVG(sl.comprehension_score) as avg_score
+               FROM session_logs sl
+               JOIN passage_questions pq ON sl.passage_id = pq.passage_id
+               WHERE sl.comprehension_score IS NOT NULL
+               GROUP BY pq.question_type"""
+        )
+    
+    comprehension_by_type = [dict(row) for row in cursor.fetchall()]
+    
+    # Stamina trend (last 7 days)
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT 
+                DATE(started_at) as date,
+                AVG(p.word_count) as avg_words,
+                COUNT(*) as sessions
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE started_at >= CURRENT_DATE - INTERVAL '7 days'
+               AND completion_status = 'completed'
+               GROUP BY DATE(started_at)
+               ORDER BY date"""
+        )
+    else:
+        cursor.execute(
+            """SELECT 
+                DATE(started_at) as date,
+                AVG(p.word_count) as avg_words,
+                COUNT(*) as sessions
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE DATE(started_at) >= DATE('now', '-7 days')
+               AND completion_status = 'completed'
+               GROUP BY DATE(started_at)
+               ORDER BY date"""
+        )
+    
+    stamina_trend = [dict(row) for row in cursor.fetchall()]
+    
+    conn.close()
+    
+    return {
+        "total_students": total_students,
+        "day1_success_rate": round(day1_success_rate, 1),
+        "day1_active_today": day1_total,
+        "comprehension_by_type": comprehension_by_type,
+        "stamina_trend": stamina_trend
+    }
+
+# ============================================
+# ADMIN ENDPOINTS (Original + Enhanced)
+# ============================================
 
 @app.get("/api/admin/students")
 async def get_all_students(token: str):
@@ -776,14 +1230,20 @@ async def get_all_students(token: str):
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, email, full_name, reading_level, interests, created_at FROM users WHERE role = 'student'")
+    cursor.execute(
+        """SELECT id, email, full_name, level_estimate, total_passages_read, 
+           comprehension_score, last_active, created_at 
+           FROM users WHERE role = 'student'
+           ORDER BY created_at DESC"""
+    )
     students = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
     return {"students": students}
 
-@app.get("/api/admin/student/{student_id}/progress")
-async def get_student_progress(student_id: int, token: str):
+@app.get("/api/admin/student/{student_id}/details")
+async def get_student_details(student_id: int, token: str):
+    """Get detailed progress for a specific student"""
     user_data = verify_token(token)
     if user_data["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -791,76 +1251,76 @@ async def get_student_progress(student_id: int, token: str):
     conn = get_db()
     cursor = conn.cursor()
     
+    # Get student info
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (student_id,))
+    else:
+        cursor.execute("SELECT * FROM users WHERE id = ?", (student_id,))
+    
+    student = dict(cursor.fetchone())
+    
+    # Get session history
     if USE_POSTGRES:
         cursor.execute(
-            """SELECT p.*, l.title, l.topic 
-            FROM progress p 
-            JOIN lessons l ON p.lesson_id = l.id 
-            WHERE p.user_id = %s 
-            ORDER BY p.completed_at DESC""",
+            """SELECT sl.*, p.title, p.word_count, p.difficulty_level
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.user_id = %s
+               ORDER BY sl.started_at DESC
+               LIMIT 20""",
             (student_id,)
         )
     else:
         cursor.execute(
-            """SELECT p.*, l.title, l.topic 
-            FROM progress p 
-            JOIN lessons l ON p.lesson_id = l.id 
-            WHERE p.user_id = ? 
-            ORDER BY p.completed_at DESC""",
+            """SELECT sl.*, p.title, p.word_count, p.difficulty_level
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.user_id = ?
+               ORDER BY sl.started_at DESC
+               LIMIT 20""",
             (student_id,)
         )
     
-    progress = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    sessions = [dict(row) for row in cursor.fetchall()]
     
-    return {"progress": progress}
-
-@app.get("/api/admin/analytics")
-async def get_analytics(token: str):
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'")
-    total_students = cursor.fetchone()['count'] if USE_POSTGRES else cursor.fetchone()[0]
-    
-    if USE_POSTGRES:
-        cursor.execute("SELECT COUNT(*) as count FROM progress WHERE completed = TRUE")
-        total_completed = cursor.fetchone()['count']
-    else:
-        cursor.execute("SELECT COUNT(*) as count FROM progress WHERE completed = 1")
-        total_completed = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT AVG(score) as avg_score FROM progress WHERE score IS NOT NULL")
-    result = cursor.fetchone()
-    avg_score = result['avg_score'] if USE_POSTGRES else result[0]
-    avg_score = avg_score or 0
-    
+    # Get writing exercises
     if USE_POSTGRES:
         cursor.execute(
-            "SELECT COUNT(DISTINCT user_id) as count FROM progress WHERE completed_at >= NOW() - INTERVAL '7 days'"
+            """SELECT prompt, score, submitted_at, revised_response IS NOT NULL as has_revision
+               FROM writing_exercises
+               WHERE user_id = %s
+               ORDER BY submitted_at DESC
+               LIMIT 10""",
+            (student_id,)
         )
-        active_students = cursor.fetchone()['count']
     else:
         cursor.execute(
-            "SELECT COUNT(DISTINCT user_id) as count FROM progress WHERE completed_at >= datetime('now', '-7 days')"
+            """SELECT prompt, score, submitted_at, 
+                      CASE WHEN revised_response IS NOT NULL THEN 1 ELSE 0 END as has_revision
+               FROM writing_exercises
+               WHERE user_id = ?
+               ORDER BY submitted_at DESC
+               LIMIT 10""",
+            (student_id,)
         )
-        active_students = cursor.fetchone()[0]
+    
+    writing = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
     
     return {
-        "total_students": total_students,
-        "total_lessons_completed": total_completed,
-        "average_score": round(avg_score, 2),
-        "active_students": active_students
+        "student": student,
+        "sessions": sessions,
+        "writing": writing
     }
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+except:
+    print("Warning: static directory not found")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

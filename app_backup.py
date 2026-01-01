@@ -10,7 +10,7 @@ import psycopg2.extras
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
-import openai
+from openai import OpenAI
 import os
 import json
 from pathlib import Path
@@ -30,9 +30,39 @@ app.add_middleware(
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "mfs-literacy-platform-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-openai.api_key = OPENAI_API_KEY
 
-# Database configuration - Use PostgreSQL if available, otherwise SQLite
+# Debug: Print API key status (first few characters only for security)
+if OPENAI_API_KEY:
+    print(f"OpenAI API Key found: {OPENAI_API_KEY[:7]}..." if len(OPENAI_API_KEY) > 7 else "Key too short")
+else:
+    print("No OpenAI API Key found in environment")
+
+# Initialize OpenAI client only if API key is provided
+openai_client = None
+if OPENAI_API_KEY and OPENAI_API_KEY.strip() and len(OPENAI_API_KEY) > 10:
+    try:
+        # Try to initialize with just the API key, let it handle httpx internally
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        print("✅ OpenAI client initialized successfully")
+    except TypeError as e:
+        # If there's a httpx compatibility issue, try with default_headers
+        print(f"⚠️ OpenAI client initialization issue (httpx compatibility): {e}")
+        try:
+            openai_client = OpenAI(
+                api_key=OPENAI_API_KEY,
+                default_headers={"User-Agent": "MFS-Literacy-Platform"}
+            )
+            print("✅ OpenAI client initialized with custom headers")
+        except Exception as e2:
+            print(f"❌ Failed to initialize OpenAI client: {e2}")
+            openai_client = None
+    except Exception as e:
+        print(f"❌ Failed to initialize OpenAI client: {e}")
+        openai_client = None
+else:
+    print("ℹ️ No valid OpenAI API key provided - will use fallback responses")
+
+# Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -49,7 +79,7 @@ class UserCreate(BaseModel):
     email: str
     password: str
     full_name: str
-    role: str = "student"  # student or admin
+    role: str = "student"
     
 class UserLogin(BaseModel):
     email: str
@@ -71,7 +101,6 @@ def init_db():
         conn = psycopg2.connect(DATABASE)
         cursor = conn.cursor()
         
-        # Users table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -85,7 +114,6 @@ def init_db():
             )
         ''')
         
-        # Assessment results table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS assessments (
                 id SERIAL PRIMARY KEY,
@@ -100,7 +128,6 @@ def init_db():
             )
         ''')
         
-        # Lessons table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS lessons (
                 id SERIAL PRIMARY KEY,
@@ -113,7 +140,6 @@ def init_db():
             )
         ''')
         
-        # Student progress table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS progress (
                 id SERIAL PRIMARY KEY,
@@ -128,7 +154,6 @@ def init_db():
             )
         ''')
         
-        # Admin account
         admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
         try:
             cursor.execute(
@@ -143,7 +168,6 @@ def init_db():
         conn.execute('PRAGMA journal_mode=WAL')
         cursor = conn.cursor()
         
-        # Users table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,7 +181,6 @@ def init_db():
             )
         ''')
         
-        # Assessment results table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS assessments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,7 +195,6 @@ def init_db():
             )
         ''')
         
-        # Lessons table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS lessons (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -185,7 +207,6 @@ def init_db():
             )
         ''')
         
-        # Student progress table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS progress (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,7 +221,6 @@ def init_db():
             )
         ''')
         
-        # Admin account
         admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
         try:
             cursor.execute(
@@ -213,10 +233,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Initialize database on startup
 init_db()
 
-# Helper functions
 def get_db():
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE)
@@ -227,17 +245,6 @@ def get_db():
         conn.execute('PRAGMA journal_mode=WAL')
         conn.row_factory = sqlite3.Row
         return conn
-
-def db_execute(cursor, query, params=None, is_postgres=USE_POSTGRES):
-    """Execute query with proper parameter substitution for SQLite or PostgreSQL"""
-    if is_postgres:
-        # PostgreSQL uses %s for all parameters
-        query = query.replace('?', '%s')
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
-    return cursor
 
 def create_token(user_id: int, role: str) -> str:
     payload = {
@@ -259,7 +266,6 @@ def verify_token(token: str) -> dict:
 async def generate_interest_assessment() -> List[Dict]:
     """Generate questions to assess student's reading interests"""
     
-    # Comprehensive fallback questions (always work!)
     fallback_questions = [
         {
             "id": 1,
@@ -323,9 +329,8 @@ async def generate_interest_assessment() -> List[Dict]:
         }
     ]
     
-    # Try OpenAI first, but don't fail if it doesn't work
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "":
-        print("No OpenAI API key - using fallback questions")
+    if not openai_client:
+        print("No OpenAI client available - using fallback questions")
         return fallback_questions
     
     try:
@@ -346,20 +351,19 @@ async def generate_interest_assessment() -> List[Dict]:
         
         Make questions engaging and appropriate for diverse reading levels."""
         
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert educator creating reading assessments."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            timeout=10  # 10 second timeout
+            timeout=20  # Increased from 10 to 20 seconds
         )
         
         print("OpenAI response received, parsing...")
         
         content = response.choices[0].message.content
-        # Extract JSON from markdown if present
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
@@ -369,65 +373,26 @@ async def generate_interest_assessment() -> List[Dict]:
         print(f"Successfully parsed {len(questions)} AI-generated questions")
         return questions
         
-    except openai.error.Timeout:
-        print("OpenAI timeout - using fallback questions")
-        return fallback_questions
-    except openai.error.AuthenticationError:
-        print("OpenAI authentication failed - check API key")
-        return fallback_questions
-    except openai.error.RateLimitError:
-        print("OpenAI rate limit exceeded - using fallback questions")
-        return fallback_questions
     except Exception as e:
-        print(f"OpenAI error: {e} - using fallback questions")
+        print(f"OpenAI error: {type(e).__name__}: {str(e)} - using fallback questions")
         return fallback_questions
-
-async def generate_reading_level_test(interests: str) -> List[Dict]:
-    """Generate adaptive reading level assessment based on interests"""
-    prompt = f"""Create 5 reading comprehension passages with questions to assess reading level.
-    Student interests: {interests}
-    
-    Include passages at different difficulty levels (elementary, middle, high school).
-    Each passage should relate to the student's interests.
-    
-    Return JSON:
-    [
-        {{
-            "id": 1,
-            "passage": "Short paragraph about topic...",
-            "questions": [
-                {{
-                    "question": "What is the main idea?",
-                    "options": ["A", "B", "C", "D"],
-                    "correct": 0,
-                    "difficulty": "elementary"
-                }}
-            ]
-        }}
-    ]"""
-    
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert literacy educator."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7
-        )
-        
-        content = response.choices[0].message.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-            
-        return json.loads(content)
-    except:
-        return []
 
 async def analyze_assessment_results(answers: List[dict]) -> Dict[str, Any]:
     """Use AI to analyze assessment results and determine reading level and interests"""
+    
+    # Fallback analysis based on answers
+    fallback_analysis = {
+        "reading_level": "middle",
+        "interests": ["technology", "sports", "science"],
+        "strengths": ["comprehension", "vocabulary"],
+        "areas_for_improvement": ["inference", "critical_thinking"],
+        "recommended_topics": ["tech innovation", "sports history", "space exploration"]
+    }
+    
+    if not openai_client:
+        print("No OpenAI client available - using fallback analysis")
+        return fallback_analysis
+    
     prompt = f"""Analyze these assessment answers and determine:
     1. Reading level (elementary, middle, high_school, adult)
     2. Top 3 interest areas
@@ -445,13 +410,14 @@ async def analyze_assessment_results(answers: List[dict]) -> Dict[str, Any]:
     }}"""
     
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert in literacy assessment and education."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5
+            temperature=0.5,
+            timeout=10
         )
         
         content = response.choices[0].message.content
@@ -461,17 +427,41 @@ async def analyze_assessment_results(answers: List[dict]) -> Dict[str, Any]:
             content = content.split("```")[1].split("```")[0].strip()
             
         return json.loads(content)
-    except:
-        return {
-            "reading_level": "middle",
-            "interests": ["general"],
-            "strengths": [],
-            "areas_for_improvement": [],
-            "recommended_topics": []
-        }
+    except Exception as e:
+        print(f"Error analyzing assessment: {type(e).__name__}: {str(e)}")
+        return fallback_analysis
 
 async def generate_adaptive_lesson(user_profile: dict, previous_performance: dict) -> Dict:
     """Generate personalized lesson content based on student profile and performance"""
+    
+    fallback_lesson = {
+        "title": "Introduction to Reading Comprehension",
+        "content": "Reading comprehension is the ability to understand and interpret what you read. This skill is essential for success in school and in everyday life. When you read, your brain processes the words on the page and connects them to your existing knowledge and experiences.",
+        "difficulty_level": 5,
+        "questions": [
+            {
+                "question": "What is reading comprehension?",
+                "options": [
+                    "The ability to read quickly",
+                    "The ability to understand and interpret text",
+                    "The ability to memorize words",
+                    "The ability to write well"
+                ],
+                "correct": 1,
+                "explanation": "Reading comprehension is about understanding and making sense of what you read."
+            }
+        ],
+        "vocabulary": {
+            "comprehension": "Understanding or grasping the meaning of something",
+            "interpret": "To explain or understand the meaning of something"
+        },
+        "next_steps": "Practice with more complex passages"
+    }
+    
+    if not openai_client:
+        print("No OpenAI client available - using fallback lesson")
+        return fallback_lesson
+    
     prompt = f"""Create an engaging reading lesson for a student with this profile:
     - Reading Level: {user_profile.get('reading_level', 'middle')}
     - Interests: {user_profile.get('interests', 'general')}
@@ -496,18 +486,19 @@ async def generate_adaptive_lesson(user_profile: dict, previous_performance: dic
                 "explanation": "Why this is correct"
             }}
         ],
-        "vocabulary": ["word1": "definition1"],
+        "vocabulary": {{"word1": "definition1"}},
         "next_steps": "Recommendation for next lesson"
     }}"""
     
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert educator creating personalized reading lessons."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.8
+            temperature=0.8,
+            timeout=15
         )
         
         content = response.choices[0].message.content
@@ -518,17 +509,10 @@ async def generate_adaptive_lesson(user_profile: dict, previous_performance: dic
             
         return json.loads(content)
     except Exception as e:
-        return {
-            "title": "Sample Lesson",
-            "content": "This is a sample lesson. Please configure OpenAI API key for personalized content.",
-            "difficulty_level": 5,
-            "questions": [],
-            "vocabulary": {},
-            "next_steps": "Continue practicing"
-        }
+        print(f"Error generating lesson: {type(e).__name__}: {str(e)}")
+        return fallback_lesson
 
 # API Routes
-
 @app.get("/", response_class=HTMLResponse)
 async def serve_landing():
     return FileResponse("static/index.html")
@@ -541,13 +525,21 @@ async def serve_dashboard():
 async def serve_admin():
     return FileResponse("static/admin-dashboard.html")
 
-# Authentication
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint to verify API status"""
+    return {
+        "status": "healthy",
+        "database": "PostgreSQL" if USE_POSTGRES else "SQLite",
+        "openai_configured": openai_client is not None,
+        "openai_status": "active" if openai_client else "using_fallback"
+    }
+
 @app.post("/api/register")
 async def register(user: UserCreate):
     conn = get_db()
     cursor = conn.cursor()
     
-    # Hash password
     password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
     
     try:
@@ -557,13 +549,13 @@ async def register(user: UserCreate):
                 (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
             )
             result = cursor.fetchone()
-            user_id = result['id']  # PostgreSQL with RealDictCursor returns dict
+            user_id = result['id']
         else:
             cursor.execute(
                 "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
                 (user.email, password_hash.decode('utf-8'), user.full_name, user.role)
             )
-            user_id = cursor.lastrowid  # SQLite uses lastrowid
+            user_id = cursor.lastrowid
         
         conn.commit()
         
@@ -584,7 +576,7 @@ async def register(user: UserCreate):
         raise HTTPException(status_code=400, detail="Email already registered")
     except Exception as e:
         conn.rollback()
-        print(f"Registration error: {e}")  # Debug logging
+        print(f"Registration error: {e}")
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
     finally:
         conn.close()
@@ -605,10 +597,8 @@ async def login(credentials: UserLogin):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Get password_hash - works for both dict (Postgres) and Row (SQLite)
-    password_hash = user['password_hash'] if USE_POSTGRES else user['password_hash']
+    password_hash = user['password_hash']
     
-    # Verify password
     if not bcrypt.checkpw(credentials.password.encode('utf-8'), password_hash.encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
@@ -627,7 +617,6 @@ async def login(credentials: UserLogin):
         }
     }
 
-# Assessment endpoints
 @app.get("/api/assessment/interest")
 async def get_interest_assessment():
     print("Assessment endpoint called - generating questions...")
@@ -651,10 +640,8 @@ async def submit_assessment(request: Request):
     user_data = verify_token(token)
     user_id = user_data["user_id"]
     
-    # Analyze results
     analysis = await analyze_assessment_results(answers)
     
-    # Update user profile
     conn = get_db()
     cursor = conn.cursor()
     
@@ -664,7 +651,6 @@ async def submit_assessment(request: Request):
             (analysis['reading_level'], json.dumps(analysis['interests']), user_id)
         )
         
-        # Save assessment
         cursor.execute(
             "INSERT INTO assessments (user_id, assessment_type, questions, answers, reading_level, interests) VALUES (%s, %s, %s, %s, %s, %s)",
             (user_id, "initial", json.dumps([]), json.dumps(answers), analysis['reading_level'], json.dumps(analysis['interests']))
@@ -675,7 +661,6 @@ async def submit_assessment(request: Request):
             (analysis['reading_level'], json.dumps(analysis['interests']), user_id)
         )
         
-        # Save assessment
         cursor.execute(
             "INSERT INTO assessments (user_id, assessment_type, questions, answers, reading_level, interests) VALUES (?, ?, ?, ?, ?, ?)",
             (user_id, "initial", json.dumps([]), json.dumps(answers), analysis['reading_level'], json.dumps(analysis['interests']))
@@ -689,7 +674,6 @@ async def submit_assessment(request: Request):
         "analysis": analysis
     }
 
-# Lesson endpoints
 @app.get("/api/lessons/next")
 async def get_next_lesson(token: str):
     user_data = verify_token(token)
@@ -698,7 +682,6 @@ async def get_next_lesson(token: str):
     conn = get_db()
     cursor = conn.cursor()
     
-    # Get user profile
     if USE_POSTGRES:
         cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
     else:
@@ -706,7 +689,6 @@ async def get_next_lesson(token: str):
     
     user = cursor.fetchone()
     
-    # Get recent performance
     if USE_POSTGRES:
         cursor.execute(
             "SELECT * FROM progress WHERE user_id = %s ORDER BY completed_at DESC LIMIT 5",
@@ -731,10 +713,8 @@ async def get_next_lesson(token: str):
         "completed_count": len(recent)
     }
     
-    # Generate personalized lesson
     lesson = await generate_adaptive_lesson(user_profile, performance)
     
-    # Save lesson to database
     conn = get_db()
     cursor = conn.cursor()
     
@@ -744,13 +724,13 @@ async def get_next_lesson(token: str):
             (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
         )
         result = cursor.fetchone()
-        lesson_id = result['id']  # PostgreSQL with RealDictCursor returns dict
+        lesson_id = result['id']
     else:
         cursor.execute(
             "INSERT INTO lessons (title, content, reading_level, topic, difficulty) VALUES (?, ?, ?, ?, ?)",
             (lesson['title'], json.dumps(lesson), user_profile['reading_level'], user_profile['interests'][0], lesson.get('difficulty_level', 5))
         )
-        lesson_id = cursor.lastrowid  # SQLite uses lastrowid
+        lesson_id = cursor.lastrowid
     
     conn.commit()
     conn.close()
@@ -759,7 +739,13 @@ async def get_next_lesson(token: str):
     return lesson
 
 @app.post("/api/lessons/progress")
-async def save_progress(data: dict, token: str):
+async def save_progress(request: Request):
+    data = await request.json()
+    token = data.get("token")
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
     user_data = verify_token(token)
     user_id = user_data["user_id"]
     
@@ -782,7 +768,6 @@ async def save_progress(data: dict, token: str):
     
     return {"success": True}
 
-# Admin endpoints
 @app.get("/api/admin/students")
 async def get_all_students(token: str):
     user_data = verify_token(token)
@@ -839,11 +824,9 @@ async def get_analytics(token: str):
     conn = get_db()
     cursor = conn.cursor()
     
-    # Total students
     cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'")
     total_students = cursor.fetchone()['count'] if USE_POSTGRES else cursor.fetchone()[0]
     
-    # Total lessons completed
     if USE_POSTGRES:
         cursor.execute("SELECT COUNT(*) as count FROM progress WHERE completed = TRUE")
         total_completed = cursor.fetchone()['count']
@@ -851,13 +834,11 @@ async def get_analytics(token: str):
         cursor.execute("SELECT COUNT(*) as count FROM progress WHERE completed = 1")
         total_completed = cursor.fetchone()[0]
     
-    # Average score
     cursor.execute("SELECT AVG(score) as avg_score FROM progress WHERE score IS NOT NULL")
     result = cursor.fetchone()
     avg_score = result['avg_score'] if USE_POSTGRES else result[0]
     avg_score = avg_score or 0
     
-    # Active students (completed lesson in last 7 days)
     if USE_POSTGRES:
         cursor.execute(
             "SELECT COUNT(DISTINCT user_id) as count FROM progress WHERE completed_at >= NOW() - INTERVAL '7 days'"
@@ -878,7 +859,6 @@ async def get_analytics(token: str):
         "active_students": active_students
     }
 
-# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 if __name__ == "__main__":

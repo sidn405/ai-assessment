@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writing Practice - MFS Literacy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-primary: #003D6C;
+            --navy-dark: #002B4D;
+            --gold-accent: #D4AF37;
+            --white: #FFFFFF;
+            --light-bg: #F5F7FA;
+            --text-primary: #2C3E50;
+            --text-secondary: #7F8C8D;
+            --success: #27AE60;
+            --info: #3498DB;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: var(--light-bg);
+            color: var(--text-primary);
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+        }
+        
+        .header h1 {
+            font-family: 'Merriweather', serif;
+            font-size: 1.8rem;
+        }
+        
+        .back-btn {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        
+        .card {
+            background: var(--white);
+            padding: 2.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .prompt-section h2 {
+            font-family: 'Merriweather', serif;
+            color: var(--navy-primary);
+            margin-bottom: 1rem;
+        }
+        
+        .prompt-text {
+            background: var(--light-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            border-left: 4px solid var(--gold-accent);
+            margin-bottom: 2rem;
+        }
+        
+        .writing-area {
+            margin-bottom: 2rem;
+        }
+        
+        .writing-area label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--navy-primary);
+        }
+        
+        .writing-area textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 1rem;
+            border: 2px solid #E0E0E0;
+            border-radius: 4px;
+            font-family: 'Open Sans', sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            resize: vertical;
+        }
+        
+        .writing-area textarea:focus {
+            outline: none;
+            border-color: var(--navy-primary);
+        }
+        
+        .word-count {
+            text-align: right;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .btn {
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+        
+        .btn-primary {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .btn-primary:hover {
+            background: var(--navy-dark);
+        }
+        
+        .btn-secondary {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+        }
+        
+        .btn-secondary:hover {
+            background: #C49B2E;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .feedback-section {
+            margin-top: 2rem;
+        }
+        
+        .feedback-box {
+            background: #E8F5E9;
+            border: 2px solid var(--success);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .feedback-box h3 {
+            color: var(--success);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .feedback-box p {
+            line-height: 1.6;
+            margin-bottom: 0.75rem;
+        }
+        
+        .suggestions {
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+        }
+        
+        .suggestions h4 {
+            color: var(--info);
+            margin-bottom: 0.75rem;
+        }
+        
+        .suggestions ul {
+            margin-left: 1.5rem;
+        }
+        
+        .suggestions li {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+        
+        .example-revision {
+            background: var(--light-bg);
+            padding: 1.5rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+            border-left: 4px solid var(--info);
+        }
+        
+        .example-revision h4 {
+            color: var(--info);
+            margin-bottom: 0.75rem;
+        }
+        
+        .score-badge {
+            display: inline-block;
+            background: var(--success);
+            color: var(--white);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-left: 1rem;
+        }
+        
+        .encouragement {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            margin-top: 1.5rem;
+        }
+        
+        .revision-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--light-bg);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+        
+        .spinner {
+            border: 4px solid var(--light-bg);
+            border-top: 4px solid var(--navy-primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .prompts-list {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .prompt-option {
+            background: var(--light-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .prompt-option:hover {
+            border-color: var(--navy-primary);
+            background: var(--white);
+        }
+        
+        .prompt-option h3 {
+            color: var(--navy-primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .prompt-option p {
+            color: var(--text-secondary);
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✍️ Writing Practice</h1>
+        <a href="/dashboard" class="back-btn">← Back to Dashboard</a>
+    </div>
+
+    <div class="container">
+        <!-- Prompt Selection -->
+        <div id="promptSelection" class="card">
+            <h2 style="font-family: 'Merriweather', serif; color: var(--navy-primary); margin-bottom: 1.5rem;">
+                Choose a Writing Topic
+            </h2>
+            <div class="prompts-list">
+                <div class="prompt-option" onclick="selectPrompt(0)">
+                    <h3>📖 Reflect on Your Reading</h3>
+                    <p>Write about the most recent passage you read. What did you learn? What surprised you?</p>
+                </div>
+                <div class="prompt-option" onclick="selectPrompt(1)">
+                    <h3>🎯 Personal Goal</h3>
+                    <p>What is one goal you have for improving your reading skills? Why is this important to you?</p>
+                </div>
+                <div class="prompt-option" onclick="selectPrompt(2)">
+                    <h3>💡 Favorite Topic</h3>
+                    <p>Write about something you find interesting and want to learn more about. Why does this topic fascinate you?</p>
+                </div>
+                <div class="prompt-option" onclick="selectPrompt(3)">
+                    <h3>🌟 Personal Story</h3>
+                    <p>Share a time when you accomplished something you were proud of. What did you learn from that experience?</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Writing Interface -->
+        <div id="writingInterface" class="card hidden">
+            <div class="prompt-section">
+                <h2>Your Writing Prompt</h2>
+                <div class="prompt-text" id="selectedPrompt"></div>
+            </div>
+
+            <div class="writing-area">
+                <label for="responseText">Your Response:</label>
+                <textarea 
+                    id="responseText" 
+                    placeholder="Start writing your thoughts here..."
+                    oninput="updateWordCount()">
+                </textarea>
+                <div class="word-count">
+                    <span id="wordCount">0</span> words
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="submitWriting()" id="submitBtn">
+                    Get Feedback
+                </button>
+                <button class="btn btn-secondary" onclick="resetPrompt()">
+                    Choose Different Topic
+                </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="feedbackLoading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Our AI tutor is reading your work and preparing helpful feedback...</p>
+            </div>
+
+            <!-- Feedback Display -->
+            <div id="feedbackDisplay" class="feedback-section hidden">
+                <div class="feedback-box">
+                    <h3>
+                        ✨ What You Did Well
+                        <span class="score-badge" id="scoreDisplay"></span>
+                    </h3>
+                    <p id="positiveFeedback"></p>
+                </div>
+
+                <div class="suggestions" id="suggestionsBox">
+                    <h4>💡 Ways to Make It Even Better</h4>
+                    <ul id="suggestionsList"></ul>
+                </div>
+
+                <div class="example-revision">
+                    <h4>📝 Here's One Way You Could Revise:</h4>
+                    <p id="revisedExample"></p>
+                </div>
+
+                <div class="encouragement" id="encouragementMessage"></div>
+
+                <!-- Revision Option -->
+                <div class="revision-section">
+                    <h3 style="color: var(--navy-primary); margin-bottom: 1rem;">
+                        Want to Try Revising?
+                    </h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Use the suggestions above to improve your writing. This is optional but helps build your skills!
+                    </p>
+                    <div class="writing-area">
+                        <label for="revisionText">Your Revised Version:</label>
+                        <textarea 
+                            id="revisionText" 
+                            placeholder="Write your improved version here..."
+                            oninput="updateRevisionWordCount()">
+                        </textarea>
+                        <div class="word-count">
+                            <span id="revisionWordCount">0</span> words
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-primary" onclick="submitRevision()">
+                            Submit Revision
+                        </button>
+                        <button class="btn btn-secondary" onclick="startNewExercise()">
+                            Start New Exercise
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const prompts = [
+            {
+                title: "Reflect on Your Reading",
+                text: "Think about the most recent passage you read. What did you learn from it? What surprised you or made you think differently? Write at least 5 sentences sharing your thoughts.",
+                type: "reflection"
+            },
+            {
+                title: "Personal Goal",
+                text: "What is one goal you have for improving your reading skills? Why is this goal important to you? What steps will you take to achieve it? Write at least 5 sentences explaining your goal and plan.",
+                type: "goal"
+            },
+            {
+                title: "Favorite Topic",
+                text: "Write about a topic that interests you and that you want to learn more about. Why does this topic fascinate you? What questions do you have about it? Write at least 5 sentences exploring this topic.",
+                type: "topic"
+            },
+            {
+                title: "Personal Story",
+                text: "Share a time when you accomplished something you were proud of. What challenges did you face? How did you overcome them? What did you learn from that experience? Write at least 5 sentences telling your story.",
+                type: "story"
+            }
+        ];
+
+        let currentPrompt = null;
+        let currentExerciseId = null;
+
+        function selectPrompt(index) {
+            currentPrompt = prompts[index];
+            document.getElementById('selectedPrompt').textContent = currentPrompt.text;
+            document.getElementById('promptSelection').classList.add('hidden');
+            document.getElementById('writingInterface').classList.remove('hidden');
+            document.getElementById('responseText').focus();
+        }
+
+        function resetPrompt() {
+            if (confirm('Are you sure? Your current work will be lost.')) {
+                document.getElementById('promptSelection').classList.remove('hidden');
+                document.getElementById('writingInterface').classList.add('hidden');
+                document.getElementById('responseText').value = '';
+                document.getElementById('feedbackDisplay').classList.add('hidden');
+                updateWordCount();
+            }
+        }
+
+        function updateWordCount() {
+            const text = document.getElementById('responseText').value;
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+            document.getElementById('wordCount').textContent = words.length;
+            
+            // Enable submit button if they've written enough
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = words.length < 25;
+        }
+
+        function updateRevisionWordCount() {
+            const text = document.getElementById('revisionText').value;
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+            document.getElementById('revisionWordCount').textContent = words.length;
+        }
+
+        async function submitWriting() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+
+            const response = document.getElementById('responseText').value.trim();
+            
+            if (!response) {
+                alert('Please write a response before submitting.');
+                return;
+            }
+
+            const words = response.split(/\s+/).filter(w => w.length > 0);
+            if (words.length < 25) {
+                alert('Please write at least 25 words (about 5 sentences) before submitting.');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('feedbackLoading').classList.remove('hidden');
+
+            try {
+                const result = await fetch('/api/write/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        prompt: currentPrompt.text,
+                        response: response
+                    })
+                });
+
+                const data = await result.json();
+                
+                if (data.success) {
+                    currentExerciseId = data.exercise_id;
+                    displayFeedback(data.feedback);
+                } else {
+                    throw new Error('Failed to get feedback');
+                }
+
+            } catch (error) {
+                console.error('Error submitting writing:', error);
+                alert('Unable to get feedback right now. Please try again.');
+                document.getElementById('submitBtn').disabled = false;
+            } finally {
+                document.getElementById('feedbackLoading').classList.add('hidden');
+            }
+        }
+
+        function displayFeedback(feedback) {
+            document.getElementById('scoreDisplay').textContent = feedback.score + '%';
+            document.getElementById('positiveFeedback').textContent = feedback.positive_feedback;
+            
+            const suggestionsList = document.getElementById('suggestionsList');
+            suggestionsList.innerHTML = feedback.suggestions
+                .map(s => `<li>${s}</li>`)
+                .join('');
+            
+            document.getElementById('revisedExample').textContent = feedback.revised_example;
+            document.getElementById('encouragementMessage').textContent = feedback.encouragement;
+            
+            document.getElementById('feedbackDisplay').classList.remove('hidden');
+            document.getElementById('feedbackDisplay').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function submitRevision() {
+            const token = localStorage.getItem('token');
+            const revision = document.getElementById('revisionText').value.trim();
+
+            if (!revision) {
+                alert('Please write your revision before submitting.');
+                return;
+            }
+
+            try {
+                await fetch('/api/write/revise', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        exercise_id: currentExerciseId,
+                        revised_response: revision
+                    })
+                });
+
+                alert('Excellent work on your revision! You\'re improving with every exercise!');
+                startNewExercise();
+
+            } catch (error) {
+                console.error('Error submitting revision:', error);
+                alert('Revision saved! Great job!');
+                startNewExercise();
+            }
+        }
+
+        function startNewExercise() {
+            if (confirm('Ready to try another writing topic?')) {
+                location.reload();
+            } else {
+                window.location.href = '/dashboard';
+            }
+        }
+    </script>
+</body>
+</html>
