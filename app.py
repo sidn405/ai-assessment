@@ -3446,6 +3446,617 @@ async def get_gamification_data(token: str):
     except Exception as e:
         print(f"Error getting gamification: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+# ============================================================
+# SESSION TRACKING & TIMEOUT SYSTEM
+# ============================================================
+
+from datetime import datetime, timedelta
+
+# ========== SESSION MANAGEMENT ==========
+
+@app.post("/api/session/start")
+async def start_session(request: Request):
+    """Start a new user session"""
+    data = await request.json()
+    token = data.get("token")
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Close any existing active sessions
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET session_end = NOW(), status = 'logged_out'
+                   WHERE user_id = %s AND status = 'active'""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET session_end = datetime('now'), status = 'logged_out'
+                   WHERE user_id = ? AND status = 'active'""",
+                (user_id,)
+            )
+        
+        # Create new session
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO user_sessions (user_id, status)
+                   VALUES (%s, 'active')
+                   RETURNING id""",
+                (user_id,)
+            )
+            result = cursor.fetchone()
+            session_id = result['id'] if result else None
+        else:
+            cursor.execute(
+                "INSERT INTO user_sessions (user_id, status) VALUES (?, 'active')",
+                (user_id,)
+            )
+            session_id = cursor.lastrowid
+        
+        # Log activity
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type)
+                   VALUES (%s, %s, 'login')""",
+                (user_id, session_id)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO activity_log (user_id, session_id, activity_type) VALUES (?, ?, 'login')",
+                (user_id, session_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "message": "Session started"
+        }
+        
+    except Exception as e:
+        print(f"Error starting session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/activity")
+async def update_activity(request: Request):
+    """Update last activity timestamp"""
+    data = await request.json()
+    token = data.get("token")
+    session_id = data.get("session_id")
+    activity_type = data.get("activity_type", "page_view")
+    activity_details = data.get("details")
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Update last activity
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET last_activity = NOW()
+                   WHERE id = %s AND user_id = %s""",
+                (session_id, user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET last_activity = datetime('now')
+                   WHERE id = ? AND user_id = ?""",
+                (session_id, user_id)
+            )
+        
+        # Log activity
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type, activity_details)
+                   VALUES (%s, %s, %s, %s)""",
+                (user_id, session_id, activity_type, activity_details)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type, activity_details)
+                   VALUES (?, ?, ?, ?)""",
+                (user_id, session_id, activity_type, activity_details)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"Error updating activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/break/start")
+async def start_break(request: Request):
+    """Start a break"""
+    data = await request.json()
+    token = data.get("token")
+    session_id = data.get("session_id")
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Update session to break status
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET status = 'on_break', break_start = NOW()
+                   WHERE id = %s AND user_id = %s""",
+                (session_id, user_id)
+            )
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type)
+                   VALUES (%s, %s, 'break_start')""",
+                (user_id, session_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET status = 'on_break', break_start = datetime('now')
+                   WHERE id = ? AND user_id = ?""",
+                (session_id, user_id)
+            )
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type)
+                   VALUES (?, ?, 'break_start')""",
+                (user_id, session_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "Break started",
+            "max_break_minutes": 30
+        }
+        
+    except Exception as e:
+        print(f"Error starting break: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/break/end")
+async def end_break(request: Request):
+    """End a break"""
+    data = await request.json()
+    token = data.get("token")
+    session_id = data.get("session_id")
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get break start time
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT break_start FROM user_sessions WHERE id = %s AND user_id = %s",
+                (session_id, user_id)
+            )
+        else:
+            cursor.execute(
+                "SELECT break_start FROM user_sessions WHERE id = ? AND user_id = ?",
+                (session_id, user_id)
+            )
+        
+        result = cursor.fetchone()
+        if result:
+            break_start = result['break_start'] if hasattr(result, 'keys') else result[0]
+            
+            # Calculate break duration
+            if break_start:
+                break_duration = (datetime.now() - datetime.fromisoformat(str(break_start))).seconds
+            else:
+                break_duration = 0
+            
+            # Update session
+            if USE_POSTGRES:
+                cursor.execute(
+                    """UPDATE user_sessions 
+                       SET status = 'active', 
+                           break_end = NOW(),
+                           total_break_time = total_break_time + %s,
+                           last_activity = NOW()
+                       WHERE id = %s AND user_id = %s""",
+                    (break_duration, session_id, user_id)
+                )
+                cursor.execute(
+                    """INSERT INTO activity_log (user_id, session_id, activity_type, activity_details)
+                       VALUES (%s, %s, 'break_end', %s)""",
+                    (user_id, session_id, f"Break duration: {break_duration}s")
+                )
+            else:
+                cursor.execute(
+                    """UPDATE user_sessions 
+                       SET status = 'active', 
+                           break_end = datetime('now'),
+                           total_break_time = total_break_time + ?,
+                           last_activity = datetime('now')
+                       WHERE id = ? AND user_id = ?""",
+                    (break_duration, session_id, user_id)
+                )
+                cursor.execute(
+                    """INSERT INTO activity_log (user_id, session_id, activity_type, activity_details)
+                       VALUES (?, ?, 'break_end', ?)""",
+                    (user_id, session_id, f"Break duration: {break_duration}s")
+                )
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "Break ended",
+            "break_duration_seconds": break_duration if result else 0
+        }
+        
+    except Exception as e:
+        print(f"Error ending break: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/timeout/warning")
+async def log_timeout_warning(request: Request):
+    """Log that timeout warning was shown"""
+    data = await request.json()
+    token = data.get("token")
+    session_id = data.get("session_id")
+    idle_duration = data.get("idle_duration", 0)
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Create timeout event
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO timeout_events (user_id, session_id, warning_shown_at, idle_duration)
+                   VALUES (%s, %s, NOW(), %s)
+                   RETURNING id""",
+                (user_id, session_id, idle_duration)
+            )
+            result = cursor.fetchone()
+            timeout_event_id = result['id'] if result else None
+            
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type, activity_details)
+                   VALUES (%s, %s, 'timeout_warning', %s)""",
+                (user_id, session_id, f"Idle for {idle_duration}s")
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO timeout_events (user_id, session_id, warning_shown_at, idle_duration)
+                   VALUES (?, ?, datetime('now'), ?)""",
+                (user_id, session_id, idle_duration)
+            )
+            timeout_event_id = cursor.lastrowid
+            
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type, activity_details)
+                   VALUES (?, ?, 'timeout_warning', ?)""",
+                (user_id, session_id, f"Idle for {idle_duration}s")
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "timeout_event_id": timeout_event_id
+        }
+        
+    except Exception as e:
+        print(f"Error logging timeout warning: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/timeout/responded")
+async def log_timeout_response(request: Request):
+    """Log that user responded to timeout warning"""
+    data = await request.json()
+    token = data.get("token")
+    session_id = data.get("session_id")
+    timeout_event_id = data.get("timeout_event_id")
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Update timeout event
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE timeout_events 
+                   SET user_responded = TRUE
+                   WHERE id = %s AND user_id = %s""",
+                (timeout_event_id, user_id)
+            )
+            
+            # Reset last activity
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET last_activity = NOW()
+                   WHERE id = %s AND user_id = %s""",
+                (session_id, user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE timeout_events 
+                   SET user_responded = 1
+                   WHERE id = ? AND user_id = ?""",
+                (timeout_event_id, user_id)
+            )
+            
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET last_activity = datetime('now')
+                   WHERE id = ? AND user_id = ?""",
+                (session_id, user_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"Error logging timeout response: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/timeout")
+async def log_timeout(request: Request):
+    """Log that user was timed out"""
+    data = await request.json()
+    token = data.get("token")
+    session_id = data.get("session_id")
+    timeout_event_id = data.get("timeout_event_id")
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Update timeout event
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE timeout_events 
+                   SET timed_out_at = NOW()
+                   WHERE id = %s AND user_id = %s""",
+                (timeout_event_id, user_id)
+            )
+            
+            # Update session
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET status = 'timed_out', 
+                       session_end = NOW(),
+                       timeout_count = timeout_count + 1
+                   WHERE id = %s AND user_id = %s""",
+                (session_id, user_id)
+            )
+            
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type)
+                   VALUES (%s, %s, 'timeout')""",
+                (user_id, session_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE timeout_events 
+                   SET timed_out_at = datetime('now')
+                   WHERE id = ? AND user_id = ?""",
+                (timeout_event_id, user_id)
+            )
+            
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET status = 'timed_out', 
+                       session_end = datetime('now'),
+                       timeout_count = timeout_count + 1
+                   WHERE id = ? AND user_id = ?""",
+                (session_id, user_id)
+            )
+            
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type)
+                   VALUES (?, ?, 'timeout')""",
+                (user_id, session_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"Error logging timeout: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/end")
+async def end_session(request: Request):
+    """End user session"""
+    data = await request.json()
+    token = data.get("token")
+    session_id = data.get("session_id")
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Update session
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET status = 'logged_out', session_end = NOW()
+                   WHERE id = %s AND user_id = %s""",
+                (session_id, user_id)
+            )
+            
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type)
+                   VALUES (%s, %s, 'logout')""",
+                (user_id, session_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE user_sessions 
+                   SET status = 'logged_out', session_end = datetime('now')
+                   WHERE id = ? AND user_id = ?""",
+                (session_id, user_id)
+            )
+            
+            cursor.execute(
+                """INSERT INTO activity_log (user_id, session_id, activity_type)
+                   VALUES (?, ?, 'logout')""",
+                (user_id, session_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"Error ending session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========== ADMIN ENDPOINTS ==========
+
+@app.get("/api/admin/sessions/active")
+async def get_active_sessions(token: str):
+    """Get all active sessions (admin only)"""
+    try:
+        user_data = verify_token(token)
+        if user_data["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT s.*, u.name, u.email 
+                FROM user_sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.status IN ('active', 'on_break')
+                ORDER BY s.last_activity DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT s.*, u.name, u.email 
+                FROM user_sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.status IN ('active', 'on_break')
+                ORDER BY s.last_activity DESC
+            """)
+        
+        sessions = []
+        for row in cursor.fetchall():
+            sessions.append({
+                'session_id': row['id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
+                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
+                'status': row['status'] if hasattr(row, 'keys') else row[4],
+                'session_start': str(row['session_start'] if hasattr(row, 'keys') else row[2]),
+                'last_activity': str(row['last_activity'] if hasattr(row, 'keys') else row[3]),
+                'break_start': str(row['break_start']) if (row['break_start'] if hasattr(row, 'keys') else row[5]) else None
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "sessions": sessions,
+            "count": len(sessions)
+        }
+        
+    except Exception as e:
+        print(f"Error getting active sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/activity/recent")
+async def get_recent_activity(token: str, hours: int = 24):
+    """Get recent activity logs (admin only)"""
+    try:
+        user_data = verify_token(token)
+        if user_data["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT a.*, u.name, u.email 
+                FROM activity_log a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.timestamp > NOW() - INTERVAL '%s hours'
+                ORDER BY a.timestamp DESC
+                LIMIT 100
+            """, (hours,))
+        else:
+            cursor.execute("""
+                SELECT a.*, u.name, u.email 
+                FROM activity_log a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
+                ORDER BY a.timestamp DESC
+                LIMIT 100
+            """, (hours,))
+        
+        activities = []
+        for row in cursor.fetchall():
+            activities.append({
+                'id': row['id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
+                'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
+                'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
+                'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "activities": activities,
+            "count": len(activities)
+        }
+        
+    except Exception as e:
+        print(f"Error getting activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Mount static files
 try:

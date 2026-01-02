@@ -647,6 +647,35 @@
                 opacity: 0;
             }
         }
+
+        /* Break status indicator */
+        .break-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 25px;
+            font-weight: bold;
+            display: none;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: pulse 2s infinite;
+        }
+
+        .break-indicator.active {
+            display: block;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
     </style>
 </head>
 <body>
@@ -676,6 +705,11 @@
                 <li class="nav-item">
                     <a href="#" class="nav-link" onclick="showSection('progress', event); return false;">
                         <span>📈</span> Progress
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="takeBreak(); return false;">
+                        <span>☕</span> Take A Break
                     </a>
                 </li>
             </ul>
@@ -2310,6 +2344,563 @@
             localStorage.removeItem('user');
             window.location.href = '/';
         }
+
+        // ============================================================
+        // SESSION TIMEOUT & BREAK SYSTEM
+        // ============================================================
+
+        // Session configuration
+        const SESSION_CONFIG = {
+            WARNING_TIME: 7 * 60 * 1000,      // 7 minutes in milliseconds
+            TIMEOUT_TIME: 10 * 60 * 1000,     // 10 minutes in milliseconds
+            MAX_BREAK_TIME: 30 * 60 * 1000,   // 30 minutes in milliseconds
+            ACTIVITY_CHECK_INTERVAL: 30 * 1000 // Check every 30 seconds
+        };
+
+        // Session state
+        let sessionState = {
+            sessionId: null,
+            lastActivity: Date.now(),
+            warningShown: false,
+            timeoutEventId: null,
+            onBreak: false,
+            breakStart: null,
+            warningTimer: null,
+            timeoutTimer: null,
+            breakTimer: null,
+            activityInterval: null
+        };
+
+        // ========== INITIALIZE SESSION ==========
+
+        async function initializeSession() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                const response = await fetch('/api/session/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    sessionState.sessionId = data.session_id;
+                    sessionState.lastActivity = Date.now();
+                    
+                    console.log('✓ Session started:', sessionState.sessionId);
+                    
+                    // Start idle monitoring
+                    startIdleMonitoring();
+                }
+            } catch (error) {
+                console.error('Error starting session:', error);
+            }
+        }
+
+        // ========== IDLE DETECTION ==========
+
+        function startIdleMonitoring() {
+            // Track user activity
+            const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+            
+            activityEvents.forEach(eventType => {
+                document.addEventListener(eventType, handleUserActivity, true);
+            });
+            
+            // Set timers
+            resetIdleTimers();
+            
+            // Periodic activity check
+            sessionState.activityInterval = setInterval(checkActivityStatus, SESSION_CONFIG.ACTIVITY_CHECK_INTERVAL);
+            
+            console.log('✓ Idle monitoring started');
+        }
+
+        function handleUserActivity() {
+            if (sessionState.onBreak) return; // Don't track activity during break
+            
+            const now = Date.now();
+            const timeSinceLastActivity = now - sessionState.lastActivity;
+            
+            // Only update if more than 30 seconds since last activity
+            if (timeSinceLastActivity > 30000) {
+                sessionState.lastActivity = now;
+                updateActivityOnServer();
+            }
+            
+            // Reset timers if warning shown
+            if (sessionState.warningShown) {
+                sessionState.warningShown = false;
+                closeTimeoutWarning();
+                resetIdleTimers();
+            } else {
+                // Just reset the timers
+                sessionState.lastActivity = now;
+                resetIdleTimers();
+            }
+        }
+
+        function resetIdleTimers() {
+            // Clear existing timers
+            if (sessionState.warningTimer) clearTimeout(sessionState.warningTimer);
+            if (sessionState.timeoutTimer) clearTimeout(sessionState.timeoutTimer);
+            
+            // Set new timers
+            sessionState.warningTimer = setTimeout(showTimeoutWarning, SESSION_CONFIG.WARNING_TIME);
+            sessionState.timeoutTimer = setTimeout(handleTimeout, SESSION_CONFIG.TIMEOUT_TIME);
+        }
+
+        async function updateActivityOnServer() {
+            const token = localStorage.getItem('token');
+            if (!token || !sessionState.sessionId) return;
+            
+            try {
+                await fetch('/api/session/activity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId,
+                        activity_type: 'page_view'
+                    })
+                });
+            } catch (error) {
+                console.error('Error updating activity:', error);
+            }
+        }
+
+        function checkActivityStatus() {
+            const now = Date.now();
+            const idleTime = now - sessionState.lastActivity;
+            
+            console.log(`Idle time: ${Math.floor(idleTime / 1000)}s`);
+            
+            // Check if on break too long
+            if (sessionState.onBreak && sessionState.breakStart) {
+                const breakDuration = now - sessionState.breakStart;
+                if (breakDuration > SESSION_CONFIG.MAX_BREAK_TIME) {
+                    console.warn('Break exceeded 30 minutes - ending break');
+                    endBreak();
+                }
+            }
+        }
+
+        // ========== TIMEOUT WARNING MODAL ==========
+
+        async function showTimeoutWarning() {
+            if (sessionState.warningShown || sessionState.onBreak) return;
+            
+            sessionState.warningShown = true;
+            
+            const idleDuration = Math.floor((Date.now() - sessionState.lastActivity) / 1000);
+            
+            // Log warning on server
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch('/api/session/timeout/warning', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId,
+                        idle_duration: idleDuration
+                    })
+                });
+                
+                const data = await response.json();
+                sessionState.timeoutEventId = data.timeout_event_id;
+            } catch (error) {
+                console.error('Error logging timeout warning:', error);
+            }
+            
+            // Create warning modal
+            const modal = document.createElement('div');
+            modal.id = 'timeout-warning-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 100000;
+                animation: fadeIn 0.3s ease;
+            `;
+            
+            const remainingTime = Math.floor((SESSION_CONFIG.TIMEOUT_TIME - (Date.now() - sessionState.lastActivity)) / 1000);
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    padding: 3rem;
+                    border-radius: 20px;
+                    text-align: center;
+                    max-width: 500px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+                    animation: scaleIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                ">
+                    <div style="font-size: 5rem; margin-bottom: 1rem;">⏰</div>
+                    <h2 style="color: #1e3a5f; margin-bottom: 1rem; font-size: 2rem;">Are You Still There?</h2>
+                    <p style="color: #666; font-size: 1.2rem; margin-bottom: 1.5rem;">
+                        You've been inactive for a while. You'll be automatically logged out in <strong id="countdown-timer">${remainingTime}</strong> seconds.
+                    </p>
+                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                        <button 
+                            onclick="respondToTimeoutWarning()" 
+                            class="btn btn-primary" 
+                            style="font-size: 1.2rem; padding: 1rem 2rem; background: #28A745; border: none;">
+                            Yes, I'm Here! 👋
+                        </button>
+                        <button 
+                            onclick="takeBreakFromWarning()" 
+                            class="btn" 
+                            style="font-size: 1.2rem; padding: 1rem 2rem; background: #667eea; color: white; border: none;">
+                            Take a Break ☕
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Start countdown
+            startWarningCountdown(remainingTime);
+        }
+
+        function startWarningCountdown(seconds) {
+            let remaining = seconds;
+            
+            const countdownInterval = setInterval(() => {
+                remaining--;
+                
+                const timerElement = document.getElementById('countdown-timer');
+                if (timerElement) {
+                    timerElement.textContent = remaining;
+                    
+                    // Change color as time runs out
+                    if (remaining <= 10) {
+                        timerElement.style.color = '#dc3545';
+                    }
+                }
+                
+                if (remaining <= 0 || !sessionState.warningShown) {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        }
+
+        async function respondToTimeoutWarning() {
+            sessionState.warningShown = false;
+            closeTimeoutWarning();
+            
+            // Log response on server
+            const token = localStorage.getItem('token');
+            try {
+                await fetch('/api/session/timeout/responded', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId,
+                        timeout_event_id: sessionState.timeoutEventId
+                    })
+                });
+            } catch (error) {
+                console.error('Error logging response:', error);
+            }
+            
+            // Reset activity and timers
+            sessionState.lastActivity = Date.now();
+            resetIdleTimers();
+            
+            showNotification('Welcome back! Your session has been extended.', 'success');
+        }
+
+        function closeTimeoutWarning() {
+            const modal = document.getElementById('timeout-warning-modal');
+            if (modal) {
+                modal.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => modal.remove(), 300);
+            }
+        }
+
+        async function handleTimeout() {
+            if (sessionState.onBreak) return; // Don't timeout during break
+            
+            console.log('⏰ Session timeout - logging out user');
+            
+            // Log timeout on server
+            const token = localStorage.getItem('token');
+            try {
+                await fetch('/api/session/timeout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId,
+                        timeout_event_id: sessionState.timeoutEventId
+                    })
+                });
+            } catch (error) {
+                console.error('Error logging timeout:', error);
+            }
+            
+            // Show timeout message
+            alert('Your session has expired due to inactivity. Please log in again.');
+            
+            // Logout
+            logout();
+        }
+
+        // ========== TAKE A BREAK FEATURE ==========
+
+        async function takeBreak() {
+            const token = localStorage.getItem('token');
+            if (!token || !sessionState.sessionId) return;
+            
+            try {
+                const response = await fetch('/api/session/break/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    sessionState.onBreak = true;
+                    sessionState.breakStart = Date.now();
+                    
+                    // Clear idle timers during break
+                    if (sessionState.warningTimer) clearTimeout(sessionState.warningTimer);
+                    if (sessionState.timeoutTimer) clearTimeout(sessionState.timeoutTimer);
+                    
+                    // Set break timer
+                    sessionState.breakTimer = setTimeout(() => {
+                        endBreak();
+                    }, SESSION_CONFIG.MAX_BREAK_TIME);
+                    
+                    showBreakModal();
+                }
+            } catch (error) {
+                console.error('Error starting break:', error);
+            }
+        }
+
+        function takeBreakFromWarning() {
+            closeTimeoutWarning();
+            sessionState.warningShown = false;
+            takeBreak();
+        }
+
+        function showBreakModal() {
+            const modal = document.createElement('div');
+            modal.id = 'break-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 100000;
+                animation: fadeIn 0.3s ease;
+            `;
+            
+            modal.innerHTML = `
+                <div style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 3rem;
+                    border-radius: 20px;
+                    text-align: center;
+                    max-width: 500px;
+                    color: white;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                ">
+                    <div style="font-size: 6rem; margin-bottom: 1rem;">☕</div>
+                    <h2 style="margin-bottom: 1rem; font-size: 2.5rem;">Take a Break!</h2>
+                    <p style="font-size: 1.3rem; margin-bottom: 1rem; opacity: 0.9;">
+                        Relax for up to 30 minutes
+                    </p>
+                    <div style="
+                        background: rgba(255,255,255,0.2);
+                        padding: 1.5rem;
+                        border-radius: 12px;
+                        margin: 1.5rem 0;
+                        backdrop-filter: blur(10px);
+                    ">
+                        <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">Break Time Remaining:</div>
+                        <div id="break-timer" style="font-size: 2.5rem; font-weight: bold;">30:00</div>
+                    </div>
+                    <button 
+                        onclick="endBreak()" 
+                        class="btn" 
+                        style="
+                            font-size: 1.2rem; 
+                            padding: 1rem 2.5rem; 
+                            background: white;
+                            color: #667eea;
+                            border: none;
+                            font-weight: bold;
+                        ">
+                        I'm Ready! Let's Continue 🚀
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Start break countdown
+            startBreakCountdown();
+        }
+
+        function startBreakCountdown() {
+            let remaining = SESSION_CONFIG.MAX_BREAK_TIME / 1000; // Convert to seconds
+            
+            const breakInterval = setInterval(() => {
+                remaining--;
+                
+                const timerElement = document.getElementById('break-timer');
+                if (timerElement) {
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = remaining % 60;
+                    timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    // Change color in last minute
+                    if (remaining <= 60) {
+                        timerElement.style.color = '#FFD700';
+                    }
+                }
+                
+                if (remaining <= 0 || !sessionState.onBreak) {
+                    clearInterval(breakInterval);
+                }
+            }, 1000);
+        }
+
+        async function endBreak() {
+            if (!sessionState.onBreak) return;
+            
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch('/api/session/break/end', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    sessionState.onBreak = false;
+                    sessionState.breakStart = null;
+                    
+                    // Clear break timer
+                    if (sessionState.breakTimer) clearTimeout(sessionState.breakTimer);
+                    
+                    // Close break modal
+                    const modal = document.getElementById('break-modal');
+                    if (modal) {
+                        modal.style.animation = 'fadeOut 0.3s ease';
+                        setTimeout(() => modal.remove(), 300);
+                    }
+                    
+                    // Reset activity tracking
+                    sessionState.lastActivity = Date.now();
+                    resetIdleTimers();
+                    
+                    showNotification('Break ended! Welcome back! 👋', 'success');
+                }
+            } catch (error) {
+                console.error('Error ending break:', error);
+            }
+        }
+
+        function updateBreakIndicator() {
+            const indicator = document.getElementById('break-indicator');
+            if (indicator) {
+                if (sessionState.onBreak) {
+                    indicator.classList.add('active');
+                } else {
+                    indicator.classList.remove('active');
+                }
+            }
+        }
+
+        // Call this when starting/ending breaks
+        // Add to takeBreak() function:
+        // updateBreakIndicator();
+
+        // Add to endBreak() function:
+        // updateBreakIndicator();
+
+        // ========== UPDATE LOGOUT FUNCTION ==========
+
+        async function logout() {
+            console.log('Logging out...');
+            
+            // End session on server
+            const token = localStorage.getItem('token');
+            if (token && sessionState.sessionId) {
+                try {
+                    await fetch('/api/session/end', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            token,
+                            session_id: sessionState.sessionId
+                        })
+                    });
+                } catch (error) {
+                    console.error('Error ending session:', error);
+                }
+            }
+            
+            // Clear session state
+            sessionState = {
+                sessionId: null,
+                lastActivity: Date.now(),
+                warningShown: false,
+                timeoutEventId: null,
+                onBreak: false,
+                breakStart: null,
+                warningTimer: null,
+                timeoutTimer: null,
+                breakTimer: null,
+                activityInterval: null
+            };
+            
+            // Clear local storage
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            
+            // Redirect to login
+            window.location.href = '/';
+        }
+
+        // ========== INITIALIZE ON PAGE LOAD ==========
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... existing DOMContentLoaded code ...
+            
+            // Initialize session tracking
+            initializeSession();
+        });
+
+        console.log('✓ Session timeout system loaded');
 
     </script>
 </body>

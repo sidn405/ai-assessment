@@ -410,6 +410,11 @@
                         <span>📈</span> Analytics
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('session tracking')">
+                        <span>⏱️</span> Session Tracking
+                    </a>
+                </li>
             </ul>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
@@ -567,6 +572,59 @@
         </div>
     </div>
 
+    
+    <!-- Add this as a new section in your admin dashboard -->
+
+    <div id="sessionTrackingSection" class="section">
+        <h1>Session Tracking & Activity</h1>
+        
+        <!-- Real-time Stats -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="stat-card" style="background: linear-gradient(135deg, #11998E 0%, #38EF7D 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="font-size: 3rem; font-weight: bold;" id="activeUsersCount">0</div>
+                <div style="font-size: 1.1rem; opacity: 0.9;">Active Users</div>
+            </div>
+            
+            <div class="stat-card" style="background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="font-size: 3rem; font-weight: bold;" id="usersOnBreakCount">0</div>
+                <div style="font-size: 1.1rem; opacity: 0.9;">On Break</div>
+            </div>
+            
+            <div class="stat-card" style="background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="font-size: 3rem; font-weight: bold;" id="timeoutsToday">0</div>
+                <div style="font-size: 1.1rem; opacity: 0.9;">Timeouts Today</div>
+            </div>
+            
+            <div class="stat-card" style="background: linear-gradient(135deg, #F093FB 0%, #F5576C 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="font-size: 3rem; font-weight: bold;" id="totalSessions">0</div>
+                <div style="font-size: 1.1rem; opacity: 0.9;">Total Sessions Today</div>
+            </div>
+        </div>
+        
+        <!-- Active Sessions Table -->
+        <div class="card" style="margin-bottom: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Active Sessions</h2>
+                <button onclick="loadActiveSessions()" class="btn btn-primary">🔄 Refresh</button>
+            </div>
+            <div id="activeSessionsTable"></div>
+        </div>
+        
+        <!-- Recent Activity Log -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Recent Activity</h2>
+                <select id="activityTimeFilter" onchange="loadRecentActivity()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
+                    <option value="1">Last 1 Hour</option>
+                    <option value="6">Last 6 Hours</option>
+                    <option value="24" selected>Last 24 Hours</option>
+                    <option value="168">Last 7 Days</option>
+                </select>
+            </div>
+            <div id="recentActivityTable"></div>
+        </div>
+    </div>
+
     <script>
         let currentUser = null;
         let allStudents = [];
@@ -624,7 +682,17 @@
                 const navLink = event.target.closest('.nav-link');
                 if (navLink) navLink.classList.add('active');
             }
+
+            if (section === 'sessionTracking') {
+                loadActiveSessions();
+                loadRecentActivity();
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
         }
+
+        
 
         async function loadStudents() {
             const token = localStorage.getItem('token');
@@ -648,6 +716,242 @@
                 loading.innerHTML = '<p>Error loading students. Please try again.</p>';
             }
         }
+       
+        console.log('✓ Session tracking admin panel loaded');
+
+        // ========== LOAD ACTIVE SESSIONS ==========
+
+        async function loadActiveSessions() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                const response = await fetch(`/api/admin/sessions/active?token=${token}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayActiveSessions(data.sessions);
+                    
+                    // Update stats
+                    const activeCount = data.sessions.filter(s => s.status === 'active').length;
+                    const onBreakCount = data.sessions.filter(s => s.status === 'on_break').length;
+                    
+                    document.getElementById('activeUsersCount').textContent = activeCount;
+                    document.getElementById('usersOnBreakCount').textContent = onBreakCount;
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+            }
+        }
+
+        function displayActiveSessions(sessions) {
+            const container = document.getElementById('activeSessionsTable');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<p style="color: #666; padding: 2rem; text-align: center;">No active sessions</p>';
+                return;
+            }
+            
+            const tableHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                            <th style="padding: 1rem; text-align: left;">User</th>
+                            <th style="padding: 1rem; text-align: left;">Status</th>
+                            <th style="padding: 1rem; text-align: left;">Session Start</th>
+                            <th style="padding: 1rem; text-align: left;">Last Activity</th>
+                            <th style="padding: 1rem; text-align: left;">Idle Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sessions.map(session => {
+                            const lastActivity = new Date(session.last_activity);
+                            const idleMinutes = Math.floor((Date.now() - lastActivity.getTime()) / 60000);
+                            const idleStatus = idleMinutes > 5 ? 'warning' : 'good';
+                            
+                            return `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 1rem;">
+                                        <div style="font-weight: bold;">${session.user_name}</div>
+                                        <div style="font-size: 0.85rem; color: #666;">${session.user_email}</div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            padding: 0.25rem 0.75rem;
+                                            border-radius: 12px;
+                                            font-size: 0.85rem;
+                                            font-weight: bold;
+                                            background: ${session.status === 'active' ? '#28A745' : '#667eea'};
+                                            color: white;
+                                        ">
+                                            ${session.status === 'active' ? '✓ Active' : '☕ On Break'}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.9rem;">
+                                        ${formatDateTime(session.session_start)}
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.9rem;">
+                                        ${formatDateTime(session.last_activity)}
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            color: ${idleStatus === 'warning' ? '#dc3545' : '#28A745'};
+                                            font-weight: bold;
+                                        ">
+                                            ${idleMinutes}m
+                                        </span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+
+        // ========== LOAD RECENT ACTIVITY ==========
+
+        async function loadRecentActivity() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            const hours = document.getElementById('activityTimeFilter').value;
+            
+            try {
+                const response = await fetch(`/api/admin/activity/recent?token=${token}&hours=${hours}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayRecentActivity(data.activities);
+                    
+                    // Calculate timeout count for today
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    const timeoutsToday = data.activities.filter(a => 
+                        a.activity_type === 'timeout' && 
+                        new Date(a.timestamp) >= today
+                    ).length;
+                    
+                    document.getElementById('timeoutsToday').textContent = timeoutsToday;
+                }
+            } catch (error) {
+                console.error('Error loading activity:', error);
+            }
+        }
+
+        function displayRecentActivity(activities) {
+            const container = document.getElementById('recentActivityTable');
+            
+            if (activities.length === 0) {
+                container.innerHTML = '<p style="color: #666; padding: 2rem; text-align: center;">No recent activity</p>';
+                return;
+            }
+            
+            const activityIcons = {
+                'login': '🔓',
+                'logout': '🔒',
+                'lesson_start': '📖',
+                'lesson_complete': '✅',
+                'break_start': '☕',
+                'break_end': '🔙',
+                'timeout_warning': '⚠️',
+                'timeout': '⏰',
+                'page_view': '👁️'
+            };
+            
+            const activityColors = {
+                'login': '#28A745',
+                'logout': '#6c757d',
+                'lesson_start': '#667eea',
+                'lesson_complete': '#28A745',
+                'break_start': '#667eea',
+                'break_end': '#28A745',
+                'timeout_warning': '#ffc107',
+                'timeout': '#dc3545',
+                'page_view': '#6c757d'
+            };
+            
+            const tableHTML = `
+                <div style="max-height: 600px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="position: sticky; top: 0; background: white; z-index: 1;">
+                            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                                <th style="padding: 1rem; text-align: left;">Time</th>
+                                <th style="padding: 1rem; text-align: left;">User</th>
+                                <th style="padding: 1rem; text-align: left;">Activity</th>
+                                <th style="padding: 1rem; text-align: left;">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${activities.map(activity => `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 1rem; font-size: 0.9rem; white-space: nowrap;">
+                                        ${formatDateTime(activity.timestamp)}
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <div style="font-weight: bold; font-size: 0.9rem;">${activity.user_name}</div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            padding: 0.25rem 0.75rem;
+                                            border-radius: 12px;
+                                            font-size: 0.85rem;
+                                            background: ${activityColors[activity.activity_type] || '#6c757d'};
+                                            color: white;
+                                            white-space: nowrap;
+                                        ">
+                                            ${activityIcons[activity.activity_type] || '•'} ${activity.activity_type.replace('_', ' ')}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.85rem; color: #666;">
+                                        ${activity.activity_details || '-'}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+
+        // ========== HELPER FUNCTIONS ==========
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+            
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        // ========== AUTO-REFRESH ==========
+
+        let refreshInterval;
+
+        function startAutoRefresh() {
+            // Refresh every 30 seconds
+            refreshInterval = setInterval(() => {
+                loadActiveSessions();
+                loadRecentActivity();
+            }, 30000);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+
 
         function renderStudentsTable(students) {
             const tbody = document.getElementById('studentsTableBody');
