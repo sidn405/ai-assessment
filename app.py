@@ -1799,8 +1799,8 @@ async def get_student_progress(token: str):
 # ============================================
 
 @app.get("/api/lessons/next")
-async def get_next_lesson(token: str):
-    """Get next AI-generated lesson - SIMPLIFIED VERSION"""
+async def get_next_lesson(token: str, exclude_topics: str = None):
+    """Get next AI-generated lesson with topic variety"""
     
     print("=" * 50)
     print("LESSON REQUEST RECEIVED")
@@ -1859,6 +1859,62 @@ async def get_next_lesson(token: str):
         
         print(f"✓ Interests: {interests}")
         
+        # ========== ADD OPTION B HERE ==========
+        # Step 4b: Get recently used topics for variety
+        print("Step 4b: Checking recently used topics...")
+        recent_topics = []
+        
+        try:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """SELECT topic_tags 
+                       FROM passages 
+                       WHERE created_by = %s 
+                       ORDER BY created_at DESC 
+                       LIMIT 5""",
+                    (user_id,)
+                )
+            else:
+                cursor.execute(
+                    """SELECT topic_tags 
+                       FROM passages 
+                       WHERE created_by = ? 
+                       ORDER BY created_at DESC 
+                       LIMIT 5""",
+                    (user_id,)
+                )
+            
+            for row in cursor.fetchall():
+                topic_tags = row[0] if isinstance(row, tuple) else row['topic_tags']
+                if topic_tags:
+                    try:
+                        tags = json.loads(topic_tags) if isinstance(topic_tags, str) else topic_tags
+                        if isinstance(tags, list):
+                            recent_topics.extend(tags)
+                    except:
+                        pass
+            
+            # Also check exclude_topics from query param
+            if exclude_topics:
+                recent_topics.extend(exclude_topics.split(','))
+            
+            print(f"✓ Recent topics: {recent_topics}")
+            
+        except Exception as e:
+            print(f"Warning: Could not fetch recent topics: {e}")
+            recent_topics = []
+        
+        # Filter out recently used topics from available interests
+        available_interests = [i for i in interests if i not in recent_topics]
+        
+        # If all interests were used recently, use all interests (fresh start)
+        if not available_interests:
+            print("All topics used recently - resetting to full list")
+            available_interests = interests
+        
+        print(f"✓ Available interests (excluding recent): {available_interests}")
+        # =======================================
+        
         # Step 5: Determine difficulty
         print("Step 5: Determining difficulty level...")
         level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
@@ -1875,10 +1931,10 @@ async def get_next_lesson(token: str):
         
         print(f"✓ Difficulty: {difficulty}, Target words: {target_words}")
         
-        # Step 6: Select topic
+        # Step 6: Select topic (MODIFIED - use available_interests)
         print("Step 6: Selecting topic...")
         import random
-        topic = random.choice(interests)
+        topic = random.choice(available_interests)  # ← CHANGED from 'interests' to 'available_interests'
         print(f"✓ Selected topic: {topic}")
         
         conn.close()

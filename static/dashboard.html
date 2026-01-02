@@ -835,6 +835,7 @@
         let currentLesson = null;
         let lessonAnswers = [];
         let lessonStartTime = null;
+        let recentTopics = []; // ← ADD THIS
 
         async function loadNextLesson() {
             console.log('=== loadNextLesson START ===');
@@ -859,8 +860,17 @@
             lessonStartTime = Date.now();
             
             try {
-                console.log('Fetching lesson...');
-                const response = await fetch(`/api/lessons/next?token=${token}`);
+                console.log('Fetching lesson from API...');
+        
+                // ========== ADD THIS ==========
+                // Pass recent topics to avoid duplicates
+                let url = `/api/lessons/next?token=${token}`;
+                if (recentTopics.length > 0) {
+                    url += `&exclude_topics=${recentTopics.join(',')}`;
+                }
+                // =============================
+                
+                const response = await fetch(url);
                 
                 console.log('Response status:', response.status);
                 
@@ -879,6 +889,16 @@
                 
                 currentLesson = lesson;
                 lessonAnswers = [];
+        
+                // ========== ADD THIS ==========
+                // Track this topic
+                const topicTags = lesson.topic_tags || [lesson.title.split(' ')[0]];
+                recentTopics.push(...topicTags);
+                // Keep only last 5 topics
+                if (recentTopics.length > 5) {
+                    recentTopics = recentTopics.slice(-5);
+                }
+                // =============================
                 
                 displayLesson(lesson);
                 
@@ -993,11 +1013,7 @@
                     console.log('Displaying questions:', lesson.questions.length);
                     displayLessonQuestions(lesson.questions);
                     
-                    // Scroll to questions after a moment
-                    setTimeout(() => {
-                        const qCard = document.getElementById('questionsCard');
-                        if (qCard) qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 800);
+                    
                 } else {
                     console.log('No questions in lesson');
                 }

@@ -20,6 +20,21 @@ class ContentGenerator:
     def generate_passage(self, topic, difficulty_level, target_words, user_interests):
         """Generate educational passage using GPT-4"""
         
+        # ========== ADD VARIETY TO PROMPT ==========
+        import random
+        
+        # Random perspective/angle
+        perspectives = [
+            f"an engaging article about {topic}",
+            f"a fascinating story exploring {topic}",
+            f"an informative piece on {topic}",
+            f"a discovery-focused narrative about {topic}",
+            f"an educational exploration of {topic}"
+        ]
+        
+        prompt_style = random.choice(perspectives)
+        # ==========================================
+        
         # Build prompt (same as before)
         prompt = f"""Create an educational reading passage with the following specifications:
 
@@ -27,6 +42,9 @@ Topic: {topic}
 Difficulty Level: {difficulty_level}
 Target Length: {target_words} words
 User Interests: {', '.join(user_interests)}
+
+IMPORTANT: Make this content unique and fresh. Avoid repeating common facts. 
+Focus on lesser-known aspects, recent discoveries, or interesting angles.
 
 Generate a passage that is engaging, age-appropriate, and educational.
 
