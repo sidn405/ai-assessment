@@ -902,7 +902,7 @@
                 console.log('Section shown successfully');
             } else {
                 console.error('Section not found:', sectionId);
-            }
+            }            
             
             // Update active nav
             if (event && event.target) {
@@ -1022,21 +1022,56 @@
             console.log('=== loadAssessment END ===');
         }
 
-        function renderAssessment() {
+        function renderAssessmentWithOther() {
             console.log('=== renderAssessment START ===');
             const container = document.getElementById('assessmentQuestions');
-            container.innerHTML = '<h3>Please answer the following questions:</h3>';
+            container.innerHTML = '<h3 style="margin-bottom: 2rem; color: var(--navy-primary);">Help us personalize your learning experience:</h3>';
             
             currentAssessment.forEach((q, index) => {
-                console.log(`Rendering question ${index + 1}:`, q.question);
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'question-card';
+                
+                // Add "Other" to all questions if not present
+                if (!q.options.includes('Other')) {
+                    q.options.push('Other');
+                }
+                
+                const optionsHTML = q.options.map((opt, i) => {
+                    if (opt === 'Other') {
+                        return `
+                            <div class="option" onclick="selectOption(${q.id}, ${i}, 'Other', true)">
+                                ✏️ ${opt} (please specify)
+                            </div>
+                            <div id="other-input-${q.id}" class="other-input hidden" style="margin-top: 0.75rem; animation: slideDown 0.3s ease;">
+                                <input 
+                                    type="text" 
+                                    id="other-text-${q.id}" 
+                                    placeholder="Type your answer here..."
+                                    style="
+                                        width: 100%; 
+                                        padding: 0.875rem; 
+                                        border: 2px solid var(--navy-primary); 
+                                        border-radius: 8px; 
+                                        font-size: 1rem;
+                                        transition: all 0.3s ease;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                    "
+                                    onfocus="this.style.borderColor='var(--teal-accent)'; this.style.boxShadow='0 0 0 3px rgba(64, 224, 208, 0.1)'"
+                                    onblur="this.style.borderColor='var(--navy-primary)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
+                                />
+                            </div>
+                        `;
+                    } else {
+                        return `<div class="option" onclick="selectOption(${q.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">${opt}</div>`;
+                    }
+                }).join('');
+                
                 questionDiv.innerHTML = `
-                    <div class="question-text">${index + 1}. ${q.question}</div>
+                    <div class="question-text" style="font-size: 1.1rem; margin-bottom: 1rem;">
+                        ${index + 1}. ${q.question}
+                    </div>
                     <div class="options" id="options-${q.id}">
-                        ${q.options.map((opt, i) => `
-                            <div class="option" onclick="selectOption(${q.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">${opt}</div>
-                        `).join('')}
+                        ${optionsHTML}
                     </div>
                 `;
                 container.appendChild(questionDiv);
@@ -1044,12 +1079,10 @@
             
             const submitBtn = document.createElement('button');
             submitBtn.className = 'btn btn-primary';
-            submitBtn.style.marginTop = '2rem';
+            submitBtn.style.cssText = 'margin-top: 2rem; font-size: 1.1rem; padding: 1rem 2rem;';
             submitBtn.textContent = 'Submit Assessment';
             submitBtn.onclick = submitAssessment;
             container.appendChild(submitBtn);
-            
-            console.log('=== renderAssessment COMPLETE ===');
         }
 
         function selectOption(questionId, optionIndex, optionText) {
@@ -1477,70 +1510,6 @@
             }
             
             console.log('Current answers:', assessmentAnswers.length);
-        }
-
-        // Update renderAssessment to include "Other" option
-        function renderAssessmentWithOther() {
-            console.log('=== renderAssessment START ===');
-            const container = document.getElementById('assessmentQuestions');
-            container.innerHTML = '<h3 style="margin-bottom: 2rem; color: var(--navy-primary);">Help us personalize your learning experience:</h3>';
-            
-            currentAssessment.forEach((q, index) => {
-                const questionDiv = document.createElement('div');
-                questionDiv.className = 'question-card';
-                
-                // Add "Other" to all questions if not present
-                if (!q.options.includes('Other')) {
-                    q.options.push('Other');
-                }
-                
-                const optionsHTML = q.options.map((opt, i) => {
-                    if (opt === 'Other') {
-                        return `
-                            <div class="option" onclick="selectOption(${q.id}, ${i}, 'Other', true)">
-                                ✏️ ${opt} (please specify)
-                            </div>
-                            <div id="other-input-${q.id}" class="other-input hidden" style="margin-top: 0.75rem; animation: slideDown 0.3s ease;">
-                                <input 
-                                    type="text" 
-                                    id="other-text-${q.id}" 
-                                    placeholder="Type your answer here..."
-                                    style="
-                                        width: 100%; 
-                                        padding: 0.875rem; 
-                                        border: 2px solid var(--navy-primary); 
-                                        border-radius: 8px; 
-                                        font-size: 1rem;
-                                        transition: all 0.3s ease;
-                                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                                    "
-                                    onfocus="this.style.borderColor='var(--teal-accent)'; this.style.boxShadow='0 0 0 3px rgba(64, 224, 208, 0.1)'"
-                                    onblur="this.style.borderColor='var(--navy-primary)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
-                                />
-                            </div>
-                        `;
-                    } else {
-                        return `<div class="option" onclick="selectOption(${q.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">${opt}</div>`;
-                    }
-                }).join('');
-                
-                questionDiv.innerHTML = `
-                    <div class="question-text" style="font-size: 1.1rem; margin-bottom: 1rem;">
-                        ${index + 1}. ${q.question}
-                    </div>
-                    <div class="options" id="options-${q.id}">
-                        ${optionsHTML}
-                    </div>
-                `;
-                container.appendChild(questionDiv);
-            });
-            
-            const submitBtn = document.createElement('button');
-            submitBtn.className = 'btn btn-primary';
-            submitBtn.style.cssText = 'margin-top: 2rem; font-size: 1.1rem; padding: 1rem 2rem;';
-            submitBtn.textContent = 'Submit Assessment';
-            submitBtn.onclick = submitAssessment;
-            container.appendChild(submitBtn);
         }
 
         // ========== FEATURE 4: GAMIFICATION FUNCTIONS ==========
