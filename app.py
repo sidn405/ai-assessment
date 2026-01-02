@@ -2007,6 +2007,9 @@ async def save_lesson_progress(request: Request):
     time_spent = data.get("time_spent", 0)
     answers = data.get("answers", [])
     
+    print(f"=== Saving Progress ===")
+    print(f"Lesson ID: {lesson_id}, Score: {score}")
+    
     try:
         user_data = verify_token(token)
         user_id = user_data["user_id"]
@@ -2060,7 +2063,6 @@ async def save_lesson_progress(request: Request):
         conn.close()
         
         # ========== GAMIFICATION ==========
-        # Award points based on score
         if score == 100:
             points_result = award_points(user_id, POINTS_CONFIG['perfect_score'], 'Perfect score!', 'lesson')
         elif score >= 80:
@@ -2070,12 +2072,11 @@ async def save_lesson_progress(request: Request):
         else:
             points_result = award_points(user_id, POINTS_CONFIG['lesson_complete'], 'Lesson completed', 'lesson')
         
-        # Check for new badges
         new_badges = check_and_award_badges(user_id)
-        
-        # Update weekly goals
         update_weekly_goals(user_id)
         # ==================================
+        
+        print(f"✓ Points awarded: {points_result['points_awarded']}")
         
         return {
             "success": True,
@@ -2925,92 +2926,6 @@ async def debug_lesson_generation(token: str):
             "message": f"Error at step: {debug_info['step']}"
         }
 
-@app.post("/api/lessons/progress")
-async def save_lesson_progress(request: Request):
-    """Save student's lesson progress"""
-    data = await request.json()
-    token = data.get("token")
-    lesson_id = data.get("lesson_id")
-    completed = data.get("completed", False)
-    score = data.get("score", 0)
-    time_spent = data.get("time_spent", 0)
-    answers = data.get("answers", [])
-    
-    print(f"=== Saving Progress ===")
-    print(f"Lesson ID: {lesson_id}")
-    print(f"Completed: {completed}")
-    print(f"Score: {score}")
-    print(f"Time spent: {time_spent}s")
-    
-    try:
-        # Verify token
-        user_data = verify_token(token)
-        user_id = user_data["user_id"]
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Save to session_logs table
-        if USE_POSTGRES:
-            cursor.execute(
-                """INSERT INTO session_logs 
-                   (user_id, passage_id, completed_at, completion_status, 
-                    time_spent_seconds, comprehension_score, answers)
-                   VALUES (%s, %s, NOW(), %s, %s, %s, %s)
-                   RETURNING id""",
-                (user_id, lesson_id, 'completed' if completed else 'in_progress',
-                 time_spent, score, json.dumps(answers))
-            )
-            result = cursor.fetchone()
-            session_id = result['id'] if result else None
-        else:
-            cursor.execute(
-                """INSERT INTO session_logs 
-                   (user_id, passage_id, completed_at, completion_status, 
-                    time_spent_seconds, comprehension_score, answers)
-                   VALUES (?, ?, datetime('now'), ?, ?, ?, ?)""",
-                (user_id, lesson_id, 'completed' if completed else 'in_progress',
-                 time_spent, score, json.dumps(answers))
-            )
-            session_id = cursor.lastrowid
-        
-        # Update user's total passages read
-        if USE_POSTGRES:
-            cursor.execute(
-                """UPDATE users 
-                   SET total_passages_read = COALESCE(total_passages_read, 0) + 1,
-                       last_active = NOW()
-                   WHERE id = %s""",
-                (user_id,)
-            )
-        else:
-            cursor.execute(
-                """UPDATE users 
-                   SET total_passages_read = COALESCE(total_passages_read, 0) + 1,
-                       last_active = datetime('now')
-                   WHERE id = ?""",
-                (user_id,)
-            )
-        
-        conn.commit()
-        conn.close()
-        
-        print(f"✓ Progress saved! Session ID: {session_id}")
-        
-        return {
-            "success": True,
-            "message": "Progress saved successfully",
-            "session_id": session_id,
-            "score": score
-        }
-        
-    except Exception as e:
-        print(f"✗ Error saving progress: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        raise HTTPException(status_code=500, detail=f"Failed to save progress: {str(e)}")
-
 # ============================================
 # ADMIN ENDPOINTS (Original + Enhanced)
 # ============================================
@@ -3162,6 +3077,375 @@ async def get_analytics(token: str):
         "average_score": round(float(avg_score), 2) if avg_score else 0,
         "active_students": active_students
     }
+    
+# ============================================================
+# GAMIFICATION SYSTEM
+# ============================================================
+
+# Points configuration
+POINTS_CONFIG = {
+    'lesson_complete': 10,
+    'perfect_score': 50,
+    'high_score': 25,
+    'good_score': 15,
+    'daily_streak': 5,
+    'weekly_goal': 100,
+    'badge_earned': 20
+}
+
+# Badge definitions
+BADGES = {
+    'first_lesson': {'name': 'Getting Started', 'description': 'Complete your first lesson', 'icon': '🎯', 'points': 20},
+    'perfect_streak_3': {'name': 'Triple Perfect', 'description': '3 perfect scores in a row', 'icon': '🔥', 'points': 50},
+    'speed_reader': {'name': 'Speed Reader', 'description': '10 lessons in one week', 'icon': '⚡', 'points': 100},
+    'bookworm': {'name': 'Bookworm', 'description': 'Complete 50 lessons total', 'icon': '📚', 'points': 200},
+    'perfect_week': {'name': 'Perfect Week', 'description': 'Achieve all weekly goals', 'icon': '🏆', 'points': 150},
+    'early_bird': {'name': 'Early Bird', 'description': 'Complete lesson before 9 AM', 'icon': '🌅', 'points': 30},
+    'night_owl': {'name': 'Night Owl', 'description': 'Complete lesson after 9 PM', 'icon': '🦉', 'points': 30},
+    'consistency_king': {'name': 'Consistency King', 'description': '7-day streak', 'icon': '👑', 'points': 100}
+}
+
+def award_points(user_id, points, reason, activity_type='general'):
+    """Award points to a user"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO user_points (user_id, points, total_earned)
+                   VALUES (%s, %s, %s)
+                   ON CONFLICT (user_id) DO UPDATE
+                   SET points = user_points.points + EXCLUDED.points,
+                       total_earned = user_points.total_earned + EXCLUDED.points,
+                       updated_at = NOW()""",
+                (user_id, points, points)
+            )
+            cursor.execute(
+                "INSERT INTO points_history (user_id, points, reason, activity_type) VALUES (%s, %s, %s, %s)",
+                (user_id, points, reason, activity_type)
+            )
+        else:
+            cursor.execute("SELECT id FROM user_points WHERE user_id = ?", (user_id,))
+            if cursor.fetchone():
+                cursor.execute(
+                    """UPDATE user_points 
+                       SET points = points + ?,
+                           total_earned = total_earned + ?,
+                           updated_at = datetime('now')
+                       WHERE user_id = ?""",
+                    (points, points, user_id)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO user_points (user_id, points, total_earned) VALUES (?, ?, ?)",
+                    (user_id, points, points)
+                )
+            cursor.execute(
+                "INSERT INTO points_history (user_id, points, reason, activity_type) VALUES (?, ?, ?, ?)",
+                (user_id, points, reason, activity_type)
+            )
+        
+        conn.commit()
+        
+        # Check for level up
+        if USE_POSTGRES:
+            cursor.execute("SELECT total_earned, level FROM user_points WHERE user_id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT total_earned, level FROM user_points WHERE user_id = ?", (user_id,))
+        
+        result = cursor.fetchone()
+        total = result['total_earned'] if hasattr(result, 'keys') else result[0]
+        current_level = result['level'] if hasattr(result, 'keys') else result[1]
+        
+        new_level = (total // 500) + 1
+        
+        if new_level > current_level:
+            if USE_POSTGRES:
+                cursor.execute("UPDATE user_points SET level = %s WHERE user_id = %s", (new_level, user_id))
+            else:
+                cursor.execute("UPDATE user_points SET level = ? WHERE user_id = ?", (new_level, user_id))
+            conn.commit()
+            conn.close()
+            return {'points_awarded': points, 'level_up': True, 'new_level': new_level}
+        
+        conn.close()
+        return {'points_awarded': points, 'level_up': False}
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error awarding points: {e}")
+        return {'points_awarded': 0, 'level_up': False}
+
+def has_badge(user_id, badge_type):
+    """Check if user has badge"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute("SELECT id FROM user_badges WHERE user_id = %s AND badge_type = %s", (user_id, badge_type))
+    else:
+        cursor.execute("SELECT id FROM user_badges WHERE user_id = ? AND badge_type = ?", (user_id, badge_type))
+    
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+def award_badge(user_id, badge_type, badge_name, description, icon):
+    """Award badge to user"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "INSERT INTO user_badges (user_id, badge_type, badge_name, description, icon) VALUES (%s, %s, %s, %s, %s)",
+                (user_id, badge_type, badge_name, description, icon)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO user_badges (user_id, badge_type, badge_name, description, icon) VALUES (?, ?, ?, ?, ?)",
+                (user_id, badge_type, badge_name, description, icon)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        award_points(user_id, BADGES[badge_type]['points'], f'Earned badge: {badge_name}', 'badge')
+        return True
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error awarding badge: {e}")
+        return False
+
+def check_and_award_badges(user_id):
+    """Check and award new badges"""
+    conn = get_db()
+    cursor = conn.cursor()
+    new_badges = []
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT COUNT(*) FROM session_logs WHERE user_id = %s AND completion_status = 'completed'",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT COUNT(*) FROM session_logs WHERE user_id = ? AND completion_status = 'completed'",
+                (user_id,)
+            )
+        
+        lesson_count = cursor.fetchone()[0]
+        
+        # First lesson badge
+        if lesson_count == 1 and not has_badge(user_id, 'first_lesson'):
+            badge = BADGES['first_lesson']
+            award_badge(user_id, 'first_lesson', badge['name'], badge['description'], badge['icon'])
+            new_badges.append(badge)
+        
+        # Bookworm (50 lessons)
+        if lesson_count == 50 and not has_badge(user_id, 'bookworm'):
+            badge = BADGES['bookworm']
+            award_badge(user_id, 'bookworm', badge['name'], badge['description'], badge['icon'])
+            new_badges.append(badge)
+        
+        # Perfect streak check
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT comprehension_score FROM session_logs 
+                   WHERE user_id = %s AND completion_status = 'completed'
+                   ORDER BY completed_at DESC LIMIT 3""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT comprehension_score FROM session_logs 
+                   WHERE user_id = ? AND completion_status = 'completed'
+                   ORDER BY completed_at DESC LIMIT 3""",
+                (user_id,)
+            )
+        
+        recent_scores = [row[0] if isinstance(row, tuple) else row['comprehension_score'] for row in cursor.fetchall()]
+        
+        if len(recent_scores) >= 3 and all(score == 100 for score in recent_scores):
+            if not has_badge(user_id, 'perfect_streak_3'):
+                badge = BADGES['perfect_streak_3']
+                award_badge(user_id, 'perfect_streak_3', badge['name'], badge['description'], badge['icon'])
+                new_badges.append(badge)
+        
+        # Time-based badges
+        from datetime import datetime
+        current_hour = datetime.now().hour
+        
+        if current_hour < 9 and not has_badge(user_id, 'early_bird'):
+            badge = BADGES['early_bird']
+            award_badge(user_id, 'early_bird', badge['name'], badge['description'], badge['icon'])
+            new_badges.append(badge)
+        
+        if current_hour >= 21 and not has_badge(user_id, 'night_owl'):
+            badge = BADGES['night_owl']
+            award_badge(user_id, 'night_owl', badge['name'], badge['description'], badge['icon'])
+            new_badges.append(badge)
+        
+        conn.close()
+        return new_badges
+        
+    except Exception as e:
+        conn.close()
+        print(f"Error checking badges: {e}")
+        return []
+
+def update_weekly_goals(user_id):
+    """Update weekly goals progress"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        from datetime import datetime, timedelta
+        week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+        week_start = week_start.date()
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT * FROM weekly_goals WHERE user_id = %s AND week_start = %s AND goal_type = 'lessons_completed'",
+                (user_id, week_start)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM weekly_goals WHERE user_id = ? AND week_start = ? AND goal_type = 'lessons_completed'",
+                (user_id, week_start)
+            )
+        
+        goal = cursor.fetchone()
+        
+        if not goal:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "INSERT INTO weekly_goals (user_id, week_start, goal_type, target_value, points_reward) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, week_start, 'lessons_completed', 5, 100)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO weekly_goals (user_id, week_start, goal_type, target_value, points_reward) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, week_start, 'lessons_completed', 5, 100)
+                )
+            conn.commit()
+        else:
+            goal_id = goal['id'] if hasattr(goal, 'keys') else goal[0]
+            current_value = goal['current_value'] if hasattr(goal, 'keys') else goal[5]
+            target = goal['target_value'] if hasattr(goal, 'keys') else goal[4]
+            completed = goal['completed'] if hasattr(goal, 'keys') else goal[6]
+            
+            new_value = current_value + 1
+            
+            if new_value >= target and not completed:
+                if USE_POSTGRES:
+                    cursor.execute(
+                        "UPDATE weekly_goals SET current_value = %s, completed = TRUE, completed_at = NOW() WHERE id = %s",
+                        (new_value, goal_id)
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE weekly_goals SET current_value = ?, completed = 1, completed_at = datetime('now') WHERE id = ?",
+                        (new_value, goal_id)
+                    )
+                conn.commit()
+                
+                points_reward = goal['points_reward'] if hasattr(goal, 'keys') else goal[7]
+                award_points(user_id, points_reward, 'Weekly goal completed', 'goal')
+            else:
+                if USE_POSTGRES:
+                    cursor.execute("UPDATE weekly_goals SET current_value = %s WHERE id = %s", (new_value, goal_id))
+                else:
+                    cursor.execute("UPDATE weekly_goals SET current_value = ? WHERE id = ?", (new_value, goal_id))
+                conn.commit()
+        
+        conn.close()
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error updating weekly goals: {e}")
+
+@app.get("/api/student/gamification")
+async def get_gamification_data(token: str):
+    """Get gamification data"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get points
+        if USE_POSTGRES:
+            cursor.execute("SELECT * FROM user_points WHERE user_id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT * FROM user_points WHERE user_id = ?", (user_id,))
+        
+        points_row = cursor.fetchone()
+        
+        if points_row:
+            points_data = {
+                'current_points': points_row['points'] if hasattr(points_row, 'keys') else points_row[2],
+                'total_earned': points_row['total_earned'] if hasattr(points_row, 'keys') else points_row[3],
+                'level': points_row['level'] if hasattr(points_row, 'keys') else points_row[4]
+            }
+        else:
+            points_data = {'current_points': 0, 'total_earned': 0, 'level': 1}
+        
+        # Get badges
+        if USE_POSTGRES:
+            cursor.execute("SELECT * FROM user_badges WHERE user_id = %s ORDER BY earned_at DESC", (user_id,))
+        else:
+            cursor.execute("SELECT * FROM user_badges WHERE user_id = ? ORDER BY earned_at DESC", (user_id,))
+        
+        badges = []
+        for row in cursor.fetchall():
+            badges.append({
+                'type': row['badge_type'] if hasattr(row, 'keys') else row[2],
+                'name': row['badge_name'] if hasattr(row, 'keys') else row[3],
+                'description': row['description'] if hasattr(row, 'keys') else row[4],
+                'icon': row['icon'] if hasattr(row, 'keys') else row[5],
+                'earned_at': row['earned_at'] if hasattr(row, 'keys') else row[6]
+            })
+        
+        # Get weekly goals
+        from datetime import datetime, timedelta
+        week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+        week_start = week_start.date()
+        
+        if USE_POSTGRES:
+            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = %s AND week_start = %s", (user_id, week_start))
+        else:
+            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = ? AND week_start = ?", (user_id, week_start))
+        
+        goals = []
+        for row in cursor.fetchall():
+            goals.append({
+                'goal_type': row['goal_type'] if hasattr(row, 'keys') else row[3],
+                'target_value': row['target_value'] if hasattr(row, 'keys') else row[4],
+                'current_value': row['current_value'] if hasattr(row, 'keys') else row[5],
+                'completed': row['completed'] if hasattr(row, 'keys') else row[6],
+                'points_reward': row['points_reward'] if hasattr(row, 'keys') else row[7]
+            })
+        
+        conn.close()
+        
+        return {
+            'success': True,
+            'points': points_data,
+            'badges': badges,
+            'available_badges': BADGES,
+            'weekly_goals': goals
+        }
+        
+    except Exception as e:
+        print(f"Error getting gamification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Mount static files
 try:
