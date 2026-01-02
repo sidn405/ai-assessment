@@ -319,121 +319,135 @@ async def login(credentials: UserLogin):
 # ASSESSMENT ENDPOINTS (Phase 1 + Phase 2)
 # ============================================
 
-async def generate_interest_assessment() -> List[Dict]:
-    """Generate questions to assess student's reading interests"""
+def generate_interest_assessment():
+    """Generate interest assessment questions with OpenAI API v1.0+"""
     
-    # Comprehensive fallback questions (always work!)
+    # Fallback questions (in case OpenAI fails)
     fallback_questions = [
         {
             "id": 1,
-            "question": "What type of stories interest you most?",
-            "options": ["Adventure and action", "Real-life stories and biographies", "Science and technology", "Sports and fitness"],
-            "category": "genre"
+            "question": "What type of books or stories do you enjoy most?",
+            "category": "genre",
+            "options": ["Fiction", "Non-fiction", "Mystery", "Science Fiction", "Other"]
         },
         {
             "id": 2,
-            "question": "Which topic sounds most interesting to you?",
-            "options": ["Technology and computers", "History and culture", "Nature and animals", "Music and arts"],
-            "category": "topic"
+            "question": "What topics are you most curious about?",
+            "category": "topic",
+            "options": ["Science", "History", "Technology", "Nature", "Other"]
         },
         {
             "id": 3,
-            "question": "What do you enjoy reading about?",
-            "options": ["How things work", "Famous people's lives", "Fantasy and imagination", "Current events and news"],
-            "category": "interest"
+            "question": "Which activities do you find most interesting?",
+            "category": "activity",
+            "options": ["Sports", "Arts & Crafts", "Music", "Gaming", "Other"]
         },
         {
             "id": 4,
-            "question": "Which activity interests you most?",
-            "options": ["Playing sports", "Using technology", "Creating art", "Helping others"],
-            "category": "activity"
+            "question": "What kind of learning do you prefer?",
+            "category": "learning",
+            "options": ["Hands-on activities", "Reading", "Videos", "Discussions", "Other"]
         },
         {
             "id": 5,
-            "question": "What would you like to learn more about?",
-            "options": ["Space and planets", "Business and money", "Health and fitness", "Entertainment and movies"],
-            "category": "learning"
+            "question": "What format of content do you like?",
+            "category": "format",
+            "options": ["Short articles", "Long stories", "Comics/Graphics", "Poems", "Other"]
         },
         {
             "id": 6,
-            "question": "What kind of book would you pick up?",
-            "options": ["A mystery to solve", "A guide or how-to book", "A story about real events", "A book with pictures and graphics"],
-            "category": "format"
+            "question": "What career or job interests you?",
+            "category": "career",
+            "options": ["Doctor/Nurse", "Teacher", "Engineer", "Artist", "Other"]
         },
         {
             "id": 7,
-            "question": "Which career field sounds interesting?",
-            "options": ["Medicine and healthcare", "Engineering and building", "Law and justice", "Creative arts and design"],
-            "category": "career"
+            "question": "What do you do in your free time?",
+            "category": "hobby",
+            "options": ["Reading", "Playing outside", "Drawing", "Building things", "Other"]
         },
         {
             "id": 8,
-            "question": "What do you do in your free time?",
-            "options": ["Watch videos online", "Play games", "Read or research", "Spend time outdoors"],
-            "category": "hobby"
+            "question": "What school subject do you like most?",
+            "category": "subject",
+            "options": ["Math", "English", "Science", "Social Studies", "Other"]
         },
         {
             "id": 9,
-            "question": "Which subject was your favorite in school?",
-            "options": ["Math and numbers", "English and writing", "Science experiments", "Social studies and history"],
-            "category": "subject"
+            "question": "What type of content would you like to read about?",
+            "category": "content_type",
+            "options": ["Real-life stories", "Fictional adventures", "Educational facts", "How-to guides", "Other"]
         },
         {
             "id": 10,
-            "question": "What type of content do you enjoy most?",
-            "options": ["Short articles and posts", "Long detailed explanations", "Visual content with images", "Step-by-step instructions"],
-            "category": "content_type"
+            "question": "What's your favorite thing to learn about?",
+            "category": "interest",
+            "options": ["Animals", "Space", "Computers", "People & cultures", "Other"]
         }
     ]
     
-    # Try OpenAI first if available
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "":
-        print("No OpenAI API key - using fallback questions")
-        return fallback_questions
+    # Try to enhance with OpenAI if available
+    if OPENAI_API_KEY and content_generator:
+        try:
+            print("Calling OpenAI to generate assessment questions...")
+            
+            # Use the NEW OpenAI API (v1.0+)
+            from openai import OpenAI
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            
+            response = client.chat.completions.create(
+                model="gpt-4-turbo-preview",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert in educational assessment design."
+                    },
+                    {
+                        "role": "user",
+                        "content": """Generate 10 engaging multiple-choice questions to assess a student's interests and reading preferences. 
+                        
+Each question should have 5 options, with "Other" as the last option.
+
+Return ONLY a JSON array with this exact structure:
+[
+    {
+        "id": 1,
+        "question": "Question text?",
+        "category": "genre/topic/activity/etc",
+        "options": ["Option 1", "Option 2", "Option 3", "Option 4", "Other"]
+    }
+]
+
+Make questions friendly, age-appropriate, and engaging for young adults."""
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=1500
+            )
+            
+            content = response.choices[0].message.content
+            
+            # Extract JSON from response
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            questions = json.loads(content)
+            
+            # Ensure all questions have "Other" option
+            for q in questions:
+                if "Other" not in q["options"]:
+                    q["options"].append("Other")
+            
+            print(f"✓ Generated {len(questions)} questions with OpenAI")
+            return questions
+            
+        except Exception as e:
+            print(f"OpenAI error: {e}")
+            print("Falling back to default questions")
     
-    try:
-        print("Calling OpenAI to generate assessment questions...")
-        
-        prompt = """Generate 10 multiple-choice questions to assess a student's reading interests.
-        Each question should help identify topics they enjoy (sports, technology, history, fiction, science, etc.).
-        
-        Return a JSON array with this structure:
-        [
-            {
-                "id": 1,
-                "question": "What type of stories interest you most?",
-                "options": ["Adventure stories", "Real-life stories", "Science topics", "Sports news"],
-                "category": "genre"
-            }
-        ]
-        
-        Make questions engaging and appropriate for diverse reading levels."""
-        
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert educator creating reading assessments."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            timeout=60
-        )
-        
-        print("OpenAI response received, parsing...")
-        
-        content = response.choices[0].message.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        
-        questions = json.loads(content)
-        print(f"Successfully parsed {len(questions)} AI-generated questions")
-        return questions
-        
-    except Exception as e:
-        print(f"OpenAI error: {e} - using fallback questions")
-        return fallback_questions
+    return fallback_questions
 
 async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     """Analyze assessment answers to determine interests and reading level"""
