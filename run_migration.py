@@ -8,7 +8,7 @@ import sys
 
 # Get your DATABASE_URL from Railway
 # Railway → PostgreSQL → Variables tab → Copy DATABASE_URL value
-DATABASE_URL = "postgresql://postgres:SKSlhHaXStrzUeYLftOkMFwcoKHSMRSo@ballast.proxy.rlwy.net:49390/railway"
+DATABASE_URL = ""
 
 # REPLACE THE DATABASE_URL ABOVE WITH YOUR ACTUAL VALUE FROM RAILWAY
 

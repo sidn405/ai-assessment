@@ -216,8 +216,7 @@ SELECT 'discussions', COUNT(*) FROM discussions;
 -- MIGRATION COMPLETE!
 -- ============================================
 
--- Next steps:
--- 1. Verify all tables created successfully
--- 2. Deploy updated app.py with new endpoints
--- 3. Test content generation
--- 4. Monitor initial usage
+-- GAMIFICATION SYSTEM DATABASE MIGRATION
+-- Run this to add points, badges, goals, and streaks
+
+-- Points and rewards tables

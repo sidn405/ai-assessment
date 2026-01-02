@@ -297,6 +297,356 @@
                 width: 100%;
             }
         }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            25% {
+                transform: rotate(-10deg);
+            }
+            75% {
+                transform: rotate(10deg);
+            }
+        }
+
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes starBurst {
+            0% {
+                transform: translateY(0) scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-200px) scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        /* ========== UTILITY CLASSES ========== */
+
+        .hidden {
+            display: none !important;
+        }
+
+        .other-input {
+            animation: slideDown 0.3s ease;
+        }
+
+        /* ========== BADGE STYLES ========== */
+
+        .badge-item {
+            display: inline-block;
+            margin: 0.5rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease;
+        }
+
+        .badge-item:hover {
+            transform: translateY(-5px) scale(1.05);
+        }
+
+        .badge-item .badge-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .badge-item .badge-name {
+            font-weight: bold;
+            margin: 0.5rem 0;
+            font-size: 1.1rem;
+        }
+
+        .badge-item .badge-description {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        /* ========== GOAL PROGRESS BARS ========== */
+
+        .goal-item {
+            padding: 1.5rem;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .goal-item:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            transform: translateX(5px);
+        }
+
+        .goal-item.completed {
+            opacity: 0.7;
+            border: 2px solid #28A745;
+            background: #f0fff4;
+        }
+
+        .progress-bar-container {
+            background: #e0e0e0;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 0.75rem 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+            border-radius: 6px;
+        }
+
+        /* ========== POINTS DISPLAY ========== */
+
+        .points-display {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        .level-badge {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        /* ========== CELEBRATION MODAL ========== */
+
+        #celebration-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        #celebration-modal .modal-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 3rem;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            color: white;
+        }
+
+        /* ========== CONFETTI CONTAINER ========== */
+
+        #confetti-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            overflow: hidden;
+        }
+
+        /* ========== OTHER INPUT STYLING ========== */
+
+        .other-input input[type="text"] {
+            width: 100%;
+            padding: 0.875rem;
+            border: 2px solid var(--navy-primary);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .other-input input[type="text"]:focus {
+            outline: none;
+            border-color: var(--teal-accent);
+            box-shadow: 0 0 0 3px rgba(64, 224, 208, 0.1);
+        }
+
+        /* ========== GAMIFICATION STATS CARDS ========== */
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--navy-primary);
+            margin: 0.5rem 0;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ========== RESPONSIVE ADJUSTMENTS ========== */
+
+        @media (max-width: 768px) {
+            .badge-item {
+                margin: 0.25rem;
+                padding: 0.75rem;
+            }
+            
+            .badge-item .badge-icon {
+                font-size: 2rem;
+            }
+            
+            #celebration-modal .modal-content {
+                padding: 2rem;
+                margin: 1rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ========== NOTIFICATION STYLES ========== */
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--navy-primary);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.success {
+            background: #28A745;
+        }
+
+        .notification.error {
+            background: #DC3545;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -485,6 +835,10 @@
         let currentUser = null;
         let currentAssessment = [];
         let assessmentAnswers = [];
+        let audioContext = null;
+        let lastTypingTime = 0;
+        const typingCooldown = 80;
+        let typingSoundEnabled = true;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -829,6 +1183,467 @@
                 'adult': 'Adult'
             };
             return levels[level] || level;
+        }
+
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playTypingSound() {
+            if (!typingSoundEnabled) return;
+            
+            const now = Date.now();
+            if (now - lastTypingTime < typingCooldown) return;
+            lastTypingTime = now;
+            
+            initAudioContext();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Randomize frequency for variety
+            oscillator.frequency.value = 750 + (Math.random() * 150);
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.04);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.04);
+        }
+
+        // Auto-attach to all text inputs
+        document.addEventListener('input', function(e) {
+            if (e.target.tagName === 'INPUT' && e.target.type === 'text') {
+                playTypingSound();
+            }
+        });
+
+        // ========== FEATURE 3: CELEBRATION SYSTEM ==========
+
+        function playCelebrationSound() {
+            initAudioContext();
+            
+            // Cheerful ascending melody
+            const notes = [523.25, 587.33, 659.25, 783.99, 880.00];
+            
+            notes.forEach((freq, i) => {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.frequency.value = freq;
+                osc.type = 'sine';
+                
+                const startTime = audioContext.currentTime + (i * 0.12);
+                gain.gain.setValueAtTime(0.25, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.25);
+                
+                osc.start(startTime);
+                osc.stop(startTime + 0.25);
+            });
+        }
+
+        function showConfetti() {
+            const confettiContainer = document.createElement('div');
+            confettiContainer.id = 'confetti-container';
+            confettiContainer.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 9999;
+                overflow: hidden;
+            `;
+            document.body.appendChild(confettiContainer);
+            
+            const colors = ['#FFD700', '#FFA500', '#FF69B4', '#00CED1', '#9370DB', '#32CD32'];
+            
+            for (let i = 0; i < 150; i++) {
+                const confetti = document.createElement('div');
+                confetti.style.cssText = `
+                    position: absolute;
+                    width: ${Math.random() * 10 + 5}px;
+                    height: ${Math.random() * 10 + 5}px;
+                    background: ${colors[Math.floor(Math.random() * colors.length)]};
+                    top: -10px;
+                    left: ${Math.random() * 100}%;
+                    opacity: ${Math.random() * 0.7 + 0.3};
+                    transform: rotate(${Math.random() * 360}deg);
+                    animation: confetti-fall ${Math.random() * 2 + 2}s linear forwards;
+                    animation-delay: ${Math.random() * 0.5}s;
+                    border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+                `;
+                confettiContainer.appendChild(confetti);
+            }
+            
+            setTimeout(() => confettiContainer.remove(), 4500);
+        }
+
+        function createStarBurst() {
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                z-index: 9998;
+            `;
+            
+            for (let i = 0; i < 12; i++) {
+                const star = document.createElement('div');
+                star.textContent = '⭐';
+                star.style.cssText = `
+                    position: absolute;
+                    font-size: 2.5rem;
+                    animation: starBurst 1.2s ease-out forwards;
+                    animation-delay: ${i * 0.05}s;
+                    transform: rotate(${i * 30}deg);
+                `;
+                container.appendChild(star);
+            }
+            
+            document.body.appendChild(container);
+            setTimeout(() => container.remove(), 1500);
+        }
+
+        function showCelebrationModal(score, correctCount, totalQuestions, pointsEarned = 50) {
+            const modal = document.createElement('div');
+            modal.id = 'celebration-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.85);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.3s ease;
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 3rem;
+                border-radius: 20px;
+                text-align: center;
+                max-width: 600px;
+                animation: scaleIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                color: white;
+            `;
+            
+            content.innerHTML = `
+                <div style="font-size: 6rem; animation: bounce 1s infinite; filter: drop-shadow(0 0 20px rgba(255,215,0,0.8));">
+                    🎉
+                </div>
+                <h1 style="font-size: 3rem; margin: 1rem 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                    PERFECT SCORE!
+                </h1>
+                <div style="font-size: 2rem; font-weight: bold; margin: 1rem 0; color: #FFD700;">
+                    ${correctCount}/${totalQuestions} Correct! ⭐⭐⭐
+                </div>
+                <p style="font-size: 1.3rem; margin: 1.5rem 0; opacity: 0.95;">
+                    Outstanding work! You're a literacy superstar! 🌟
+                </p>
+                <div style="background: rgba(255,255,255,0.2); border-radius: 15px; padding: 2rem; margin: 2rem 0; backdrop-filter: blur(10px);">
+                    <div style="font-size: 4rem; margin: 1rem 0; animation: shake 0.5s infinite;">🏆</div>
+                    <div style="font-size: 2.5rem; font-weight: bold; color: #FFD700; margin: 0.5rem 0;">
+                        +${pointsEarned} Points!
+                    </div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">
+                        Bonus for perfect score!
+                    </div>
+                </div>
+                <button 
+                    onclick="closeCelebrationModal()" 
+                    class="btn btn-primary" 
+                    style="
+                        font-size: 1.3rem; 
+                        padding: 1rem 2.5rem; 
+                        background: white;
+                        color: #667eea;
+                        border: none;
+                        font-weight: bold;
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                        transition: transform 0.2s;
+                    "
+                    onmouseover="this.style.transform='scale(1.05)'"
+                    onmouseout="this.style.transform='scale(1)'"
+                >
+                    Continue Learning! 🚀
+                </button>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+        }
+
+        function closeCelebrationModal() {
+            const modal = document.getElementById('celebration-modal');
+            if (modal) {
+                modal.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => modal.remove(), 300);
+            }
+        }
+
+        function celebratePerfectScore(score, correctCount, totalQuestions) {
+            playCelebrationSound();
+            showConfetti();
+            createStarBurst();
+            
+            setTimeout(() => {
+                showCelebrationModal(score, correctCount, totalQuestions);
+            }, 600);
+        }
+
+        // ========== FEATURE 1: "OTHER" OPTION HANDLING ==========
+
+        // Global to track custom "Other" responses
+        let customOtherResponses = {};
+
+        function selectOption(questionId, optionIndex, optionText, isOther = false) {
+            console.log('Option selected:', questionId, optionIndex, optionText);
+            
+            const options = document.getElementById(`options-${questionId}`).querySelectorAll('.option');
+            options.forEach(opt => opt.classList.remove('selected'));
+            options[optionIndex].classList.add('selected');
+            
+            if (isOther) {
+                // Show custom input field
+                const otherInput = document.getElementById(`other-input-${questionId}`);
+                if (otherInput) {
+                    otherInput.classList.remove('hidden');
+                    const textInput = document.getElementById(`other-text-${questionId}`);
+                    textInput.focus();
+                    
+                    // Store answer with custom text
+                    textInput.addEventListener('input', (e) => {
+                        customOtherResponses[questionId] = e.target.value;
+                        
+                        // Update answer in assessmentAnswers
+                        const existingIndex = assessmentAnswers.findIndex(a => a.question_id === questionId);
+                        if (existingIndex >= 0) {
+                            assessmentAnswers[existingIndex] = { 
+                                question_id: questionId, 
+                                answer: e.target.value || 'Other'
+                            };
+                        } else {
+                            assessmentAnswers.push({ 
+                                question_id: questionId, 
+                                answer: e.target.value || 'Other'
+                            });
+                        }
+                    });
+                }
+                
+                // Initialize with "Other" if no text yet
+                const existingIndex = assessmentAnswers.findIndex(a => a.question_id === questionId);
+                if (existingIndex >= 0) {
+                    assessmentAnswers[existingIndex] = { question_id: questionId, answer: 'Other' };
+                } else {
+                    assessmentAnswers.push({ question_id: questionId, answer: 'Other' });
+                }
+            } else {
+                // Hide other input if visible
+                const otherInput = document.getElementById(`other-input-${questionId}`);
+                if (otherInput) {
+                    otherInput.classList.add('hidden');
+                }
+                
+                // Clear custom response
+                delete customOtherResponses[questionId];
+                
+                // Store regular answer
+                const existingIndex = assessmentAnswers.findIndex(a => a.question_id === questionId);
+                if (existingIndex >= 0) {
+                    assessmentAnswers[existingIndex] = { question_id: questionId, answer: optionText };
+                } else {
+                    assessmentAnswers.push({ question_id: questionId, answer: optionText });
+                }
+            }
+            
+            console.log('Current answers:', assessmentAnswers.length);
+        }
+
+        // Update renderAssessment to include "Other" option
+        function renderAssessmentWithOther() {
+            console.log('=== renderAssessment START ===');
+            const container = document.getElementById('assessmentQuestions');
+            container.innerHTML = '<h3 style="margin-bottom: 2rem; color: var(--navy-primary);">Help us personalize your learning experience:</h3>';
+            
+            currentAssessment.forEach((q, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'question-card';
+                
+                // Add "Other" to all questions if not present
+                if (!q.options.includes('Other')) {
+                    q.options.push('Other');
+                }
+                
+                const optionsHTML = q.options.map((opt, i) => {
+                    if (opt === 'Other') {
+                        return `
+                            <div class="option" onclick="selectOption(${q.id}, ${i}, 'Other', true)">
+                                ✏️ ${opt} (please specify)
+                            </div>
+                            <div id="other-input-${q.id}" class="other-input hidden" style="margin-top: 0.75rem; animation: slideDown 0.3s ease;">
+                                <input 
+                                    type="text" 
+                                    id="other-text-${q.id}" 
+                                    placeholder="Type your answer here..."
+                                    style="
+                                        width: 100%; 
+                                        padding: 0.875rem; 
+                                        border: 2px solid var(--navy-primary); 
+                                        border-radius: 8px; 
+                                        font-size: 1rem;
+                                        transition: all 0.3s ease;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                    "
+                                    onfocus="this.style.borderColor='var(--teal-accent)'; this.style.boxShadow='0 0 0 3px rgba(64, 224, 208, 0.1)'"
+                                    onblur="this.style.borderColor='var(--navy-primary)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
+                                />
+                            </div>
+                        `;
+                    } else {
+                        return `<div class="option" onclick="selectOption(${q.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">${opt}</div>`;
+                    }
+                }).join('');
+                
+                questionDiv.innerHTML = `
+                    <div class="question-text" style="font-size: 1.1rem; margin-bottom: 1rem;">
+                        ${index + 1}. ${q.question}
+                    </div>
+                    <div class="options" id="options-${q.id}">
+                        ${optionsHTML}
+                    </div>
+                `;
+                container.appendChild(questionDiv);
+            });
+            
+            const submitBtn = document.createElement('button');
+            submitBtn.className = 'btn btn-primary';
+            submitBtn.style.cssText = 'margin-top: 2rem; font-size: 1.1rem; padding: 1rem 2rem;';
+            submitBtn.textContent = 'Submit Assessment';
+            submitBtn.onclick = submitAssessment;
+            container.appendChild(submitBtn);
+        }
+
+        // ========== FEATURE 4: GAMIFICATION FUNCTIONS ==========
+
+        async function loadGamificationData() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                const response = await fetch(`/api/student/gamification?token=${token}`);
+                if (!response.ok) throw new Error('Failed to load gamification data');
+                
+                const data = await response.json();
+                
+                // Update points display
+                if (document.getElementById('userPoints')) {
+                    document.getElementById('userPoints').textContent = data.points.current_points;
+                }
+                if (document.getElementById('userLevel')) {
+                    document.getElementById('userLevel').textContent = data.points.level;
+                }
+                
+                // Display badges
+                displayBadges(data.badges);
+                
+                // Display weekly goals
+                if (data.weekly_goals) {
+                    displayWeeklyGoals(data.weekly_goals);
+                }
+                
+                return data;
+                
+            } catch (error) {
+                console.error('Error loading gamification:', error);
+            }
+        }
+
+        function displayBadges(badges) {
+            const badgesContainer = document.getElementById('badgesContainer');
+            if (!badgesContainer) return;
+            
+            if (badges.length === 0) {
+                badgesContainer.innerHTML = '<p style="color: #666;">Complete lessons to earn badges!</p>';
+                return;
+            }
+            
+            badgesContainer.innerHTML = badges.map(badge => `
+                <div class="badge-item" style="
+                    display: inline-block;
+                    margin: 0.5rem;
+                    padding: 1rem;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 12px;
+                    color: white;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                ">
+                    <div style="font-size: 3rem;">${badge.icon}</div>
+                    <div style="font-weight: bold; margin-top: 0.5rem;">${badge.name}</div>
+                    <div style="font-size: 0.85rem; opacity: 0.9;">${badge.description}</div>
+                </div>
+            `).join('');
+        }
+
+        function displayWeeklyGoals(goals) {
+            const goalsContainer = document.getElementById('weeklyGoalsContainer');
+            if (!goalsContainer) return;
+            
+            goalsContainer.innerHTML = goals.map(goal => {
+                const progress = (goal.current_value / goal.target_value) * 100;
+                const isComplete = goal.completed;
+                
+                return `
+                    <div class="goal-item" style="
+                        padding: 1.5rem;
+                        background: white;
+                        border-radius: 12px;
+                        margin-bottom: 1rem;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        ${isComplete ? 'opacity: 0.7; border: 2px solid #28A745;' : ''}
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span style="font-weight: bold; font-size: 1.1rem;">
+                                ${isComplete ? '✅ ' : ''}${goal.goal_type.replace('_', ' ')}
+                            </span>
+                            <span style="color: #667eea; font-weight: bold;">
+                                ${goal.current_value}/${goal.target_value}
+                            </span>
+                        </div>
+                        <div style="background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div style="
+                                width: ${Math.min(progress, 100)}%;
+                                height: 100%;
+                                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+                                transition: width 0.3s ease;
+                            "></div>
+                        </div>
+                        <div style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
+                            Reward: ${goal.points_reward} points 🎁
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Lesson Management
