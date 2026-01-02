@@ -2308,41 +2308,6 @@
             }, 3000);
         }
 
-        // Hook into existing showSection function
-        (function() {
-            const originalShowSection = window.showSection;
-            
-            window.showSection = function(sectionName, event) {
-                if (event) event.preventDefault();
-                
-                // Call original function
-                if (originalShowSection) {
-                    originalShowSection(sectionName, event);
-                }
-                
-                // If showing lessons section, auto-load lesson if assessment completed
-                if (sectionName === 'lessons') {
-                    try {
-                        const user = JSON.parse(localStorage.getItem('user') || '{}');
-                        if (user.reading_level || user.level_estimate) {
-                            // User has completed assessment
-                            const noLessons = document.getElementById('noLessons');
-                            if (noLessons) noLessons.classList.add('hidden');
-                            loadNextLesson();
-                        } else {
-                            // Show "complete assessment first"
-                            const noLessons = document.getElementById('noLessons');
-                            if (noLessons) noLessons.classList.remove('hidden');
-                        }
-                    } catch (error) {
-                        console.error('Error in showSection hook:', error);
-                    }
-                }
-            };
-        })();
-
-        console.log('✅ Bulletproof lesson loading code installed');
-
         function logout() {
             console.log('Logging out...');
             localStorage.removeItem('token');
