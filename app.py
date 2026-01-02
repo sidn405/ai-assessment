@@ -518,28 +518,81 @@ Requirements:
 async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     """Analyze assessment answers to determine interests and reading level"""
     
+    print(f"Analyzing {len(answers)} assessment answers...")
+    
     # Extract interests from answers
     interests = []
     topics = []
+    categories = {}
     
     for answer in answers:
-        category = answer.get('category', '')
-        selected = answer.get('answer', '')
+        question_id = answer.get('question_id')
+        answer_value = answer.get('answer')
         
-        if category in ['genre', 'topic', 'interest', 'learning']:
-            topics.append(selected.lower())
+        print(f"Question {question_id}: {answer_value}")
         
-    # Determine reading level based on answer patterns
-    # For now, default to intermediate
-    reading_level = "intermediate"
+        # Handle different answer formats
+        if isinstance(answer_value, dict):
+            # Format: {"option": "Other", "custom_text": "user input"}
+            if answer_value.get('option') == 'Other' or answer_value.get('custom_text'):
+                custom_text = answer_value.get('custom_text', '').strip()
+                if custom_text:
+                    print(f"  → Custom answer: {custom_text}")
+                    interests.append(custom_text.lower())
+                    topics.append(custom_text.lower())
+            elif answer_value.get('option'):
+                option = answer_value.get('option')
+                if option and option != 'Other':
+                    interests.append(option.lower())
+                    topics.append(option.lower())
+        
+        elif isinstance(answer_value, str):
+            # Plain string answer
+            if answer_value and answer_value != 'Other':
+                print(f"  → Regular answer: {answer_value}")
+                interests.append(answer_value.lower())
+                topics.append(answer_value.lower())
+        
+        # Track by category
+        category = answer.get('category', 'general')
+        if category not in categories:
+            categories[category] = []
+        
+        # Add to category
+        if isinstance(answer_value, dict) and answer_value.get('custom_text'):
+            categories[category].append(answer_value['custom_text'].lower())
+        elif isinstance(answer_value, str) and answer_value != 'Other':
+            categories[category].append(answer_value.lower())
     
-    # Extract unique interests
-    unique_interests = list(set(topics))[:5]  # Top 5
+    # Remove duplicates while preserving order
+    interests = list(dict.fromkeys(interests))
+    topics = list(dict.fromkeys(topics))
+    
+    print(f"Extracted interests: {interests}")
+    print(f"Extracted topics: {topics}")
+    
+    # If no interests extracted, use default
+    if not interests:
+        interests = ['general reading', 'education']
+        topics = ['general reading', 'education']
+    
+    # Determine reading level based on answers
+    reading_level = 'intermediate'  # Default
+    
+    # Check format preferences
+    if 'format' in categories:
+        format_prefs = categories['format']
+        if any('short' in pref for pref in format_prefs):
+            reading_level = 'beginner'
+        elif any('long' in pref for pref in format_prefs):
+            reading_level = 'advanced'
     
     return {
-        "reading_level": reading_level,
-        "interests": unique_interests if unique_interests else ["general reading"],
-        "topics": topics
+        'interests': interests,
+        'topics': topics,
+        'categories': categories,
+        'reading_level': reading_level,
+        'total_responses': len(answers)
     }
 
 @app.get("/api/assessment/interest")

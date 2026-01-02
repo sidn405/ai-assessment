@@ -1106,7 +1106,7 @@
             console.log('Answers:', assessmentAnswers.length, '/', currentAssessment.length);
             
             if (assessmentAnswers.length < currentAssessment.length) {
-                alert('Please answer all questions before submitting.');
+                alert(`Please answer all questions before submitting. (${assessmentAnswers.length}/${currentAssessment.length} answered)`);
                 return;
             }
             
@@ -1126,44 +1126,69 @@
             document.getElementById('assessmentCard').appendChild(completionDiv);
             
             const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+            
+            // Process answers to handle "Other" custom text
+            const processedAnswers = assessmentAnswers.map(answer => {
+                const questionId = answer.question_id;
+                const answerValue = answer.answer;
+                
+                // Check if this was an "Other" answer with custom text
+                if (customOtherResponses[questionId]) {
+                    return {
+                        question_id: questionId,
+                        answer: customOtherResponses[questionId] // Use the custom text directly
+                    };
+                }
+                
+                // Check if answer is "Other" but no custom text
+                if (answerValue === 'Other') {
+                    const customText = document.getElementById(`other-text-${questionId}`)?.value;
+                    if (customText && customText.trim()) {
+                        return {
+                            question_id: questionId,
+                            answer: customText.trim()
+                        };
+                    }
+                }
+                
+                return answer;
+            });
+            
+            console.log('Processed answers:', processedAnswers);
             
             try {
-                console.log('Submitting assessment to API...');
                 const response = await fetch('/api/assessment/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token, answers: assessmentAnswers })
+                    body: JSON.stringify({
+                        token: token,
+                        answers: processedAnswers
+                    })
                 });
                 
-                console.log('Submit response:', response.status);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const result = await response.json();
+                console.log('Assessment submitted:', result);
+                
+                // Update user in localStorage
+                if (result.user) {
+                    localStorage.setItem('user', JSON.stringify(result.user));
                 }
                 
-                const data = await response.json();
-                console.log('Analysis received:', data);
+                // Show success message
+                alert('✓ Assessment completed! Your personalized lessons are ready.');
                 
-                if (data.success) {
-                    // Update user data
-                    currentUser.reading_level = data.analysis.reading_level;
-                    currentUser.interests = data.analysis.interests;
-                    localStorage.setItem('user', JSON.stringify(currentUser));
-                    
-                    // Show results
-                    displayAssessmentResults(data.analysis);
-                } else {
-                    throw new Error('Submission failed');
-                }
+                // Reload to show updated dashboard
+                location.reload();
+                
             } catch (error) {
                 console.error('Error submitting assessment:', error);
-                completionDiv.innerHTML = `
-                    <div class="alert alert-info">
-                        <strong>Error submitting assessment.</strong>
-                        <p>${error.message}</p>
-                        <button class="btn btn-primary" onclick="submitAssessment()">Try Again</button>
-                    </div>
-                `;
+                alert('Failed to submit assessment. Please try again.');
             }
             
             console.log('=== submitAssessment END ===');
