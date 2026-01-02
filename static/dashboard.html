@@ -2430,16 +2430,11 @@
                 updateActivityOnServer();
             }
             
-            // Reset timers if warning shown
-            if (sessionState.warningShown) {
-                sessionState.warningShown = false;
-                closeTimeoutWarning();
-                resetIdleTimers();
-            } else {
-                // Just reset the timers
-                sessionState.lastActivity = now;
-                resetIdleTimers();
-            }
+            
+            // Just reset the timers
+            sessionState.lastActivity = now;
+            resetIdleTimers();
+            
         }
 
         function resetIdleTimers() {
@@ -2594,38 +2589,25 @@
             }, 1000);
         }
 
-        async function respondToTimeoutWarning() {
+        function takeBreakFromWarning() {
+            console.log('User chose to take a break from warning');
+            
+            // Close warning modal first
             sessionState.warningShown = false;
             closeTimeoutWarning();
             
-            // Log response on server
-            const token = localStorage.getItem('token');
-            try {
-                await fetch('/api/session/timeout/responded', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token,
-                        session_id: sessionState.sessionId,
-                        timeout_event_id: sessionState.timeoutEventId
-                    })
-                });
-            } catch (error) {
-                console.error('Error logging response:', error);
-            }
-            
-            // Reset activity and timers
-            sessionState.lastActivity = Date.now();
-            resetIdleTimers();
-            
-            showNotification('Welcome back! Your session has been extended.', 'success');
+            // Start break
+            takeBreak();
         }
 
         function closeTimeoutWarning() {
             const modal = document.getElementById('timeout-warning-modal');
             if (modal) {
                 modal.style.animation = 'fadeOut 0.3s ease';
-                setTimeout(() => modal.remove(), 300);
+                setTimeout(() => {
+                    modal.remove();
+                    sessionState.warningShown = false; // Ensure flag is cleared
+                }, 300);
             }
         }
 
