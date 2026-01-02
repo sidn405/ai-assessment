@@ -914,9 +914,22 @@
         const typingCooldown = 80;
         let typingSoundEnabled = true;
 
+        // Debug: Track loadNextLesson calls
+        let lessonCallCount = 0;
+        const originalLoadNextLesson = loadNextLesson;
+
+        // Wrap function to log all calls
+        window.loadNextLesson = function() {
+            lessonCallCount++;
+            console.log(`🔍 loadNextLesson called (call #${lessonCallCount})`);
+            console.trace('Call stack:'); // Shows where it was called from
+            return originalLoadNextLesson.apply(this, arguments);
+        };
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             console.log('=== PAGE LOADED ===');
+
             const token = localStorage.getItem('token');
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             
@@ -994,13 +1007,26 @@
                 console.log('Triggering loadAssessment...');
                 loadAssessment();
             } else if (section === 'lessons') {
-                console.log('Lessons section - loading lesson...');
+                console.log('Lessons section - checking lesson state...');
                 const user = JSON.parse(localStorage.getItem('user') || '{}');
+                
                 if (user.reading_level || user.level_estimate) {
                     // User has completed assessment
                     const noLessons = document.getElementById('noLessons');
                     if (noLessons) noLessons.classList.add('hidden');
-                    loadNextLesson();
+                    
+                    // ========== FIX: ONLY LOAD IF NO LESSON IS DISPLAYED ==========
+                    const lessonContent = document.getElementById('lessonContent');
+                    const isLessonVisible = lessonContent && lessonContent.style.display !== 'none';
+                    const hasCurrentLesson = currentLesson && currentLesson.id;
+                    
+                    if (!isLessonVisible || !hasCurrentLesson) {
+                        console.log('No lesson displayed - loading first lesson');
+                        loadNextLesson();
+                    } else {
+                        console.log('Lesson already displayed - keeping current lesson');
+                    }
+                    // ==============================================================
                 } else {
                     // Show "complete assessment first"
                     const noLessons = document.getElementById('noLessons');
@@ -1740,6 +1766,7 @@
         let lessonAnswers = [];
         let lessonStartTime = null;
         let recentTopics = []; // ← ADD THIS
+        let isLoadingLesson = false; // Prevent duplicate loads
 
         async function loadNextLesson() {
             console.log('=== loadNextLesson START ===');
@@ -1926,6 +1953,12 @@
                 console.error('Error displaying lesson:', error);
                 alert('Error displaying lesson: ' + error.message);
             }
+
+            // At the very end, make sure to show the lesson
+            document.getElementById('lessonLoading').style.display = 'none';
+            document.getElementById('lessonContent').style.display = 'block';
+            
+            console.log('✓ Lesson displayed:', currentLesson.title);
             
             console.log('=== displayLesson END ===');
         }
