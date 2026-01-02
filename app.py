@@ -386,12 +386,11 @@ def generate_interest_assessment():
         }
     ]
     
-    # Try to enhance with OpenAI if available
+    # Try OpenAI enhancement (optional)
     if OPENAI_API_KEY and content_generator:
         try:
             print("Calling OpenAI to generate assessment questions...")
             
-            # Use the NEW OpenAI API (v1.0+)
             from openai import OpenAI
             client = OpenAI(api_key=OPENAI_API_KEY)
             
@@ -400,53 +399,120 @@ def generate_interest_assessment():
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert in educational assessment design."
+                        "content": "You are an expert in educational assessment. You MUST respond with valid JSON only, no additional text."
                     },
                     {
                         "role": "user",
-                        "content": """Generate 10 engaging multiple-choice questions to assess a student's interests and reading preferences. 
-                        
-Each question should have 5 options, with "Other" as the last option.
+                        "content": """Generate 10 multiple-choice questions to assess student interests.
 
-Return ONLY a JSON array with this exact structure:
+CRITICAL: Respond with ONLY valid JSON. No markdown, no explanations, just the JSON array.
+
+Required format:
 [
     {
         "id": 1,
-        "question": "Question text?",
-        "category": "genre/topic/activity/etc",
+        "question": "Question text here?",
+        "category": "genre",
         "options": ["Option 1", "Option 2", "Option 3", "Option 4", "Other"]
     }
 ]
 
-Make questions friendly, age-appropriate, and engaging for young adults."""
+Requirements:
+- Exactly 10 questions
+- Each has 5 options
+- Last option is always "Other"
+- Age-appropriate for young adults
+- Friendly, engaging tone"""
                     }
                 ],
                 temperature=0.7,
-                max_tokens=1500
+                max_tokens=2000,
+                response_format={"type": "json_object"}  # Force JSON response
             )
             
-            content = response.choices[0].message.content
+            content = response.choices[0].message.content.strip()
             
-            # Extract JSON from response
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
+            print(f"Raw OpenAI response length: {len(content)} chars")
+            print(f"First 200 chars: {content[:200]}")
             
-            questions = json.loads(content)
+            # Clean up response
+            content = content.strip()
             
-            # Ensure all questions have "Other" option
-            for q in questions:
-                if "Other" not in q["options"]:
-                    q["options"].append("Other")
+            # Remove markdown code blocks if present
+            if content.startswith("```"):
+                # Extract content between ``` markers
+                lines = content.split('\n')
+                # Remove first line (```json or ```)
+                lines = lines[1:]
+                # Remove last line if it's ```
+                if lines and lines[-1].strip() == '```':
+                    lines = lines[:-1]
+                content = '\n'.join(lines).strip()
             
-            print(f"✓ Generated {len(questions)} questions with OpenAI")
-            return questions
+            # Try to find JSON array or object
+            if not content.startswith('[') and not content.startswith('{'):
+                # Look for first [ or {
+                start_bracket = content.find('[')
+                start_brace = content.find('{')
+                
+                if start_bracket != -1:
+                    content = content[start_bracket:]
+                elif start_brace != -1:
+                    content = content[start_brace:]
+            
+            print(f"Cleaned content first 100 chars: {content[:100]}")
+            
+            # Parse JSON
+            try:
+                parsed = json.loads(content)
+                
+                # Handle if it's wrapped in an object
+                if isinstance(parsed, dict):
+                    if 'questions' in parsed:
+                        questions = parsed['questions']
+                    else:
+                        # Try to find the array
+                        for value in parsed.values():
+                            if isinstance(value, list):
+                                questions = value
+                                break
+                        else:
+                            raise ValueError("No questions array found in response")
+                else:
+                    questions = parsed
+                
+                # Validate structure
+                if not isinstance(questions, list) or len(questions) == 0:
+                    raise ValueError("Invalid questions format")
+                
+                # Ensure all questions have required fields and "Other" option
+                for i, q in enumerate(questions):
+                    if not all(key in q for key in ['id', 'question', 'options']):
+                        raise ValueError(f"Question {i+1} missing required fields")
+                    
+                    if "Other" not in q["options"]:
+                        q["options"].append("Other")
+                    
+                    # Ensure category exists
+                    if "category" not in q:
+                        q["category"] = "general"
+                
+                print(f"✓ Generated {len(questions)} questions with OpenAI")
+                return questions
+                
+            except json.JSONDecodeError as je:
+                print(f"JSON parsing error: {je}")
+                print(f"Failed content: {content[:500]}")
+                raise
             
         except Exception as e:
             print(f"OpenAI error: {e}")
+            import traceback
+            traceback.print_exc()
             print("Falling back to default questions")
     
+    # Return fallback questions
+    print(f"✓ Using {len(fallback_questions)} fallback questions")
     return fallback_questions
 
 async def analyze_assessment_results(answers: List[Dict]) -> Dict:
@@ -477,16 +543,27 @@ async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     }
 
 @app.get("/api/assessment/interest")
-async def get_interest_assessment():
-    """Get interest assessment questions (Phase 1 compatibility)"""
-    print("Assessment endpoint called - generating questions...")
+def get_interest_assessment():  # ← Remove 'async'
+    """Get interest assessment questions"""
     try:
-        questions = await generate_interest_assessment()
-        print(f"Generated {len(questions)} questions")
-        return {"questions": questions}
+        print("Assessment endpoint called - generating questions...")
+        questions = generate_interest_assessment()  # ← Remove 'await'
+        
+        if not questions:
+            raise HTTPException(status_code=500, detail="Failed to generate assessment")
+        
+        print(f"✓ Returning {len(questions)} questions")
+        
+        return {
+            "success": True,
+            "questions": questions
+        }
+        
     except Exception as e:
         print(f"Error generating assessment: {e}")
-        raise HTTPException(status_code=500, detail=f"Assessment generation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/assessment/submit")
 async def submit_assessment(request: Request):
