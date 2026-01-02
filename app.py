@@ -1740,13 +1740,13 @@ async def get_student_progress(token: str):
         sessions = []
         for row in cursor.fetchall():
             sessions.append({
-                'id': row[0] if isinstance(row, tuple) else row['id'],
-                'completed_at': row[1] if isinstance(row, tuple) else row['completed_at'],
-                'score': row[2] if isinstance(row, tuple) else row['comprehension_score'],
-                'time_spent': row[3] if isinstance(row, tuple) else row['time_spent_seconds'],
-                'passage_title': row[4] if isinstance(row, tuple) else row['passage_title'],
-                'difficulty': row[5] if isinstance(row, tuple) else row['difficulty_level'],
-                'word_count': row[6] if isinstance(row, tuple) else row['word_count']
+                'id': row['id'] if hasattr(row, 'keys') else row[0],
+                'completed_at': row['completed_at'] if hasattr(row, 'keys') else row[1],
+                'score': row['comprehension_score'] if hasattr(row, 'keys') else row[2],
+                'time_spent': row['time_spent_seconds'] if hasattr(row, 'keys') else row[3],
+                'passage_title': row['passage_title'] if hasattr(row, 'keys') else row[4],
+                'difficulty': row['difficulty_level'] if hasattr(row, 'keys') else row[5],
+                'word_count': row['word_count'] if hasattr(row, 'keys') else row[6]
             })
         
         # Get overall stats
@@ -1775,16 +1775,36 @@ async def get_student_progress(token: str):
         
         stats = cursor.fetchone()
         
+        # ========== FIXED STATS PARSING ==========
+        # Handle both dict-like (psycopg2.extras.RealDictRow) and tuple
+        if hasattr(stats, 'keys'):
+            # Dict-like object (PostgreSQL with RealDictCursor)
+            total_lessons = stats['total_lessons'] or 0
+            avg_score = stats['avg_score']
+            total_time = stats['total_time'] or 0
+            last_activity = stats['last_activity']
+        else:
+            # Tuple (SQLite or regular cursor)
+            total_lessons = stats[0] or 0
+            avg_score = stats[1]
+            total_time = stats[2] or 0
+            last_activity = stats[3]
+        
+        # Round average score
+        avg_score_rounded = round(avg_score, 1) if avg_score else 0
+        total_time_minutes = round(total_time / 60, 1)
+        # =========================================
+        
         conn.close()
         
         return {
             "success": True,
             "sessions": sessions,
             "stats": {
-                "total_lessons": stats[0] if isinstance(stats, tuple) else stats['total_lessons'] or 0,
-                "average_score": round(stats[1], 1) if (isinstance(stats, tuple) and stats[1]) or (not isinstance(stats, tuple) and stats['avg_score']) else 0,
-                "total_time_minutes": round((stats[2] or 0) / 60, 1) if isinstance(stats, tuple) else round((stats['total_time'] or 0) / 60, 1),
-                "last_activity": stats[3] if isinstance(stats, tuple) else stats['last_activity']
+                "total_lessons": total_lessons,
+                "average_score": avg_score_rounded,
+                "total_time_minutes": total_time_minutes,
+                "last_activity": last_activity
             }
         }
         
