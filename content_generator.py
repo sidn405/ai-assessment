@@ -20,53 +20,41 @@ class ContentGenerator:
     def generate_passage(self, topic, difficulty_level, target_words, user_interests):
         """Generate educational passage using GPT-4"""
         
-        # ========== ADD VARIETY TO PROMPT ==========
-        import random
-        
-        # Random perspective/angle
-        perspectives = [
-            f"an engaging article about {topic}",
-            f"a fascinating story exploring {topic}",
-            f"an informative piece on {topic}",
-            f"a discovery-focused narrative about {topic}",
-            f"an educational exploration of {topic}"
+        # ========== UPDATED PROMPT ==========
+        # Build focused prompt - ONE TOPIC PER LESSON
+        prompt = f"""Create an educational reading passage about {topic}.
+
+    Difficulty Level: {difficulty_level}
+    Target Length: {target_words} words
+
+    IMPORTANT: 
+    - Focus ONLY on {topic}
+    - Do NOT try to combine with other topics
+    - Make it engaging and age-appropriate
+    - Use clear, accessible language
+
+    Generate a passage that explores {topic} in an interesting way.
+
+    Return your response as a JSON object with this exact structure:
+    {{
+        "title": "Specific title about {topic}",
+        "content": "The full passage text (approximately {target_words} words, focused on {topic})",
+        "key_concepts": ["concept1", "concept2", "concept3"],
+        "vocabulary_words": [
+            {{"word": "word1", "definition": "simple definition"}},
+            {{"word": "word2", "definition": "simple definition"}}
         ]
-        
-        prompt_style = random.choice(perspectives)
-        # ==========================================
-        
-        # Build prompt (same as before)
-        prompt = f"""Create an educational reading passage with the following specifications:
-
-Topic: {topic}
-Difficulty Level: {difficulty_level}
-Target Length: {target_words} words
-User Interests: {', '.join(user_interests)}
-
-IMPORTANT: Make this content unique and fresh. Avoid repeating common facts. 
-Focus on lesser-known aspects, recent discoveries, or interesting angles.
-
-Generate a passage that is engaging, age-appropriate, and educational.
-
-Return your response as a JSON object with this exact structure:
-{{
-    "title": "Engaging title for the passage",
-    "content": "The full passage text (approximately {target_words} words)",
-    "key_concepts": ["concept1", "concept2", "concept3"],
-    "vocabulary_words": [
-        {{"word": "word1", "definition": "simple definition"}},
-        {{"word": "word2", "definition": "simple definition"}}
-    ]
-}}"""
+    }}"""
+        # ===================================
 
         try:
             # NEW API SYNTAX
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",  # Use your working model
+                model="gpt-4-turbo-preview",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert educational content creator specializing in literacy development."
+                        "content": "You are an expert educational content creator. Focus on ONE topic at a time. Do not blend multiple topics together."
                     },
                     {"role": "user", "content": prompt}
                 ],
@@ -75,10 +63,9 @@ Return your response as a JSON object with this exact structure:
                 timeout=60
             )
             
-            # NEW API - Different response structure
             content = response.choices[0].message.content
             
-            # Extract JSON (same as before)
+            # Extract JSON
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
@@ -90,10 +77,10 @@ Return your response as a JSON object with this exact structure:
             from readability import analyze_readability
             readability = analyze_readability(passage_data['content'])
             
-            # Add metadata
+            # Add metadata - TAG WITH SINGLE TOPIC
             passage_data.update({
                 "source": "AI",
-                "topic_tags": self._extract_topics(topic, user_interests),
+                "topic_tags": [topic],  # ← ONLY the main topic, not all interests
                 "word_count": readability['word_count'],
                 "readability_score": readability['flesch_kincaid_grade'],
                 "flesch_ease": readability['flesch_reading_ease'],
@@ -109,8 +96,9 @@ Return your response as a JSON object with this exact structure:
             print(f"Error generating passage: {e}")
             import traceback
             traceback.print_exc()
-            # Return a fallback passage
             return self._get_fallback_passage(topic, difficulty_level)
+            
+       
     
     def generate_comprehension_questions(self, passage_text, passage_title, num_questions=3):
         """Generate comprehension questions using GPT-4"""

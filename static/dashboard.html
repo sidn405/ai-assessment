@@ -805,18 +805,57 @@
                 </div>
 
                 <!-- Stats Cards -->
-                <div class="progress-grid">
-                    <div class="progress-card">
-                        <span class="progress-value" id="progressTotalLessons">0</span>
-                        <span class="progress-label">Lessons Completed</span>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <div class="card" style="text-align: center;">
+                        <div style="font-size: 3rem; color: var(--navy-primary); font-weight: bold;" id="lessonsCompleted">0</div>
+                        <div style="color: #666;">Lessons Completed</div>
                     </div>
-                    <div class="progress-card">
-                        <span class="progress-value" id="progressAvgScore">0%</span>
-                        <span class="progress-label">Average Score</span>
+                    <div class="card" style="text-align: center;">
+                        <div style="font-size: 3rem; color: var(--navy-primary); font-weight: bold;" id="averageScore">-</div>
+                        <div style="color: #666;">Average Score</div>
                     </div>
-                    <div class="progress-card">
-                        <span class="progress-value" id="progressTotalTime">0</span>
-                        <span class="progress-label">Minutes Practiced</span>
+                    <div class="card" style="text-align: center;">
+                        <div style="font-size: 3rem; color: var(--teal-accent); font-weight: bold;">intermediate</div>
+                        <div style="color: #666;">Reading Level</div>
+                    </div>
+                    <div class="card" style="text-align: center;">
+                        <div style="font-size: 3rem; color: var(--navy-primary); font-weight: bold;">0</div>
+                        <div style="color: #666;">Day Streak</div>
+                    </div>
+                </div>
+
+                <!-- ========== ADD THIS GAMIFICATION SECTION ========== -->
+                <div class="card" style="margin-top: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <h2 style="color: white; margin-bottom: 1.5rem;">🏆 Your Achievements</h2>
+                    <div style="display: flex; justify-content: space-around; margin: 1.5rem 0; flex-wrap: wrap; gap: 1rem;">
+                        <div style="text-align: center; background: rgba(255,255,255,0.2); padding: 1.5rem; border-radius: 12px; min-width: 150px;">
+                            <div style="font-size: 2.5rem; font-weight: bold; color: #FFD700;">
+                                <span id="userPoints">0</span> pts
+                            </div>
+                            <div style="opacity: 0.9;">Points Earned</div>
+                        </div>
+                        <div style="text-align: center; background: rgba(255,255,255,0.2); padding: 1.5rem; border-radius: 12px; min-width: 150px;">
+                            <div style="font-size: 2.5rem; font-weight: bold; color: #FFD700;">
+                                Level <span id="userLevel">1</span>
+                            </div>
+                            <div style="opacity: 0.9;">Current Level</div>
+                        </div>
+                        <div style="text-align: center; background: rgba(255,255,255,0.2); padding: 1.5rem; border-radius: 12px; min-width: 150px;">
+                            <div style="font-size: 2.5rem; font-weight: bold; color: #FFD700;">
+                                <span id="badgeCount">0</span>
+                            </div>
+                            <div style="opacity: 0.9;">Badges Earned</div>
+                        </div>
+                    </div>
+                    <div id="badgesContainer" style="margin-top: 1.5rem; text-align: center;">
+                        <p style="opacity: 0.8;">Complete lessons to earn badges!</p>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 2rem;">
+                    <h2 style="margin-bottom: 1.5rem;">📅 Weekly Goals</h2>
+                    <div id="weeklyGoalsContainer">
+                        <p style="color: #666;">Loading your goals...</p>
                     </div>
                 </div>
 
@@ -877,6 +916,10 @@
             console.log('=== showSection called ===');
             console.log('Section:', section);
             console.log('Event:', event);
+
+            if (sectionName === 'overview') {
+                loadGamificationData(); // Add this line
+            }
             
             if (event) {
                 event.preventDefault();
@@ -1183,8 +1226,8 @@
                 // Show success message
                 alert('✓ Assessment completed! Your personalized lessons are ready.');
                 
-                // Reload to show updated dashboard
-                location.reload();
+                // Navigate to lessons section
+                showSection('lessons')
                 
             } catch (error) {
                 console.error('Error submitting assessment:', error);
@@ -2005,6 +2048,33 @@
                     
                     const result = await response.json();
                     console.log('✓ Progress saved:', result);
+
+                    // ========== SHOW GAMIFICATION RESULTS ==========
+                    if (result.gamification) {
+                        console.log('Points earned:', result.gamification.points_earned);
+                        
+                        // Update points display immediately
+                        const currentPoints = parseInt(document.getElementById('userPoints').textContent) || 0;
+                        document.getElementById('userPoints').textContent = currentPoints + result.gamification.points_earned;
+                        
+                        // Show points notification
+                        showNotification(`+${result.gamification.points_earned} points earned!`, 'success');
+                        
+                        if (result.gamification.level_up) {
+                            console.log('LEVEL UP to level', result.gamification.new_level);
+                            document.getElementById('userLevel').textContent = result.gamification.new_level;
+                            showNotification(`🎉 Level Up! You're now level ${result.gamification.new_level}!`, 'success');
+                        }
+                        
+                        if (result.gamification.new_badges && result.gamification.new_badges.length > 0) {
+                            console.log('New badges:', result.gamification.new_badges);
+                            result.gamification.new_badges.forEach(badge => {
+                                showNotification(`🏆 Badge Earned: ${badge.icon} ${badge.name}!`, 'success');
+                            });
+                            // Reload gamification to show new badges
+                            setTimeout(() => loadGamificationData(), 2000);
+                        }
+                    }
                     
                     // Update stats on page
                     const completedEl = document.getElementById('lessonsCompleted');
@@ -2124,6 +2194,33 @@
                 document.getElementById('recentActivityList').innerHTML = 
                     '<p>Unable to load progress data.</p>';
             }
+        }
+
+        // Add notification function
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#28A745' : '#667eea'};
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                animation: slideIn 0.3s ease;
+                font-weight: bold;
+            `;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
         }
 
         // Hook into existing showSection function
