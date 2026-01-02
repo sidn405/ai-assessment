@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --navy-primary: #003D6C;
-            --navy-dark: #002847;
-            --navy-light: #0056A3;
+            --navy-primary: #2D398D;
+            --navy-dark: #191f4e;
+            --navy-light: #4a56af;
             --gold-accent: #D4AF37;
             --white: #FFFFFF;
             --light-gray: #F5F5F5;
@@ -2546,15 +2546,39 @@
                     </p>
                     <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
                         <button 
-                            onclick="respondToTimeoutWarning()" 
+                            id="yes-here-btn"
                             class="btn btn-primary" 
-                            style="font-size: 1.2rem; padding: 1rem 2rem; background: #28A745; border: none;">
+                            style="
+                                font-size: 1.2rem; 
+                                padding: 1rem 2rem; 
+                                background: #28A745; 
+                                border: none;
+                                color: white;
+                                font-weight: bold;
+                                cursor: pointer;
+                                border-radius: 8px;
+                                transition: all 0.3s;
+                            "
+                            onmouseover="this.style.background='#218838'; this.style.transform='scale(1.05)'"
+                            onmouseout="this.style.background='#28A745'; this.style.transform='scale(1)'">
                             Yes, I'm Here! 👋
                         </button>
                         <button 
-                            onclick="takeBreakFromWarning()" 
+                            id="take-break-btn"
                             class="btn" 
-                            style="font-size: 1.2rem; padding: 1rem 2rem; background: #667eea; color: white; border: none;">
+                            style="
+                                font-size: 1.2rem; 
+                                padding: 1rem 2rem; 
+                                background: #667eea; 
+                                color: white; 
+                                border: none;
+                                font-weight: bold;
+                                cursor: pointer;
+                                border-radius: 8px;
+                                transition: all 0.3s;
+                            "
+                            onmouseover="this.style.background='#5568d3'; this.style.transform='scale(1.05)'"
+                            onmouseout="this.style.background='#667eea'; this.style.transform='scale(1)'">
                             Take a Break ☕
                         </button>
                     </div>
@@ -2562,6 +2586,37 @@
             `;
             
             document.body.appendChild(modal);
+            
+            // ========== ADD EVENT LISTENERS AFTER MODAL IS IN DOM ==========
+            setTimeout(() => {
+                const yesBtn = document.getElementById('yes-here-btn');
+                const breakBtn = document.getElementById('take-break-btn');
+                
+                if (yesBtn) {
+                    yesBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('✓ Yes button clicked!');
+                        respondToTimeoutWarning();
+                    });
+                    console.log('✓ Yes button listener attached');
+                } else {
+                    console.error('✗ Yes button not found!');
+                }
+                
+                if (breakBtn) {
+                    breakBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('✓ Break button clicked!');
+                        takeBreakFromWarning();
+                    });
+                    console.log('✓ Break button listener attached');
+                } else {
+                    console.error('✗ Break button not found!');
+                }
+            }, 100);
+            // ===============================================================
             
             // Start countdown
             startWarningCountdown(remainingTime);
