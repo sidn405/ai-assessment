@@ -807,12 +807,16 @@
                 <!-- Stats Cards -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
                     <div class="card" style="text-align: center;">
-                        <div style="font-size: 3rem; color: var(--navy-primary); font-weight: bold;" id="lessonsCompleted">0</div>
+                        <div style="font-size: 3rem; color: var(--navy-primary); font-weight: bold;" id="lessonsCompleted">3</div>
                         <div style="color: #666;">Lessons Completed</div>
                     </div>
                     <div class="card" style="text-align: center;">
                         <div style="font-size: 3rem; color: var(--navy-primary); font-weight: bold;" id="averageScore">-</div>
                         <div style="color: #666;">Average Score</div>
+                    </div>
+                    <div class="card" style="text-align: center;">
+                        <div style="font-size: 3rem; color: #28A745; font-weight: bold;" id="readingScore">-</div>
+                        <div style="color: #666;">Reading Score</div>
                     </div>
                     <div class="card" style="text-align: center;">
                         <div style="font-size: 3rem; color: var(--teal-accent); font-weight: bold;">intermediate</div>
@@ -825,7 +829,7 @@
                 </div>
 
                 <!-- ========== ADD THIS GAMIFICATION SECTION ========== -->
-                <div class="card" style="margin-top: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <div class="card" style="margin-top: 2rem; background: linear-gradient(135deg, #1e3a5f 0%, #2d5a7b 100%); color: white;">
                     <h2 style="color: white; margin-bottom: 1.5rem;">🏆 Your Achievements</h2>
                     <div style="display: flex; justify-content: space-around; margin: 1.5rem 0; flex-wrap: wrap; gap: 1rem;">
                         <div style="text-align: center; background: rgba(255,255,255,0.2); padding: 1.5rem; border-radius: 12px; min-width: 150px;">
@@ -1585,10 +1589,12 @@
             if (!token) return;
             
             try {
+                console.log('Loading gamification data...');
                 const response = await fetch(`/api/student/gamification?token=${token}`);
                 if (!response.ok) throw new Error('Failed to load gamification data');
                 
                 const data = await response.json();
+                console.log('Gamification data:', data);
                 
                 // Update points display
                 if (document.getElementById('userPoints')) {
@@ -1596,6 +1602,11 @@
                 }
                 if (document.getElementById('userLevel')) {
                     document.getElementById('userLevel').textContent = data.points.level;
+                }
+                
+                // Update badge count
+                if (document.getElementById('badgeCount')) {
+                    document.getElementById('badgeCount').textContent = data.badges.length;
                 }
                 
                 // Display badges
@@ -1626,8 +1637,9 @@
                 <div class="badge-item" style="
                     display: inline-block;
                     margin: 0.5rem;
-                    padding: 1rem;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 1rem 1.5rem;
+                    background: linear-gradient(135deg, rgba(30, 58, 95, 0.8) 0%, rgba(45, 90, 123, 0.8) 100%);
+                    border: 2px solid rgba(255, 255, 255, 0.3);
                     border-radius: 12px;
                     color: white;
                     text-align: center;
