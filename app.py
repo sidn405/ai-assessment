@@ -2425,6 +2425,9 @@ async def get_student_progress(token: str):
                 'difficulty': row['difficulty_level'] if hasattr(row, 'keys') else row[5],
                 'word_count': row['word_count'] if hasattr(row, 'keys') else row[6]
             })
+            
+        # Calculate streak
+        streak = calculate_streak(user_id, conn)
         
         # Get overall stats
         if USE_POSTGRES:
@@ -2481,7 +2484,7 @@ async def get_student_progress(token: str):
                 "total_lessons": total_lessons,
                 "average_score": avg_score_rounded,
                 "total_time_minutes": total_time_minutes,
-                "last_activity": last_activity
+                "last_activity": last_activity           
             }
         }
         
@@ -2609,6 +2612,63 @@ async def get_weekly_goals(token: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
+def calculate_streak(user_id, conn):
+    """Calculate user's current day streak"""
+    cursor = conn.cursor()
+    
+    try:
+        # Get distinct dates when user completed lessons
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT DISTINCT DATE(completed_at) as lesson_date
+                   FROM session_logs
+                   WHERE user_id = %s 
+                   AND completion_status = 'completed'
+                   ORDER BY lesson_date DESC
+                   LIMIT 30""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT DISTINCT DATE(completed_at) as lesson_date
+                   FROM session_logs
+                   WHERE user_id = ? 
+                   AND completion_status = 'completed'
+                   ORDER BY lesson_date DESC
+                   LIMIT 30""",
+                (user_id,)
+            )
+        
+        dates = [row[0] if isinstance(row, tuple) else row['lesson_date'] for row in cursor.fetchall()]
+        
+        if not dates:
+            return 0
+        
+        # Calculate streak
+        from datetime import datetime, timedelta
+        
+        streak = 0
+        current_date = datetime.now().date()
+        
+        # Check if they completed a lesson today or yesterday
+        if dates[0] == current_date or dates[0] == current_date - timedelta(days=1):
+            streak = 1
+            expected_date = dates[0] - timedelta(days=1)
+            
+            # Count consecutive days
+            for i in range(1, len(dates)):
+                if dates[i] == expected_date:
+                    streak += 1
+                    expected_date -= timedelta(days=1)
+                else:
+                    break
+        
+        return streak
+        
+    except Exception as e:
+        print(f"Error calculating streak: {e}")
+        return 0
 
 # ============================================
 # LESSONS ENDPOINTS (Phase 2 - AI Generated)
