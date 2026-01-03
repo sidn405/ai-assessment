@@ -3730,7 +3730,7 @@ def update_user_difficulty(user_id, new_level, essay_id, reason):
         
         # If no word count set, use default based on old level
         if not current_word_count:
-            level_defaults = {'beginner': 50, 'intermediate': 150, 'advanced': 250}
+            level_defaults = {'beginner': 25, 'intermediate': 50, 'advanced': 75}
             current_word_count = level_defaults.get(old_level, 50)
         
         # Increase word count by 100 when leveling up
@@ -3963,8 +3963,8 @@ async def get_word_count_requirement(token: str):
         
         # If no word count set, use default based on level
         if not word_count:
-            level_defaults = {'beginner': 200, 'intermediate': 300, 'advanced': 400}
-            word_count = level_defaults.get(reading_level, 200)
+            level_defaults = {'beginner': 25, 'intermediate': 50, 'advanced': 75}
+            word_count = level_defaults.get(reading_level, 50)
         
         conn.close()
         

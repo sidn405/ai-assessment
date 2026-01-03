@@ -2401,7 +2401,7 @@
             const token = localStorage.getItem('token');
             
             // Get word count requirement
-            let wordCountRequired = 200; // default
+            let wordCountRequired = 50; // default
             try {
                 const response = await fetch(`/api/essay/word-count-requirement?token=${token}`);
                 const data = await response.json();
