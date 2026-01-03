@@ -3459,7 +3459,7 @@ async def submit_essay(request: Request):
     token = data.get("token")
     essay_text = data.get("essay_text")
     lesson_count = data.get("lesson_count")
-    recent_lessons = data.get("recent_lessons", [])  # Last 3 lessons data
+    recent_lessons = data.get("recent_lessons", [])
     
     try:
         user_data = verify_token(token)
@@ -3468,7 +3468,7 @@ async def submit_essay(request: Request):
         conn = get_db()
         cursor = conn.cursor()
         
-        # Get user info
+        # Get user info - USING full_name
         if USE_POSTGRES:
             cursor.execute("SELECT full_name, reading_level FROM users WHERE id = %s", (user_id,))
         else:
@@ -3484,7 +3484,8 @@ async def submit_essay(request: Request):
         else:
             cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = ?", (user_id,))
         
-        essay_number = cursor.fetchone()[0] + 1
+        result = cursor.fetchone()
+        essay_number = (result['count'] if hasattr(result, 'keys') else result[0]) + 1
         
         # Calculate word count
         word_count = len(essay_text.split())
