@@ -1416,7 +1416,7 @@
                 }
             } else if (section === 'progress') {
                 console.log('Progress section - loading data...');
-                loadProgressData();
+                loadAllStats();
             }
 
         }
@@ -3203,7 +3203,7 @@
             showSection('lessons');
         }
 
-        async function loadProgressData() {
+        async function loadAllStats() {
             const token = localStorage.getItem('token');
             
             if (!token) {
@@ -3212,9 +3212,8 @@
             }
             
             try {
-                console.log('Loading progress data...');
+                console.log('Loading all stats...');
                 
-                // Fix: Use parentheses, not backticks
                 const response = await fetch(`/api/student/progress?token=${token}`);
                 
                 if (!response.ok) {
@@ -3222,45 +3221,55 @@
                 }
                 
                 const data = await response.json();
-                console.log('Progress data received:', data);
+                console.log('Stats data received:', data);
                 
-                // Helper function to safely update elements
-                function safeUpdate(id, value) {
-                    const element = document.getElementById(id);
-                    if (element) {
-                        element.textContent = value;
-                        console.log(`✓ Updated ${id}: ${value}`);
-                    } else {
-                        console.warn(`⚠ Element not found: ${id}`);
+                if (!data.success || !data.stats) {
+                    throw new Error('Invalid response');
+                }
+                
+                // Extract values ONCE
+                const stats = {
+                    lessons: data.stats.total_lessons || 0,
+                    avgScore: data.stats.average_score || 0,
+                    avgScoreFormatted: data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-',
+                    level: data.user?.reading_level || 'intermediate',
+                    streak: data.stats.streak || 0,
+                    userName: data.user?.full_name || data.user?.email || 'Student'
+                };
+                
+                // Update ALL elements at once (Overview + Progress + Sidebar)
+                const updates = {
+                    // Overview section
+                    'lessonsCompleted': stats.lessons,
+                    'averageScore': stats.avgScoreFormatted,
+                    'currentLevel': stats.level,
+                    'streak': stats.streak,
+                    'welcomeName': stats.userName,
+                    
+                    // Progress section (same values!)
+                    'progressLessonsCompleted': stats.lessons,
+                    'progressAvgScore': stats.avgScoreFormatted,
+                    'progressReadingScore': Math.round(stats.avgScore) || '-',
+                    'progressReadingLevel': stats.level,
+                    'progressDayStreak': stats.streak,
+                    'progressTotalTime': data.stats.total_time_minutes || 0,
+                    
+                    // Sidebar
+                    'userName': stats.userName,
+                    'userLevel': stats.level
+                };
+                
+                // Apply all updates
+                for (const [id, value] of Object.entries(updates)) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.textContent = value;
                     }
                 }
                 
-                // Update Overview section stats (if they exist)
-                if (data.stats) {
-                    safeUpdate('lessonsCompleted', data.stats.total_lessons || 0);
-                    safeUpdate('averageScore', data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-');
-                    safeUpdate('currentLevel', data.user?.reading_level || data.stats?.reading_level || 'intermediate');
-                    safeUpdate('streak', data.stats.streak || 0);
-                }
+                console.log('✓ All stats updated:', stats);
                 
-                // Update Progress section stats (if they exist)
-                if (data.stats) {
-                    safeUpdate('progressLessonsCompleted', data.stats.total_lessons || 0);
-                    safeUpdate('progressAvgScore', data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-');
-                    safeUpdate('progressTotalTime', data.stats.total_time_minutes || 0);
-                    safeUpdate('progressReadingScore', data.stats.average_score ? Math.round(data.stats.average_score) : '-');
-                    safeUpdate('progressReadingLevel', data.user?.reading_level || data.stats?.reading_level || 'intermediate');
-                    safeUpdate('progressDayStreak', data.stats.streak || 0);
-                }
-                
-                // Update user info in sidebar
-                if (data.user) {
-                    safeUpdate('userName', data.user.full_name || data.user.email || 'Student');
-                    safeUpdate('welcomeName', data.user.full_name || data.user.email || 'Student');
-                    safeUpdate('userLevel', data.user.reading_level || 'intermediate');
-                }
-                
-                // Display recent sessions
+                // Display Recent Activity
                 const activityList = document.getElementById('recentActivityList');
                 if (activityList) {
                     if (!data.sessions || data.sessions.length === 0) {
@@ -3280,7 +3289,7 @@
                                     <div>
                                         <strong style="color: var(--navy-primary);">${session.passage_title || 'Lesson'}</strong>
                                         <div style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
-                                            ${formattedDate} • ${session.difficulty || 'N/A'} • ${session.word_count || 0} words
+                                            ${formattedDate} • ${session.difficulty || 'intermediate'} • ${session.word_count || 0} words
                                         </div>
                                     </div>
                                     <div style="text-align: right;">
@@ -3297,12 +3306,12 @@
                     }
                 }
                 
-                console.log('✓ Progress data loaded successfully');
+                console.log('✓ Recent activity updated');
                 
             } catch (error) {
-                console.error('Error loading progress data:', error);
+                console.error('Error loading stats:', error);
                 
-                // Show user-friendly error message
+                // Show error message
                 const activityList = document.getElementById('recentActivityList');
                 if (activityList) {
                     activityList.innerHTML = '<p style="color: #DC3545; padding: 2rem; text-align: center;">Unable to load progress data. Please refresh the page.</p>';
@@ -3961,7 +3970,7 @@
         // ========== INITIALIZE ON PAGE LOAD ==========
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadProgressData();
+            loadAllStats();
             loadWeeklyGoals();  // ADD THIS
             
             // Initialize session tracking
