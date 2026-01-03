@@ -1017,11 +1017,16 @@
             <span id="menuIconMain">☰</span> Menu
         </button>
 
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar">
             <div class="logo-container">
                 <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
-                <div class="logo-text">Achieve 365</div>
+                <div class="logo-text"></div>
             </div>
+
+            <!-- Mobile Menu Toggle (Hidden on desktop) -->
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" style="display: none;">
+                <span id="menuIcon">☰</span> Menu
+            </button>
 
             <div class="user-info">
                 <div class="user-name" id="userName">Loading...</div>
@@ -3880,42 +3885,21 @@
     
     
     function toggleMobileMenu() {
-        const sidebar = document.getElementById('sidebar');
+        const sidebar = document.querySelector('.sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuIcon = document.getElementById('menuIcon');
-        
-        if (!sidebar || !overlay || !menuIcon) {
-            console.error('Mobile menu elements not found');
-            return;
-        }
+        const menuIconMain = document.getElementById('menuIconMain');
         
         sidebar.classList.toggle('active');
         overlay.classList.toggle('active');
         
-        // Update icon
-        menuIcon.textContent = sidebar.classList.contains('active') ? '✕' : '☰';
+        // Update both icons
+        const isActive = sidebar.classList.contains('active');
+        const icon = isActive ? '✕' : '☰';
         
-        console.log('Menu toggled:', sidebar.classList.contains('active') ? 'OPEN' : 'CLOSED');
+        if (menuIcon) menuIcon.textContent = icon;
+        if (menuIconMain) menuIconMain.textContent = icon;
     }
-
-    // Close menu when clicking nav links on mobile
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', function() {
-                if (window.innerWidth <= 768) {
-                    const sidebar = document.getElementById('sidebar');
-                    const overlay = document.getElementById('sidebarOverlay');
-                    const menuIcon = document.getElementById('menuIcon');
-                    
-                    if (sidebar && sidebar.classList.contains('active')) {
-                        sidebar.classList.remove('active');
-                        overlay.classList.remove('active');
-                        menuIcon.textContent = '☰';
-                    }
-                }
-            });
-        });
-    });
     
     </script>
 </body>
