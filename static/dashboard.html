@@ -676,12 +676,303 @@
                 transform: scale(1.05);
             }
         }
+
+        /* ============================================================
+        RESPONSIVE DESIGN - MOBILE & TABLET SUPPORT
+        Add this CSS file to all pages: dashboard, admin-dashboard, login
+        ============================================================ */
+
+        /* ========== LOGO & HEADER ========== */
+        .logo-container {
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .logo-container img {
+            max-height: 60px;
+            width: auto;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1e3a5f;
+        }
+
+        /* ========== MOBILE MENU TOGGLE ========== */
+        .mobile-menu-toggle {
+            display: none;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+        /* ========== RESPONSIVE BREAKPOINTS ========== */
+
+        /* Tablets (768px and below) */
+        @media (max-width: 768px) {
+            /* Show mobile menu toggle */
+            .mobile-menu-toggle {
+                display: block;
+            }
+            
+            /* Sidebar adjustments */
+            .sidebar {
+                position: fixed;
+                left: -100%;
+                top: 0;
+                height: 100vh;
+                width: 280px;
+                z-index: 1000;
+                transition: left 0.3s ease;
+                overflow-y: auto;
+            }
+            
+            .sidebar.active {
+                left: 0;
+            }
+            
+            /* Main content full width on mobile */
+            .main-content {
+                margin-left: 0 !important;
+                padding: 1rem !important;
+                width: 100% !important;
+            }
+            
+            /* Cards stack vertically */
+            .stats-grid,
+            .card-grid {
+                grid-template-columns: 1fr !important;
+                gap: 1rem !important;
+            }
+            
+            /* Reduce padding on cards */
+            .card {
+                padding: 1rem !important;
+            }
+            
+            /* Logo smaller on mobile */
+            .logo-container {
+                padding: 0.75rem 1rem;
+                margin-bottom: 1rem;
+            }
+            
+            .logo-container img {
+                max-height: 40px;
+            }
+            
+            .logo-text {
+                font-size: 1.2rem;
+            }
+            
+            /* Tables scroll horizontally */
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            
+            /* Buttons stack */
+            .button-group {
+                flex-direction: column !important;
+                gap: 0.5rem !important;
+            }
+            
+            .button-group button,
+            .button-group .btn {
+                width: 100% !important;
+            }
+            
+            /* Modals take full screen on mobile */
+            .modal-content,
+            div[id$='-modal'] > div {
+                width: 95% !important;
+                max-width: 95% !important;
+                margin: 1rem auto !important;
+            }
+            
+            /* Font size adjustments */
+            h1 {
+                font-size: 1.5rem !important;
+            }
+            
+            h2 {
+                font-size: 1.3rem !important;
+            }
+            
+            h3 {
+                font-size: 1.1rem !important;
+            }
+            
+            /* Navigation items */
+            .nav-item {
+                font-size: 1rem;
+                padding: 0.75rem 1rem;
+            }
+        }
+
+        /* Mobile phones (480px and below) */
+        @media (max-width: 480px) {
+            /* Even smaller logo */
+            .logo-container {
+                padding: 0.5rem 0.75rem;
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .logo-container img {
+                max-height: 35px;
+            }
+            
+            .logo-text {
+                font-size: 1rem;
+            }
+            
+            /* Smaller fonts */
+            body {
+                font-size: 14px;
+            }
+            
+            h1 {
+                font-size: 1.3rem !important;
+            }
+            
+            h2 {
+                font-size: 1.1rem !important;
+            }
+            
+            /* Tighter spacing */
+            .card {
+                padding: 0.75rem !important;
+                margin-bottom: 0.75rem !important;
+            }
+            
+            /* Stats cards */
+            .stat-card {
+                padding: 0.75rem !important;
+            }
+            
+            .stat-card h3 {
+                font-size: 1.5rem !important;
+            }
+            
+            /* Buttons */
+            .btn {
+                padding: 0.6rem 1rem !important;
+                font-size: 0.9rem !important;
+            }
+        }
+
+        /* Landscape mobile (small height) */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .sidebar {
+                padding: 0.5rem;
+            }
+            
+            .nav-item {
+                padding: 0.5rem;
+                font-size: 0.9rem;
+            }
+            
+            .logo-container {
+                padding: 0.5rem;
+                margin-bottom: 0.5rem;
+            }
+        }
+
+        /* ========== OVERLAY FOR MOBILE MENU ========== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* ========== TOUCH-FRIENDLY IMPROVEMENTS ========== */
+        @media (hover: none) and (pointer: coarse) {
+            /* Larger tap targets for touch devices */
+            button,
+            .btn,
+            .nav-item,
+            a {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            /* Remove hover effects on touch devices */
+            *:hover {
+                transform: none !important;
+            }
+        }
+
+        /* ========== PRINT STYLES ========== */
+        @media print {
+            .sidebar,
+            .mobile-menu-toggle,
+            .sidebar-overlay {
+                display: none !important;
+            }
+            
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+        }
+
+        /* ========== ACCESSIBILITY ========== */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* ========== HIGH CONTRAST MODE ========== */
+        @media (prefers-contrast: high) {
+            .card,
+            .nav-item,
+            .btn {
+                border: 2px solid currentColor;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="dashboard">
+
+        <!-- Mobile Menu Overlay -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
         <aside class="sidebar">
-            <div class="logo">MFS Literacy</div>
+            <div class="logo-container">
+                <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
+                <div class="logo-text">Achieve 365</div>
+            </div>
+
+            <!-- Mobile Menu Toggle (Hidden on desktop) -->
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" style="display: none;">
+                <span id="menuIcon">☰</span> Menu
+            </button>
+            
             <div class="user-info">
                 <div class="user-name" id="userName">Loading...</div>
                 <div class="user-level" id="userLevel">Getting started</div>
@@ -3532,6 +3823,43 @@
         });
 
         console.log('✓ Session timeout system loaded');
+
+    // ========== Add this JavaScript for mobile menu toggle ==========
+    
+    function toggleMobileMenu() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        const menuIcon = document.getElementById('menuIcon');
+        
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+        
+        // Change icon
+        if (sidebar.classList.contains('active')) {
+            menuIcon.textContent = '✕';
+        } else {
+            menuIcon.textContent = '☰';
+        }
+    }
+
+    // Close menu when clicking nav item on mobile
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', function() {
+            if (window.innerWidth <= 768) {
+                toggleMobileMenu();
+            }
+        });
+    });
+
+    // Close menu on window resize to desktop
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 768) {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.remove('active');
+            overlay.classList.remove('active');
+        }
+    });
 
     </script>
 </body>
