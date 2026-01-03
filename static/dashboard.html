@@ -1342,49 +1342,83 @@
             console.log('=== INITIALIZATION COMPLETE ===');
         });
 
-        function showSection(sectionName, event) {
+        function showSection(section, event) {
+            console.log('=== showSection called ===');
+            console.log('Section:', section);
+            console.log('Event:', event);
+
+            
+            
             if (event) {
                 event.preventDefault();
             }
             
-            console.log('Switching to section:', sectionName);
-            
             // Hide all sections
-            const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
-            sections.forEach(id => {
-                const section = document.getElementById(id);
-                if (section) {
-                    section.classList.add('hidden');
-                }
+            document.querySelectorAll('[id$="Section"]').forEach(el => {
+                console.log('Hiding:', el.id);
+                el.classList.add('hidden');
             });
             
-            // Remove active class from all nav items
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active');
-            });
+            // Update nav links
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
             
             // Show selected section
-            const targetSection = document.getElementById(sectionName + 'Section');
+            const sectionId = section + 'Section';
+            console.log('Showing section:', sectionId);
+            const targetSection = document.getElementById(sectionId);
+            console.log('Target section element:', targetSection);
+            
             if (targetSection) {
                 targetSection.classList.remove('hidden');
+                console.log('Section shown successfully');
+            } else {
+                console.error('Section not found:', sectionId);
+            }            
+            
+            // Update active nav
+            if (event && event.target) {
+                const navLink = event.target.closest('.nav-link');
+                if (navLink) {
+                    navLink.classList.add('active');
+                    console.log('Nav link activated');
+                }
             }
             
-            // Add active class to clicked nav item
-            if (event && event.currentTarget) {
-                event.currentTarget.classList.add('active');
-            }
-            
-            // Load data for specific sections
-            if (sectionName === 'overview' || sectionName === 'progress') {
-                console.log('Loading stats for ' + sectionName + ' section...');
-                loadAllStats();
-            } else if (sectionName === 'lessons') {
-                console.log('Lessons section - checking for next lesson...');
-                checkForNextLesson();
-            } else if (sectionName === 'assessment') {
-                console.log('Assessment section - loading assessment...');
+            // Load section data
+            if (section === 'assessment') {
+                console.log('Triggering loadAssessment...');
                 loadAssessment();
+            } else if (section === 'lessons') {
+                console.log('Lessons section - checking lesson state...');
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                
+                if (user.reading_level || user.level_estimate) {
+                    // User has completed assessment
+                    const noLessons = document.getElementById('noLessons');
+                    if (noLessons) noLessons.classList.add('hidden');
+                    
+                    // ========== FIX: ONLY LOAD IF NO LESSON IS DISPLAYED ==========
+                    const lessonContent = document.getElementById('lessonContent');
+                    const isLessonVisible = lessonContent && lessonContent.style.display !== 'none';
+                    const hasCurrentLesson = currentLesson && currentLesson.id;
+                    
+                    if (!isLessonVisible || !hasCurrentLesson) {
+                        console.log('No lesson displayed - loading first lesson');
+                        loadNextLesson();
+                    } else {
+                        console.log('Lesson already displayed - keeping current lesson');
+                    }
+                    // ==============================================================
+                } else {
+                    // Show "complete assessment first"
+                    const noLessons = document.getElementById('noLessons');
+                    if (noLessons) noLessons.classList.remove('hidden');
+                }
+            } else if (sectionName === 'overview' || sectionName === 'progress') {
+                console.log('Progress section - loading data...');
+                loadAllStats();
             }
+
         }
 
         async function loadAssessment() {
@@ -3210,7 +3244,7 @@
                     'averageScore': stats.avgScoreFormatted,
                     'currentLevel': stats.level,
                     'streak': stats.streak,
-                    'welcomeName': stats.full_name,
+                    'welcomeName': stats.userName,
                     
                     // Progress section (same values!)
                     'progressLessonsCompleted': stats.lessons,
