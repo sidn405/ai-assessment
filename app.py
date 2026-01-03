@@ -3816,6 +3816,7 @@ async def check_essay_due(token: str):
             )
         
         total_lessons = cursor.fetchone()[0]
+        print(f"User {user_id} has completed {total_lessons} lessons")
         
         # Count completed essays
         if USE_POSTGRES:
@@ -3824,41 +3825,55 @@ async def check_essay_due(token: str):
             cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = ?", (user_id,))
         
         total_essays = cursor.fetchone()[0]
+        print(f"User {user_id} has completed {total_essays} essays")
         
         # Essay is due every 3 lessons
         expected_essays = total_lessons // 3
         essay_due = total_essays < expected_essays
         
-        # If essay is due, get last 3 lessons
+        print(f"Expected essays: {expected_essays}, Essay due: {essay_due}")
+        
+        # If essay is due, get last 3 lessons - SIMPLIFIED VERSION
         recent_lessons = []
         if essay_due:
-            if USE_POSTGRES:
-                cursor.execute(
-                    """SELECT sl.passage_id, p.title, p.content, sl.completed_at
-                       FROM session_logs sl
-                       LEFT JOIN passages p ON sl.passage_id = p.id
-                       WHERE sl.user_id = %s AND sl.completion_status = 'completed'
-                       ORDER BY sl.completed_at DESC
-                       LIMIT 3""",
-                    (user_id,)
-                )
-            else:
-                cursor.execute(
-                    """SELECT sl.passage_id, p.title, p.content, sl.completed_at
-                       FROM session_logs sl
-                       LEFT JOIN passages p ON sl.passage_id = p.id
-                       WHERE sl.user_id = ? AND sl.completion_status = 'completed'
-                       ORDER BY sl.completed_at DESC
-                       LIMIT 3""",
-                    (user_id,)
-                )
-            
-            for row in cursor.fetchall():
-                recent_lessons.append({
-                    'id': row['passage_id'] if hasattr(row, 'keys') else row[0],
-                    'title': row['title'] if hasattr(row, 'keys') else row[1],
-                    'content': row['content'] if hasattr(row, 'keys') else row[2]
-                })
+            # Try to get from generated_content table first
+            try:
+                if USE_POSTGRES:
+                    cursor.execute(
+                        """SELECT id, title, content 
+                           FROM generated_content 
+                           WHERE user_id = %s 
+                           ORDER BY created_at DESC 
+                           LIMIT 3""",
+                        (user_id,)
+                    )
+                else:
+                    cursor.execute(
+                        """SELECT id, title, content 
+                           FROM generated_content 
+                           WHERE user_id = ? 
+                           ORDER BY created_at DESC 
+                           LIMIT 3""",
+                        (user_id,)
+                    )
+                
+                for row in cursor.fetchall():
+                    recent_lessons.append({
+                        'id': row['id'] if hasattr(row, 'keys') else row[0],
+                        'title': row['title'] if hasattr(row, 'keys') else row[1],
+                        'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if row[1] else ''
+                    })
+                
+                print(f"Found {len(recent_lessons)} recent lessons from generated_content")
+                
+            except Exception as e:
+                print(f"Could not get from generated_content: {e}")
+                # Fallback: create generic lesson data
+                recent_lessons = [
+                    {'id': i, 'title': f'Recent Lesson {i+1}', 'content': 'A lesson you recently completed.'}
+                    for i in range(3)
+                ]
+                print("Using fallback lesson data")
         
         conn.close()
         
@@ -3872,7 +3887,9 @@ async def check_essay_due(token: str):
         }
         
     except Exception as e:
-        print(f"Error checking essay due: {e}")
+        print(f"ERROR in check_essay_due: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     
 # ============================================================

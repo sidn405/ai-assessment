@@ -2297,8 +2297,27 @@
                 alert('Error submitting answers: ' + error.message);
             }
 
-            setTimeout(() => {
-                checkForComprehensionEssay();
+            // At the end of submitLessonAnswers(), REPLACE the essay check with this:
+            setTimeout(async () => {
+                console.log('=== CHECKING FOR ESSAY ===');
+                const token = localStorage.getItem('token');
+                
+                try {
+                    const response = await fetch(`/api/essay/check-due?token=${token}`);
+                    console.log('Response status:', response.status);
+                    
+                    const data = await response.json();
+                    console.log('Response data:', data);
+                    
+                    if (response.ok && data.success && data.essay_due) {
+                        console.log('✓ Essay IS due! Total lessons:', data.total_lessons);
+                        checkForComprehensionEssay();
+                    } else {
+                        console.log('✗ Essay NOT due. Total lessons:', data.total_lessons, 'Total essays:', data.total_essays);
+                    }
+                } catch (error) {
+                    console.error('Essay check error:', error);
+                }
             }, 1500);
             
             console.log('=== submitLessonAnswers END ===');
