@@ -3804,39 +3804,49 @@ async def check_essay_due(token: str):
         # Count completed lessons
         if USE_POSTGRES:
             cursor.execute(
-                """SELECT COUNT(*) FROM session_logs 
+                """SELECT COUNT(*) as count FROM session_logs 
                    WHERE user_id = %s AND completion_status = 'completed'""",
                 (user_id,)
             )
         else:
             cursor.execute(
-                """SELECT COUNT(*) FROM session_logs 
+                """SELECT COUNT(*) as count FROM session_logs 
                    WHERE user_id = ? AND completion_status = 'completed'""",
                 (user_id,)
             )
         
-        total_lessons = cursor.fetchone()[0]
-        print(f"User {user_id} has completed {total_lessons} lessons")
+        result = cursor.fetchone()
+        # Handle both dict and tuple results
+        if result:
+            total_lessons = result['count'] if hasattr(result, 'keys') else result[0]
+        else:
+            total_lessons = 0
+        
+        print(f"✓ User {user_id} has completed {total_lessons} lessons")
         
         # Count completed essays
         if USE_POSTGRES:
-            cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = %s", (user_id,))
+            cursor.execute("SELECT COUNT(*) as count FROM user_essays WHERE user_id = %s", (user_id,))
         else:
-            cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = ?", (user_id,))
+            cursor.execute("SELECT COUNT(*) as count FROM user_essays WHERE user_id = ?", (user_id,))
         
-        total_essays = cursor.fetchone()[0]
-        print(f"User {user_id} has completed {total_essays} essays")
+        result = cursor.fetchone()
+        if result:
+            total_essays = result['count'] if hasattr(result, 'keys') else result[0]
+        else:
+            total_essays = 0
+        
+        print(f"✓ User {user_id} has completed {total_essays} essays")
         
         # Essay is due every 3 lessons
         expected_essays = total_lessons // 3
         essay_due = total_essays < expected_essays
         
-        print(f"Expected essays: {expected_essays}, Essay due: {essay_due}")
+        print(f"✓ Expected essays: {expected_essays}, Essay due: {essay_due}")
         
-        # If essay is due, get last 3 lessons - SIMPLIFIED VERSION
+        # If essay is due, get last 3 lessons
         recent_lessons = []
         if essay_due:
-            # Try to get from generated_content table first
             try:
                 if USE_POSTGRES:
                     cursor.execute(
@@ -3861,33 +3871,44 @@ async def check_essay_due(token: str):
                     recent_lessons.append({
                         'id': row['id'] if hasattr(row, 'keys') else row[0],
                         'title': row['title'] if hasattr(row, 'keys') else row[1],
-                        'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if row[1] else ''
+                        'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if (row['content'] if hasattr(row, 'keys') else row[2]) else ''
                     })
                 
-                print(f"Found {len(recent_lessons)} recent lessons from generated_content")
+                print(f"✓ Found {len(recent_lessons)} recent lessons")
+                
+                # If we don't have 3 lessons, pad with generic data
+                while len(recent_lessons) < 3:
+                    recent_lessons.append({
+                        'id': 0,
+                        'title': f'Recent Lesson {len(recent_lessons) + 1}',
+                        'content': 'A lesson you recently completed.'
+                    })
                 
             except Exception as e:
-                print(f"Could not get from generated_content: {e}")
+                print(f"Warning getting lessons: {e}")
                 # Fallback: create generic lesson data
                 recent_lessons = [
                     {'id': i, 'title': f'Recent Lesson {i+1}', 'content': 'A lesson you recently completed.'}
                     for i in range(3)
                 ]
-                print("Using fallback lesson data")
         
         conn.close()
         
-        return {
+        response_data = {
             "success": True,
             "essay_due": essay_due,
             "total_lessons": total_lessons,
             "total_essays": total_essays,
             "lesson_count_for_next_essay": total_lessons,
-            "recent_lessons": recent_lessons if essay_due else []
+            "recent_lessons": recent_lessons
         }
         
+        print(f"✓ Returning: {response_data}")
+        
+        return response_data
+        
     except Exception as e:
-        print(f"ERROR in check_essay_due: {e}")
+        print(f"✗ ERROR in check_essay_due: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
