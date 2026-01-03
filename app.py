@@ -3889,18 +3889,15 @@ async def check_essay_due(token: str):
         
         print(f"✓ Essay due: {essay_due}")
         
-        # If essay is due, get ACTUAL last 3 lessons
+        # If essay is due, get last 3 lessons from passages table
         recent_lessons = []
         if essay_due:
             try:
-                # Try multiple approaches to get lesson data
-                
-                # Approach 1: Try session_logs + generated_content
                 if USE_POSTGRES:
                     cursor.execute(
-                        """SELECT DISTINCT gc.id, gc.title, gc.content
+                        """SELECT p.id, p.title, p.content
                            FROM session_logs sl
-                           JOIN generated_content gc ON sl.passage_id = gc.id
+                           JOIN passages p ON sl.passage_id = p.id
                            WHERE sl.user_id = %s 
                            AND sl.completion_status = 'completed'
                            ORDER BY sl.completed_at DESC
@@ -3909,9 +3906,9 @@ async def check_essay_due(token: str):
                     )
                 else:
                     cursor.execute(
-                        """SELECT DISTINCT gc.id, gc.title, gc.content
+                        """SELECT p.id, p.title, p.content
                            FROM session_logs sl
-                           JOIN generated_content gc ON sl.passage_id = gc.id
+                           JOIN passages p ON sl.passage_id = p.id
                            WHERE sl.user_id = ? 
                            AND sl.completion_status = 'completed'
                            ORDER BY sl.completed_at DESC
@@ -3921,58 +3918,28 @@ async def check_essay_due(token: str):
                 
                 rows = cursor.fetchall()
                 
-                if rows:
-                    for row in rows:
-                        recent_lessons.append({
-                            'id': row['id'] if hasattr(row, 'keys') else row[0],
-                            'title': row['title'] if hasattr(row, 'keys') else row[1],
-                            'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if (row['content'] if hasattr(row, 'keys') else row[2]) else ''
-                        })
-                    print(f"✓ Found {len(recent_lessons)} lessons from session_logs")
+                for row in rows:
+                    recent_lessons.append({
+                        'id': row['id'] if hasattr(row, 'keys') else row[0],
+                        'title': row['title'] if hasattr(row, 'keys') else row[1],
+                        'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if (row['content'] if hasattr(row, 'keys') else row[2]) else ''
+                    })
                 
-                # If still not enough, try generated_content directly
-                if len(recent_lessons) < 3:
-                    if USE_POSTGRES:
-                        cursor.execute(
-                            """SELECT id, title, content 
-                               FROM generated_content 
-                               WHERE user_id = %s 
-                               ORDER BY created_at DESC 
-                               LIMIT 3""",
-                            (user_id,)
-                        )
-                    else:
-                        cursor.execute(
-                            """SELECT id, title, content 
-                               FROM generated_content 
-                               WHERE user_id = ? 
-                               ORDER BY created_at DESC 
-                               LIMIT 3""",
-                            (user_id,)
-                        )
-                    
-                    for row in cursor.fetchall():
-                        if len(recent_lessons) < 3:
-                            recent_lessons.append({
-                                'id': row['id'] if hasattr(row, 'keys') else row[0],
-                                'title': row['title'] if hasattr(row, 'keys') else row[1],
-                                'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if (row['content'] if hasattr(row, 'keys') else row[2]) else ''
-                            })
-                    print(f"✓ Total lessons found: {len(recent_lessons)}")
+                print(f"✓ Found {len(recent_lessons)} lessons from passages table")
                 
             except Exception as e:
                 print(f"⚠ Error getting lesson titles: {e}")
                 import traceback
                 traceback.print_exc()
         
-        # If we still don't have 3 lessons with real data, use generic
+        # If we still don't have 3 lessons, use generic placeholders
         if essay_due and len(recent_lessons) < 3:
-            print(f"⚠ Using generic lesson placeholders")
+            print(f"⚠ Only found {len(recent_lessons)} lessons, using placeholders")
             while len(recent_lessons) < 3:
                 recent_lessons.append({
                     'id': len(recent_lessons),
                     'title': f'Recent Lesson {len(recent_lessons) + 1}',
-                    'content': 'A lesson you recently completed about your interests.'
+                    'content': 'A lesson you recently completed.'
                 })
         
         conn.close()
