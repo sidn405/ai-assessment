@@ -430,6 +430,7 @@
             align-items: center;
             gap: 1rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            justify-content: flex-start;
         }
 
         .logo-container img {
@@ -441,6 +442,17 @@
             font-size: 1.5rem;
             font-weight: bold;
             color: #1e3a5f;
+        }
+
+        .admin-badge {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: auto; /* ADD THIS - pushes badge to right */
+            flex-shrink: 0; /* ADD THIS - prevents stretching */
         }
 
         /* ========== MOBILE MENU TOGGLE ========== */
@@ -716,7 +728,7 @@
             <div class="logo-container">
                 <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
                 <div class="logo-text">
-                    <span class="admin-badge">ADMIN</span>
+                <span class="admin-badge">ADMIN</span>
                 </div>
             </div>
 
