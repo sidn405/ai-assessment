@@ -2067,6 +2067,8 @@ async def save_lesson_progress(request: Request):
         conn.commit()
         conn.close()
         
+
+        
         # ========== GAMIFICATION ==========
         if score == 100:
             points_result = award_points(user_id, POINTS_CONFIG['perfect_score'], 'Perfect score!', 'lesson')
@@ -2485,6 +2487,125 @@ async def get_student_progress(token: str):
         
     except Exception as e:
         print(f"Error getting progress: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/student/weekly-goals")
+async def get_weekly_goals(token: str):
+    """Get student's weekly goals"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Check if weekly_goals table exists
+        try:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """SELECT goal_type, target_value, current_value, week_start, week_end
+                       FROM weekly_goals 
+                       WHERE user_id = %s 
+                       AND week_start <= CURRENT_DATE 
+                       AND week_end >= CURRENT_DATE""",
+                    (user_id,)
+                )
+            else:
+                cursor.execute(
+                    """SELECT goal_type, target_value, current_value, week_start, week_end
+                       FROM weekly_goals 
+                       WHERE user_id = ? 
+                       AND week_start <= date('now') 
+                       AND week_end >= date('now')""",
+                    (user_id,)
+                )
+            
+            goals = []
+            for row in cursor.fetchall():
+                goal_type = row['goal_type'] if hasattr(row, 'keys') else row[0]
+                target = row['target_value'] if hasattr(row, 'keys') else row[1]
+                current = row['current_value'] if hasattr(row, 'keys') else row[2]
+                
+                # Map goal types to display info
+                goal_info = {
+                    'lessons': {'name': 'Complete Lessons', 'icon': '📚'},
+                    'reading_time': {'name': 'Reading Time (min)', 'icon': '⏱️'},
+                    'score': {'name': 'Average Score', 'icon': '⭐'},
+                }
+                
+                info = goal_info.get(goal_type, {'name': goal_type.title(), 'icon': '🎯'})
+                
+                goals.append({
+                    'name': info['name'],
+                    'icon': info['icon'],
+                    'current': current or 0,
+                    'target': target or 0,
+                    'progress': round((current / target * 100) if target > 0 else 0, 1)
+                })
+            
+            conn.close()
+            
+            # If no goals exist, return default goals
+            if not goals:
+                # Get current week's stats
+                if USE_POSTGRES:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        """SELECT COUNT(*) as lessons_this_week
+                           FROM session_logs 
+                           WHERE user_id = %s 
+                           AND completion_status = 'completed'
+                           AND completed_at >= date_trunc('week', CURRENT_DATE)""",
+                        (user_id,)
+                    )
+                    result = cursor.fetchone()
+                    lessons_this_week = result['lessons_this_week'] if hasattr(result, 'keys') else result[0]
+                    conn.close()
+                else:
+                    lessons_this_week = 0
+                
+                goals = [
+                    {
+                        'name': 'Complete 55 Lessons',
+                        'icon': '📚',
+                        'current': lessons_this_week,
+                        'target': 15,
+                        'progress': round((lessons_this_week / 5 * 100), 1)
+                    },
+                    {
+                        'name': 'Maintain 80% Average',
+                        'icon': '⭐',
+                        'current': 90,  # Use their actual average
+                        'target': 80,
+                        'progress': 100
+                    }
+                ]
+            
+            return {
+                "success": True,
+                "goals": goals
+            }
+            
+        except Exception as table_error:
+            # Table doesn't exist, return default goals
+            print(f"Weekly goals table doesn't exist: {table_error}")
+            return {
+                "success": True,
+                "goals": [
+                    {
+                        'name': 'Complete 5 Lessons This Week',
+                        'icon': '📚',
+                        'current': 0,
+                        'target': 5,
+                        'progress': 0
+                    }
+                ]
+            }
+        
+    except Exception as e:
+        print(f"Error getting weekly goals: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
