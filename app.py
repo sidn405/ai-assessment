@@ -3470,12 +3470,12 @@ async def submit_essay(request: Request):
         
         # Get user info
         if USE_POSTGRES:
-            cursor.execute("SELECT name, reading_level FROM users WHERE id = %s", (user_id,))
+            cursor.execute("SELECT full_name, reading_level FROM users WHERE id = %s", (user_id,))
         else:
-            cursor.execute("SELECT name, reading_level FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT full_name, reading_level FROM users WHERE id = ?", (user_id,))
         
         user_row = cursor.fetchone()
-        user_name = user_row['name'] if hasattr(user_row, 'keys') else user_row[0]
+        user_name = user_row['full_name'] if hasattr(user_row, 'keys') else user_row[0]
         current_level = user_row['reading_level'] if hasattr(user_row, 'keys') else user_row[1]
         
         # Count existing essays
