@@ -157,7 +157,7 @@ def init_db():
         try:
             cursor.execute(
                 "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
-                ("admin@mfs.org", admin_hash.decode('utf-8'), "MFS Administrator", "admin")
+                ("admin@mfs.org", admin_hash.decode('utf-8'), "Achieve 365 Administrator", "admin")
             )
         except sqlite3.IntegrityError:
             pass
