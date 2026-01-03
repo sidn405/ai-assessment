@@ -2641,27 +2641,24 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Step 6: Select topic (MODIFIED - use available_interests)
         print("Step 6: Selecting topic...")
         import random
-        topic = random.choice(available_interests)  # ← CHANGED from 'interests' to 'available_interests'
+        topic = random.choice(available_interests)
         print(f"✓ Selected topic: {topic}")
-        
-        target_words = random.randint(word_count_min, word_count_max)
-        
+
         conn.close()
-        
+
         # Step 7: Generate passage
         print("Step 7: Generating passage with OpenAI...")
         print(f"   Topic: {topic}")
         print(f"   Difficulty: {difficulty}")
-        print(f"   Words: {target_words}")
+        print(f"   Word count range: {word_count_min}-{word_count_max}")
         print(f"   Interests: {interests}")
-        
+
         try:
             passage_data = content_generator.generate_passage(
                 topic=topic,
                 difficulty_level=difficulty,
-                word_count_min=word_count_min,  # NEW
-                word_count_max=word_count_max,  # NEW
-                target_words=target_words,
+                word_count_min=word_count_min,
+                word_count_max=word_count_max,
                 user_interests=interests
             )
             print("✓ Passage generated successfully")
