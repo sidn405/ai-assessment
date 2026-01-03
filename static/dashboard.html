@@ -1414,7 +1414,7 @@
                     const noLessons = document.getElementById('noLessons');
                     if (noLessons) noLessons.classList.remove('hidden');
                 }
-            } else if (section === 'progress') {
+            } else if (sectionName === 'overview' || section === 'progress') {
                 console.log('Progress section - loading data...');
                 loadAllStats();
             }
