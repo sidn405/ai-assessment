@@ -3740,8 +3740,8 @@ def update_user_difficulty(user_id, new_level, essay_id, reason):
             current_essay_words = level_defaults.get(old_level, 25)
         
         if not current_min or not current_max:
-            current_min = 150
-            current_max = 200
+            current_min = 50
+            current_max = 75
         
         # Increase LESSON word count by 100
         new_min = current_min + 100
