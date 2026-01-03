@@ -1797,10 +1797,88 @@
 
         // Lesson Management
         let currentLesson = null;
-        let lessonAnswers = [];
-        let lessonStartTime = null;
+        let lessonAnswers = [];        
         let recentTopics = []; // ← ADD THIS
         let isLoadingLesson = false; // Prevent duplicate loads
+
+        // ============================================================
+        // SESSION TIMEOUT & BREAK SYSTEM
+        // ============================================================
+
+        // Session configuration
+        const SESSION_CONFIG = {
+            WARNING_TIME: 7 * 60 * 1000,      // 7 minutes in milliseconds
+            TIMEOUT_TIME: 10 * 60 * 1000,     // 10 minutes in milliseconds
+            MAX_BREAK_TIME: 30 * 60 * 1000,   // 30 minutes in milliseconds
+            ACTIVITY_CHECK_INTERVAL: 30 * 1000 // Check every 30 seconds
+        };
+
+        // Session state
+        let sessionState = {
+            sessionId: null,
+            lastActivity: Date.now(),
+            warningShown: false,
+            timeoutEventId: null,
+            onBreak: false,
+            breakStart: null,
+            warningTimer: null,
+            timeoutTimer: null,
+            breakTimer: null,
+            activityInterval: null
+        };
+
+        async function respondToTimeoutWarning() {
+            console.log('✓ User clicked Yes, I\'m Here!');
+            
+            // Close modal first
+            sessionState.warningShown = false;
+            closeTimeoutWarning();
+            
+            // Log response on server
+            const token = localStorage.getItem('token');
+            try {
+                await fetch('/api/session/timeout/responded', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId,
+                        timeout_event_id: sessionState.timeoutEventId
+                    })
+                });
+                console.log('✓ Response logged on server');
+            } catch (error) {
+                console.error('Error logging response:', error);
+            }
+            
+            // Reset activity and timers
+            sessionState.lastActivity = Date.now();
+            resetIdleTimers();
+            
+            showNotification('Welcome back! Your session has been extended.', 'success');
+        }
+
+        function takeBreakFromWarning() {
+            console.log('✓ User chose to take a break from warning');
+            
+            // Close warning modal first
+            sessionState.warningShown = false;
+            closeTimeoutWarning();
+            
+            // Start break
+            takeBreak();
+        }
+
+        function closeTimeoutWarning() {
+            const modal = document.getElementById('timeout-warning-modal');
+            if (modal) {
+                modal.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => {
+                    modal.remove();
+                    sessionState.warningShown = false;
+                }, 300);
+            }
+        }
 
         async function loadNextLesson() {
             console.log('=== loadNextLesson START ===');
@@ -2344,86 +2422,6 @@
             localStorage.removeItem('user');
             window.location.href = '/';
         }
-
-        // ============================================================
-        // SESSION TIMEOUT & BREAK SYSTEM
-        // ============================================================
-
-        // Session configuration
-        const SESSION_CONFIG = {
-            WARNING_TIME: 7 * 60 * 1000,      // 7 minutes in milliseconds
-            TIMEOUT_TIME: 10 * 60 * 1000,     // 10 minutes in milliseconds
-            MAX_BREAK_TIME: 30 * 60 * 1000,   // 30 minutes in milliseconds
-            ACTIVITY_CHECK_INTERVAL: 30 * 1000 // Check every 30 seconds
-        };
-
-        // Session state
-        let sessionState = {
-            sessionId: null,
-            lastActivity: Date.now(),
-            warningShown: false,
-            timeoutEventId: null,
-            onBreak: false,
-            breakStart: null,
-            warningTimer: null,
-            timeoutTimer: null,
-            breakTimer: null,
-            activityInterval: null
-        };
-
-        async function respondToTimeoutWarning() {
-            console.log('✓ User clicked Yes, I\'m Here!');
-            
-            // Close modal first
-            sessionState.warningShown = false;
-            closeTimeoutWarning();
-            
-            // Log response on server
-            const token = localStorage.getItem('token');
-            try {
-                await fetch('/api/session/timeout/responded', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token,
-                        session_id: sessionState.sessionId,
-                        timeout_event_id: sessionState.timeoutEventId
-                    })
-                });
-                console.log('✓ Response logged on server');
-            } catch (error) {
-                console.error('Error logging response:', error);
-            }
-            
-            // Reset activity and timers
-            sessionState.lastActivity = Date.now();
-            resetIdleTimers();
-            
-            showNotification('Welcome back! Your session has been extended.', 'success');
-        }
-
-        function takeBreakFromWarning() {
-            console.log('✓ User chose to take a break from warning');
-            
-            // Close warning modal first
-            sessionState.warningShown = false;
-            closeTimeoutWarning();
-            
-            // Start break
-            takeBreak();
-        }
-
-        function closeTimeoutWarning() {
-            const modal = document.getElementById('timeout-warning-modal');
-            if (modal) {
-                modal.style.animation = 'fadeOut 0.3s ease';
-                setTimeout(() => {
-                    modal.remove();
-                    sessionState.warningShown = false;
-                }, 300);
-            }
-        }
-
 
         // ========== INITIALIZE SESSION ==========
 
