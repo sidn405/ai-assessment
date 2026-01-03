@@ -1801,13 +1801,21 @@
         let recentTopics = []; // ← ADD THIS
         let isLoadingLesson = false; // Prevent duplicate loads
 
+        // ========== GLOBAL STATE FOR ESSAYS ==========
+        let essayState = {
+            isDue: false,
+            lessonCount: 0,
+            recentLessons: [],
+            essayNumber: 0
+        };
+
         // ============================================================
         // SESSION TIMEOUT & BREAK SYSTEM
         // ============================================================
 
         // Session configuration
         const SESSION_CONFIG = {
-            WARNING_TIME: 7 * 60 * 1000,      // 7 minutes in milliseconds
+            WARNING_TIME: 27 * 60 * 1000,      // 7 minutes in milliseconds
             TIMEOUT_TIME: 10 * 60 * 1000,     // 10 minutes in milliseconds
             MAX_BREAK_TIME: 30 * 60 * 1000,   // 30 minutes in milliseconds
             ACTIVITY_CHECK_INTERVAL: 30 * 1000 // Check every 30 seconds
@@ -2332,6 +2340,470 @@
             }
             
             console.log('=== displayLessonResults END ===');
+        }
+
+        // ========== CHECK FOR ESSAY AFTER LESSON COMPLETION ==========
+
+        async function checkForComprehensionEssay() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                console.log('Checking if essay is due...');
+                const response = await fetch(`/api/essay/check-due?token=${token}`);
+                const data = await response.json();
+                
+                console.log('Essay check result:', data);
+                
+                if (data.success && data.essay_due) {
+                    essayState.isDue = true;
+                    essayState.lessonCount = data.lesson_count_for_next_essay;
+                    essayState.recentLessons = data.recent_lessons;
+                    essayState.essayNumber = data.total_essays + 1;
+                    
+                    console.log('📝 Essay is due! Showing modal...');
+                    
+                    // Show essay modal
+                    showComprehensionEssayModal();
+                } else {
+                    console.log('✓ No essay needed yet');
+                }
+            } catch (error) {
+                console.error('Error checking for essay:', error);
+            }
+        }
+
+        // ========== SHOW ESSAY MODAL ==========
+
+        function showComprehensionEssayModal() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const userName = user.name || 'there';
+            
+            // Create modal
+            const modal = document.createElement('div');
+            modal.id = 'comprehension-essay-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 100000;
+                animation: fadeIn 0.3s ease;
+                overflow-y: auto;
+                padding: 2rem;
+            `;
+            
+            const lessonTitles = essayState.recentLessons.map((l, i) => 
+                `<div style="margin-bottom: 0.5rem;">${i + 1}. ${l.title}</div>`
+            ).join('');
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    border-radius: 20px;
+                    max-width: 800px;
+                    width: 100%;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    animation: scaleIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                ">
+                    <!-- Header -->
+                    <div style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 2.5rem;
+                        border-radius: 20px 20px 0 0;
+                        text-align: center;
+                    ">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
+                        <h2 style="font-size: 2.2rem; margin-bottom: 0.5rem;">
+                            Great Job, ${userName}!
+                        </h2>
+                        <p style="font-size: 1.3rem; opacity: 0.95;">
+                            You've completed ${essayState.lessonCount} lessons! 🎉
+                        </p>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div style="padding: 2.5rem;">
+                        <div style="
+                            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                            color: white;
+                            padding: 1.5rem;
+                            border-radius: 12px;
+                            margin-bottom: 2rem;
+                            text-align: center;
+                        ">
+                            <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 0.5rem;">
+                                📝 Comprehension Check
+                            </div>
+                            <div style="font-size: 1rem; opacity: 0.95;">
+                                This quiz helps us gauge your progress!<br>
+                                The better you do, the more points you earn for rewards! 💎
+                            </div>
+                        </div>
+                        
+                        <div style="
+                            background: #f8f9fa;
+                            padding: 1.5rem;
+                            border-radius: 12px;
+                            margin-bottom: 2rem;
+                        ">
+                            <div style="font-weight: bold; margin-bottom: 0.75rem; color: #1e3a5f;">
+                                📚 Your Recent Lessons:
+                            </div>
+                            <div style="color: #666; font-size: 0.95rem; line-height: 1.6;">
+                                ${lessonTitles}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="
+                                display: block;
+                                font-weight: bold;
+                                font-size: 1.1rem;
+                                color: #1e3a5f;
+                                margin-bottom: 1rem;
+                            ">
+                                ✍️ In your own words, explain what you learned from these lessons:
+                            </label>
+                            <textarea 
+                                id="essay-text-input"
+                                placeholder="Tell us what you learned! Try to include specific details or examples from the lessons..."
+                                style="
+                                    width: 100%;
+                                    min-height: 250px;
+                                    padding: 1rem;
+                                    border: 2px solid #ddd;
+                                    border-radius: 12px;
+                                    font-size: 1rem;
+                                    font-family: inherit;
+                                    resize: vertical;
+                                    transition: border-color 0.3s;
+                                "
+                                onfocus="this.style.borderColor='#667eea'"
+                                onblur="this.style.borderColor='#ddd'"
+                            ></textarea>
+                            <div style="
+                                margin-top: 0.5rem;
+                                font-size: 0.9rem;
+                                color: #666;
+                                display: flex;
+                                justify-content: space-between;
+                            ">
+                                <span id="word-count-display">Words: 0</span>
+                                <span style="color: #28A745;">💡 Tip: Aim for at least 50 words</span>
+                            </div>
+                        </div>
+                        
+                        <div style="
+                            background: #e7f3ff;
+                            border-left: 4px solid #667eea;
+                            padding: 1rem;
+                            margin-bottom: 2rem;
+                            border-radius: 4px;
+                        ">
+                            <div style="font-weight: bold; margin-bottom: 0.5rem; color: #1e3a5f;">
+                                ⭐ Earn More Points!
+                            </div>
+                            <div style="font-size: 0.9rem; color: #666;">
+                                • Excellent comprehension: <strong style="color: #28A745;">100 points</strong><br>
+                                • Good comprehension: <strong style="color: #667eea;">75 points</strong><br>
+                                • Adequate comprehension: <strong style="color: #ffc107;">50 points</strong>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; justify-content: center;">
+                            <button 
+                                id="submit-essay-btn"
+                                class="btn btn-primary"
+                                style="
+                                    font-size: 1.2rem;
+                                    padding: 1rem 2.5rem;
+                                    background: linear-gradient(135deg, #28A745 0%, #20c997 100%);
+                                    border: none;
+                                    color: white;
+                                    font-weight: bold;
+                                    cursor: pointer;
+                                    border-radius: 12px;
+                                    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+                                    transition: all 0.3s;
+                                "
+                                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(40, 167, 69, 0.4)'"
+                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(40, 167, 69, 0.3)'"
+                            >
+                                Submit My Essay ✅
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Add word count tracker
+            const textarea = document.getElementById('essay-text-input');
+            const wordCountDisplay = document.getElementById('word-count-display');
+            
+            textarea.addEventListener('input', function() {
+                const words = this.value.trim().split(/\s+/).filter(w => w.length > 0);
+                const count = words.length;
+                wordCountDisplay.textContent = `Words: ${count}`;
+                
+                if (count >= 50) {
+                    wordCountDisplay.style.color = '#28A745';
+                    wordCountDisplay.style.fontWeight = 'bold';
+                } else {
+                    wordCountDisplay.style.color = '#666';
+                    wordCountDisplay.style.fontWeight = 'normal';
+                }
+            });
+            
+            // Add click handler to button
+            document.getElementById('submit-essay-btn').addEventListener('click', submitComprehensionEssay);
+            
+            // Focus textarea
+            setTimeout(() => textarea.focus(), 500);
+        }
+
+        // ========== SUBMIT ESSAY ==========
+
+        async function submitComprehensionEssay() {
+            const essayText = document.getElementById('essay-text-input').value.trim();
+            
+            // Validation
+            if (!essayText) {
+                alert('Please write your essay before submitting!');
+                return;
+            }
+            
+            const wordCount = essayText.split(/\s+/).filter(w => w.length > 0).length;
+            if (wordCount < 20) {
+                alert('Please write at least 20 words. You currently have ' + wordCount + ' words.');
+                return;
+            }
+            
+            // Disable submit button
+            const submitBtn = document.getElementById('submit-essay-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Evaluating... ⏳';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.cursor = 'not-allowed';
+            
+            const token = localStorage.getItem('token');
+            
+            try {
+                console.log('Submitting essay...');
+                const response = await fetch('/api/essay/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        essay_text: essayText,
+                        lesson_count: essayState.lessonCount,
+                        recent_lessons: essayState.recentLessons
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('Essay submission result:', data);
+                
+                if (data.success) {
+                    console.log('✓ Essay evaluated:', data);
+                    
+                    // Close essay modal
+                    const modal = document.getElementById('comprehension-essay-modal');
+                    if (modal) {
+                        modal.style.animation = 'fadeOut 0.3s ease';
+                        setTimeout(() => modal.remove(), 300);
+                    }
+                    
+                    // Show results modal
+                    showEssayResults(data);
+                } else {
+                    throw new Error(data.detail || 'Failed to submit essay');
+                }
+                
+            } catch (error) {
+                console.error('Error submitting essay:', error);
+                alert('Failed to submit essay. Please try again.');
+                
+                // Re-enable button
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit My Essay ✅';
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
+            }
+        }
+
+        // ========== SHOW ESSAY RESULTS ==========
+
+        function showEssayResults(data) {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const userName = user.name || 'there';
+            
+            const evaluation = data.evaluation;
+            const pointsAwarded = data.points_awarded;
+            const levelChanged = data.level_changed;
+            const newLevel = data.new_reading_level;
+            
+            // Determine emoji and color based on comprehension level
+            let emoji, color, title;
+            if (evaluation.comprehension_level === 'excellent') {
+                emoji = '🌟';
+                color = '#28A745';
+                title = 'Excellent Work!';
+            } else if (evaluation.comprehension_level === 'good') {
+                emoji = '👏';
+                color = '#667eea';
+                title = 'Great Job!';
+            } else if (evaluation.comprehension_level === 'adequate') {
+                emoji = '👍';
+                color = '#ffc107';
+                title = 'Good Effort!';
+            } else {
+                emoji = '💪';
+                color = '#f5576c';
+                title = 'Keep Practicing!';
+            }
+            
+            const modal = document.createElement('div');
+            modal.id = 'essay-results-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 100001;
+                animation: fadeIn 0.3s ease;
+                padding: 2rem;
+            `;
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    border-radius: 20px;
+                    max-width: 600px;
+                    width: 100%;
+                    text-align: center;
+                    animation: scaleIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                ">
+                    <div style="
+                        background: ${color};
+                        color: white;
+                        padding: 2.5rem;
+                        border-radius: 20px 20px 0 0;
+                    ">
+                        <div style="font-size: 5rem; margin-bottom: 1rem;">${emoji}</div>
+                        <h2 style="font-size: 2rem; margin-bottom: 0.5rem;">${title}</h2>
+                        <p style="font-size: 1.2rem; opacity: 0.95;">
+                            Comprehension Score: <strong>${evaluation.comprehension_score}/100</strong>
+                        </p>
+                    </div>
+                    
+                    <div style="padding: 2.5rem;">
+                        ${pointsAwarded > 0 ? `
+                            <div style="
+                                background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+                                color: white;
+                                padding: 1.5rem;
+                                border-radius: 12px;
+                                margin-bottom: 2rem;
+                                font-size: 1.3rem;
+                                font-weight: bold;
+                                box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+                            ">
+                                💎 +${pointsAwarded} Points Earned!
+                            </div>
+                        ` : ''}
+                        
+                        ${levelChanged ? `
+                            <div style="
+                                background: #e7f3ff;
+                                border: 2px solid #667eea;
+                                padding: 1.5rem;
+                                border-radius: 12px;
+                                margin-bottom: 2rem;
+                            ">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+                                <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.5rem; font-size: 1.2rem;">
+                                    Level Up!
+                                </div>
+                                <div style="color: #666;">
+                                    You're now at <strong>${newLevel}</strong> level!
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="
+                            background: #f8f9fa;
+                            padding: 1.5rem;
+                            border-radius: 12px;
+                            margin-bottom: 2rem;
+                            text-align: left;
+                        ">
+                            <div style="font-weight: bold; margin-bottom: 1rem; color: #1e3a5f;">
+                                📝 Feedback:
+                            </div>
+                            <div style="color: #666; line-height: 1.6;">
+                                ${evaluation.feedback}
+                            </div>
+                        </div>
+                        
+                        <button 
+                            id="continue-learning-btn"
+                            class="btn btn-primary"
+                            style="
+                                font-size: 1.2rem;
+                                padding: 1rem 2.5rem;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                border: none;
+                                color: white;
+                                font-weight: bold;
+                                cursor: pointer;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                                transition: all 0.3s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                        >
+                            Continue Learning 🚀
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Add click handler
+            document.getElementById('continue-learning-btn').addEventListener('click', closeEssayResultsAndContinue);
+        }
+
+        function closeEssayResultsAndContinue() {
+            const modal = document.getElementById('essay-results-modal');
+            if (modal) {
+                modal.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => modal.remove(), 300);
+            }
+            
+            // Reload gamification data to show new points
+            if (typeof loadGamificationData === 'function') {
+                loadGamificationData();
+            }
+            
+            // Show lessons section
+            showSection('lessons');
         }
 
         async function loadProgressData() {
