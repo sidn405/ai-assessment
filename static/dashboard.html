@@ -1012,26 +1012,23 @@
         <!-- Mobile Menu Overlay -->
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
 
-        <!-- ADD THIS NEW FLOATING BUTTON -->
+        <!-- Floating Mobile Menu Button (OUTSIDE sidebar) -->
         <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">
             <span id="menuIconMain">☰</span> Menu
         </button>
 
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="logo-container">
                 <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
-                <div class="logo-text"></div>
+                <div class="logo-text">Achieve 365</div>
             </div>
-
-            <!-- NEW - CORRECT -->
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
-                <span id="menuIcon">☰</span> Menu
-            </button>
 
             <div class="user-info">
                 <div class="user-name" id="userName">Loading...</div>
                 <div class="user-level" id="userLevel">Getting started</div>
             </div>
+            
+            <!-- Rest of sidebar content -->
             <ul class="nav-menu">
                 <li class="nav-item">
                     <a href="#" class="nav-link active" onclick="showSection('overview', event); return false;">
