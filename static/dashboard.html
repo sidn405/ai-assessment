@@ -2371,6 +2371,60 @@
             activityInterval: null
         };
 
+        async function respondToTimeoutWarning() {
+            console.log('✓ User clicked Yes, I\'m Here!');
+            
+            // Close modal first
+            sessionState.warningShown = false;
+            closeTimeoutWarning();
+            
+            // Log response on server
+            const token = localStorage.getItem('token');
+            try {
+                await fetch('/api/session/timeout/responded', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        session_id: sessionState.sessionId,
+                        timeout_event_id: sessionState.timeoutEventId
+                    })
+                });
+                console.log('✓ Response logged on server');
+            } catch (error) {
+                console.error('Error logging response:', error);
+            }
+            
+            // Reset activity and timers
+            sessionState.lastActivity = Date.now();
+            resetIdleTimers();
+            
+            showNotification('Welcome back! Your session has been extended.', 'success');
+        }
+
+        function takeBreakFromWarning() {
+            console.log('✓ User chose to take a break from warning');
+            
+            // Close warning modal first
+            sessionState.warningShown = false;
+            closeTimeoutWarning();
+            
+            // Start break
+            takeBreak();
+        }
+
+        function closeTimeoutWarning() {
+            const modal = document.getElementById('timeout-warning-modal');
+            if (modal) {
+                modal.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => {
+                    modal.remove();
+                    sessionState.warningShown = false;
+                }, 300);
+            }
+        }
+
+
         // ========== INITIALIZE SESSION ==========
 
         async function initializeSession() {
@@ -2555,7 +2609,7 @@
             modal.appendChild(content);
             document.body.appendChild(modal);
             
-            // Create buttons with JavaScript
+            // Create buttons dynamically
             const buttonContainer = document.getElementById('button-container');
             
             // Yes button
@@ -2572,11 +2626,26 @@
                 border-radius: 8px;
                 transition: all 0.3s;
             `;
-            yesBtn.textContent = "Yes, I'm Here! 👋";
-            yesBtn.onclick = function() {
+            yesBtn.innerHTML = "Yes, I'm Here! 👋";
+            
+            // ========== ATTACH CLICK HANDLER ==========
+            yesBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 console.log('✓✓✓ YES BUTTON CLICKED ✓✓✓');
                 respondToTimeoutWarning();
+            });
+            // =========================================
+            
+            yesBtn.onmouseover = function() {
+                this.style.background = '#218838';
+                this.style.transform = 'scale(1.05)';
             };
+            yesBtn.onmouseout = function() {
+                this.style.background = '#28A745';
+                this.style.transform = 'scale(1)';
+            };
+            
             buttonContainer.appendChild(yesBtn);
             
             // Break button
@@ -2593,16 +2662,30 @@
                 border-radius: 8px;
                 transition: all 0.3s;
             `;
-            breakBtn.textContent = 'Take a Break ☕';
-            breakBtn.onclick = function() {
+            breakBtn.innerHTML = 'Take a Break ☕';
+            
+            // ========== ATTACH CLICK HANDLER ==========
+            breakBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 console.log('✓✓✓ BREAK BUTTON CLICKED ✓✓✓');
                 takeBreakFromWarning();
+            });
+            // =========================================
+            
+            breakBtn.onmouseover = function() {
+                this.style.background = '#5568d3';
+                this.style.transform = 'scale(1.05)';
             };
+            breakBtn.onmouseout = function() {
+                this.style.background = '#667eea';
+                this.style.transform = 'scale(1)';
+            };
+            
             buttonContainer.appendChild(breakBtn);
             
-            console.log('✓ Modal created, buttons attached');
-            console.log('✓ respondToTimeoutWarning exists?', typeof window.respondToTimeoutWarning);
-            console.log('✓ takeBreakFromWarning exists?', typeof window.takeBreakFromWarning);
+            console.log('✓ Modal created with event listeners');
+            console.log('✓ Buttons attached to DOM');
             
             // Start countdown
             startWarningCountdown(remainingTime);
