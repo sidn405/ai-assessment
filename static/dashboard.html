@@ -764,10 +764,9 @@
 
         /* ========== RESPONSIVE BREAKPOINTS ========== */
 
-        /* Tablets (768px and below) */
         @media (max-width: 768px) {
-            /* Show mobile menu toggle */
-            .mobile-menu-toggle {
+            /* Show mobile menu button */
+            .mobile-menu-btn {
                 display: flex !important;
             }
             
@@ -778,24 +777,25 @@
             
             /* Sidebar adjustments */
             .sidebar {
-                position: fixed;
-                left: -100%;
-                top: 0;
-                height: 100vh;
-                width: 280px;
-                z-index: 1000;
-                transition: left 0.3s ease;
-                overflow-y: auto;
+                position: fixed !important;
+                left: -100% !important;
+                top: 0 !important;
+                height: 100vh !important;
+                width: 280px !important;
+                z-index: 1000 !important;
+                transition: left 0.3s ease !important;
+                overflow-y: auto !important;
             }
             
             .sidebar.active {
-                left: 0;
+                left: 0 !important;
             }
             
             /* Main content full width on mobile */
             .main-content {
                 margin-left: 0 !important;
                 padding: 1rem !important;
+                padding-top: 4rem !important;
                 width: 100% !important;
             }
             
@@ -3878,23 +3878,45 @@
 
     // ========== Add this JavaScript for mobile menu toggle ==========
     
+    
     function toggleMobileMenu() {
-        const sidebar = document.querySelector('.sidebar');
+        const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuIcon = document.getElementById('menuIcon');
-        const menuIconMain = document.getElementById('menuIconMain');
+        
+        if (!sidebar || !overlay || !menuIcon) {
+            console.error('Mobile menu elements not found');
+            return;
+        }
         
         sidebar.classList.toggle('active');
         overlay.classList.toggle('active');
         
-        // Update both icons
-        const isActive = sidebar.classList.contains('active');
-        const icon = isActive ? '✕' : '☰';
+        // Update icon
+        menuIcon.textContent = sidebar.classList.contains('active') ? '✕' : '☰';
         
-        if (menuIcon) menuIcon.textContent = icon;
-        if (menuIconMain) menuIconMain.textContent = icon;
+        console.log('Menu toggled:', sidebar.classList.contains('active') ? 'OPEN' : 'CLOSED');
     }
 
+    // Close menu when clicking nav links on mobile
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function() {
+                if (window.innerWidth <= 768) {
+                    const sidebar = document.getElementById('sidebar');
+                    const overlay = document.getElementById('sidebarOverlay');
+                    const menuIcon = document.getElementById('menuIcon');
+                    
+                    if (sidebar && sidebar.classList.contains('active')) {
+                        sidebar.classList.remove('active');
+                        overlay.classList.remove('active');
+                        menuIcon.textContent = '☰';
+                    }
+                }
+            });
+        });
+    });
+    
     </script>
 </body>
 </html>
