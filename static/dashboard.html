@@ -2288,8 +2288,14 @@
                 console.error('Error submitting answers:', error);
                 alert('Error submitting answers: ' + error.message);
             }
+
+            setTimeout(() => {
+                checkForComprehensionEssay();
+            }, 1500);
             
             console.log('=== submitLessonAnswers END ===');
+
+        console.log('✓ Comprehensive essay system frontend loaded');
         }
 
         function displayLessonResults(score, correct, total) {

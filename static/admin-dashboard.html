@@ -415,6 +415,11 @@
                         <span>⏱️</span> Session Tracking
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('easy alerts')">
+                        <span>📝</span> Essay Alerts
+                    </a>
+                </li>
             </ul>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
@@ -501,6 +506,68 @@
                             </tbody>
                         </table>
                     </div>
+                    <!-- Add this section to your admin dashboard sections -->
+                    <div id="essayAlertsSection" class="section">
+                        <h1>📝 Essay Reviews & Student Alerts</h1>
+                        <p style="color: #666; margin-bottom: 2rem;">
+                            Monitor student comprehension and provide assistance when needed
+                        </p>
+                        
+                        <!-- Stats Cards -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                            <div style="
+                                background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+                                color: white;
+                                padding: 2rem;
+                                border-radius: 16px;
+                                box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+                                text-align: center;
+                            ">
+                                <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="unreadAlertsCount">0</div>
+                                <div style="font-size: 1.1rem; opacity: 0.95;">🚨 Unread Alerts</div>
+                            </div>
+                            
+                            <div style="
+                                background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+                                color: white;
+                                padding: 2rem;
+                                border-radius: 16px;
+                                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                                text-align: center;
+                            ">
+                                <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="essaysNeedingReviewCount">0</div>
+                                <div style="font-size: 1.1rem; opacity: 0.95;">📝 Essays to Review</div>
+                            </div>
+                            
+                            <div style="
+                                background: linear-gradient(135deg, #11998E 0%, #38EF7D 100%);
+                                color: white;
+                                padding: 2rem;
+                                border-radius: 16px;
+                                box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+                                text-align: center;
+                            ">
+                                <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="totalEssaysToday">0</div>
+                                <div style="font-size: 1.1rem; opacity: 0.95;">✅ Essays Today</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Student Alerts -->
+                        <div class="card" style="margin-bottom: 2rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                <h2 style="margin: 0;">🚨 Student Alerts - Need Help</h2>
+                                <button onclick="loadEssayAlerts()" class="btn btn-primary">🔄 Refresh</button>
+                            </div>
+                            <div id="studentAlertsTable"></div>
+                        </div>
+                        
+                        <!-- Essays Needing Review -->
+                        <div class="card">
+                            <h2 style="margin-bottom: 1.5rem;">📝 Essays Needing Review</h2>
+                            <div id="essaysReviewTable"></div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -683,6 +750,10 @@
                 if (navLink) navLink.classList.add('active');
             }
 
+            if (section === 'essayAlerts') {
+                loadEssayAlerts();
+            }
+
             if (section === 'sessionTracking') {
                 loadActiveSessions();
                 loadRecentActivity();
@@ -690,6 +761,8 @@
             } else {
                 stopAutoRefresh();
             }
+
+            console.log('✓ Essay alerts admin panel loaded');
         }
 
         
@@ -809,6 +882,285 @@
             `;
             
             container.innerHTML = tableHTML;
+        }
+
+        // ========== LOAD ESSAY ALERTS & REVIEWS ==========
+
+        async function loadEssayAlerts() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                console.log('Loading essay alerts...');
+                
+                // Get unread alerts
+                const alertsResp = await fetch(`/api/admin/alerts/unread?token=${token}`);
+                const alertsData = await alertsResp.json();
+                
+                // Get essays needing review
+                const essaysResp = await fetch(`/api/admin/essays/needs-review?token=${token}`);
+                const essaysData = await essaysResp.json();
+                
+                console.log('Alerts:', alertsData);
+                console.log('Essays:', essaysData);
+                
+                // Update counts
+                document.getElementById('unreadAlertsCount').textContent = alertsData.count || 0;
+                document.getElementById('essaysNeedingReviewCount').textContent = essaysData.count || 0;
+                
+                // Get today's essay count
+                const todayEssays = essaysData.essays ? essaysData.essays.filter(e => {
+                    const created = new Date(e.created_at);
+                    const today = new Date();
+                    return created.toDateString() === today.toDateString();
+                }).length : 0;
+                document.getElementById('totalEssaysToday').textContent = todayEssays;
+                
+                // Display alerts
+                displayStudentAlerts(alertsData.alerts || []);
+                
+                // Display essays
+                displayEssaysForReview(essaysData.essays || []);
+                
+            } catch (error) {
+                console.error('Error loading essay alerts:', error);
+                alert('Failed to load essay data. Check console for details.');
+            }
+        }
+
+        function displayStudentAlerts(alerts) {
+            const container = document.getElementById('studentAlertsTable');
+            
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div style="
+                        text-align: center;
+                        padding: 3rem;
+                        color: #28A745;
+                    ">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                        <div style="font-size: 1.2rem; font-weight: bold;">All Clear!</div>
+                        <div style="color: #666; margin-top: 0.5rem;">No students currently need assistance</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const tableHTML = `
+                <div style="overflow-x: auto;">
+                    ${alerts.map(alert => {
+                        const priorityColors = {
+                            urgent: { bg: '#dc3545', icon: '🚨' },
+                            high: { bg: '#ff6b6b', icon: '⚠️' },
+                            normal: { bg: '#ffc107', icon: '📌' }
+                        };
+                        const priority = priorityColors[alert.priority] || priorityColors.normal;
+                        
+                        return `
+                            <div style="
+                                padding: 1.5rem;
+                                border-left: 5px solid ${priority.bg};
+                                background: #f8f9fa;
+                                margin-bottom: 1rem;
+                                border-radius: 4px;
+                                transition: transform 0.2s;
+                            " onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='translateX(0)'">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: bold; font-size: 1.1rem; color: #1e3a5f; margin-bottom: 0.5rem;">
+                                            ${priority.icon} ${alert.message}
+                                        </div>
+                                        <div style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                                            <strong>Student:</strong> ${alert.user_name} (${alert.user_email})
+                                        </div>
+                                        <div style="color: #666; font-size: 0.85rem;">
+                                            <strong>Time:</strong> ${formatDateTime(alert.created_at)}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style="
+                                            background: ${priority.bg};
+                                            color: white;
+                                            padding: 0.5rem 1rem;
+                                            border-radius: 20px;
+                                            font-size: 0.85rem;
+                                            font-weight: bold;
+                                            text-transform: uppercase;
+                                        ">
+                                            ${alert.priority}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                ${alert.details ? `
+                                    <details style="margin-top: 1rem; cursor: pointer;">
+                                        <summary style="font-weight: bold; color: #667eea;">View Details</summary>
+                                        <div style="
+                                            margin-top: 0.75rem;
+                                            padding: 1rem;
+                                            background: white;
+                                            border-radius: 8px;
+                                            font-size: 0.9rem;
+                                        ">
+                                            <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">${JSON.stringify(JSON.parse(alert.details), null, 2)}</pre>
+                                        </div>
+                                    </details>
+                                ` : ''}
+                                
+                                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                                    <button 
+                                        onclick="viewStudentDashboard(${alert.user_id})"
+                                        style="
+                                            padding: 0.5rem 1rem;
+                                            background: #667eea;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 6px;
+                                            cursor: pointer;
+                                            font-size: 0.9rem;
+                                        ">
+                                        View Student Dashboard
+                                    </button>
+                                    <button 
+                                        onclick="markAlertResolved(${alert.alert_id})"
+                                        style="
+                                            padding: 0.5rem 1rem;
+                                            background: #28A745;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 6px;
+                                            cursor: pointer;
+                                            font-size: 0.9rem;
+                                        ">
+                                        Mark Resolved ✓
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+
+        function displayEssaysForReview(essays) {
+            const container = document.getElementById('essaysReviewTable');
+            
+            if (essays.length === 0) {
+                container.innerHTML = `
+                    <div style="
+                        text-align: center;
+                        padding: 3rem;
+                        color: #666;
+                    ">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+                        <div style="font-size: 1.2rem; font-weight: bold;">No essays to review</div>
+                        <div style="margin-top: 0.5rem;">All essays have been reviewed!</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const tableHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                            <th style="padding: 1rem; text-align: left;">Student</th>
+                            <th style="padding: 1rem; text-align: left;">Essay #</th>
+                            <th style="padding: 1rem; text-align: left;">Score</th>
+                            <th style="padding: 1rem; text-align: left;">Level</th>
+                            <th style="padding: 1rem; text-align: left;">Date</th>
+                            <th style="padding: 1rem; text-align: left;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${essays.map(essay => {
+                            const scoreColor = essay.comprehension_score >= 75 ? '#28A745' : 
+                                            essay.comprehension_score >= 60 ? '#ffc107' : '#dc3545';
+                            
+                            return `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 1rem;">
+                                        <div style="font-weight: bold;">${essay.user_name}</div>
+                                        <div style="font-size: 0.85rem; color: #666;">${essay.user_email}</div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <strong>#${essay.essay_number}</strong>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            background: ${scoreColor};
+                                            color: white;
+                                            padding: 0.25rem 0.75rem;
+                                            border-radius: 12px;
+                                            font-weight: bold;
+                                        ">
+                                            ${essay.comprehension_score}/100
+                                        </span>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="text-transform: capitalize;">${essay.comprehension_level}</span>
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.9rem;">
+                                        ${formatDateTime(essay.created_at)}
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <button 
+                                            onclick="viewEssayDetails(${essay.essay_id})"
+                                            style="
+                                                padding: 0.5rem 1rem;
+                                                background: #667eea;
+                                                color: white;
+                                                border: none;
+                                                border-radius: 6px;
+                                                cursor: pointer;
+                                                font-size: 0.9rem;
+                                            ">
+                                            View Essay
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+
+        // ========== HELPER FUNCTIONS ==========
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+            
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        function viewStudentDashboard(userId) {
+            // TODO: Implement student dashboard view
+            alert(`View dashboard for user ID: ${userId}`);
+            // You can navigate to student details or show a modal
+        }
+
+        function markAlertResolved(alertId) {
+            // TODO: Implement mark as resolved
+            alert(`Mark alert ${alertId} as resolved - implement API call`);
+            // Make API call to mark alert as resolved, then reload
+        }
+
+        function viewEssayDetails(essayId) {
+            // TODO: Implement essay details view
+            alert(`View essay ${essayId} details - implement modal or page`);
+            // Show full essay text, AI feedback, and allow admin to add notes
         }
 
         // ========== LOAD RECENT ACTIVITY ==========

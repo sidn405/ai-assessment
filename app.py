@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 import random
 import traceback
+from openai import OpenAI
 
 # Import our new utilities
 from readability import analyze_readability, get_difficulty_for_user
@@ -3445,6 +3446,433 @@ async def get_gamification_data(token: str):
         
     except Exception as e:
         print(f"Error getting gamification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# ============================================================
+#        ESSAY SUBMISSION & EVALUATION 
+# ============================================================
+
+@app.post("/api/essay/submit")
+async def submit_essay(request: Request):
+    """Submit and evaluate comprehension essay"""
+    data = await request.json()
+    token = data.get("token")
+    essay_text = data.get("essay_text")
+    lesson_count = data.get("lesson_count")
+    recent_lessons = data.get("recent_lessons", [])  # Last 3 lessons data
+    
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get user info
+        if USE_POSTGRES:
+            cursor.execute("SELECT name, reading_level FROM users WHERE id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT name, reading_level FROM users WHERE id = ?", (user_id,))
+        
+        user_row = cursor.fetchone()
+        user_name = user_row['name'] if hasattr(user_row, 'keys') else user_row[0]
+        current_level = user_row['reading_level'] if hasattr(user_row, 'keys') else user_row[1]
+        
+        # Count existing essays
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = ?", (user_id,))
+        
+        essay_number = cursor.fetchone()[0] + 1
+        
+        # Calculate word count
+        word_count = len(essay_text.split())
+        
+        # Prepare lesson context for AI
+        lesson_topics = [lesson.get('title', '') for lesson in recent_lessons]
+        lesson_ids = [lesson.get('id', 0) for lesson in recent_lessons]
+        
+        # Evaluate essay with AI
+        evaluation = await evaluate_essay_with_ai(
+            essay_text=essay_text,
+            user_name=user_name,
+            current_level=current_level,
+            lesson_topics=lesson_topics,
+            recent_lessons=recent_lessons
+        )
+        
+        # Determine points based on comprehension score
+        points_awarded = calculate_essay_points(evaluation['comprehension_score'])
+        
+        # Save essay to database
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO user_essays 
+                   (user_id, essay_number, lesson_count, essay_text, word_count,
+                    comprehension_level, comprehension_score, difficulty_recommendation,
+                    ai_feedback, lesson_ids, lesson_topics, needs_admin_review, points_awarded)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   RETURNING id""",
+                (user_id, essay_number, lesson_count, essay_text, word_count,
+                 evaluation['comprehension_level'], evaluation['comprehension_score'],
+                 evaluation['difficulty_recommendation'], evaluation['ai_feedback'],
+                 json.dumps(lesson_ids), json.dumps(lesson_topics),
+                 evaluation['needs_admin_review'], points_awarded)
+            )
+            result = cursor.fetchone()
+            essay_id = result['id'] if result else None
+        else:
+            cursor.execute(
+                """INSERT INTO user_essays 
+                   (user_id, essay_number, lesson_count, essay_text, word_count,
+                    comprehension_level, comprehension_score, difficulty_recommendation,
+                    ai_feedback, lesson_ids, lesson_topics, needs_admin_review, points_awarded)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, essay_number, lesson_count, essay_text, word_count,
+                 evaluation['comprehension_level'], evaluation['comprehension_score'],
+                 evaluation['difficulty_recommendation'], evaluation['ai_feedback'],
+                 json.dumps(lesson_ids), json.dumps(lesson_topics),
+                 evaluation['needs_admin_review'], points_awarded)
+            )
+            essay_id = cursor.lastrowid
+        
+        conn.commit()
+        
+        # Award points
+        if points_awarded > 0:
+            award_points(user_id, points_awarded, f'Comprehension essay #{essay_number}', 'essay')
+        
+        # Handle difficulty adjustment
+        new_level = current_level
+        if evaluation['difficulty_recommendation'] == 'advance':
+            new_level = get_next_difficulty_level(current_level)
+            update_user_difficulty(user_id, new_level, essay_id, 'Strong comprehension - advancing')
+        elif evaluation['difficulty_recommendation'] == 'support_needed':
+            # Stay at current level but create admin alert
+            create_admin_alert(
+                user_id=user_id,
+                essay_id=essay_id,
+                alert_type='student_needs_help',
+                priority='high',
+                message=f"{user_name} needs additional support - low comprehension on essay #{essay_number}",
+                details=json.dumps({
+                    'comprehension_score': evaluation['comprehension_score'],
+                    'comprehension_level': evaluation['comprehension_level'],
+                    'lesson_count': lesson_count,
+                    'current_level': current_level
+                })
+            )
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "essay_id": essay_id,
+            "evaluation": {
+                "comprehension_level": evaluation['comprehension_level'],
+                "comprehension_score": evaluation['comprehension_score'],
+                "difficulty_recommendation": evaluation['difficulty_recommendation'],
+                "feedback": evaluation['ai_feedback'],
+                "needs_admin_review": evaluation['needs_admin_review']
+            },
+            "points_awarded": points_awarded,
+            "new_reading_level": new_level,
+            "level_changed": new_level != current_level
+        }
+        
+    except Exception as e:
+        print(f"Error submitting essay: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========== AI ESSAY EVALUATION ==========
+
+async def evaluate_essay_with_ai(essay_text, user_name, current_level, lesson_topics, recent_lessons):
+    """Use OpenAI to evaluate comprehension essay"""
+    
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        # Prepare lesson context
+        lesson_context = "\n".join([
+            f"Lesson {i+1}: {lesson.get('title', 'Unknown')}\n"
+            f"Content: {lesson.get('content', '')[:500]}...\n"
+            for i, lesson in enumerate(recent_lessons)
+        ])
+        
+        prompt = f"""You are evaluating a student's comprehension essay to determine their understanding of recent lessons.
+
+STUDENT INFO:
+- Name: {user_name}
+- Current Reading Level: {current_level}
+- Recent Lessons Completed: {', '.join(lesson_topics)}
+
+RECENT LESSON CONTENT:
+{lesson_context}
+
+STUDENT'S ESSAY:
+{essay_text}
+
+EVALUATION CRITERIA:
+1. Does the student demonstrate understanding of key concepts from the lessons?
+2. Can they explain ideas in their own words?
+3. Do they make connections between different lessons?
+4. Is their writing clear and coherent for their level?
+5. Did they provide specific examples or details from the lessons?
+
+Please evaluate this essay and respond with ONLY a JSON object (no markdown, no preamble) in this exact format:
+{{
+    "comprehension_level": "excellent|good|adequate|needs_help",
+    "comprehension_score": 0-100,
+    "difficulty_recommendation": "advance|stay|support_needed",
+    "ai_feedback": "Specific, encouraging feedback for the student",
+    "needs_admin_review": true|false,
+    "strengths": ["strength1", "strength2"],
+    "areas_for_improvement": ["area1", "area2"]
+}}
+
+SCORING GUIDE:
+- 90-100: Excellent - clear mastery, ready to advance
+- 75-89: Good - solid understanding, can stay at current level
+- 60-74: Adequate - basic understanding, needs practice at current level
+- Below 60: Needs help - requires additional support
+
+Be encouraging but honest. Focus on what they DID understand, not just what they missed."""
+
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert literacy educator evaluating student comprehension. Always respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        
+        # Parse AI response
+        evaluation = json.loads(content)
+        
+        # Ensure all required fields
+        evaluation.setdefault('comprehension_level', 'adequate')
+        evaluation.setdefault('comprehension_score', 70)
+        evaluation.setdefault('difficulty_recommendation', 'stay')
+        evaluation.setdefault('ai_feedback', 'Good effort! Keep practicing.')
+        evaluation.setdefault('needs_admin_review', False)
+        
+        # Auto-flag for admin review if score is low
+        if evaluation['comprehension_score'] < 60:
+            evaluation['needs_admin_review'] = True
+            evaluation['difficulty_recommendation'] = 'support_needed'
+        
+        print(f"✓ AI Evaluation: {evaluation['comprehension_level']} ({evaluation['comprehension_score']}/100)")
+        
+        return evaluation
+        
+    except Exception as e:
+        print(f"Error in AI evaluation: {e}")
+        # Fallback evaluation
+        return {
+            'comprehension_level': 'adequate',
+            'comprehension_score': 70,
+            'difficulty_recommendation': 'stay',
+            'ai_feedback': 'Thank you for your essay. Your teacher will review it soon.',
+            'needs_admin_review': True
+        }
+
+# ========== HELPER FUNCTIONS ==========
+
+def calculate_essay_points(comprehension_score):
+    """Calculate points based on essay score"""
+    if comprehension_score >= 90:
+        return 100  # Excellent
+    elif comprehension_score >= 75:
+        return 75   # Good
+    elif comprehension_score >= 60:
+        return 50   # Adequate
+    else:
+        return 25   # Needs help (participation points)
+
+def get_next_difficulty_level(current_level):
+    """Get the next difficulty level"""
+    level_progression = {
+        'beginner': 'intermediate',
+        'intermediate': 'advanced',
+        'advanced': 'advanced'  # Stay at advanced
+    }
+    return level_progression.get(current_level, current_level)
+
+def update_user_difficulty(user_id, new_level, essay_id, reason):
+    """Update user's reading level"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Get current level
+        if USE_POSTGRES:
+            cursor.execute("SELECT reading_level FROM users WHERE id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT reading_level FROM users WHERE id = ?", (user_id,))
+        
+        result = cursor.fetchone()
+        old_level = result['reading_level'] if hasattr(result, 'keys') else result[0]
+        
+        # Update user level
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE users SET reading_level = %s WHERE id = %s",
+                (new_level, user_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE users SET reading_level = ? WHERE id = ?",
+                (new_level, user_id)
+            )
+        
+        # Log adjustment
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO difficulty_adjustments 
+                   (user_id, essay_id, previous_level, new_level, reason)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (user_id, essay_id, old_level, new_level, reason)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO difficulty_adjustments 
+                   (user_id, essay_id, previous_level, new_level, reason)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (user_id, essay_id, old_level, new_level, reason)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✓ User {user_id} level updated: {old_level} → {new_level}")
+        
+    except Exception as e:
+        print(f"Error updating difficulty: {e}")
+        conn.rollback()
+        conn.close()
+
+def create_admin_alert(user_id, essay_id, alert_type, priority, message, details):
+    """Create admin alert"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO admin_alerts 
+                   (alert_type, user_id, essay_id, priority, message, details)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (alert_type, user_id, essay_id, priority, message, details)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO admin_alerts 
+                   (alert_type, user_id, essay_id, priority, message, details)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (alert_type, user_id, essay_id, priority, message, details)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✓ Admin alert created: {alert_type} for user {user_id}")
+        
+    except Exception as e:
+        print(f"Error creating alert: {e}")
+        conn.rollback()
+        conn.close()
+
+# ========== CHECK IF ESSAY IS DUE ==========
+
+@app.get("/api/essay/check-due")
+async def check_essay_due(token: str):
+    """Check if user needs to complete an essay"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Count completed lessons
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT COUNT(*) FROM session_logs 
+                   WHERE user_id = %s AND completion_status = 'completed'""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT COUNT(*) FROM session_logs 
+                   WHERE user_id = ? AND completion_status = 'completed'""",
+                (user_id,)
+            )
+        
+        total_lessons = cursor.fetchone()[0]
+        
+        # Count completed essays
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM user_essays WHERE user_id = ?", (user_id,))
+        
+        total_essays = cursor.fetchone()[0]
+        
+        # Essay is due every 3 lessons
+        expected_essays = total_lessons // 3
+        essay_due = total_essays < expected_essays
+        
+        # If essay is due, get last 3 lessons
+        recent_lessons = []
+        if essay_due:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """SELECT sl.passage_id, p.title, p.content, sl.completed_at
+                       FROM session_logs sl
+                       LEFT JOIN passages p ON sl.passage_id = p.id
+                       WHERE sl.user_id = %s AND sl.completion_status = 'completed'
+                       ORDER BY sl.completed_at DESC
+                       LIMIT 3""",
+                    (user_id,)
+                )
+            else:
+                cursor.execute(
+                    """SELECT sl.passage_id, p.title, p.content, sl.completed_at
+                       FROM session_logs sl
+                       LEFT JOIN passages p ON sl.passage_id = p.id
+                       WHERE sl.user_id = ? AND sl.completion_status = 'completed'
+                       ORDER BY sl.completed_at DESC
+                       LIMIT 3""",
+                    (user_id,)
+                )
+            
+            for row in cursor.fetchall():
+                recent_lessons.append({
+                    'id': row['passage_id'] if hasattr(row, 'keys') else row[0],
+                    'title': row['title'] if hasattr(row, 'keys') else row[1],
+                    'content': row['content'] if hasattr(row, 'keys') else row[2]
+                })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "essay_due": essay_due,
+            "total_lessons": total_lessons,
+            "total_essays": total_essays,
+            "lesson_count_for_next_essay": total_lessons,
+            "recent_lessons": recent_lessons if essay_due else []
+        }
+        
+    except Exception as e:
+        print(f"Error checking essay due: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 # ============================================================
