@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 
 # Initialize FastAPI
-app = FastAPI(title="MFS Literacy Assessment Platform")
+app = FastAPI(title="Achieve 365 Reading Rewards")
 
 # CORS middleware
 app.add_middleware(
@@ -28,7 +28,7 @@ app.add_middleware(
 )
 
 # Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "mfs-literacy-platform-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY", "achieve-365-reading-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Debug: Print API key status (first few characters only for security)

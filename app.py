@@ -30,7 +30,7 @@ import random
 
 
 # Initialize FastAPI
-app = FastAPI(title="MFS Literacy Assessment Platform - Phase 2")
+app = FastAPI(title="Achieve 365 - Phase 2")
 
 # CORS middleware
 app.add_middleware(
@@ -42,7 +42,7 @@ app.add_middleware(
 )
 
 # Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "mfs-literacy-platform-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY", "achieve-365-reading-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 openai.api_key = OPENAI_API_KEY
 
