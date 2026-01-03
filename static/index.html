@@ -443,6 +443,25 @@
             opacity: 0.8;
             margin-top: 1rem;
         }
+
+        /* Desktop/Mobile visibility helpers */
+        .desktop-only {
+            display: inline-block;
+        }
+
+        .mobile-only {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .desktop-only {
+                display: none !important;
+            }
+            
+            .mobile-only {
+                display: block !important;
+            }
+        }
         
         /* Responsive */
         @media (max-width: 768px) {
@@ -508,10 +527,90 @@
             margin-bottom: 1rem;
         }
 
+        /* ========== MOBILE NAVIGATION ========== */
+        .mobile-nav-toggle {
+            display: none;
+            background: var(--navy-primary);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+
+        @media (max-width: 768px) {
+            /* Show mobile menu button */
+            .mobile-nav-toggle {
+                display: block;
+            }
+            
+            /* Hide navigation by default */
+            nav {
+                position: relative;
+            }
+            
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: white;
+                flex-direction: column;
+                padding: 1rem;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                gap: 0 !important;
+            }
+            
+            .nav-links.active {
+                display: flex !important;
+            }
+            
+            .nav-links li {
+                width: 100%;
+                border-bottom: 1px solid var(--medium-gray);
+            }
+            
+            .nav-links li:last-child {
+                border-bottom: none;
+            }
+            
+            .nav-links a {
+                display: block;
+                padding: 1rem;
+                width: 100%;
+            }
+            
+            /* Move Get Started button to dropdown */
+            nav > .btn-primary {
+                display: none;
+            }
+            
+            /* Adjust header padding */
+            nav {
+                padding: 0 1rem;
+            }
+            
+            /* Hero section adjustments */
+            .hero h1 {
+                font-size: 2rem !important;
+            }
+            
+            .hero p {
+                font-size: 1.1rem !important;
+            }
+        }
+
         /* ========== RESPONSIVE BREAKPOINTS ========== */
 
         /* Tablets (768px and below) */
         @media (max-width: 768px) {
+            /* Show mobile menu toggle */
+            .mobile-menu-toggle {
+                display: flex !important;
+            }
+            
             /* Show mobile menu toggle */
             .mobile-menu-toggle {
                 display: block;
@@ -755,10 +854,20 @@
                 <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
                 <div class="logo-text"></div>
             </div>
-            <ul class="nav-links">
-                <li><a href="#features">Features</a></li>
-                <li><a href="#impact">Impact</a></li>
-                <li><a href="#" onclick="openModal('login')">Login</a></li>
+
+            <!-- Mobile Menu Toggle -->
+            <button class="mobile-nav-toggle" id="mobileNavToggle" onclick="toggleMobileNav()">
+                <span id="navIcon">☰</span>
+            </button>
+            <!-- Navigation Links -->
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#features" onclick="closeMobileNav()">Features</a></li>
+                <li><a href="#impact" onclick="closeMobileNav()">Impact</a></li>
+                <li><a href="#" onclick="openModal('login'); closeMobileNav()">Login</a></li>
+                <li class="mobile-only">
+                    <a href="#" onclick="openModal('register'); closeMobileNav()" 
+                    style="color: var(--navy-primary); font-weight: bold;">Get Started</a>
+                </li>
             </ul>
             <button class="btn btn-primary" onclick="openModal('register')">Get Started</button>
         </nav>
@@ -1003,23 +1112,45 @@
             }
         });
 
-    // ========== Add this JavaScript for mobile menu toggle ==========
-    
-    function toggleMobileMenu() {
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('sidebarOverlay');
-        const menuIcon = document.getElementById('menuIcon');
+    // Mobile Navigation Toggle
+    function toggleMobileNav() {
+        const navLinks = document.getElementById('navLinks');
+        const navIcon = document.getElementById('navIcon');
         
-        sidebar.classList.toggle('active');
-        overlay.classList.toggle('active');
+        navLinks.classList.toggle('active');
+        navIcon.textContent = navLinks.classList.contains('active') ? '✕' : '☰';
+    }
+
+    function closeMobileNav() {
+        const navLinks = document.getElementById('navLinks');
+        const navIcon = document.getElementById('navIcon');
         
-        // Change icon
-        if (sidebar.classList.contains('active')) {
-            menuIcon.textContent = '✕';
-        } else {
-            menuIcon.textContent = '☰';
+        if (window.innerWidth <= 768) {
+            navLinks.classList.remove('active');
+            navIcon.textContent = '☰';
         }
     }
+
+    // Close mobile nav when clicking outside
+    document.addEventListener('click', function(event) {
+        const nav = document.querySelector('nav');
+        const navToggle = document.getElementById('mobileNavToggle');
+        const navLinks = document.getElementById('navLinks');
+        
+        if (!nav.contains(event.target) && navLinks.classList.contains('active')) {
+            closeMobileNav();
+        }
+    });
+
+    // Close nav on window resize to desktop
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 768) {
+            const navLinks = document.getElementById('navLinks');
+            const navIcon = document.getElementById('navIcon');
+            navLinks.classList.remove('active');
+            navIcon.textContent = '☰';
+        }
+    });
     </script>
 </body>
 </html>

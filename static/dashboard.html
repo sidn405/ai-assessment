@@ -739,31 +739,38 @@
         }
 
         /* ========== MOBILE MENU TOGGLE ========== */
-        .mobile-menu-toggle {
-            display: none;
-            background: rgba(255, 255, 255, 0.2);
+        .mobile-menu-btn {
+            display: none; /* Hidden on desktop */
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8f 100%);
             border: none;
             color: white;
-            font-size: 1.5rem;
-            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            padding: 0.75rem 1.5rem;
             cursor: pointer;
-            border-radius: 6px;
-            margin-bottom: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-weight: bold;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .mobile-menu-btn {
-            display: block !important;
-            position: fixed !important;
-            top: 1rem !important;
-            left: 1rem !important;
-            z-index: 9999 !important;
-            background: red !important; /* Makes it obvious */
+        .mobile-menu-btn:active {
+            transform: scale(0.95);
         }
 
         /* ========== RESPONSIVE BREAKPOINTS ========== */
 
         /* Tablets (768px and below) */
         @media (max-width: 768px) {
+            /* Show mobile menu toggle */
+            .mobile-menu-toggle {
+                display: flex !important;
+            }
+            
             /* Show mobile menu toggle */
             .mobile-menu-toggle {
                 display: block;
@@ -1004,14 +1011,20 @@
 
         <!-- Mobile Menu Overlay -->
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
+
+        <!-- ADD THIS NEW FLOATING BUTTON -->
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">
+            <span id="menuIconMain">☰</span> Menu
+        </button>
+
         <aside class="sidebar">
             <div class="logo-container">
                 <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
                 <div class="logo-text"></div>
             </div>
 
-            <!-- Mobile Menu Toggle (Hidden on desktop) -->
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" style="display: none;">
+            <!-- NEW - CORRECT -->
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
                 <span id="menuIcon">☰</span> Menu
             </button>
 
@@ -3869,19 +3882,20 @@
     // ========== Add this JavaScript for mobile menu toggle ==========
     
     function toggleMobileMenu() {
-        const sidebar = document.getElementById('sidebar');
+        const sidebar = document.querySelector('.sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuIcon = document.getElementById('menuIcon');
+        const menuIconMain = document.getElementById('menuIconMain');
         
         sidebar.classList.toggle('active');
         overlay.classList.toggle('active');
         
-        // Change icon
-        if (sidebar.classList.contains('active')) {
-            menuIcon.textContent = '✕';
-        } else {
-            menuIcon.textContent = '☰';
-        }
+        // Update both icons
+        const isActive = sidebar.classList.contains('active');
+        const icon = isActive ? '✕' : '☰';
+        
+        if (menuIcon) menuIcon.textContent = icon;
+        if (menuIconMain) menuIconMain.textContent = icon;
     }
 
     // Close menu when clicking nav item on mobile

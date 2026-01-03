@@ -462,6 +462,11 @@
         @media (max-width: 768px) {
             /* Show mobile menu toggle */
             .mobile-menu-toggle {
+                display: flex !important;
+            }
+            
+            /* Show mobile menu toggle */
+            .mobile-menu-toggle {
                 display: block;
             }
             
@@ -700,6 +705,12 @@
 
         <!-- Mobile Menu Overlay -->
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
+        
+         <!-- ADD THIS NEW FLOATING BUTTON -->
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">
+            <span id="menuIconMain">☰</span> Menu
+        </button>
+
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo-container">
@@ -1763,19 +1774,20 @@
     // ========== Add this JavaScript for mobile menu toggle ==========
     
     function toggleMobileMenu() {
-        const sidebar = document.getElementById('sidebar');
+        const sidebar = document.querySelector('.sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuIcon = document.getElementById('menuIcon');
+        const menuIconMain = document.getElementById('menuIconMain');
         
         sidebar.classList.toggle('active');
         overlay.classList.toggle('active');
         
-        // Change icon
-        if (sidebar.classList.contains('active')) {
-            menuIcon.textContent = '✕';
-        } else {
-            menuIcon.textContent = '☰';
-        }
+        // Update both icons
+        const isActive = sidebar.classList.contains('active');
+        const icon = isActive ? '✕' : '☰';
+        
+        if (menuIcon) menuIcon.textContent = icon;
+        if (menuIconMain) menuIconMain.textContent = icon;
     }
     </script>
 </body>
