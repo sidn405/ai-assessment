@@ -821,7 +821,7 @@
                         <strong>🎉 Great Job!</strong>
                         <p id="resultsMessage" style="margin-top: 0.5rem;"></p>
                     </div>
-                    <button class="btn btn-primary" onclick="loadNextLesson()">Next Lesson</button>
+                    <button class="btn btn-primary" onclick="handleNextLesson()">Next Lesson</button>
                 </div>
                 
                 <!-- No Lessons Yet -->
@@ -1986,6 +1986,41 @@
             console.log('=== loadNextLesson END ===');
         }
 
+        async function handleNextLesson() {
+            console.log('=== NEXT LESSON CLICKED ===');
+            
+            // Check if essay is due BEFORE loading next lesson
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/essay/check-due?token=${token}`);
+                const data = await response.json();
+                
+                console.log('Essay check response:', data);
+                
+                if (response.ok && data.success && data.essay_due) {
+                    console.log('✓ Essay IS due! Showing modal...');
+                    
+                    // Store essay data
+                    essayState.isDue = true;
+                    essayState.lessonCount = data.total_lessons;
+                    essayState.recentLessons = data.recent_lessons;
+                    essayState.essayNumber = data.total_essays + 1;
+                    
+                    // Show essay modal
+                    showComprehensionEssayModal();
+                } else {
+                    console.log('✓ No essay due, loading next lesson');
+                    // No essay due, just load next lesson
+                    loadNextLesson();
+                }
+            } catch (error) {
+                console.error('Error checking for essay:', error);
+                // On error, just load next lesson
+                loadNextLesson();
+            }
+        }
+
         function displayLesson(lesson) {
             console.log('=== displayLesson START ===', lesson);
             
@@ -2297,29 +2332,6 @@
                 console.error('Error submitting answers:', error);
                 alert('Error submitting answers: ' + error.message);
             }
-
-            // At the end of submitLessonAnswers(), REPLACE the essay check with this:
-            setTimeout(async () => {
-                console.log('=== CHECKING FOR ESSAY ===');
-                const token = localStorage.getItem('token');
-                
-                try {
-                    const response = await fetch(`/api/essay/check-due?token=${token}`);
-                    console.log('Response status:', response.status);
-                    
-                    const data = await response.json();
-                    console.log('Response data:', data);
-                    
-                    if (response.ok && data.success && data.essay_due) {
-                        console.log('✓ Essay IS due! Total lessons:', data.total_lessons);
-                        checkForComprehensionEssay();
-                    } else {
-                        console.log('✗ Essay NOT due. Total lessons:', data.total_lessons, 'Total essays:', data.total_essays);
-                    }
-                } catch (error) {
-                    console.error('Essay check error:', error);
-                }
-            }, 1500);
             
             console.log('=== submitLessonAnswers END ===');
 

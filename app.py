@@ -3707,77 +3707,104 @@ def get_next_difficulty_level(current_level):
     return level_progression.get(current_level, current_level)
 
 def update_user_difficulty(user_id, new_level, essay_id, reason):
-    """Update user's reading level and increase word count requirement"""
+    """Update user's reading level and increase LESSON word count by 100"""
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        # Get current level and word count
+        # Get current level and word counts
         if USE_POSTGRES:
             cursor.execute(
-                "SELECT reading_level, essay_word_count_requirement FROM users WHERE id = %s", 
+                """SELECT reading_level, essay_word_count_requirement, 
+                   word_count_min, word_count_max 
+                   FROM users WHERE id = %s""", 
                 (user_id,)
             )
         else:
             cursor.execute(
-                "SELECT reading_level, essay_word_count_requirement FROM users WHERE id = ?", 
+                """SELECT reading_level, essay_word_count_requirement, 
+                   word_count_min, word_count_max 
+                   FROM users WHERE id = ?""", 
                 (user_id,)
             )
         
         result = cursor.fetchone()
         old_level = result['reading_level'] if hasattr(result, 'keys') else result[0]
-        current_word_count = result['essay_word_count_requirement'] if hasattr(result, 'keys') else result[1]
+        current_essay_words = result['essay_word_count_requirement'] if hasattr(result, 'keys') else result[1]
+        current_min = result['word_count_min'] if hasattr(result, 'keys') else result[2]
+        current_max = result['word_count_max'] if hasattr(result, 'keys') else result[3]
         
-        # If no word count set, use default based on old level
-        if not current_word_count:
+        # Set defaults if not set
+        if not current_essay_words:
             level_defaults = {'beginner': 25, 'intermediate': 50, 'advanced': 75}
-            current_word_count = level_defaults.get(old_level, 50)
+            current_essay_words = level_defaults.get(old_level, 25)
         
-        # Increase word count by 100 when leveling up
-        new_word_count = current_word_count + 100
+        if not current_min or not current_max:
+            current_min = 150
+            current_max = 200
         
-        # Update user level and word count
+        # Increase LESSON word count by 100
+        new_min = current_min + 100
+        new_max = current_max + 100
+        
+        # Increase ESSAY word count by 25
+        new_essay_words = current_essay_words + 25
+        
+        # Update user level and word counts
         if USE_POSTGRES:
             cursor.execute(
                 """UPDATE users 
-                   SET reading_level = %s, essay_word_count_requirement = %s 
+                   SET reading_level = %s, 
+                       essay_word_count_requirement = %s,
+                       word_count_min = %s,
+                       word_count_max = %s
                    WHERE id = %s""",
-                (new_level, new_word_count, user_id)
+                (new_level, new_essay_words, new_min, new_max, user_id)
             )
         else:
             cursor.execute(
                 """UPDATE users 
-                   SET reading_level = ?, essay_word_count_requirement = ? 
+                   SET reading_level = ?, 
+                       essay_word_count_requirement = ?,
+                       word_count_min = ?,
+                       word_count_max = ?
                    WHERE id = ?""",
-                (new_level, new_word_count, user_id)
+                (new_level, new_essay_words, new_min, new_max, user_id)
             )
         
         # Log adjustment
+        adjustment_log = (
+            f"{reason} | "
+            f"Lesson words: {current_min}-{current_max} → {new_min}-{new_max} | "
+            f"Essay words: {current_essay_words} → {new_essay_words}"
+        )
+        
         if USE_POSTGRES:
             cursor.execute(
                 """INSERT INTO difficulty_adjustments 
                    (user_id, essay_id, previous_level, new_level, reason)
                    VALUES (%s, %s, %s, %s, %s)""",
-                (user_id, essay_id, old_level, new_level, 
-                 f"{reason} | Word count: {current_word_count} → {new_word_count}")
+                (user_id, essay_id, old_level, new_level, adjustment_log)
             )
         else:
             cursor.execute(
                 """INSERT INTO difficulty_adjustments 
                    (user_id, essay_id, previous_level, new_level, reason)
                    VALUES (?, ?, ?, ?, ?)""",
-                (user_id, essay_id, old_level, new_level, 
-                 f"{reason} | Word count: {current_word_count} → {new_word_count}")
+                (user_id, essay_id, old_level, new_level, adjustment_log)
             )
         
         conn.commit()
         conn.close()
         
         print(f"✓ User {user_id} level updated: {old_level} → {new_level}")
-        print(f"✓ Essay word count: {current_word_count} → {new_word_count}")
+        print(f"✓ Lesson word count: {current_min}-{current_max} → {new_min}-{new_max}")
+        print(f"✓ Essay word count: {current_essay_words} → {new_essay_words}")
         
     except Exception as e:
         print(f"Error updating difficulty: {e}")
+        import traceback
+        traceback.print_exc()
         conn.rollback()
         conn.close()
 
@@ -3839,11 +3866,7 @@ async def check_essay_due(token: str):
             )
         
         result = cursor.fetchone()
-        # Handle both dict and tuple results
-        if result:
-            total_lessons = result['count'] if hasattr(result, 'keys') else result[0]
-        else:
-            total_lessons = 0
+        total_lessons = result['count'] if hasattr(result, 'keys') else result[0] if result else 0
         
         print(f"✓ User {user_id} has completed {total_lessons} lessons")
         
@@ -3854,17 +3877,21 @@ async def check_essay_due(token: str):
             cursor.execute("SELECT COUNT(*) as count FROM user_essays WHERE user_id = ?", (user_id,))
         
         result = cursor.fetchone()
-        if result:
-            total_essays = result['count'] if hasattr(result, 'keys') else result[0]
-        else:
-            total_essays = 0
+        total_essays = result['count'] if hasattr(result, 'keys') else result[0] if result else 0
         
         print(f"✓ User {user_id} has completed {total_essays} essays")
         
-        # Essay is due every 3 lessons
+        # Essay is due every 3 lessons (3, 6, 9, 12, etc.)
+        # Only due if: total_lessons is divisible by 3 AND total_essays < expected
         expected_essays = total_lessons // 3
-        essay_due = total_essays < expected_essays
         
+        # IMPORTANT: Only due if we have exactly the right number of lessons
+        # and we haven't written the essay for this set yet
+        essay_due = (total_lessons > 0 and 
+                     total_lessons % 3 == 0 and 
+                     total_essays < expected_essays)
+        
+        print(f"✓ Total lessons: {total_lessons}, Total essays: {total_essays}")
         print(f"✓ Expected essays: {expected_essays}, Essay due: {essay_due}")
         
         # If essay is due, get last 3 lessons
@@ -3899,7 +3926,7 @@ async def check_essay_due(token: str):
                 
                 print(f"✓ Found {len(recent_lessons)} recent lessons")
                 
-                # If we don't have 3 lessons, pad with generic data
+                # Ensure we have 3 lessons
                 while len(recent_lessons) < 3:
                     recent_lessons.append({
                         'id': 0,
@@ -3909,7 +3936,6 @@ async def check_essay_due(token: str):
                 
             except Exception as e:
                 print(f"Warning getting lessons: {e}")
-                # Fallback: create generic lesson data
                 recent_lessons = [
                     {'id': i, 'title': f'Recent Lesson {i+1}', 'content': 'A lesson you recently completed.'}
                     for i in range(3)
@@ -3917,7 +3943,7 @@ async def check_essay_due(token: str):
         
         conn.close()
         
-        response_data = {
+        return {
             "success": True,
             "essay_due": essay_due,
             "total_lessons": total_lessons,
@@ -3925,10 +3951,6 @@ async def check_essay_due(token: str):
             "lesson_count_for_next_essay": total_lessons,
             "recent_lessons": recent_lessons
         }
-        
-        print(f"✓ Returning: {response_data}")
-        
-        return response_data
         
     except Exception as e:
         print(f"✗ ERROR in check_essay_due: {e}")
@@ -3964,7 +3986,7 @@ async def get_word_count_requirement(token: str):
         # If no word count set, use default based on level
         if not word_count:
             level_defaults = {'beginner': 25, 'intermediate': 50, 'advanced': 75}
-            word_count = level_defaults.get(reading_level, 50)
+            word_count = level_defaults.get(reading_level, 25)
         
         conn.close()
         
