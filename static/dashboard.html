@@ -3898,25 +3898,6 @@
         if (menuIconMain) menuIconMain.textContent = icon;
     }
 
-    // Close menu when clicking nav item on mobile
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', function() {
-            if (window.innerWidth <= 768) {
-                toggleMobileMenu();
-            }
-        });
-    });
-
-    // Close menu on window resize to desktop
-    window.addEventListener('resize', function() {
-        if (window.innerWidth > 768) {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            sidebar.classList.remove('active');
-            overlay.classList.remove('active');
-        }
-    });
-
     </script>
 </body>
 </html>
