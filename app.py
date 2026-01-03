@@ -2379,13 +2379,13 @@ async def get_student_progress(token: str):
         # ========== ADD THIS: GET USER INFO ==========
         if USE_POSTGRES:
             cursor.execute(
-                """SELECT id, full_name, email, reading_level, streak 
+                """SELECT id, full_name, email, reading_level, user_streaks 
                    FROM users WHERE id = %s""",
                 (user_id,)
             )
         else:
             cursor.execute(
-                """SELECT id, full_name, email, reading_level, streak 
+                """SELECT id, full_name, email, reading_level, user_streaks
                    FROM users WHERE id = ?""",
                 (user_id,)
             )
@@ -2402,7 +2402,7 @@ async def get_student_progress(token: str):
                 'full_name': user_row['full_name'],
                 'email': user_row['email'],
                 'reading_level': user_row['reading_level'],
-                'streak': user_row['streak']
+                'user_streaks': user_row['user_streaks']
             }
         else:
             user_info = {
