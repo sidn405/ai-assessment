@@ -3239,7 +3239,7 @@
                 if (data.stats) {
                     safeUpdate('lessonsCompleted', data.stats.total_lessons || 0);
                     safeUpdate('averageScore', data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-');
-                    safeUpdate('currentLevel', data.user.reading_level || 'beginner');
+                    safeUpdate('currentLevel', data.stats.reading_level || 'beginner');
                     safeUpdate('streak', data.stats.streak || 0);
                 }
                 
@@ -3304,48 +3304,6 @@
                 const activityList = document.getElementById('recentActivityList');
                 if (activityList) {
                     activityList.innerHTML = '<p style="color: #DC3545; padding: 2rem; text-align: center;">Unable to load progress data. Please refresh the page.</p>';
-                }
-            }
-        }
-
-        async function loadWeeklyGoals() {
-            const token = localStorage.getItem('token');
-            
-            try {
-                const response = await fetch(`/api/student/weekly-goals?token=${token}`);
-                const data = await response.json();
-                
-                const goalsContainer = document.querySelector('.weekly-goals-container');
-                if (!goalsContainer) {
-                    console.warn('Weekly goals container not found');
-                    return;
-                }
-                
-                if (data.success && data.goals && data.goals.length > 0) {
-                    goalsContainer.innerHTML = data.goals.map(goal => `
-                        <div style="padding: 1rem; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <span style="font-size: 1.5rem;">${goal.icon}</span>
-                                <span style="font-weight: 500;">${goal.name}</span>
-                            </div>
-                            <div style="flex: 1; max-width: 200px; margin: 0 1rem;">
-                                <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
-                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; width: ${goal.progress}%; transition: width 0.3s;"></div>
-                                </div>
-                            </div>
-                            <span style="font-weight: 600; color: #667eea;">${goal.current}/${goal.target}</span>
-                        </div>
-                    `).join('');
-                    
-                    console.log('✓ Weekly goals loaded');
-                } else {
-                    goalsContainer.innerHTML = '<p style="color: #666; padding: 1rem;">No active goals this week. Keep learning!</p>';
-                }
-            } catch (error) {
-                console.error('Error loading weekly goals:', error);
-                const goalsContainer = document.querySelector('.weekly-goals-container');
-                if (goalsContainer) {
-                    goalsContainer.innerHTML = '<p style="color: #999; padding: 1rem;">Unable to load weekly goals.</p>';
                 }
             }
         }
@@ -3959,8 +3917,7 @@
         // ========== INITIALIZE ON PAGE LOAD ==========
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadProgressData();
-            loadWeeklyGoals();  // ADD THIS
+            // ... existing DOMContentLoaded code ...
             
             // Initialize session tracking
             initializeSession();
