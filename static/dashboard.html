@@ -3204,63 +3204,107 @@
         }
 
         async function loadProgressData() {
-            console.log('Loading progress data...');
-            
             const token = localStorage.getItem('token');
-            if (!token) return;
+            
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
             
             try {
+                console.log('Loading progress data...');
+                
+                // Fix: Use parentheses, not backticks
                 const response = await fetch(`/api/student/progress?token=${token}`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 
                 const data = await response.json();
-                console.log('Progress data:', data);
+                console.log('Progress data received:', data);
                 
-                // Update stats
-                document.getElementById('progressTotalLessons').textContent = data.stats.total_lessons;
-                document.getElementById('progressAvgScore').textContent = `${data.stats.average_score}%`;
-                document.getElementById('progressTotalTime').textContent = data.stats.total_time_minutes;
+                // Helper function to safely update elements
+                function safeUpdate(id, value) {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = value;
+                        console.log(`✓ Updated ${id}: ${value}`);
+                    } else {
+                        console.warn(`⚠ Element not found: ${id}`);
+                    }
+                }
+                
+                // Update Overview section stats (if they exist)
+                if (data.stats) {
+                    safeUpdate('lessonsCompleted', data.stats.total_lessons || 0);
+                    safeUpdate('averageScore', data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-');
+                    safeUpdate('currentLevel', data.stats.reading_level || 'beginner');
+                    safeUpdate('streak', data.stats.streak || 0);
+                }
+                
+                // Update Progress section stats (if they exist)
+                if (data.stats) {
+                    safeUpdate('progressTotalLessons', data.stats.total_lessons || 0);
+                    safeUpdate('progressAvgScore', data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-');
+                    safeUpdate('progressTotalTime', data.stats.total_time_minutes || 0);
+                    safeUpdate('readingScore', data.stats.average_score ? Math.round(data.stats.average_score) : '-');
+                }
+                
+                // Update user info in sidebar
+                if (data.user) {
+                    safeUpdate('userName', data.user.full_name || data.user.email || 'Student');
+                    safeUpdate('welcomeName', data.user.full_name || data.user.email || 'Student');
+                    safeUpdate('userLevel', data.user.reading_level || 'beginner');
+                }
                 
                 // Display recent sessions
                 const activityList = document.getElementById('recentActivityList');
-                
-                if (data.sessions.length === 0) {
-                    activityList.innerHTML = '<p>Complete your first lesson to see your progress!</p>';
-                } else {
-                    activityList.innerHTML = data.sessions.map(session => {
-                        const date = new Date(session.completed_at);
-                        const formattedDate = date.toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit'
-                        });
-                        
-                        return `
-                            <div style="padding: 1rem; border-bottom: 1px solid var(--medium-gray); display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong style="color: var(--navy-primary);">${session.passage_title}</strong>
-                                    <div style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
-                                        ${formattedDate} • ${session.difficulty} • ${session.word_count} words
+                if (activityList) {
+                    if (!data.sessions || data.sessions.length === 0) {
+                        activityList.innerHTML = '<p style="color: #666; padding: 2rem; text-align: center;">Complete your first lesson to see your progress!</p>';
+                    } else {
+                        activityList.innerHTML = data.sessions.map(session => {
+                            const date = new Date(session.completed_at);
+                            const formattedDate = date.toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                            });
+                            
+                            return `
+                                <div style="padding: 1rem; border-bottom: 1px solid var(--medium-gray); display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <strong style="color: var(--navy-primary);">${session.passage_title || 'Lesson'}</strong>
+                                        <div style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+                                            ${formattedDate} • ${session.difficulty || 'N/A'} • ${session.word_count || 0} words
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: ${session.score >= 80 ? '#28A745' : session.score >= 60 ? '#FFC107' : '#DC3545'};">
+                                            ${Math.round(session.score || 0)}%
+                                        </div>
+                                        <div style="color: #666; font-size: 0.85rem;">
+                                            ${Math.round((session.time_spent || 0) / 60)} min
+                                        </div>
                                     </div>
                                 </div>
-                                <div style="text-align: right;">
-                                    <div style="font-size: 1.5rem; font-weight: bold; color: ${session.score >= 80 ? '#28A745' : session.score >= 60 ? '#FFC107' : '#DC3545'};">
-                                        ${Math.round(session.score)}%
-                                    </div>
-                                    <div style="color: #666; font-size: 0.85rem;">
-                                        ${Math.round(session.time_spent / 60)} min
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
+                            `;
+                        }).join('');
+                    }
                 }
                 
+                console.log('✓ Progress data loaded successfully');
+                
             } catch (error) {
-                console.error('Error loading progress:', error);
-                document.getElementById('recentActivityList').innerHTML = 
-                    '<p>Unable to load progress data.</p>';
+                console.error('Error loading progress data:', error);
+                
+                // Show user-friendly error message
+                const activityList = document.getElementById('recentActivityList');
+                if (activityList) {
+                    activityList.innerHTML = '<p style="color: #DC3545; padding: 2rem; text-align: center;">Unable to load progress data. Please refresh the page.</p>';
+                }
             }
         }
 
