@@ -2376,6 +2376,44 @@ async def get_student_progress(token: str):
         conn = get_db()
         cursor = conn.cursor()
         
+        # ========== ADD THIS: GET USER INFO ==========
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT id, full_name, email, reading_level, streak 
+                   FROM users WHERE id = %s""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT id, full_name, email, reading_level, streak 
+                   FROM users WHERE id = ?""",
+                (user_id,)
+            )
+        
+        user_row = cursor.fetchone()
+        
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Parse user data
+        if hasattr(user_row, 'keys'):
+            user_info = {
+                'id': user_row['id'],
+                'full_name': user_row['full_name'],
+                'email': user_row['email'],
+                'reading_level': user_row['reading_level'],
+                'streak': user_row['streak']
+            }
+        else:
+            user_info = {
+                'id': user_row[0],
+                'full_name': user_row[1],
+                'email': user_row[2],
+                'reading_level': user_row[3],
+                'streak': user_row[4]
+            }
+        # ============================================
+        
         # Get recent sessions with passage details
         if USE_POSTGRES:
             cursor.execute(
@@ -2455,16 +2493,13 @@ async def get_student_progress(token: str):
         
         stats = cursor.fetchone()
         
-        # ========== FIXED STATS PARSING ==========
-        # Handle both dict-like (psycopg2.extras.RealDictRow) and tuple
+        # Handle both dict-like and tuple
         if hasattr(stats, 'keys'):
-            # Dict-like object (PostgreSQL with RealDictCursor)
             total_lessons = stats['total_lessons'] or 0
             avg_score = stats['avg_score']
             total_time = stats['total_time'] or 0
             last_activity = stats['last_activity']
         else:
-            # Tuple (SQLite or regular cursor)
             total_lessons = stats[0] or 0
             avg_score = stats[1]
             total_time = stats[2] or 0
@@ -2473,20 +2508,24 @@ async def get_student_progress(token: str):
         # Round average score
         avg_score_rounded = round(avg_score, 1) if avg_score else 0
         total_time_minutes = round(total_time / 60, 1)
-        # =========================================
         
         conn.close()
         
+        # ========== UPDATE RETURN TO INCLUDE USER ==========
         return {
             "success": True,
+            "user": user_info,  # ← ADD THIS LINE!
             "sessions": sessions,
             "stats": {
                 "total_lessons": total_lessons,
                 "average_score": avg_score_rounded,
                 "total_time_minutes": total_time_minutes,
-                "last_activity": last_activity           
+                "last_activity": last_activity,
+                "reading_level": user_info['reading_level'],  # ← ADD THIS
+                "streak": streak  # ← ADD THIS
             }
         }
+        # ===================================================
         
     except Exception as e:
         print(f"Error getting progress: {e}")
