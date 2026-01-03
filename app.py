@@ -3660,7 +3660,7 @@ SCORING GUIDE:
 Be encouraging but honest. Focus on what they DID understand, not just what they missed."""
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert literacy educator evaluating student comprehension. Always respond with valid JSON only."},
                 {"role": "user", "content": prompt}
