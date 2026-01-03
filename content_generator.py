@@ -7,6 +7,7 @@ import os
 from typing import List, Dict, Optional
 from readability import analyze_readability
 
+
 class ContentGenerator:
     def __init__(self, api_key=None):
         """Initialize with OpenAI API key"""
@@ -17,15 +18,18 @@ class ContentGenerator:
         # NEW API - Create client
         self.client = OpenAI(api_key=self.api_key)
     
-    def generate_passage(self, topic, difficulty_level, target_words, user_interests):
-        """Generate educational passage using GPT-4"""
+    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests):
+        """Generate educational passage using GPT-4 with dynamic word count"""
+        
+        # Calculate target from range
+        import random
+        target_words = random.randint(word_count_min, word_count_max)
         
         # ========== UPDATED PROMPT ==========
         # Build focused prompt - ONE TOPIC PER LESSON
         prompt = f"""Create an educational reading passage about {topic}.
-
     Difficulty Level: {difficulty_level}
-    Target Length: {target_words} words
+    Word Count: Between {word_count_min} and {word_count_max} words (aim for approximately {target_words} words)
 
     IMPORTANT: 
     - Focus ONLY on {topic}
@@ -46,7 +50,6 @@ class ContentGenerator:
         ]
     }}"""
         # ===================================
-
         try:
             # NEW API SYNTAX
             response = self.client.chat.completions.create(
@@ -54,12 +57,12 @@ class ContentGenerator:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert educational content creator. Focus on ONE topic at a time. Do not blend multiple topics together."
+                        "content": "You are an expert educational content creator. Focus on ONE topic at a time. Do not blend multiple topics together. Generate passages within the specified word count range."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.8,
-                max_tokens=1500,
+                max_tokens=2000,  # Increased to accommodate longer passages
                 timeout=60
             )
             
@@ -87,8 +90,12 @@ class ContentGenerator:
                 "difficulty_level": difficulty_level,
                 "estimated_minutes": readability['estimated_minutes'],
                 "actual_difficulty": readability['difficulty_level'],
-                "grade_band": readability['grade_band']
+                "grade_band": readability['grade_band'],
+                "target_word_range": f"{word_count_min}-{word_count_max}"  # Track the range used
             })
+            
+            print(f"✓ Generated passage: '{passage_data['title']}'")
+            print(f"✓ Word count: {readability['word_count']} (target: {word_count_min}-{word_count_max})")
             
             return passage_data
             

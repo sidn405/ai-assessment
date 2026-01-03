@@ -25,6 +25,10 @@ from openai import OpenAI
 from readability import analyze_readability, get_difficulty_for_user
 from content_generator import ContentGenerator
 
+# Use word count range from database
+import random
+
+
 # Initialize FastAPI
 app = FastAPI(title="MFS Literacy Assessment Platform - Phase 2")
 
@@ -2606,21 +2610,35 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         print(f"✓ Available interests (excluding recent): {available_interests}")
         # =======================================
         
-        # Step 5: Determine difficulty
-        print("Step 5: Determining difficulty level...")
+        target_words = random.randint(word_count_min, word_count_max)
+        
+        # Step 5: Get user's word count settings from database
+        print("Step 5: Getting word count settings...")
+        word_count_min = user.get('word_count_min')
+        word_count_max = user.get('word_count_max')
         level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
         total_read = user.get('total_passages_read') or 0
         
+        # Set defaults if not in database
+        if not word_count_min or not word_count_max:
+            defaults = {
+                'beginner': (150, 200),
+                'intermediate': (200, 250),
+                'advanced': (250, 300)
+            }
+            word_count_min, word_count_max = defaults.get(level_estimate, (200, 250))
+        
         difficulty = level_estimate
-        target_words = 200
         
         # First lesson should be easier
         if total_read == 0:
             if level_estimate == "intermediate":
                 difficulty = "beginner"
-            target_words = 150
+            word_count_min = 150
+            word_count_max = 200
         
-        print(f"✓ Difficulty: {difficulty}, Target words: {target_words}")
+        print(f"✓ Difficulty: {difficulty}")
+        print(f"✓ Word count range: {word_count_min}-{word_count_max} words")
         
         # Step 6: Select topic (MODIFIED - use available_interests)
         print("Step 6: Selecting topic...")
@@ -2641,6 +2659,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             passage_data = content_generator.generate_passage(
                 topic=topic,
                 difficulty_level=difficulty,
+                word_count_min=word_count_min,  # NEW
+                word_count_max=word_count_max,  # NEW
                 target_words=target_words,
                 user_interests=interests
             )
