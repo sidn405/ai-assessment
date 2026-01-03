@@ -3707,30 +3707,49 @@ def get_next_difficulty_level(current_level):
     return level_progression.get(current_level, current_level)
 
 def update_user_difficulty(user_id, new_level, essay_id, reason):
-    """Update user's reading level"""
+    """Update user's reading level and increase word count requirement"""
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        # Get current level
-        if USE_POSTGRES:
-            cursor.execute("SELECT reading_level FROM users WHERE id = %s", (user_id,))
-        else:
-            cursor.execute("SELECT reading_level FROM users WHERE id = ?", (user_id,))
-        
-        result = cursor.fetchone()
-        old_level = result['reading_level'] if hasattr(result, 'keys') else result[0]
-        
-        # Update user level
+        # Get current level and word count
         if USE_POSTGRES:
             cursor.execute(
-                "UPDATE users SET reading_level = %s WHERE id = %s",
-                (new_level, user_id)
+                "SELECT reading_level, essay_word_count_requirement FROM users WHERE id = %s", 
+                (user_id,)
             )
         else:
             cursor.execute(
-                "UPDATE users SET reading_level = ? WHERE id = ?",
-                (new_level, user_id)
+                "SELECT reading_level, essay_word_count_requirement FROM users WHERE id = ?", 
+                (user_id,)
+            )
+        
+        result = cursor.fetchone()
+        old_level = result['reading_level'] if hasattr(result, 'keys') else result[0]
+        current_word_count = result['essay_word_count_requirement'] if hasattr(result, 'keys') else result[1]
+        
+        # If no word count set, use default based on old level
+        if not current_word_count:
+            level_defaults = {'beginner': 50, 'intermediate': 150, 'advanced': 250}
+            current_word_count = level_defaults.get(old_level, 50)
+        
+        # Increase word count by 100 when leveling up
+        new_word_count = current_word_count + 100
+        
+        # Update user level and word count
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE users 
+                   SET reading_level = %s, essay_word_count_requirement = %s 
+                   WHERE id = %s""",
+                (new_level, new_word_count, user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE users 
+                   SET reading_level = ?, essay_word_count_requirement = ? 
+                   WHERE id = ?""",
+                (new_level, new_word_count, user_id)
             )
         
         # Log adjustment
@@ -3739,20 +3758,23 @@ def update_user_difficulty(user_id, new_level, essay_id, reason):
                 """INSERT INTO difficulty_adjustments 
                    (user_id, essay_id, previous_level, new_level, reason)
                    VALUES (%s, %s, %s, %s, %s)""",
-                (user_id, essay_id, old_level, new_level, reason)
+                (user_id, essay_id, old_level, new_level, 
+                 f"{reason} | Word count: {current_word_count} → {new_word_count}")
             )
         else:
             cursor.execute(
                 """INSERT INTO difficulty_adjustments 
                    (user_id, essay_id, previous_level, new_level, reason)
                    VALUES (?, ?, ?, ?, ?)""",
-                (user_id, essay_id, old_level, new_level, reason)
+                (user_id, essay_id, old_level, new_level, 
+                 f"{reason} | Word count: {current_word_count} → {new_word_count}")
             )
         
         conn.commit()
         conn.close()
         
         print(f"✓ User {user_id} level updated: {old_level} → {new_level}")
+        print(f"✓ Essay word count: {current_word_count} → {new_word_count}")
         
     except Exception as e:
         print(f"Error updating difficulty: {e}")
@@ -3912,6 +3934,48 @@ async def check_essay_due(token: str):
         print(f"✗ ERROR in check_essay_due: {e}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/essay/word-count-requirement")
+async def get_word_count_requirement(token: str):
+    """Get current essay word count requirement for user"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT essay_word_count_requirement, reading_level FROM users WHERE id = %s",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT essay_word_count_requirement, reading_level FROM users WHERE id = ?",
+                (user_id,)
+            )
+        
+        result = cursor.fetchone()
+        word_count = result['essay_word_count_requirement'] if hasattr(result, 'keys') else result[0]
+        reading_level = result['reading_level'] if hasattr(result, 'keys') else result[1]
+        
+        # If no word count set, use default based on level
+        if not word_count:
+            level_defaults = {'beginner': 200, 'intermediate': 300, 'advanced': 400}
+            word_count = level_defaults.get(reading_level, 200)
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "word_count_requirement": word_count,
+            "reading_level": reading_level
+        }
+        
+    except Exception as e:
+        print(f"Error getting word count: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 # ============================================================

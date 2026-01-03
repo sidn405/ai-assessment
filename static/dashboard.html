@@ -1800,6 +1800,7 @@
         let lessonAnswers = [];        
         let recentTopics = []; // ← ADD THIS
         let isLoadingLesson = false; // Prevent duplicate loads
+        wordCountRequired: 50
 
         // ========== GLOBAL STATE FOR ESSAYS ==========
         let essayState = {
@@ -2394,9 +2395,25 @@
 
         // ========== SHOW ESSAY MODAL ==========
 
-        function showComprehensionEssayModal() {
+        async function showComprehensionEssayModal() {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             const userName = user.name || 'there';
+            const token = localStorage.getItem('token');
+            
+            // Get word count requirement
+            let wordCountRequired = 200; // default
+            try {
+                const response = await fetch(`/api/essay/word-count-requirement?token=${token}`);
+                const data = await response.json();
+                if (data.success) {
+                    wordCountRequired = data.word_count_requirement;
+                }
+            } catch (error) {
+                console.error('Error getting word count:', error);
+            }
+            
+            // Store for validation
+            essayState.wordCountRequired = wordCountRequired;
             
             // Create modal
             const modal = document.createElement('div');
@@ -2515,8 +2532,8 @@
                                 display: flex;
                                 justify-content: space-between;
                             ">
-                                <span id="word-count-display">Words: 0</span>
-                                <span style="color: #28A745;">💡 Tip: Aim for at least 50 words</span>
+                                <span id="word-count-display">Words: 0 / ${wordCountRequired}</span>
+                                <span style="color: #28A745;">💡 Tip: Write at least ${wordCountRequired} words</span>
                             </div>
                         </div>
                         
@@ -2572,9 +2589,9 @@
             textarea.addEventListener('input', function() {
                 const words = this.value.trim().split(/\s+/).filter(w => w.length > 0);
                 const count = words.length;
-                wordCountDisplay.textContent = `Words: ${count}`;
+                wordCountDisplay.textContent = `Words: ${count} / ${wordCountRequired}`;
                 
-                if (count >= 50) {
+                if (count >= wordCountRequired) {
                     wordCountDisplay.style.color = '#28A745';
                     wordCountDisplay.style.fontWeight = 'bold';
                 } else {
@@ -2602,6 +2619,7 @@
             }
             
             const wordCount = essayText.split(/\s+/).filter(w => w.length > 0).length;
+
             if (wordCount < 20) {
                 alert('Please write at least 20 words. You currently have ' + wordCount + ' words.');
                 return;
