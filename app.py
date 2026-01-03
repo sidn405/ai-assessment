@@ -2610,8 +2610,6 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         print(f"✓ Available interests (excluding recent): {available_interests}")
         # =======================================
         
-        target_words = random.randint(word_count_min, word_count_max)
-        
         # Step 5: Get user's word count settings from database
         print("Step 5: Getting word count settings...")
         word_count_min = user.get('word_count_min')
@@ -2645,6 +2643,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         import random
         topic = random.choice(available_interests)  # ← CHANGED from 'interests' to 'available_interests'
         print(f"✓ Selected topic: {topic}")
+        
+        target_words = random.randint(word_count_min, word_count_max)
         
         conn.close()
         
