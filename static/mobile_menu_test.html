@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Menu Test</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: linear-gradient(180deg, #1e3a5f 0%, #2d5a8f 100%);
+            color: white;
+            padding: 1rem;
+            transition: left 0.3s ease;
+        }
+        
+        /* Logo */
+        .logo-container {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .logo-text {
+            color: #1e3a5f;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Nav items */
+        .nav-item {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Main content */
+        .main-content {
+            margin-left: 270px;
+            padding: 2rem;
+            transition: margin-left 0.3s ease;
+        }
+        
+        /* Mobile menu button */
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e3a5f;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        
+        .sidebar-overlay.active {
+            display: block;
+        }
+        
+        /* MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+            /* Show mobile button */
+            .mobile-menu-btn {
+                display: block;
+            }
+            
+            /* Hide sidebar by default */
+            .sidebar {
+                left: -100%;
+            }
+            
+            /* Show sidebar when active */
+            .sidebar.active {
+                left: 0;
+            }
+            
+            /* Full width content */
+            .main-content {
+                margin-left: 0;
+                padding-top: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Menu Button -->
+    <button class="mobile-menu-btn" id="menuBtn">
+        <span id="menuIcon">☰</span> Menu
+    </button>
+    
+    <!-- Overlay -->
+    <div class="sidebar-overlay" id="overlay"></div>
+    
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="logo-container">
+            <div class="logo-text">MFS Literacy</div>
+        </div>
+        
+        <div class="nav-item">📊 Overview</div>
+        <div class="nav-item">📝 Assessment</div>
+        <div class="nav-item">📚 Lessons</div>
+        <div class="nav-item">📈 Progress</div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <h1>Mobile Menu Test</h1>
+        <p>Resize your browser to less than 768px width to see the mobile menu.</p>
+        <p>Or open this page on your phone.</p>
+        
+        <div style="background: white; padding: 2rem; border-radius: 8px; margin-top: 2rem;">
+            <h2>Test Instructions:</h2>
+            <ol>
+                <li>On desktop (>768px): Sidebar should be visible on the left</li>
+                <li>On mobile (<768px): 
+                    <ul>
+                        <li>Hamburger menu button should appear top-left</li>
+                        <li>Click it to open sidebar</li>
+                        <li>Click overlay or X to close</li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <p><strong>Current screen width:</strong> <span id="screenWidth"></span>px</p>
+            <p><strong>Status:</strong> <span id="status"></span></p>
+        </div>
+    </div>
+    
+    <script>
+        // Mobile menu functionality
+        const menuBtn = document.getElementById('menuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const menuIcon = document.getElementById('menuIcon');
+        
+        function toggleMenu() {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+            menuIcon.textContent = sidebar.classList.contains('active') ? '✕' : '☰';
+        }
+        
+        menuBtn.addEventListener('click', toggleMenu);
+        overlay.addEventListener('click', toggleMenu);
+        
+        // Close on nav click (mobile only)
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    toggleMenu();
+                }
+            });
+        });
+        
+        // Update status
+        function updateStatus() {
+            const width = window.innerWidth;
+            document.getElementById('screenWidth').textContent = width;
+            
+            if (width <= 768) {
+                document.getElementById('status').textContent = 'MOBILE MODE - Menu button should be visible';
+                document.getElementById('status').style.color = 'green';
+            } else {
+                document.getElementById('status').textContent = 'DESKTOP MODE - Sidebar should be visible';
+                document.getElementById('status').style.color = 'blue';
+            }
+        }
+        
+        updateStatus();
+        window.addEventListener('resize', updateStatus);
+        
+        console.log('✓ Mobile menu test page loaded');
+    </script>
+</body>
+</html>
