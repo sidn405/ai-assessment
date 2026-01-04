@@ -1233,9 +1233,10 @@
     <!-- Profile Photo Display (Upper Right) -->
     <div class="profile-photo-container" onclick="openProfileModal()">
         <img id="profilePhotoDisplay" class="profile-photo default" src="" alt="Profile" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-        
+        <div id="profilePhotoInitials" class="profile-photo default" style="display: none;">P</div>
         <span class="profile-name" id="profileNameDisplay">Student</span>
     </div>
+
     <!-- Profile Photo Modal -->
     <div class="profile-modal" id="profileModal">
         <div class="profile-modal-content">
