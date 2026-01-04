@@ -1028,16 +1028,67 @@
             transform: translateY(-2px) !important;
         }
 
+        /* Simplified Profile Photo - No Initials */
         .profile-photo {
-            width: 40px !important;
-            height: 40px !important;
+            width: 50px !important;
+            height: 50px !important;
             border-radius: 50% !important;
-            object-fit: cover !important;
-            border: 2px solid var(--navy-primary) !important;
+            background: linear-gradient(135deg, #700d0b 0%, #B40200 100%) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: 2px solid white !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        }
+
+        .profile-photo #avatarEmoji {
+            font-size: 1.5rem !important;
+            line-height: 1 !important;
+        }
+
+        /* Avatar Prompt Tooltip */
+        .avatar-prompt {
+            position: absolute !important;
+            top: 50px !important;
+            right: 0 !important;
+            background: var(--gold-accent) !important;
+            color: white !important;
+            padding: 0.5rem 1rem !important;
+            border-radius: 8px !important;
+            font-size: 0.85rem !important;
+            font-weight: 600 !important;
+            white-space: nowrap !important;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4) !important;
+            animation: bounce 2s infinite !important;
+            z-index: 1001 !important;
+        }
+
+        .avatar-prompt::before {
+            content: '' !important;
+            position: absolute !important;
+            top: -6px !important;
+            right: 20px !important;
+            width: 0 !important;
+            height: 0 !important;
+            border-left: 6px solid transparent !important;
+            border-right: 6px solid transparent !important;
+            border-bottom: 6px solid var(--gold-accent) !important;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            60% {
+                transform: translateY(-5px);
+            }
         }
 
         .profile-photo.default {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            background: linear-gradient(135deg, #700d0b 0%, #B40200 100%) !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -1232,9 +1283,15 @@
 
     <!-- Profile Photo Display (Upper Right) -->
     <div class="profile-photo-container" onclick="openProfileModal()">
-        <img id="profilePhotoDisplay" class="profile-photo default" src="" alt="Profile" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-        <div id="profilePhotoInitials" class="profile-photo default" style="display: none;">P</div>
-        <span class="profile-name" id="profileNameDisplay">Student</span>
+        <div id="profilePhotoDisplay" class="profile-photo default">
+            <span id="avatarEmoji">👤</span>
+        </div>
+        <span class="profile-name" id="profileNameDisplay"></span>
+        
+        <!-- Tooltip prompt for new users -->
+        <div id="avatarPrompt" class="avatar-prompt" style="display: none;">
+            Click to choose your avatar! 👆
+        </div>
     </div>
 
     <!-- Profile Photo Modal -->
@@ -4362,7 +4419,10 @@ const avatars_darkSkinFocus = [
 
     let selectedAvatar = null;
 
-    // Load profile photo on page load
+    // Default avatar for new users
+    const DEFAULT_AVATAR = '👤';  // Generic person silhouette
+
+    // Load and set profile photo/avatar
     async function loadProfilePhoto() {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -4372,56 +4432,56 @@ const avatars_darkSkinFocus = [
             const data = await response.json();
             
             if (data.success && data.photo_url) {
-                setProfilePhoto(data.photo_url);
+                // User has set an avatar
+                setAvatar(data.photo_url);
             } else {
-                // No photo set - show initials
-                setDefaultInitials();
+                // New user - show default avatar and prompt
+                setAvatar(DEFAULT_AVATAR);
+                showAvatarPrompt();
             }
         } catch (error) {
             console.error('Error loading profile photo:', error);
-            setDefaultInitials();
+            setAvatar(DEFAULT_AVATAR);
+            showAvatarPrompt();
         }
     }
 
-    function setProfilePhoto(photoUrl) {
-        const photoDisplay = document.getElementById('profilePhotoDisplay');
-        const initials = document.getElementById('profilePhotoInitials');
+    function setAvatar(avatar) {
+        const avatarEmoji = document.getElementById('avatarEmoji');
         
-        if (photoUrl && photoUrl.startsWith('data:image')) {
-            // Custom uploaded photo
-            photoDisplay.src = photoUrl;
-            photoDisplay.style.display = 'block';
-            initials.style.display = 'none';
-        } else if (photoUrl && photoUrl.length <= 4) {
-            // Emoji avatar
-            initials.textContent = photoUrl;
-            initials.style.display = 'flex';
-            photoDisplay.style.display = 'none';
+        if (avatar && avatar.length <= 4) {
+            // It's an emoji avatar
+            avatarEmoji.textContent = avatar;
         } else {
-            setDefaultInitials();
+            // Default
+            avatarEmoji.textContent = DEFAULT_AVATAR;
         }
     }
 
-    function setDefaultInitials() {
-        const initials = document.getElementById('profilePhotoInitials');
-        const nameDisplay = document.getElementById('profileNameDisplay');
-        const name = nameDisplay.textContent || 'Student';
-        
-        // Get first letter of name
-        const firstLetter = name.charAt(0).toUpperCase();
-        initials.textContent = firstLetter;
-        initials.style.display = 'flex';
-        
-        // Hide image
-        document.getElementById('profilePhotoDisplay').style.display = 'none';
+    function showAvatarPrompt() {
+        const prompt = document.getElementById('avatarPrompt');
+        if (prompt) {
+            prompt.style.display = 'block';
+            
+            // Hide prompt after 5 seconds
+            setTimeout(() => {
+                prompt.style.display = 'none';
+            }, 5000);
+        }
     }
 
-    // Modal functions
+    function hideAvatarPrompt() {
+        const prompt = document.getElementById('avatarPrompt');
+        if (prompt) {
+            prompt.style.display = 'none';
+        }
+    }
+
+    // Update modal functions
     function openProfileModal() {
         const modal = document.getElementById('profileModal');
         modal.classList.add('active');
-        
-        // Generate avatar grid
+        hideAvatarPrompt();  // Hide prompt when modal opens
         generateAvatarGrid();
     }
 
@@ -4430,34 +4490,9 @@ const avatars_darkSkinFocus = [
         modal.classList.remove('active');
     }
 
-    function switchProfileTab(tab) {
-        // Update tabs
-        document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.profile-tab-content').forEach(c => c.classList.remove('active'));
-        
-        if (tab === 'upload') {
-            document.querySelector('.profile-tab:nth-child(1)').classList.add('active');
-            document.getElementById('uploadTab').classList.add('active');
-        } else {
-            document.querySelector('.profile-tab:nth-child(2)').classList.add('active');
-            document.getElementById('avatarTab').classList.add('active');
-        }
-    }
-
-    function generateAvatarGrid() {
-        const grid = document.getElementById('avatarGrid');
-        grid.innerHTML = avatars.map(avatar => `
-            <div class="avatar-option" onclick="selectAvatar('${avatar}', this)">
-                ${avatar}
-            </div>
-        `).join('');
-    }
-
+    // Updated avatar selection
     function selectAvatar(avatar, element) {
-        // Remove selection from all
         document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
-        
-        // Select this one
         element.classList.add('selected');
         selectedAvatar = avatar;
     }
@@ -4473,116 +4508,69 @@ const avatars_darkSkinFocus = [
         try {
             const response = await fetch('/api/profile/set-avatar', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    token: token,
-                    avatar: selectedAvatar
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token, avatar: selectedAvatar })
             });
             
             const data = await response.json();
             
             if (data.success) {
-                setProfilePhoto(selectedAvatar);
+                setAvatar(selectedAvatar);
                 closeProfileModal();
-                alert('Avatar saved successfully! ✓');
+                
+                // Show success message
+                showSuccessMessage('Avatar saved! ✓');
             } else {
                 alert('Error saving avatar');
             }
         } catch (error) {
-            console.error('Error saving avatar:', error);
+            console.error('Error:', error);
             alert('Error saving avatar');
         }
     }
 
-    // Photo upload functions
-    function previewPhoto(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+    function showSuccessMessage(message) {
+        const successDiv = document.createElement('div');
+        successDiv.style.cssText = `
+            position: fixed;
+            top: 100px;
+            right: 1rem;
+            background: #28a745;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        `;
+        successDiv.textContent = message;
         
-        // Validate file size
-        if (file.size > 5 * 1024 * 1024) {
-            alert('File too large. Maximum size is 5MB.');
-            return;
-        }
+        document.body.appendChild(successDiv);
         
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            alert('Please upload an image file');
-            return;
-        }
-        
-        // Show preview
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const preview = document.getElementById('photoPreview');
-            preview.src = e.target.result;
-            preview.classList.add('active');
-            
-            document.getElementById('uploadButton').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
+        setTimeout(() => {
+            successDiv.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => successDiv.remove(), 300);
+        }, 2000);
     }
 
-    async function uploadPhoto() {
-        const fileInput = document.getElementById('photoInput');
-        const file = fileInput.files[0];
-        
-        if (!file) {
-            alert('Please select a photo first');
-            return;
-        }
-        
-        const token = localStorage.getItem('token');
-        const formData = new FormData();
-        formData.append('token', token);
-        formData.append('photo', file);
-        
-        try {
-            const response = await fetch('/api/profile/upload-photo', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                setProfilePhoto(data.photo_url);
-                closeProfileModal();
-                alert('Photo uploaded successfully! ✓');
-                
-                // Reset form
-                fileInput.value = '';
-                document.getElementById('photoPreview').classList.remove('active');
-                document.getElementById('uploadButton').style.display = 'none';
-            } else {
-                alert('Error uploading photo');
-            }
-        } catch (error) {
-            console.error('Error uploading photo:', error);
-            alert('Error uploading photo');
-        }
-    }
-
-    // Close modal when clicking outside
-    document.getElementById('profileModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            closeProfileModal();
-        }
-    });
-
-    // Load profile photo when page loads
+    // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
-        // Set default initials immediately
-        setDefaultInitials();
+        // Load profile photo
         loadProfilePhoto();
         
-        // Also set the name
+        // Set the name
         const userName = document.getElementById('userName');
         if (userName) {
             document.getElementById('profileNameDisplay').textContent = userName.textContent;
+        }
+    });
+
+    // Close modal when clicking outside
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('profileModal');
+        if (e.target === modal) {
+            closeProfileModal();
         }
     });
     
