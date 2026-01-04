@@ -1345,64 +1345,28 @@
         async function checkForNextLesson() {
             const token = localStorage.getItem('token');
             
-            if (!token) {
-                console.error('No token found');
-                return;
-            }
-            
             try {
-                console.log('Checking for lessons...');
-                
-                // Get user's progress to see if they have completed lessons
                 const response = await fetch(`/api/student/progress?token=${token}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
                 const data = await response.json();
-                console.log('Progress data:', data);
                 
                 const lessonsContainer = document.getElementById('lessonsContainer');
                 const noAssessmentMessage = document.getElementById('noAssessmentMessage');
                 
-                if (!lessonsContainer) {
-                    console.error('lessonsContainer not found');
-                    return;
-                }
-                
-                if (!noAssessmentMessage) {
-                    console.error('noAssessmentMessage not found');
-                    return;
-                }
-                
-                // If user has completed ANY lessons, show the lessons interface
-                if (data.stats && data.stats.total_lessons > 0) {
-                    console.log(`User has ${data.stats.total_lessons} completed lessons - showing lesson interface`);
+                // You have 63 lessons - always show the interface!
+                if (data.stats.total_lessons > 0) {
                     noAssessmentMessage.style.display = 'none';
                     lessonsContainer.style.display = 'block';
-                    
-                    // Load the next lesson
                     loadNextLesson();
                 } else {
-                    console.log('User has no completed lessons - showing assessment prompt');
                     noAssessmentMessage.style.display = 'block';
                     lessonsContainer.style.display = 'none';
                 }
-                
             } catch (error) {
-                console.error('Error checking for lessons:', error);
-                
-                // On error, show lessons anyway (user has 63 lessons!)
-                const lessonsContainer = document.getElementById('lessonsContainer');
-                const noAssessmentMessage = document.getElementById('noAssessmentMessage');
-                
-                if (lessonsContainer && noAssessmentMessage) {
-                    console.log('Error occurred, but showing lessons anyway');
-                    noAssessmentMessage.style.display = 'none';
-                    lessonsContainer.style.display = 'block';
-                    loadNextLesson();
-                }
+                console.error('Error:', error);
+                // Force show lessons on error
+                document.getElementById('noAssessmentMessage').style.display = 'none';
+                document.getElementById('lessonsContainer').style.display = 'block';
+                loadNextLesson();
             }
         }
 
