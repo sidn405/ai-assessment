@@ -1128,25 +1128,6 @@
                     <h1>📚 Your Personalized Lessons</h1>
                     <p>Adaptive content based on your interests and skill level</p>
                 </div>
-
-                <!-- ADD THIS: Message when no assessment -->
-                <div id="noAssessmentMessage" style="display: none; padding: 2rem; text-align: center; background: white; border-radius: 8px; margin: 2rem 0;">
-                    <p style="font-size: 1.1rem; color: #666; margin-bottom: 1.5rem;">
-                        Lessons will appear here after you complete your assessment.
-                    </p>
-                    <button onclick="showSection('assessment', event)" style="padding: 0.75rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer;">
-                        Take Assessment
-                    </button>
-                </div>
-                
-                <!-- ADD THIS: Lessons container -->
-                <div id="lessonsContainer" style="display: none;">
-                    <!-- Your existing lesson content goes here -->
-                    <div id="lessonContent">
-                        <p>Loading next lesson...</p>
-                    </div>
-                </div>
-            </div>
                 
                 <!-- Loading State -->
                 <div id="lessonLoading" class="loading hidden">
@@ -1364,63 +1345,81 @@
         async function checkForNextLesson() {
             const token = localStorage.getItem('token');
             
-            if (!token) {
-                console.error('No token found');
-                return;
-            }
-            
             try {
-                console.log('Checking for lessons...');
-                
-                // Get user's progress
                 const response = await fetch(`/api/student/progress?token=${token}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
                 const data = await response.json();
-                console.log('Progress data:', data);
                 
-                // ========== SAFE ELEMENT ACCESS ==========
                 const lessonsContainer = document.getElementById('lessonsContainer');
                 const noAssessmentMessage = document.getElementById('noAssessmentMessage');
                 
-                // Check if elements exist
-                if (!lessonsContainer) {
-                    console.error('❌ lessonsContainer element not found in HTML!');
-                    console.error('Add: <div id="lessonsContainer">...</div> to your lessonsSection');
-                    return;
-                }
-                
-                if (!noAssessmentMessage) {
-                    console.error('❌ noAssessmentMessage element not found in HTML!');
-                    console.error('Add: <div id="noAssessmentMessage">...</div> to your lessonsSection');
-                    return;
-                }
-                // =========================================
-                
-                // If user has completed lessons, show the interface
-                if (data.stats && data.stats.total_lessons > 0) {
-                    console.log(`✓ User has ${data.stats.total_lessons} completed lessons`);
+                // You have 63 lessons - always show the interface!
+                if (data.stats.total_lessons > 0) {
                     noAssessmentMessage.style.display = 'none';
                     lessonsContainer.style.display = 'block';
-                    
-                    // Load the next lesson if function exists
-                    if (typeof loadNextLesson === 'function') {
-                        loadNextLesson();
-                    } else {
-                        console.warn('loadNextLesson function not found');
-                        lessonsContainer.innerHTML = '<p style="padding: 2rem; text-align: center;">You have completed 63 lessons! Ready to continue learning?</p>';
-                    }
+                    loadNextLesson();
                 } else {
-                    console.log('User has no completed lessons - showing assessment prompt');
                     noAssessmentMessage.style.display = 'block';
                     lessonsContainer.style.display = 'none';
                 }
-                
             } catch (error) {
-                console.error('Error checking for lessons:', error);
+                console.error('Error:', error);
+                // Force show lessons on error
+                document.getElementById('noAssessmentMessage').style.display = 'none';
+                document.getElementById('lessonsContainer').style.display = 'block';
+                loadNextLesson();
+            }
+        }
+
+        function showSection(sectionName, event) {
+            if (event) {
+                event.preventDefault();
+            }
+            
+            console.log('Switching to section:', sectionName);
+            
+            // Hide all sections
+            const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
+            sections.forEach(id => {
+                const section = document.getElementById(id);
+                if (section) {
+                    section.classList.add('hidden');
+                }
+            });
+            
+            // ========== FIX: Remove active from ALL nav items ==========
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            // ===========================================================
+            
+            // Show selected section
+            const targetSection = document.getElementById(sectionName + 'Section');
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+            }
+            
+            // ========== FIX: Add active to clicked nav item ==========
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            } else {
+                // If no event (called programmatically), find and activate the nav item
+                const navItem = document.querySelector(`.nav-item[onclick*="${sectionName}"]`);
+                if (navItem) {
+                    navItem.classList.add('active');
+                }
+            }
+            // =========================================================
+            
+            // Load data for specific sections
+            if (sectionName === 'overview' || sectionName === 'progress') {
+                console.log('Loading stats for ' + sectionName + ' section...');
+                loadAllStats();
+            } else if (sectionName === 'lessons') {
+                console.log('Lessons section - checking for next lesson...');
+                checkForNextLesson();
+            } else if (sectionName === 'assessment') {
+                console.log('Assessment section - loading assessment...');
+                loadAssessment();
             }
         }
 
