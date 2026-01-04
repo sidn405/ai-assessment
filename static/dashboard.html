@@ -4206,235 +4206,6 @@
             }
         }
 
-        // Preset avatars (emojis)
-        const avatars = [
-            '😀', '😎', '🤓', '🧐', '🤩', '🥳', '😇', '🙂',
-            '😊', '☺️', '🤗', '🤔', '🧑‍🎓', '👨‍🎓', '👩‍🎓', '🧑‍💻',
-            '👨‍💻', '👩‍💻', '🧑‍🏫', '👨‍🏫', '👩‍🏫', '🦸', '🦹', '🧙'
-        ];
-
-        let selectedAvatar = null;
-
-        // Load profile photo on page load
-        async function loadProfilePhoto() {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-            
-            try {
-                const response = await fetch(`/api/profile/photo?token=${token}`);
-                const data = await response.json();
-                
-                if (data.success && data.photo_url) {
-                    setProfilePhoto(data.photo_url);
-                } else {
-                    // No photo set - show initials
-                    setDefaultInitials();
-                }
-            } catch (error) {
-                console.error('Error loading profile photo:', error);
-                setDefaultInitials();
-            }
-        }
-
-        function setProfilePhoto(photoUrl) {
-            const photoDisplay = document.getElementById('profilePhotoDisplay');
-            const initials = document.getElementById('profilePhotoInitials');
-            
-            if (photoUrl && photoUrl.startsWith('data:image')) {
-                // Custom uploaded photo
-                photoDisplay.src = photoUrl;
-                photoDisplay.style.display = 'block';
-                initials.style.display = 'none';
-            } else if (photoUrl && photoUrl.length <= 4) {
-                // Emoji avatar
-                initials.textContent = photoUrl;
-                initials.style.display = 'flex';
-                photoDisplay.style.display = 'none';
-            } else {
-                setDefaultInitials();
-            }
-        }
-
-        function setDefaultInitials() {
-            const initials = document.getElementById('profilePhotoInitials');
-            const nameDisplay = document.getElementById('profileNameDisplay');
-            const name = nameDisplay.textContent || 'Student';
-            
-            // Get first letter of name
-            const firstLetter = name.charAt(0).toUpperCase();
-            initials.textContent = firstLetter;
-            initials.style.display = 'flex';
-            document.getElementById('profilePhotoDisplay').style.display = 'none';
-        }
-
-        // Modal functions
-        function openProfileModal() {
-            const modal = document.getElementById('profileModal');
-            modal.classList.add('active');
-            
-            // Generate avatar grid
-            generateAvatarGrid();
-        }
-
-        function closeProfileModal() {
-            const modal = document.getElementById('profileModal');
-            modal.classList.remove('active');
-        }
-
-        function switchProfileTab(tab) {
-            // Update tabs
-            document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.profile-tab-content').forEach(c => c.classList.remove('active'));
-            
-            if (tab === 'upload') {
-                document.querySelector('.profile-tab:nth-child(1)').classList.add('active');
-                document.getElementById('uploadTab').classList.add('active');
-            } else {
-                document.querySelector('.profile-tab:nth-child(2)').classList.add('active');
-                document.getElementById('avatarTab').classList.add('active');
-            }
-        }
-
-        function generateAvatarGrid() {
-            const grid = document.getElementById('avatarGrid');
-            grid.innerHTML = avatars.map(avatar => `
-                <div class="avatar-option" onclick="selectAvatar('${avatar}', this)">
-                    ${avatar}
-                </div>
-            `).join('');
-        }
-
-        function selectAvatar(avatar, element) {
-            // Remove selection from all
-            document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
-            
-            // Select this one
-            element.classList.add('selected');
-            selectedAvatar = avatar;
-        }
-
-        async function saveAvatar() {
-            if (!selectedAvatar) {
-                alert('Please select an avatar first');
-                return;
-            }
-            
-            const token = localStorage.getItem('token');
-            
-            try {
-                const response = await fetch('/api/profile/set-avatar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        token: token,
-                        avatar: selectedAvatar
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    setProfilePhoto(selectedAvatar);
-                    closeProfileModal();
-                    alert('Avatar saved successfully! ✓');
-                } else {
-                    alert('Error saving avatar');
-                }
-            } catch (error) {
-                console.error('Error saving avatar:', error);
-                alert('Error saving avatar');
-            }
-        }
-
-        // Photo upload functions
-        function previewPhoto(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            // Validate file size
-            if (file.size > 5 * 1024 * 1024) {
-                alert('File too large. Maximum size is 5MB.');
-                return;
-            }
-            
-            // Validate file type
-            if (!file.type.startsWith('image/')) {
-                alert('Please upload an image file');
-                return;
-            }
-            
-            // Show preview
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const preview = document.getElementById('photoPreview');
-                preview.src = e.target.result;
-                preview.classList.add('active');
-                
-                document.getElementById('uploadButton').style.display = 'block';
-            };
-            reader.readAsDataURL(file);
-        }
-
-        async function uploadPhoto() {
-            const fileInput = document.getElementById('photoInput');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                alert('Please select a photo first');
-                return;
-            }
-            
-            const token = localStorage.getItem('token');
-            const formData = new FormData();
-            formData.append('token', token);
-            formData.append('photo', file);
-            
-            try {
-                const response = await fetch('/api/profile/upload-photo', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    setProfilePhoto(data.photo_url);
-                    closeProfileModal();
-                    alert('Photo uploaded successfully! ✓');
-                    
-                    // Reset form
-                    fileInput.value = '';
-                    document.getElementById('photoPreview').classList.remove('active');
-                    document.getElementById('uploadButton').style.display = 'none';
-                } else {
-                    alert('Error uploading photo');
-                }
-            } catch (error) {
-                console.error('Error uploading photo:', error);
-                alert('Error uploading photo');
-            }
-        }
-
-        // Close modal when clicking outside
-        document.getElementById('profileModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeProfileModal();
-            }
-        });
-
-        // Load profile photo when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            loadProfilePhoto();
-            
-            // Also set the name
-            const userName = document.getElementById('userName');
-            if (userName) {
-                document.getElementById('profileNameDisplay').textContent = userName.textContent;
-            }
-        });
-
         // Call this when starting/ending breaks
         // Add to takeBreak() function:
         // updateBreakIndicator();
@@ -4517,6 +4288,235 @@
         if (menuIcon) menuIcon.textContent = icon;
         if (menuIconMain) menuIconMain.textContent = icon;
     }
+
+    // Preset avatars (emojis)
+    const avatars = [
+        '😀', '😎', '🤓', '🧐', '🤩', '🥳', '😇', '🙂',
+        '😊', '☺️', '🤗', '🤔', '🧑‍🎓', '👨‍🎓', '👩‍🎓', '🧑‍💻',
+        '👨‍💻', '👩‍💻', '🧑‍🏫', '👨‍🏫', '👩‍🏫', '🦸', '🦹', '🧙'
+    ];
+
+    let selectedAvatar = null;
+
+    // Load profile photo on page load
+    async function loadProfilePhoto() {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        try {
+            const response = await fetch(`/api/profile/photo?token=${token}`);
+            const data = await response.json();
+            
+            if (data.success && data.photo_url) {
+                setProfilePhoto(data.photo_url);
+            } else {
+                // No photo set - show initials
+                setDefaultInitials();
+            }
+        } catch (error) {
+            console.error('Error loading profile photo:', error);
+            setDefaultInitials();
+        }
+    }
+
+    function setProfilePhoto(photoUrl) {
+        const photoDisplay = document.getElementById('profilePhotoDisplay');
+        const initials = document.getElementById('profilePhotoInitials');
+        
+        if (photoUrl && photoUrl.startsWith('data:image')) {
+            // Custom uploaded photo
+            photoDisplay.src = photoUrl;
+            photoDisplay.style.display = 'block';
+            initials.style.display = 'none';
+        } else if (photoUrl && photoUrl.length <= 4) {
+            // Emoji avatar
+            initials.textContent = photoUrl;
+            initials.style.display = 'flex';
+            photoDisplay.style.display = 'none';
+        } else {
+            setDefaultInitials();
+        }
+    }
+
+    function setDefaultInitials() {
+        const initials = document.getElementById('profilePhotoInitials');
+        const nameDisplay = document.getElementById('profileNameDisplay');
+        const name = nameDisplay.textContent || 'Student';
+        
+        // Get first letter of name
+        const firstLetter = name.charAt(0).toUpperCase();
+        initials.textContent = firstLetter;
+        initials.style.display = 'flex';
+        document.getElementById('profilePhotoDisplay').style.display = 'none';
+    }
+
+    // Modal functions
+    function openProfileModal() {
+        const modal = document.getElementById('profileModal');
+        modal.classList.add('active');
+        
+        // Generate avatar grid
+        generateAvatarGrid();
+    }
+
+    function closeProfileModal() {
+        const modal = document.getElementById('profileModal');
+        modal.classList.remove('active');
+    }
+
+    function switchProfileTab(tab) {
+        // Update tabs
+        document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.profile-tab-content').forEach(c => c.classList.remove('active'));
+        
+        if (tab === 'upload') {
+            document.querySelector('.profile-tab:nth-child(1)').classList.add('active');
+            document.getElementById('uploadTab').classList.add('active');
+        } else {
+            document.querySelector('.profile-tab:nth-child(2)').classList.add('active');
+            document.getElementById('avatarTab').classList.add('active');
+        }
+    }
+
+    function generateAvatarGrid() {
+        const grid = document.getElementById('avatarGrid');
+        grid.innerHTML = avatars.map(avatar => `
+            <div class="avatar-option" onclick="selectAvatar('${avatar}', this)">
+                ${avatar}
+            </div>
+        `).join('');
+    }
+
+    function selectAvatar(avatar, element) {
+        // Remove selection from all
+        document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+        
+        // Select this one
+        element.classList.add('selected');
+        selectedAvatar = avatar;
+    }
+
+    async function saveAvatar() {
+        if (!selectedAvatar) {
+            alert('Please select an avatar first');
+            return;
+        }
+        
+        const token = localStorage.getItem('token');
+        
+        try {
+            const response = await fetch('/api/profile/set-avatar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    token: token,
+                    avatar: selectedAvatar
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                setProfilePhoto(selectedAvatar);
+                closeProfileModal();
+                alert('Avatar saved successfully! ✓');
+            } else {
+                alert('Error saving avatar');
+            }
+        } catch (error) {
+            console.error('Error saving avatar:', error);
+            alert('Error saving avatar');
+        }
+    }
+
+    // Photo upload functions
+    function previewPhoto(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        // Validate file size
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File too large. Maximum size is 5MB.');
+            return;
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            alert('Please upload an image file');
+            return;
+        }
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('photoPreview');
+            preview.src = e.target.result;
+            preview.classList.add('active');
+            
+            document.getElementById('uploadButton').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function uploadPhoto() {
+        const fileInput = document.getElementById('photoInput');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            alert('Please select a photo first');
+            return;
+        }
+        
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('token', token);
+        formData.append('photo', file);
+        
+        try {
+            const response = await fetch('/api/profile/upload-photo', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                setProfilePhoto(data.photo_url);
+                closeProfileModal();
+                alert('Photo uploaded successfully! ✓');
+                
+                // Reset form
+                fileInput.value = '';
+                document.getElementById('photoPreview').classList.remove('active');
+                document.getElementById('uploadButton').style.display = 'none';
+            } else {
+                alert('Error uploading photo');
+            }
+        } catch (error) {
+            console.error('Error uploading photo:', error);
+            alert('Error uploading photo');
+        }
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('profileModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeProfileModal();
+        }
+    });
+
+    // Load profile photo when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadProfilePhoto();
+        
+        // Also set the name
+        const userName = document.getElementById('userName');
+        if (userName) {
+            document.getElementById('profileNameDisplay').textContent = userName.textContent;
+        }
+    });
     
     </script>
 </body>
