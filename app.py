@@ -4914,6 +4914,124 @@ async def end_session(request: Request):
     except Exception as e:
         print(f"Error ending session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+# ============================================
+# AI TUTOR ENDPOINTS
+# ============================================
+
+@app.post("/api/tutor/message")
+async def get_tutor_message(request: Request):
+    """Generate personalized AI tutor message with voice-friendly text"""
+    try:
+        data = await request.json()
+        token = data.get('token')
+        context = data.get('context')  # 'greeting', 'instruction', 'success', 'struggle', 'encouragement', 'milestone'
+        student_name = data.get('student_name', 'there')
+        score = data.get('score')
+        lesson_number = data.get('lesson_number')
+        
+        # Verify token
+        user_data = verify_token(token)
+        
+        # Generate personalized message based on context
+        messages = generate_tutor_message(context, student_name, score, lesson_number)
+        
+        return {
+            "success": True,
+            "message": messages['text'],
+            "emotion": messages['emotion']  # happy, encouraging, celebrating, thoughtful
+        }
+        
+    except Exception as e:
+        print(f"Error generating tutor message: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def generate_tutor_message(context, student_name, score=None, lesson_number=None):
+    """Generate personalized tutor messages optimized for text-to-speech"""
+    
+    # Get first name only for more natural speech
+    first_name = student_name.split()[0] if student_name and student_name != 'there' else student_name
+    
+    if context == 'greeting':
+        messages = [
+            f"Hello {first_name}! I'm so excited to learn with you today!",
+            f"Welcome back, {first_name}! Ready to explore something amazing?",
+            f"Hi {first_name}! Great to see you! Let's make today's lesson awesome!",
+            f"Hey {first_name}! I'm here to help you succeed. Let's get started!"
+        ]
+        emotion = 'happy'
+        
+    elif context == 'instruction':
+        messages = [
+            f"Alright {first_name}, read this passage carefully. Take your time and enjoy the story! Then we'll test your understanding.",
+            f"Here's your reading for today, {first_name}. Focus on the main ideas and interesting details. You've got this!",
+            f"Let's dive into this passage together, {first_name}! Read at your own pace, and I'll be here when you're ready for questions.",
+            f"Time to read, {first_name}! Remember, it's not a race. Understanding is what matters most!"
+        ]
+        emotion = 'encouraging'
+        
+    elif context == 'success':
+        if score and score >= 80:
+            messages = [
+                f"Outstanding work, {first_name}! You scored {score} percent! You're really mastering this!",
+                f"Wow {first_name}! {score} percent is fantastic! You understood that passage perfectly!",
+                f"Incredible, {first_name}! {score} percent! Your hard work is really paying off! Keep it up!",
+                f"Amazing job, {first_name}! {score} percent! I'm so proud of your progress!"
+            ]
+            emotion = 'celebrating'
+        else:
+            messages = [
+                f"Good effort, {first_name}! You scored {score} percent. Every lesson makes you stronger!",
+                f"Nice work, {first_name}! {score} percent shows you're learning. Keep practicing!",
+                f"You're doing great, {first_name}! {score} percent is progress. Each lesson builds your skills!",
+                f"Well done, {first_name}! {score} percent means you're on the right track. Keep going!"
+            ]
+            emotion = 'encouraging'
+            
+    elif context == 'struggle':
+        messages = [
+            f"Hey {first_name}, I know this one was challenging. That's okay! Challenges help us grow. Want to try another passage?",
+            f"{first_name}, even the best readers find some passages tricky. The important thing is you're trying! Let's keep practicing.",
+            f"Don't worry, {first_name}! Learning has ups and downs. You're doing better than you think. Keep going!",
+            f"{first_name}, remember: every expert was once a beginner. You're building important skills. I believe in you!"
+        ]
+        emotion = 'encouraging'
+        
+    elif context == 'encouragement':
+        messages = [
+            f"You're making real progress, {first_name}! Every word you read makes you a better reader!",
+            f"Keep up the fantastic work, {first_name}! You're building skills that will help you forever!",
+            f"{first_name}, I can see how much you're improving! You should be proud of yourself!",
+            f"You're doing amazing, {first_name}! Each lesson brings you closer to your goals!"
+        ]
+        emotion = 'happy'
+        
+    elif context == 'milestone':
+        if lesson_number and lesson_number % 10 == 0:
+            messages = [
+                f"Wow {first_name}! You've completed {lesson_number} lessons! That's incredible dedication!",
+                f"Amazing milestone, {first_name}! {lesson_number} lessons shows real commitment to learning!",
+                f"{first_name}, {lesson_number} lessons completed! You're unstoppable! Keep this momentum going!"
+            ]
+        else:
+            messages = [
+                f"Great progress, {first_name}! Lesson {lesson_number} done! You're on a roll!",
+                f"Another lesson complete, {first_name}! That's lesson {lesson_number}! Keep it up!",
+                f"Excellent, {first_name}! Lesson {lesson_number} is behind you! Onward and upward!"
+            ]
+        emotion = 'celebrating'
+    
+    else:
+        messages = [f"Great to have you here, {first_name}! Let's learn together!"]
+        emotion = 'happy'
+    
+    return {
+        'text': random.choice(messages),
+        'emotion': emotion
+    }
 
 # ========== ADMIN ENDPOINTS ==========
 
