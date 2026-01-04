@@ -1342,6 +1342,70 @@
             console.log('=== INITIALIZATION COMPLETE ===');
         });
 
+        async function checkForNextLesson() {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
+            
+            try {
+                console.log('Checking for lessons...');
+                
+                // Get user's progress to see if they have completed lessons
+                const response = await fetch(`/api/student/progress?token=${token}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Progress data:', data);
+                
+                const lessonsContainer = document.getElementById('lessonsContainer');
+                const noAssessmentMessage = document.getElementById('noAssessmentMessage');
+                
+                if (!lessonsContainer) {
+                    console.error('lessonsContainer not found');
+                    return;
+                }
+                
+                if (!noAssessmentMessage) {
+                    console.error('noAssessmentMessage not found');
+                    return;
+                }
+                
+                // If user has completed ANY lessons, show the lessons interface
+                if (data.stats && data.stats.total_lessons > 0) {
+                    console.log(`User has ${data.stats.total_lessons} completed lessons - showing lesson interface`);
+                    noAssessmentMessage.style.display = 'none';
+                    lessonsContainer.style.display = 'block';
+                    
+                    // Load the next lesson
+                    loadNextLesson();
+                } else {
+                    console.log('User has no completed lessons - showing assessment prompt');
+                    noAssessmentMessage.style.display = 'block';
+                    lessonsContainer.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error('Error checking for lessons:', error);
+                
+                // On error, show lessons anyway (user has 63 lessons!)
+                const lessonsContainer = document.getElementById('lessonsContainer');
+                const noAssessmentMessage = document.getElementById('noAssessmentMessage');
+                
+                if (lessonsContainer && noAssessmentMessage) {
+                    console.log('Error occurred, but showing lessons anyway');
+                    noAssessmentMessage.style.display = 'none';
+                    lessonsContainer.style.display = 'block';
+                    loadNextLesson();
+                }
+            }
+        }
+
         function showSection(sectionName, event) {
             if (event) {
                 event.preventDefault();
@@ -1358,10 +1422,11 @@
                 }
             });
             
-            // Remove active class from all nav items
+            // ========== FIX: Remove active from ALL nav items ==========
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('active');
             });
+            // ===========================================================
             
             // Show selected section
             const targetSection = document.getElementById(sectionName + 'Section');
@@ -1369,10 +1434,17 @@
                 targetSection.classList.remove('hidden');
             }
             
-            // Add active class to clicked nav item
+            // ========== FIX: Add active to clicked nav item ==========
             if (event && event.currentTarget) {
                 event.currentTarget.classList.add('active');
+            } else {
+                // If no event (called programmatically), find and activate the nav item
+                const navItem = document.querySelector(`.nav-item[onclick*="${sectionName}"]`);
+                if (navItem) {
+                    navItem.classList.add('active');
+                }
             }
+            // =========================================================
             
             // Load data for specific sections
             if (sectionName === 'overview' || sectionName === 'progress') {
