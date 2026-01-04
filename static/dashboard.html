@@ -1691,7 +1691,7 @@
                 const response = await fetch(`/api/student/progress?token=${token}`);
                 const data = await response.json();
                 
-                console.log('Progress check:', data.stats);
+                console.log('Progress check:', data);
                 
                 // Get the actual elements that exist in your HTML
                 const noLessons = document.getElementById('noLessons');
@@ -1701,24 +1701,30 @@
                     return;
                 }
                 
-                // If user has completed lessons, hide "noLessons" and load next lesson
-                if (data.stats && data.stats.total_lessons > 0) {
-                    console.log(`User has ${data.stats.total_lessons} completed lessons - loading lesson interface`);
+                // Check if user has completed assessment (has reading level and interests)
+                const hasCompletedAssessment = data.user && data.user.reading_level && data.user.interests;
+                
+                if (hasCompletedAssessment) {
+                    console.log('âœ" User has completed assessment - loading lessons');
                     noLessons.classList.add('hidden');
                     loadNextLesson();
                 } else {
-                    console.log('No completed lessons - showing assessment prompt');
+                    console.log('âŒ User needs to complete assessment first');
                     noLessons.classList.remove('hidden');
                 }
                 
             } catch (error) {
                 console.error('Error checking for lessons:', error);
                 
-                // On error, try to load lessons anyway (user has 63!)
-                const noLessons = document.getElementById('noLessons');
-                if (noLessons) {
-                    noLessons.classList.add('hidden');
-                    loadNextLesson();
+                // On error, check localStorage for user data
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                if (user.reading_level && user.interests) {
+                    console.log('âœ" Found assessment data in localStorage - loading lessons');
+                    const noLessons = document.getElementById('noLessons');
+                    if (noLessons) {
+                        noLessons.classList.add('hidden');
+                        loadNextLesson();
+                    }
                 }
             }
         }
@@ -2519,7 +2525,7 @@
 
         // Session configuration
         const SESSION_CONFIG = {
-            WARNING_TIME: 7 * 60 * 1000,      // 7 minutes in milliseconds
+            WARNING_TIME: 37 * 60 * 1000,      // 7 minutes in milliseconds
             TIMEOUT_TIME: 10 * 60 * 1000,     // 10 minutes in milliseconds
             MAX_BREAK_TIME: 30 * 60 * 1000,   // 30 minutes in milliseconds
             ACTIVITY_CHECK_INTERVAL: 30 * 1000 // Check every 30 seconds
