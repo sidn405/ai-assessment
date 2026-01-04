@@ -1229,6 +1229,169 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         conn.close()
         print(f"Error generating passage: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(e)}")
+    
+import os
+import base64
+from datetime import datetime
+from fastapi import File, UploadFile
+
+# ============================================
+# PROFILE PHOTO ENDPOINTS
+# ============================================
+
+@app.post("/api/profile/upload-photo")
+async def upload_profile_photo(request: Request):
+    """Upload custom profile photo"""
+    try:
+        # Get multipart form data
+        form = await request.form()
+        token = form.get('token')
+        photo = form.get('photo')
+        
+        if not token:
+            raise HTTPException(status_code=400, detail="Token required")
+        
+        if not photo:
+            raise HTTPException(status_code=400, detail="Photo required")
+        
+        # Verify token
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        # Read photo data
+        photo_data = await photo.read()
+        
+        # Validate file size (max 5MB)
+        if len(photo_data) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+        
+        # Validate file type
+        content_type = photo.content_type
+        if not content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Only image files allowed")
+        
+        # Convert to base64 for storage
+        base64_image = base64.b64encode(photo_data).decode('utf-8')
+        photo_url = f"data:{content_type};base64,{base64_image}"
+        
+        # Save to database
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE users SET profile_photo = %s WHERE id = %s""",
+                (photo_url, user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE users SET profile_photo = ? WHERE id = ?""",
+                (photo_url, user_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "Profile photo uploaded successfully",
+            "photo_url": photo_url
+        }
+        
+    except Exception as e:
+        print(f"Error uploading profile photo: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/profile/set-avatar")
+async def set_avatar(request: Request):
+    """Set avatar from preset options"""
+    try:
+        data = await request.json()
+        token = data.get('token')
+        avatar = data.get('avatar')
+        
+        if not token or not avatar:
+            raise HTTPException(status_code=400, detail="Token and avatar required")
+        
+        # Verify token
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        # Save to database
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE users SET profile_photo = %s WHERE id = %s""",
+                (avatar, user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE users SET profile_photo = ? WHERE id = ?""",
+                (avatar, user_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "Avatar set successfully",
+            "avatar": avatar
+        }
+        
+    except Exception as e:
+        print(f"Error setting avatar: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/profile/photo")
+async def get_profile_photo(token: str):
+    """Get user's current profile photo"""
+    try:
+        # Verify token
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        # Get from database
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT profile_photo FROM users WHERE id = %s""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT profile_photo FROM users WHERE id = ?""",
+                (user_id,)
+            )
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        photo = result['profile_photo'] if hasattr(result, 'keys') else result[0]
+        
+        return {
+            "success": True,
+            "photo_url": photo
+        }
+        
+    except Exception as e:
+        print(f"Error getting profile photo: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/read/feedback")
 async def submit_reading_feedback(request: Request):
