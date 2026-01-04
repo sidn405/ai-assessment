@@ -4411,6 +4411,8 @@ const avatars_darkSkinFocus = [
         const firstLetter = name.charAt(0).toUpperCase();
         initials.textContent = firstLetter;
         initials.style.display = 'flex';
+        
+        // Hide image
         document.getElementById('profilePhotoDisplay').style.display = 'none';
     }
 
@@ -4573,6 +4575,8 @@ const avatars_darkSkinFocus = [
 
     // Load profile photo when page loads
     document.addEventListener('DOMContentLoaded', function() {
+        // Set default initials immediately
+        setDefaultInitials();
         loadProfilePhoto();
         
         // Also set the name
