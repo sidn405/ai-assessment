@@ -2376,17 +2376,23 @@ async def get_student_progress(token: str):
         conn = get_db()
         cursor = conn.cursor()
         
-        # ========== ADD THIS: GET USER INFO ==========
+        # ========== GET USER INFO WITH STREAK ==========
         if USE_POSTGRES:
             cursor.execute(
-                """SELECT id, full_name, email, reading_level, current_streak
-                   FROM users WHERE id = %s""",
+                """SELECT u.id, u.full_name, u.email, u.reading_level, 
+                          COALESCE(us.current_streak, 0) as current_streak
+                   FROM users u
+                   LEFT JOIN user_streaks us ON u.id = us.user_id
+                   WHERE u.id = %s""",
                 (user_id,)
             )
         else:
             cursor.execute(
-                """SELECT id, full_name, email, reading_level, current_streak
-                   FROM users WHERE id = ?""",
+                """SELECT u.id, u.full_name, u.email, u.reading_level, 
+                          COALESCE(us.current_streak, 0) as current_streak
+                   FROM users u
+                   LEFT JOIN user_streaks us ON u.id = us.user_id
+                   WHERE u.id = ?""",
                 (user_id,)
             )
         
