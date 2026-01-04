@@ -4291,10 +4291,66 @@
 
     // Preset avatars (emojis)
     const avatars = [
-        '😀', '😎', '🤓', '🧐', '🤩', '🥳', '😇', '🙂',
-        '😊', '☺️', '🤗', '🤔', '🧑‍🎓', '👨‍🎓', '👩‍🎓', '🧑‍💻',
-        '👨‍💻', '👩‍💻', '🧑‍🏫', '👨‍🏫', '👩‍🏫', '🦸', '🦹', '🧙'
-    ];
+    // Happy faces - various skin tones
+    '😀', '😃', '😄', '😁', '😊', '🙂', '😇',
+    
+    // Cool & Fun - various skin tones
+    '😎', '🤓', '🧐', '🤩', '🥳', '🤗',
+    
+    // African American students (dark skin tone)
+    '🧑🏿‍🎓', '👨🏿‍🎓', '👩🏿‍🎓',  // Students - dark skin
+    
+    // African American professionals (dark skin tone)
+    '🧑🏿‍💻', '👨🏿‍💻', '👩🏿‍💻',  // Tech/Computer - dark skin
+    '🧑🏿‍🏫', '👨🏿‍🏫', '👩🏿‍🏫',  // Teachers - dark skin
+    '🧑🏿‍🔬', '👨🏿‍🔬', '👩🏿‍🔬',  // Scientists - dark skin
+    '🧑🏿', '👨🏿', '👩🏿',          // General person - dark skin
+    
+    // Medium-dark skin tone representation
+    '🧑🏾‍🎓', '👨🏾‍🎓', '👩🏾‍🎓',  // Students - medium-dark
+    '🧑🏾‍💻', '👨🏾‍💻', '👩🏾‍💻',  // Tech - medium-dark
+    '🧑🏾', '👨🏾', '👩🏾',          // General - medium-dark
+    
+    // Medium skin tone
+    '🧑🏽‍🎓', '👨🏽‍🎓', '👩🏽‍🎓',  // Students - medium
+    '🧑🏽‍💻', '👨🏽‍💻', '👩🏽‍💻',  // Tech - medium
+    
+    // Light-medium skin tone
+    '🧑🏼‍🎓', '👨🏼‍🎓', '👩🏼‍🎓',  // Students - light-medium
+    
+    // Superheroes & Fun (all skin tones available)
+    '🦸🏿', '🦸🏾', '🦸🏽', '🦸',     // Superheroes
+    '🦹🏿', '🦹🏾', '🦹🏽', '🦹',     // Supervillains (fun)
+    
+    // Additional professional roles
+    '🧑‍⚕️', '👨‍⚕️', '👩‍⚕️',        // Healthcare
+    '🧑‍🚀', '👨‍🚀', '👩‍🚀',        // Astronaut
+    '🧙🏿', '🧙🏾', '🧙',            // Wizard (magical/fun)
+    
+    // More expressions
+    '🤔', '🧐', '😌', '🙃', '😏'
+];
+
+// Alternative: If you want ONLY dark skin tones to prominently feature African American representation
+const avatars_darkSkinFocus = [
+    // African American representation (dark & medium-dark skin tones)
+    '🧑🏿‍🎓', '👨🏿‍🎓', '👩🏿‍🎓',  // Students
+    '🧑🏿‍💻', '👨🏿‍💻', '👩🏿‍💻',  // Tech workers
+    '🧑🏿‍🏫', '👨🏿‍🏫', '👩🏿‍🏫',  // Teachers
+    '🧑🏿‍🔬', '👨🏿‍🔬', '👩🏿‍🔬',  // Scientists
+    '🧑🏿', '👨🏿', '👩🏿',          // General
+    '🧑🏾‍🎓', '👨🏾‍🎓', '👩🏾‍🎓',  // Students
+    '🧑🏾‍💻', '👨🏾‍💻', '👩🏾‍💻',  // Tech workers
+    '🧑🏾', '👨🏾', '👩🏾',          // General
+    '🦸🏿', '🦹🏿',                  // Superheroes
+    
+    // Additional diverse options
+    '🧑🏽‍🎓', '👨🏽‍🎓', '👩🏽‍🎓',
+    '🧑🏼‍🎓', '👨🏼‍🎓', '👩🏼‍🎓',
+    
+    // Fun expressions (neutral skin)
+    '😀', '😎', '🤓', '🥳', '😊', '🤗', '🙂'
+];
 
     let selectedAvatar = null;
 
