@@ -1,0 +1,45 @@
+async function checkForNextLesson() {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
+            
+            try {
+                console.log('Checking for next lesson...');
+                
+                const response = await fetch(`/api/student/progress?token=${token}`);
+                const data = await response.json();
+                
+                console.log('Progress check:', data.stats);
+                
+                // Get the actual elements that exist in your HTML
+                const noLessons = document.getElementById('noLessons');
+                
+                if (!noLessons) {
+                    console.error('noLessons element not found!');
+                    return;
+                }
+                
+                // If user has completed lessons, hide "noLessons" and load next lesson
+                if (data.stats && data.stats.total_lessons > 0) {
+                    console.log(`User has ${data.stats.total_lessons} completed lessons - loading lesson interface`);
+                    noLessons.classList.add('hidden');
+                    loadNextLesson();
+                } else {
+                    console.log('No completed lessons - showing assessment prompt');
+                    noLessons.classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                console.error('Error checking for lessons:', error);
+                
+                // On error, try to load lessons anyway (user has 63!)
+                const noLessons = document.getElementById('noLessons');
+                if (noLessons) {
+                    noLessons.classList.add('hidden');
+                    loadNextLesson();
+                }
+            }
+        }
