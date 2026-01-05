@@ -1286,7 +1286,7 @@
             position: fixed;
             bottom: 2rem;
             right: 2rem;
-            z-index: 1000;
+            z-index: 100000;
             display: flex;
             align-items: flex-end;
             gap: 1rem;
@@ -1928,6 +1928,17 @@
         // AI TUTOR (Dashboard-integrated)
         // ============================================
         let tutorMuted = false;
+        let speechUnlocked = false;
+
+        document.addEventListener('click', () => {
+        if (speechUnlocked || !window.speechSynthesis) return;
+        speechUnlocked = true;
+
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+        }, { once: true });
+
 
         function getStudentNameForTutor() {
         try {
