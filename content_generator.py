@@ -25,8 +25,7 @@ class ContentGenerator:
         import random
         target_words = random.randint(word_count_min, word_count_max)
         
-        # ========== UPDATED PROMPT ==========
-        # Build focused prompt - ONE TOPIC PER LESSON
+        # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
         prompt = f"""Create an educational reading passage about {topic}.
     Difficulty Level: {difficulty_level}
     Word Count: Between {word_count_min} and {word_count_max} words (aim for approximately {target_words} words)
@@ -37,6 +36,14 @@ class ContentGenerator:
     - Make it engaging and age-appropriate
     - Use clear, accessible language
 
+    CRITICAL - VOCABULARY EXTRACTION:
+    - Identify ALL potentially challenging words in the passage
+    - Include words that a {difficulty_level} reader might not know
+    - For each word, provide a simple, age-appropriate definition
+    - Include at least 5-8 vocabulary words (more for longer passages)
+    - Look for: academic terms, technical words, advanced vocabulary, subject-specific jargon
+    - Examples: "phenomenon", "transformation", "immersive", "gratification", "tangible", "palpable", etc.
+
     Generate a passage that explores {topic} in an interesting way.
 
     Return your response as a JSON object with this exact structure:
@@ -45,11 +52,23 @@ class ContentGenerator:
         "content": "The full passage text (approximately {target_words} words, focused on {topic})",
         "key_concepts": ["concept1", "concept2", "concept3"],
         "vocabulary_words": [
-            {{"word": "word1", "definition": "simple definition"}},
-            {{"word": "word2", "definition": "simple definition"}}
+            {{"word": "challenging_word1", "definition": "simple, clear definition"}},
+            {{"word": "challenging_word2", "definition": "simple, clear definition"}},
+            {{"word": "challenging_word3", "definition": "simple, clear definition"}},
+            {{"word": "challenging_word4", "definition": "simple, clear definition"}},
+            {{"word": "challenging_word5", "definition": "simple, clear definition"}},
+            {{"word": "challenging_word6", "definition": "simple, clear definition"}},
+            {{"word": "challenging_word7", "definition": "simple, clear definition"}},
+            {{"word": "challenging_word8", "definition": "simple, clear definition"}}
         ]
-    }}"""
-        # ===================================
+    }}
+
+    VOCABULARY GUIDELINES BY LEVEL:
+    - elementary: Words at 4th-6th grade level (5-7 words minimum)
+    - intermediate: Words at 7th-9th grade level (6-8 words minimum)
+    - high_school: College-prep vocabulary (7-10 words minimum)
+    - adult: Advanced academic vocabulary (8-12 words minimum)"""
+        
         try:
             # NEW API SYNTAX
             response = self.client.chat.completions.create(
@@ -57,12 +76,25 @@ class ContentGenerator:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert educational content creator. Focus on ONE topic at a time. Do not blend multiple topics together. Generate passages within the specified word count range."
+                        "content": """You are an expert educational content creator. 
+
+    CRITICAL VOCABULARY INSTRUCTION:
+    Extract ALL words from your passage that might be challenging for the target reading level. 
+    Don't limit yourself to just 2-3 words - identify EVERY word that a student might need help understanding.
+    A good passage should have AT LEAST 5-10 vocabulary words, more for longer passages.
+
+    Examples of words to include:
+    - Elementary: "ecosystem", "gravity", "nutrient", "habitat", "diverse"
+    - Intermediate: "phenomenon", "inevitable", "perspective", "substantial", "comprehensive"  
+    - High School: "culmination", "juxtaposition", "paradigm", "synthesis", "nuance"
+    - Adult: "epistemology", "hegemony", "empirical", "ubiquitous", "pragmatic"
+
+    Focus on ONE topic at a time. Do not blend multiple topics together."""
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.8,
-                max_tokens=2000,  # Increased to accommodate longer passages
+                max_tokens=2500,
                 timeout=60
             )
             
@@ -76,14 +108,41 @@ class ContentGenerator:
             
             passage_data = json.loads(content)
             
+            # ========== VALIDATE & ENHANCE VOCABULARY ==========
+            vocab_words = passage_data.get('vocabulary_words', [])
+            vocab_count = len(vocab_words)
+            
+            print(f"📚 Initial vocabulary words: {vocab_count}")
+            
+            # Minimum vocabulary requirements by level
+            min_vocab = {
+                'elementary': 5,
+                'intermediate': 6,
+                'high_school': 7,
+                'adult': 8
+            }
+            
+            required_min = min_vocab.get(difficulty_level, 5)
+            
+            if vocab_count < required_min:
+                print(f"⚠️ Only {vocab_count} words found. Need at least {required_min}. Extracting more...")
+                passage_data['vocabulary_words'] = self._extract_additional_vocabulary(
+                    passage_data['content'], 
+                    vocab_words,
+                    difficulty_level,
+                    required_min
+                )
+                print(f"✅ Enhanced to {len(passage_data['vocabulary_words'])} vocabulary words")
+            # ==================================================
+            
             # Analyze readability
             from readability import analyze_readability
             readability = analyze_readability(passage_data['content'])
             
-            # Add metadata - TAG WITH SINGLE TOPIC
+            # Add metadata
             passage_data.update({
                 "source": "AI",
-                "topic_tags": [topic],  # ← ONLY the main topic, not all interests
+                "topic_tags": [topic],
                 "word_count": readability['word_count'],
                 "readability_score": readability['flesch_kincaid_grade'],
                 "flesch_ease": readability['flesch_reading_ease'],
@@ -91,11 +150,13 @@ class ContentGenerator:
                 "estimated_minutes": readability['estimated_minutes'],
                 "actual_difficulty": readability['difficulty_level'],
                 "grade_band": readability['grade_band'],
-                "target_word_range": f"{word_count_min}-{word_count_max}"  # Track the range used
+                "target_word_range": f"{word_count_min}-{word_count_max}",
+                "vocabulary_count": len(passage_data['vocabulary_words'])
             })
             
-            print(f"✓ Generated passage: '{passage_data['title']}'")
-            print(f"✓ Word count: {readability['word_count']} (target: {word_count_min}-{word_count_max})")
+            print(f"✅ Generated passage: '{passage_data['title']}'")
+            print(f"✅ Word count: {readability['word_count']} (target: {word_count_min}-{word_count_max})")
+            print(f"✅ Vocabulary words: {len(passage_data['vocabulary_words'])}")
             
             return passage_data
             
@@ -104,9 +165,114 @@ class ContentGenerator:
             import traceback
             traceback.print_exc()
             return self._get_fallback_passage(topic, difficulty_level)
+
+    def _extract_additional_vocabulary(self, passage_text, existing_vocab, difficulty_level, min_required=5):
+        """
+        Use AI to extract more vocabulary words if initial extraction was insufficient
+        
+        Args:
+            passage_text: The full passage content
+            existing_vocab: List of already identified vocabulary dicts
+            difficulty_level: Target difficulty (elementary, intermediate, etc.)
+            min_required: Minimum number of total vocabulary words needed
+        """
+        existing_words = [v['word'].lower() for v in existing_vocab]
+        words_needed = max(min_required - len(existing_vocab), 3)
+        
+        print(f"🔍 Extracting {words_needed} more vocabulary words...")
+        
+        prompt = f"""Analyze this passage and extract {words_needed} MORE challenging vocabulary words for a {difficulty_level} level reader.
+
+    Passage:
+    {passage_text}
+
+    Already identified: {', '.join(existing_words) if existing_words else 'none'}
+
+    Find {words_needed} MORE challenging words from this passage that students at {difficulty_level} level might not know.
+
+    Focus on:
+    - Academic vocabulary
+    - Technical terms
+    - Uncommon words
+    - Subject-specific terminology
+    - Advanced descriptive words
+
+    Provide simple, age-appropriate definitions.
+
+    Return ONLY a JSON array (no other text):
+    [
+        {{"word": "word1", "definition": "simple definition"}},
+        {{"word": "word2", "definition": "simple definition"}},
+        {{"word": "word3", "definition": "simple definition"}}
+    ]"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4-turbo-preview",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"Extract challenging vocabulary for {difficulty_level} readers. Provide simple definitions."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000,
+                timeout=30
+            )
             
-       
-    
+            content = response.choices[0].message.content
+            
+            # Extract JSON
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            additional_vocab = json.loads(content)
+            
+            # Combine with existing, avoid duplicates
+            all_vocab = existing_vocab.copy()
+            added_count = 0
+            
+            for new_word in additional_vocab:
+                word_lower = new_word['word'].lower()
+                if word_lower not in existing_words:
+                    all_vocab.append(new_word)
+                    existing_words.append(word_lower)
+                    added_count += 1
+            
+            print(f"✅ Added {added_count} new vocabulary words")
+            return all_vocab
+            
+        except Exception as e:
+            print(f"❌ Error extracting additional vocabulary: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return existing vocabulary if extraction fails
+            return existing_vocab
+
+    def _get_fallback_passage(self, topic, difficulty):
+        """Return a basic fallback passage if AI generation fails"""
+        return {
+            "title": f"Introduction to {topic}",
+            "content": f"This is a {difficulty} passage about {topic}. [AI generation unavailable - please try again or contact administrator]",
+            "source": "fallback",
+            "topic_tags": [topic],
+            "word_count": 50,
+            "readability_score": 5.0,
+            "flesch_ease": 70.0,
+            "difficulty_level": difficulty,
+            "estimated_minutes": 1,
+            "key_concepts": [topic],
+            "vocabulary_words": [
+                {"word": "topic", "definition": "The main subject being discussed"},
+                {"word": "passage", "definition": "A section of written text"},
+                {"word": "educational", "definition": "Related to learning and teaching"}
+            ],
+            "vocabulary_count": 3
+        }
+            
     def generate_comprehension_questions(self, passage_text, passage_title, num_questions=3):
         """Generate comprehension questions using GPT-4"""
         

@@ -3242,18 +3242,72 @@
                 const vocabSection = document.getElementById('vocabularySection');
                 const vocabList = document.getElementById('vocabularyList');
                 
-                if (lesson.vocabulary && Array.isArray(lesson.vocabulary) && lesson.vocabulary.length > 0) {
-                    if (vocabSection) vocabSection.classList.remove('hidden');
+                // Handle both 'vocabulary' and 'vocabulary_words' field names
+                const vocabWords = lesson.vocabulary_words || lesson.vocabulary || [];
+                
+                // Parse if it's a string
+                let parsedVocab = vocabWords;
+                if (typeof vocabWords === 'string') {
+                    try {
+                        parsedVocab = JSON.parse(vocabWords);
+                    } catch (e) {
+                        console.error('Error parsing vocabulary:', e);
+                        parsedVocab = [];
+                    }
+                }
+                
+                console.log('📚 Vocabulary data:', parsedVocab);
+                console.log('📚 Vocabulary count:', parsedVocab.length);
+                
+                if (parsedVocab && Array.isArray(parsedVocab) && parsedVocab.length > 0) {
+                    if (vocabSection) {
+                        vocabSection.classList.remove('hidden');
+                        
+                        // Update header with count
+                        const vocabHeader = vocabSection.querySelector('h3');
+                        if (vocabHeader) {
+                            vocabHeader.innerHTML = `📚 Key Vocabulary <span style="
+                                font-size: 0.9rem; 
+                                opacity: 0.8; 
+                                font-weight: normal;
+                            ">(${parsedVocab.length} words)</span>`;
+                        }
+                    }
+                    
                     if (vocabList) {
-                        vocabList.innerHTML = lesson.vocabulary.map(v => `
-                            <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 4px; margin-bottom: 0.5rem;">
-                                <strong style="color: #D4AF37; font-size: 1.1rem;">${v.word || 'Word'}</strong>
-                                <p style="margin-top: 0.5rem; margin-bottom: 0;">${v.definition || ''}</p>
+                        vocabList.innerHTML = parsedVocab.map((v, index) => `
+                            <div style="
+                                background: rgba(255,255,255,0.1); 
+                                padding: 1.25rem; 
+                                border-radius: 8px; 
+                                margin-bottom: 0.75rem;
+                                border-left: 4px solid var(--gold-accent);
+                                transition: all 0.3s;
+                                animation: slideDown 0.3s ease ${index * 0.05}s both;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.15)'; this.style.borderLeftWidth='6px'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.1)'; this.style.borderLeftWidth='4px'">
+                                <strong style="
+                                    color: var(--gold-accent); 
+                                    font-size: 1.2rem;
+                                    display: block;
+                                    margin-bottom: 0.5rem;
+                                    letter-spacing: 0.5px;
+                                ">${v.word || 'Word'}</strong>
+                                <p style="
+                                    margin: 0; 
+                                    line-height: 1.6;
+                                    color: rgba(255,255,255,0.9);
+                                    font-size: 0.95rem;
+                                ">${v.definition || ''}</p>
                             </div>
                         `).join('');
+                        
+                        console.log(`✅ Displayed ${parsedVocab.length} vocabulary words`);
                     }
                 } else {
                     if (vocabSection) vocabSection.classList.add('hidden');
+                    console.log('⚠️ No vocabulary words in lesson');
                 }
                 
                 // Display questions if available

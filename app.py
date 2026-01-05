@@ -2266,6 +2266,7 @@ async def save_lesson_progress(request: Request):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
 
 @app.get("/api/student/gamification")
 async def get_gamification_data(token: str):
