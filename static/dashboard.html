@@ -1588,9 +1588,14 @@
                             Badges celebrate milestones (first lesson, streaks, 50 lessons, time-of-day achievements).
                         </div>
                         <div style="margin-top:.75rem; font-size:.9rem;">
-                            <div>🎯 <strong>Getting Started</strong> — your first completed lesson</div>
+                            <div>🎯 <strong>Getting Started</strong> — Complete your first lesson</div>
                             <div>📚 <strong>Bookworm</strong> — 50 lessons completed</div>
                             <div>🔥 <strong>Triple Perfect</strong> — 3 perfect scores in a row</div>
+                            <div>🏆 <strong>Perfect Week</strong> — Achieve all weekly goals</div>
+                            <div>🌅 <strong>Early Bird</strong> — Complete lesson before 9 AM</div>
+                            <div>🦉 <strong>Night Owl</strong> — Complete lesson after 9 PM</div>
+                            <div>👑 <strong>Consistency King</strong> — 7-day streak</div>
+                            <div>⚡ <strong>Speed Reader</strong> — 10 lessons in one week</div>
                         </div>
                         </div>
 
@@ -2795,6 +2800,7 @@
                 
                 // Display badges
                 displayBadges(data.badges);
+                renderWeeklyGoals(gamification.weekly_goals);
                 
                 // Display weekly goals
                 if (data.weekly_goals) {
@@ -4114,44 +4120,59 @@
             }
         }
 
-        async function saveWeeklyGoal() {
+        async function saveWeeklyGoal(event) {
+            event.preventDefault();
+
             const token = localStorage.getItem('token');
-            const statusEl = document.getElementById('weeklyGoalStatus');
-            const input = document.getElementById('weeklyLessonsTarget');
+            const target = Number(document.getElementById('weeklyLessonsTarget').value || 5);
 
-            if (!token || !input) return;
-
-            const target = Math.max(1, Math.min(50, parseInt(input.value || '5', 10)));
-
-            try {
-                if (statusEl) statusEl.textContent = 'Saving...';
-
-                const res = await fetch('/api/student/weekly-goals/set', {
+            const res = await fetch('/api/student/weekly-goals', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token,
-                    goal_type: 'lessons_completed',
-                    target_value: target
-                })
-                });
+                body: JSON.stringify({ token, goal_type: 'lessons_completed', target_value: target })
+            });
 
-                const data = await res.json();
-                if (!res.ok || !data.success) {
-                throw new Error(data?.detail || 'Unable to save goal.');
-                }
-
-                if (statusEl) statusEl.textContent = 'Saved ✅';
-
-                // refresh the Progress widgets
-                if (typeof loadGamificationData === 'function') {
-                await loadGamificationData();
-                }
-            } catch (e) {
-                console.error(e);
-                if (statusEl) statusEl.textContent = 'Could not save ❌';
+            if (!res.ok) {
+                const txt = await res.text();
+                alert('Failed to save weekly goal: ' + txt);
+                return;
             }
-        }
+
+            document.getElementById('weeklyGoalSaved')?.classList.remove('hidden');
+
+            // refresh gamification/progress UI
+            loadAllStats();
+            setTimeout(() => document.getElementById('weeklyGoalSaved')?.classList.add('hidden'), 1500);
+            }
+
+            function renderWeeklyGoals(goals) {
+            const box = document.getElementById('weeklyGoalsContainer');
+            if (!box) return;
+
+            if (!goals || goals.length === 0) {
+                box.innerHTML = `<div style="color:var(--text-gray);">No goal set yet. Choose a target above.</div>`;
+                return;
+            }
+
+            const g = goals.find(x => x.goal_type === 'lessons_completed') || goals[0];
+            const pct = Math.min(100, Math.round((g.current_value / g.target_value) * 100));
+
+            box.innerHTML = `
+                <div style="display:flex; justify-content:space-between; margin-bottom:.35rem;">
+                <div><strong>${g.current_value}</strong> of <strong>${g.target_value}</strong> lessons</div>
+                <div style="font-weight:700; color:${g.completed ? '#155724' : 'var(--navy-primary)'};">
+                    ${g.completed ? '✅ Completed' : pct + '%'}
+                </div>
+                </div>
+                <div style="height:10px; background:#e5e7eb; border-radius:999px; overflow:hidden;">
+                <div style="height:10px; width:${pct}%; background: linear-gradient(90deg, var(--navy-primary), var(--gold-accent));"></div>
+                </div>
+                <div style="margin-top:.5rem; color:var(--text-gray); font-size:.9rem;">
+                Bonus for completing: <strong>${g.points_reward}</strong> points
+                </div>
+            `;
+            }
+
 
         async function loadWeeklyGoals() {
             const token = localStorage.getItem('token');
@@ -4168,18 +4189,33 @@
                 
                 if (data.success && data.goals && data.goals.length > 0) {
                     goalsContainer.innerHTML = data.goals.map(goal => `
-                        <div style="padding: 1rem; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <span style="font-size: 1.5rem;">${goal.icon}</span>
-                                <span style="font-weight: 500;">${goal.name}</span>
+                        <div class="card">
+                            <h2>📅 Weekly Goals</h2>
+
+                            <div class="alert alert-info" style="margin-bottom:1rem;">
+                                Set a simple weekly target. When you hit it, you earn a bonus and build consistency.
                             </div>
-                            <div style="flex: 1; max-width: 200px; margin: 0 1rem;">
-                                <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
-                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; width: ${goal.progress}%; transition: width 0.3s;"></div>
+
+                            <form id="weeklyGoalsForm" onsubmit="saveWeeklyGoal(event)" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                                <div style="display:flex; flex-direction:column; gap:.35rem;">
+                                <label style="font-weight:600; color: var(--navy-primary);">Lessons per week</label>
+                                <input id="weeklyLessonsTarget" type="number" min="1" max="25" value="5"
+                                        style="padding:.7rem .9rem; border:1px solid #e5e7eb; border-radius:10px; width:180px;" />
                                 </div>
+
+                                <button class="btn btn-primary" type="submit">Save Goal</button>
+
+                                <div id="weeklyGoalSaved" class="hidden" style="color:#155724; font-weight:600;">
+                                ✅ Saved!
+                                </div>
+                            </form>
+
+                            <div style="margin-top:1rem;">
+                                <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.35rem;">This week’s progress</div>
+                                <div id="weeklyGoalsContainer">Loading your goals...</div>
                             </div>
-                            <span style="font-weight: 600; color: #667eea;">${goal.current}/${goal.target}</span>
-                        </div>
+                            </div>
+
                     `).join('');
                     
                     console.log('✓ Weekly goals loaded');
