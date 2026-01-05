@@ -1005,6 +1005,68 @@
             }
         }
 
+        /* ========== MOBILE MODAL FIX ========== */
+
+        /* Make modals scrollable on mobile */
+        @media (max-width: 768px) {
+            /* Essay Results Modal */
+            #essay-results-modal,
+            #celebration-modal,
+            #comprehension-essay-modal {
+                padding: 1rem !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            
+            /* Modal content should fit screen */
+            #essay-results-modal > div,
+            #celebration-modal > div,
+            #comprehension-essay-modal > div {
+                max-height: 90vh !important;
+                overflow-y: auto !important;
+                margin: auto !important;
+            }
+            
+            /* Lesson Results Card - Mobile */
+            #lessonResultsCard {
+                max-height: 90vh !important;
+                overflow-y: auto !important;
+            }
+            
+            /* Make sure buttons are always visible */
+            .btn-primary {
+                position: sticky !important;
+                bottom: 0 !important;
+                background: var(--navy-primary) !important;
+                z-index: 10 !important;
+                margin-top: 1rem !important;
+            }
+            
+            /* Prevent body scroll when modal is open */
+            body.modal-open {
+                overflow: hidden !important;
+                position: fixed !important;
+                width: 100% !important;
+            }
+        }
+
+        /* General Modal Improvements */
+        .modal-content {
+            max-height: 85vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Ensure feedback text is fully visible */
+        #tutorMessage,
+        #resultsMessage,
+        .speech-text {
+            max-height: 60vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 1rem;
+        }
+
     
         /* Profile Photo in Upper Right */
         .profile-photo-container {
@@ -1727,7 +1789,7 @@
                         <!-- Points Card -->
                         <div style="text-align: center; background: rgba(255,255,255,0.95); padding: 2rem 2.5rem; border-radius: 16px; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-8px) scale(1.05)'" onmouseout="this.style.transform='translateY(0) scale(1)'">
                             <div style="font-size: 3rem; margin-bottom: 0.5rem;">💎</div>
-                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                                 <span id="userPoints">0</span> pts
                             </div>
                             <div style="color: #666; font-weight: 600; margin-top: 0.5rem;">Points Earned</div>
@@ -1736,7 +1798,7 @@
                         <!-- Level Card -->
                         <div style="text-align: center; background: rgba(255,255,255,0.95); padding: 2rem 2.5rem; border-radius: 16px; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-8px) scale(1.05)'" onmouseout="this.style.transform='translateY(0) scale(1)'">
                             <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎖️</div>
-                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #F093FB 0%, #F5576C 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                                 Level <span id="userLevel">1</span>
                             </div>
                             <div style="color: #666; font-weight: 600; margin-top: 0.5rem;">Current Level</div>
@@ -3811,6 +3873,45 @@
             }
         }
 
+        // ========== MOBILE MODAL SCROLL FIX ==========
+
+        function openModalMobile(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            
+            // Prevent body scroll on mobile
+            if (window.innerWidth <= 768) {
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+                document.body.style.position = 'fixed';
+                document.body.style.width = '100%';
+            }
+            
+            modal.classList.add('active');
+            
+            // Scroll modal to top
+            setTimeout(() => {
+                modal.scrollTop = 0;
+                const content = modal.querySelector('.modal-content, .profile-modal-content');
+                if (content) content.scrollTop = 0;
+            }, 100);
+        }
+
+        function closeModalMobile(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            
+            // Restore body scroll
+            if (window.innerWidth <= 768) {
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.position = '';
+                document.body.style.width = '';
+            }
+            
+            modal.classList.remove('active');
+        }
+
         // ========== SHOW ESSAY RESULTS ==========
 
         function showEssayResults(data) {
@@ -3955,6 +4056,21 @@
             `;
             
             document.body.appendChild(modal);
+    
+            // ✅ PREVENT BODY SCROLL ON MOBILE
+            if (window.innerWidth <= 768) {
+                document.body.style.overflow = 'hidden';
+                document.body.style.position = 'fixed';
+                document.body.style.width = '100%';
+                document.body.style.top = `-${window.scrollY}px`;
+            }
+            
+            // ✅ SCROLL MODAL TO TOP
+            setTimeout(() => {
+                modal.scrollTop = 0;
+                const content = modal.querySelector('div');
+                if (content) content.scrollTop = 0;
+            }, 100);
             
             // Add click handler
             document.getElementById('continue-learning-btn').addEventListener('click', closeEssayResultsAndContinue);
@@ -3962,6 +4078,21 @@
 
         function closeEssayResultsAndContinue() {
             const modal = document.getElementById('essay-results-modal');
+            
+            // ✅ RESTORE BODY SCROLL ON MOBILE (BEFORE REMOVING MODAL)
+            if (window.innerWidth <= 768) {
+                const scrollY = document.body.style.top;
+                document.body.style.overflow = '';
+                document.body.style.position = '';
+                document.body.style.width = '';
+                document.body.style.top = '';
+                
+                // Restore scroll position
+                if (scrollY) {
+                    window.scrollTo(0, parseInt(scrollY || '0') * -1);
+                }
+            }
+            
             if (modal) {
                 modal.style.animation = 'fadeOut 0.3s ease';
                 setTimeout(() => modal.remove(), 300);
@@ -3974,6 +4105,11 @@
             
             // Show lessons section
             showSection('lessons');
+            
+            // ✅ SCROLL TO TOP ON MOBILE
+            setTimeout(() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }, 400);
         }
 
         async function loadAllStats() {
