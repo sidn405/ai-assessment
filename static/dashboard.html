@@ -1515,29 +1515,36 @@
                     <p>Your personalized literacy journey starts here</p>
                 </div>
 
-                <div class="progress-grid">
-                    <div class="progress-card">
-                        <span class="progress-value" id="lessonsCompleted"></span>
-                        <span class="progress-label">Lessons Completed</span>
-                    </div>
-                    <div class="progress-card">
-                        <span class="progress-value" id="averageScore"></span>
-                        <span class="progress-label">Average Score</span>
-                    </div>
-                    <div class="progress-card">
-                        <span class="progress-value" id="currentLevel"></span>
-                        <span class="progress-label">Reading Level</span>
-                    </div>
-                    <div class="progress-card">
-                        <span class="progress-value" id="streak"></span>
-                        <span class="progress-label">Day Streak</span>
-                    </div>
-            <div class="card">
+                <div class="progress-card">
+                    <span class="progress-value" id="lessonsCompleted"></span>
+                    <span class="progress-label">Lessons Completed</span>
+                </div>
+
+                <div class="progress-card">
+                    <span class="progress-value" id="averageScore"></span>
+                    <span class="progress-label">Average Score</span>
+                </div>
+
+                <div class="progress-card">
+                    <span class="progress-value" id="currentLevel"></span>
+                    <span class="progress-label">Reading Level</span>
+                </div>
+
+                <div class="progress-card">
+                    <span class="progress-value" id="streak"></span>
+                    <span class="progress-label">Day Streak</span>
+                </div>
+                </div> <!-- ✅ CLOSE progress-grid -->
+
+                <!-- ✅ Now Rewards is OUTSIDE the grid -->
+                <div class="card" id="rewardsMotivationCard" style="margin-top: 1.25rem;">
                 <h2>🏆 Rewards & Motivation</h2>
+
                 <div class="alert alert-info">
                     <strong>How it helps you:</strong>
                     Points and badges keep you consistent, celebrate progress, and help Achieve 365 personalize lessons to what you need most.
                 </div>
+
                 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1rem;">
                     <div style="background: var(--light-gray); border-radius: 12px; padding: 1rem;">
                     <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.25rem;">⭐ Points</div>
@@ -1551,6 +1558,7 @@
                         <div>🔥 Daily streak: <strong>5</strong></div>
                     </div>
                     </div>
+
                     <div style="background: var(--light-gray); border-radius: 12px; padding: 1rem;">
                     <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.25rem;">🏅 Badges</div>
                     <div style="color: var(--text-gray); font-size:.95rem;">
@@ -1567,19 +1575,20 @@
                         <div>⚡ <strong>Speed Reader</strong> — 10 lessons in one week</div>
                     </div>
                     </div>
-                            <div style="background: var(--light-gray); border-radius: 12px; padding: 1rem;">
-                            <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.25rem;">🏁 Levels</div>
-                            <div style="color: var(--text-gray); font-size:.95rem;">
-                                Your level increases as your total points grow—showing long-term consistency and effort.
-                            </div>
-                            <div style="margin-top:.75rem; font-size:.9rem;">
-                                <div>⬆️ Level up every <strong>500</strong> total points</div>
-                                <div>🎉 Level-ups unlock more recognition and momentum</div>
-                            </div>
-                            </div>
-                        </div>
+
+                    <div style="background: var(--light-gray); border-radius: 12px; padding: 1rem;">
+                    <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.25rem;">🏁 Levels</div>
+                    <div style="color: var(--text-gray); font-size:.95rem;">
+                        Your level increases as your total points grow—showing long-term consistency and effort.
+                    </div>
+                    <div style="margin-top:.75rem; font-size:.9rem;">
+                        <div>⬆️ Level up every <strong>500</strong> total points</div>
+                        <div>🎉 Level-ups unlock more recognition and momentum</div>
+                    </div>
                     </div>
                 </div>
+                </div>
+
 
                 <div class="card">
                     <h2>Getting Started</h2>
