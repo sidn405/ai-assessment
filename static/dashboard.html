@@ -1515,27 +1515,52 @@
                     <p>Your personalized literacy journey starts here</p>
                 </div>
 
-                <div class="progress-card">
-                    <span class="progress-value" id="lessonsCompleted"></span>
-                    <span class="progress-label">Lessons Completed</span>
+                <div class="progress-grid">
+                    <div class="progress-card">
+                        <span class="progress-value" id="lessonsCompleted"></span>
+                        <span class="progress-label">Lessons Completed</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="averageScore"></span>
+                        <span class="progress-label">Average Score</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="currentLevel"></span>
+                        <span class="progress-label">Reading Level</span>
+                    </div>
+                    <div class="progress-card">
+                        <span class="progress-value" id="streak"></span>
+                        <span class="progress-label">Day Streak</span>
+                    </div>
                 </div>
 
-                <div class="progress-card">
-                    <span class="progress-value" id="averageScore"></span>
-                    <span class="progress-label">Average Score</span>
-                </div>
+                <div class="card">
+                    <h2>Getting Started</h2>
 
-                <div class="progress-card">
-                    <span class="progress-value" id="currentLevel"></span>
-                    <span class="progress-label">Reading Level</span>
-                </div>
+                    <!-- shown only BEFORE assessment -->
+                    <div id="gettingStarted">
+                        <div class="alert alert-info">
+                        <strong>Welcome to your literacy journey!</strong>
+                        Start by taking our assessment to help us understand your interests and reading level.
+                        </div>
+                        <button class="btn btn-primary"
+                                onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
+                        Take Assessment
+                        </button>
+                    </div>
 
-                <div class="progress-card">
-                    <span class="progress-value" id="streak"></span>
-                    <span class="progress-label">Day Streak</span>
+                    <!-- shown only AFTER assessment -->
+                    <div id="continueLearning" class="hidden">
+                        <div class="alert alert-success">
+                        ✅ Assessment complete! Your lessons are now personalized to your interests and reading level.
+                        </div>
+                        <button class="btn btn-primary" onclick="showSection('lessons', event)">
+                        Continue Learning
+                        </button>
+                    </div>
+                  </div>
                 </div>
-            </div> <!-- ✅ CLOSE progress-grid -->
-
+                
                 <!-- ✅ Now Rewards is OUTSIDE the grid -->
                 <div class="card" id="rewardsMotivationCard" style="margin-top: 1.25rem;">
                   <h2>🏆 Rewards & Motivation</h2>
@@ -1585,36 +1610,8 @@
                         <div>⬆️ Level up every <strong>500</strong> total points</div>
                         <div>🎉 Level-ups unlock more recognition and momentum</div>
                     </div>
-                    </div>
-                </div>
-                </div>
-                
-                <div class="card">
-                    <h2>Getting Started</h2>
-
-                    <!-- shown only BEFORE assessment -->
-                    <div id="gettingStarted">
-                        <div class="alert alert-info">
-                        <strong>Welcome to your literacy journey!</strong>
-                        Start by taking our assessment to help us understand your interests and reading level.
-                        </div>
-                        <button class="btn btn-primary"
-                                onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
-                        Take Assessment
-                        </button>
-                    </div>
-
-                    <!-- shown only AFTER assessment -->
-                    <div id="continueLearning" class="hidden">
-                        <div class="alert alert-success">
-                        ✅ Assessment complete! Your lessons are now personalized to your interests and reading level.
-                        </div>
-                        <button class="btn btn-primary" onclick="showSection('lessons', event)">
-                        Continue Learning
-                        </button>
-                    </div>
                   </div>
-                </div>         
+                </div>
 
            <!-- Lessons Section -->
             <div id="lessonsSection" class="hidden">
