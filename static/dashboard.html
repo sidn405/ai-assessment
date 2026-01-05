@@ -1489,7 +1489,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('lessons', event); return false;">
+                    <a href="#" class="nav-link" onclick="unlockSpeechOnce(); showSection('lessons', event); return false;">
                         <span>📚</span> My Lessons
                     </a>
                 </li>
@@ -1747,6 +1747,20 @@
         // AI TUTOR (Dashboard-integrated)
         // ============================================
         let tutorMuted = false;
+        let speechUnlocked = false;
+
+        function unlockSpeechOnce() {
+        if (speechUnlocked || !window.speechSynthesis) return;
+        speechUnlocked = true;
+
+        const u = new SpeechSynthesisUtterance(" ");
+        u.volume = 0;
+        speechSynthesis.cancel();
+        try { speechSynthesis.resume(); } catch(e) {}
+        setTimeout(() => speechSynthesis.speak(u), 60);
+        }
+
+        document.addEventListener("click", unlockSpeechOnce, { once: true });
 
 
         function getStudentNameForTutor() {
@@ -2915,6 +2929,7 @@
                 // =============================
                 
                 displayLesson(lesson);
+                requestAnimationFrame(() => startTutorForLesson());
                 
             } catch (error) {
                 console.error('Error loading lesson:', error);
