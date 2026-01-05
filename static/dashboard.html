@@ -2119,57 +2119,46 @@
 
 
         function showSection(sectionName, event) {
-            if (event) {
-                event.preventDefault();
-            }
-            
-            console.log('Switching to section:', sectionName);
-            
+            if (event) event.preventDefault();
+
             // Hide all sections
             const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
             sections.forEach(id => {
-                const section = document.getElementById(id);
-                if (section) {
-                    section.classList.add('hidden');
-                }
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
             });
-            
-            // ========== FIX: Remove active from ALL nav items ==========
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            // ===========================================================
-            
-            // Show selected section
+
+            // Remove active from nav links
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+
+            // Show target section
             const targetSection = document.getElementById(sectionName + 'Section');
-            if (targetSection) {
-                targetSection.classList.remove('hidden');
-            }
-            
-            // ========== FIX: Add active to clicked nav item ==========
-            if (event && event.currentTarget) {
+            if (targetSection) targetSection.classList.remove('hidden');
+            else console.error('Target section not found:', sectionName + 'Section');
+
+            // Only set active if we actually have an event/currentTarget
+            if (event && event.currentTarget && event.currentTarget.classList) {
                 event.currentTarget.classList.add('active');
             } else {
-                // If no event (called programmatically), find and activate the nav item
-                const navItem = document.querySelector(`.nav-item[onclick*="${sectionName}"]`);
-                if (navItem) {
-                    navItem.classList.add('active');
-                }
+                // optional: set active via href / id mapping if needed
+                const link = document.querySelector(`a.nav-link[onclick*="showSection('${sectionName}'"]`);
+                if (link) link.classList.add('active');
             }
-            // =========================================================
-            
-            // Load data for specific sections
+
+            // Load data for the section
             if (sectionName === 'overview' || sectionName === 'progress') {
-                console.log('Loading stats for ' + sectionName + ' section...');
                 loadAllStats();
+                if (sectionName === 'progress' && typeof loadGamificationData === 'function') {
+                loadGamificationData();
+                }
             } else if (sectionName === 'lessons') {
-                console.log('Lessons section - checking for next lesson...');
                 checkForNextLesson();
             } else if (sectionName === 'assessment') {
-                console.log('Assessment section - loading assessment...');
                 loadAssessment();
             }
-        }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
 
         async function loadAssessment() {
             console.log('=== loadAssessment START ===');
