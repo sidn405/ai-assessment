@@ -1747,16 +1747,6 @@
         // AI TUTOR (Dashboard-integrated)
         // ============================================
         let tutorMuted = false;
-        let speechUnlocked = false;
-
-        document.addEventListener('click', () => {
-        if (speechUnlocked || !window.speechSynthesis) return;
-        speechUnlocked = true;
-
-        const u = new SpeechSynthesisUtterance(' ');
-        u.volume = 0;
-        window.speechSynthesis.speak(u);
-        }, { once: true });
 
 
         function getStudentNameForTutor() {
