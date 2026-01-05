@@ -865,6 +865,212 @@
         let startTime = null;
         let utterance = null;
 
+        // ============================================
+        // AI VOICE TUTOR (GLOBAL - DEFINE ONCE)
+        // ============================================
+
+        let tutorMuted = JSON.parse(localStorage.getItem('tutorMuted') || 'false');
+        const tutorSynth = window.speechSynthesis;
+        let tutorVoice = null;
+
+        // track last quiz score so milestone logic can use it
+        let lastQuizScore = null;
+
+        // avoid stacking timers each time a new passage loads
+        let tutorIntroTimers = [];
+        let encouragementIntervalId = null;
+
+        function getStudentNameForTutor() {
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            return user.full_name || user.name || localStorage.getItem('studentName') || 'there';
+        } catch {
+            return localStorage.getItem('studentName') || 'there';
+        }
+        }
+
+        function initTutorVoice() {
+        const voices = tutorSynth.getVoices();
+        if (!voices || voices.length === 0) return;
+
+        tutorVoice =
+            voices.find(v => /en-US/i.test(v.lang) && /Google|Female|Samantha/i.test(v.name)) ||
+            voices.find(v => /en-US/i.test(v.lang)) ||
+            voices.find(v => /^en/i.test(v.lang)) ||
+            voices[0];
+        }
+
+        if (typeof tutorSynth !== 'undefined' && tutorSynth.onvoiceschanged !== undefined) {
+        tutorSynth.onvoiceschanged = initTutorVoice;
+        }
+        initTutorVoice();
+
+        function setTutorVisible(visible) {
+        const tutor = document.getElementById('aiTutor');
+        if (!tutor) return;
+        tutor.classList.toggle('hidden', !visible);
+        }
+
+        async function showTutor(context, additionalData = {}) {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // stop any current speech to avoid overlap
+        if (tutorSynth.speaking) tutorSynth.cancel();
+
+        setTutorVisible(true);
+
+        try {
+            const response = await fetch('/api/tutor/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token,
+                context,
+                student_name: getStudentNameForTutor(),
+                ...additionalData, // ✅ FIX (was ".additionalData")
+            }),
+            });
+
+            const data = await response.json();
+
+            if (data && data.success) {
+            displayTutorMessage(data.message, data.emotion);
+            speakTutor(data.message, data.emotion);
+            } else {
+            console.warn('Tutor response not successful:', data);
+            displayTutorMessage("Let's do great work together!", 'happy');
+            speakTutor("Let's do great work together!", 'happy');
+            }
+        } catch (err) {
+            console.error('Error getting tutor message:', err);
+            displayTutorMessage("Let's do great work together!", 'happy');
+            speakTutor("Let's do great work together!", 'happy');
+        }
+        }
+
+        function displayTutorMessage(message, emotion = 'happy') {
+        const tutor = document.getElementById('aiTutor');
+        const messageEl = document.getElementById('tutorMessage');
+        const avatarEl = document.getElementById('tutorAvatar');
+        const mouthEl = document.getElementById('avatarMouth');
+
+        if (!tutor || !messageEl) return;
+
+        tutor.classList.remove('hidden');
+        messageEl.textContent = message;
+
+        if (avatarEl) avatarEl.className = 'avatar ' + emotion;
+        if (mouthEl) mouthEl.className = 'mouth ' + emotion;
+        }
+
+        function speakTutor(text, emotion = 'happy') {
+        if (tutorMuted) return;
+        if (!('speechSynthesis' in window)) return;
+
+        initTutorVoice();
+
+        const cleanText = String(text).replace(/<[^>]*>/g, '');
+        const u = new SpeechSynthesisUtterance(cleanText);
+
+        // tone tweaks
+        if (emotion === 'celebrating') {
+            u.rate = 1.05;
+            u.pitch = 1.2;
+        } else if (emotion === 'encouraging') {
+            u.rate = 0.95;
+            u.pitch = 1.05;
+        } else {
+            u.rate = 0.95;
+            u.pitch = 1.1;
+        }
+        u.volume = 1.0;
+
+        if (tutorVoice) u.voice = tutorVoice;
+
+        tutorSynth.speak(u);
+        }
+
+        function hideTutor() {
+        setTutorVisible(false);
+        tutorSynth.cancel();
+        }
+
+        function toggleMute() {
+        tutorMuted = !tutorMuted;
+        localStorage.setItem('tutorMuted', JSON.stringify(tutorMuted));
+
+        const muteIcon = document.getElementById('muteIcon');
+        if (muteIcon) muteIcon.textContent = tutorMuted ? '🔇' : '🔊';
+
+        if (tutorMuted) tutorSynth.cancel();
+        }
+
+        // Lesson intro: greeting then instruction (matches your expected behavior)
+        function runTutorLessonIntro() {
+        tutorIntroTimers.forEach(clearTimeout);
+        tutorIntroTimers = [];
+
+        tutorIntroTimers.push(setTimeout(() => showTutor('greeting'), 800));
+        tutorIntroTimers.push(setTimeout(() => showTutor('instruction'), 5800));
+        }
+
+        // Optional: random encouragement while reading
+        function startEncouragementTimerOnce() {
+        if (encouragementIntervalId) return;
+
+        encouragementIntervalId = setInterval(() => {
+            const tutor = document.getElementById('aiTutor');
+            if (tutor && !tutor.classList.contains('hidden')) return;
+
+            if (Math.random() > 0.7) {
+            showTutor('encouragement');
+            }
+        }, 120000);
+        }
+
+        function handleTutorAfterScore(score) {
+        const s = Number(score) || 0;
+        lastQuizScore = s;
+
+        if (s >= 80) {
+            showTutor('success', { score: s });
+        } else if (s < 60) {
+            showTutor('struggle', { score: s });
+        } else {
+            showTutor('success', { score: s }); // “encouraging” variant comes from backend
+        }
+        }
+
+        // Milestone: every 10 lessons (uses backend tutor context "milestone") :contentReference[oaicite:2]{index=2}
+        async function maybeShowMilestone() {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            // if you already have this endpoint on dashboard, reuse it
+            const resp = await fetch(`/api/student/progress?token=${encodeURIComponent(token)}`);
+            const data = await resp.json();
+
+            const totalLessons =
+            data?.progress?.total_lessons ??
+            data?.stats?.total_lessons ??
+            data?.total_lessons;
+
+            const n = Number(totalLessons);
+            if (!Number.isFinite(n) || n <= 0) return;
+
+            if (n % 10 === 0) {
+            setTimeout(() => {
+                showTutor('milestone', { lesson_number: n, score: lastQuizScore ?? undefined });
+            }, 1200);
+            }
+        } catch (e) {
+            console.warn('Milestone check failed:', e);
+        }
+        }
+
+
         // Update speed display
         document.getElementById('readingSpeed').addEventListener('input', function(e) {
             document.getElementById('speedValue').textContent = e.target.value + 'x';
@@ -902,6 +1108,10 @@
 
                 if (data.is_first_passage) {
                     document.getElementById('firstPassageBadge').classList.remove('hidden');
+
+                    runTutorLessonIntro();
+                    startEncouragementTimerOnce();
+
                 }
             } catch (error) {
                 console.error('Error loading passage:', error);
@@ -979,174 +1189,6 @@
                     is_correct: isCorrect
                 });
 
-                // ============================================
-                // AI TUTOR SYSTEM
-                // ============================================
-
-                let isMuted = false;
-                let speechSynthesis = window.speechSynthesis;
-
-                // Show tutor with message
-                async function showTutor(context, additionalData = {}) {
-                    const token = localStorage.getItem('token');
-                    const studentName = localStorage.getItem('studentName') || 'there';
-                    
-                    try {
-                        const response = await fetch('/api/tutor/message', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                token: token,
-                                context: context,
-                                student_name: studentName,
-                                ...additionalData
-                            })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            displayTutorMessage(data.message, data.emotion);
-                        }
-                    } catch (error) {
-                        console.error('Error getting tutor message:', error);
-                        // Fallback message
-                        displayTutorMessage("Let's do great work together!", 'happy');
-                    }
-                }
-
-                function displayTutorMessage(message, emotion = 'happy') {
-                    const tutor = document.getElementById('aiTutor');
-                    const messageEl = document.getElementById('tutorMessage');
-                    const mouthEl = document.getElementById('avatarMouth');
-                    
-                    // Show tutor
-                    tutor.classList.remove('hidden');
-                    
-                    // Set message
-                    messageEl.textContent = message;
-                    
-                    // Set mouth emotion
-                    mouthEl.className = 'mouth ' + emotion;
-                    
-                    // Speak message
-                    if (!isMuted) {
-                        speak(message);
-                    }
-                }
-
-                function speak(text) {
-                    // Cancel any ongoing speech
-                    speechSynthesis.cancel();
-                    
-                    // Create utterance
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    
-                    // Configure voice
-                    utterance.rate = 0.9;  // Slightly slower for clarity
-                    utterance.pitch = 1.1;  // Slightly higher for friendly tone
-                    utterance.volume = 1.0;
-                    
-                    // Try to use a pleasant voice
-                    const voices = speechSynthesis.getVoices();
-                    const preferredVoice = voices.find(voice => 
-                        voice.name.includes('Google') || 
-                        voice.name.includes('Female') ||
-                        voice.name.includes('Samantha')
-                    );
-                    
-                    if (preferredVoice) {
-                        utterance.voice = preferredVoice;
-                    }
-                    
-                    // Speak
-                    speechSynthesis.speak(utterance);
-                }
-
-                function hideTutor() {
-                    const tutor = document.getElementById('aiTutor');
-                    tutor.classList.add('hidden');
-                    
-                    // Stop speech
-                    speechSynthesis.cancel();
-                }
-
-                function toggleMute() {
-                    isMuted = !isMuted;
-                    const muteIcon = document.getElementById('muteIcon');
-                    muteIcon.textContent = isMuted ? '🔇' : '🔊';
-                    
-                    if (isMuted) {
-                        speechSynthesis.cancel();
-                    }
-                }
-
-                // ============================================
-                // INTEGRATION POINTS IN LESSON FLOW
-                // ============================================
-
-                // Call these at appropriate times:
-
-                // 1. When lesson loads
-                window.addEventListener('load', function() {
-                    // Load voices
-                    if (speechSynthesis.onvoiceschanged !== undefined) {
-                        speechSynthesis.onvoiceschanged = () => {};
-                    }
-                    
-                    // Greet student after 1 second
-                    setTimeout(() => {
-                        showTutor('greeting');
-                    }, 1000);
-                    
-                    // Show instructions after greeting (after 6 seconds)
-                    setTimeout(() => {
-                        showTutor('instruction');
-                    }, 6000);
-                });
-
-                // 2. When student submits answers - UPDATE YOUR submitAnswers FUNCTION:
-                async function submitAnswers() {
-                    // ... your existing code to calculate score ...
-                    
-                    const score = calculateScore();  // Your score calculation
-                    const lessonNumber = getCurrentLessonNumber();  // Your lesson number
-                    
-                    // Show tutor feedback based on score
-                    if (score >= 80) {
-                        showTutor('success', { score: score, lesson_number: lessonNumber });
-                    } else if (score < 60) {
-                        showTutor('struggle', { score: score });
-                    } else {
-                        showTutor('success', { score: score });
-                    }
-                    
-                    // Check for milestones
-                    if (lessonNumber % 10 === 0) {
-                        setTimeout(() => {
-                            showTutor('milestone', { lesson_number: lessonNumber });
-                        }, 3000);
-                    }
-                }
-
-                // 3. Random encouragement during reading (optional)
-                function startEncouragementTimer() {
-                    // Show encouragement every 2 minutes while reading
-                    setInterval(() => {
-                        if (!document.getElementById('aiTutor').classList.contains('hidden')) {
-                            return;  // Don't interrupt if tutor is already showing
-                        }
-                        
-                        const random = Math.random();
-                        if (random > 0.7) {  // 30% chance every 2 minutes
-                            showTutor('encouragement');
-                        }
-                    }, 120000);  // 2 minutes
-                }
-
-                // Start encouragement timer
-                startEncouragementTimer();
-
                 // Visual feedback
                 const options = document.querySelectorAll(`input[name="question${index}"]`);
                 options.forEach(opt => {
@@ -1183,6 +1225,9 @@
                 // Show score
                 document.getElementById('scorePercent').textContent = `${result.score}%`;
                 document.getElementById('scoreMessage').textContent = result.message;
+
+                handleTutorAfterScore(result.score);
+
                 document.getElementById('scoreDisplay').classList.remove('hidden');
                 document.getElementById('quizSection').querySelector('button').classList.add('hidden');
                 
@@ -1223,6 +1268,10 @@
                     })
                 });
 
+                if (!res.ok) throw new Error(`Feedback save failed: ${res.status}`);
+
+                maybeShowMilestone();
+
                 // Show success and redirect
                 setTimeout(() => {
                     if (confirm('Great job! Ready for another passage?')) {
@@ -1230,7 +1279,7 @@
                     } else {
                         window.location.href = '/dashboard';
                     }
-                }, 1000);
+                }, 3500);
 
             } catch (error) {
                 console.error('Error submitting feedback:', error);
