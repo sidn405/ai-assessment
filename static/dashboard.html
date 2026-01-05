@@ -1947,9 +1947,10 @@
         function showTutorUI() {
         const tutor = document.getElementById('aiTutor');
         if (!tutor) return;
-
         tutor.classList.remove('hidden');
-        requestAnimationFrame(() => tutor.classList.add('show'));
+        // force reflow so transition applies
+        void tutor.offsetWidth;
+        tutor.classList.add('show');
         }
 
 
