@@ -2137,6 +2137,11 @@
             if (targetSection) targetSection.classList.remove('hidden');
             else console.error('Target section not found:', sectionName + 'Section');
 
+            const rewards = document.getElementById('rewardsMotivationOverview');
+                if (rewards) {
+                rewards.style.display = (sectionName === 'overview') ? '' : 'none';
+                }
+
             // Only set active if we actually have an event/currentTarget
             if (event && event.currentTarget && event.currentTarget.classList) {
                 event.currentTarget.classList.add('active');
