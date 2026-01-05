@@ -1679,49 +1679,82 @@
 
         async function checkForNextLesson() {
             const token = localStorage.getItem('token');
-            
+
             if (!token) {
                 console.error('No token found');
                 return;
             }
-            
+
+            // Helper: assessment is considered "done" if the user has interests and/or a reading level/estimate
+            const hasCompletedAssessment = () => {
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+
+                // interests might be an array OR a JSON string (your logs show it as a string)
+                let interestsCount = 0;
+                if (Array.isArray(u.interests)) {
+                interestsCount = u.interests.length;
+                } else if (typeof u.interests === 'string') {
+                try {
+                    const parsed = JSON.parse(u.interests);
+                    if (Array.isArray(parsed)) interestsCount = parsed.length;
+                } catch (_) {}
+                }
+
+                return (
+                interestsCount > 0 ||
+                !!u.reading_level ||
+                !!u.level_estimate
+                );
+            };
+
             try {
                 console.log('Checking for next lesson...');
-                
+
                 const response = await fetch(`/api/student/progress?token=${token}`);
                 const data = await response.json();
-                
+
                 console.log('Progress check:', data.stats);
-                
-                // Get the actual elements that exist in your HTML
+
                 const noLessons = document.getElementById('noLessons');
-                
                 if (!noLessons) {
-                    console.error('noLessons element not found!');
-                    return;
+                console.error('noLessons element not found!');
+                return;
                 }
-                
-                // If user has completed lessons, hide "noLessons" and load next lesson
-                if (data.stats && data.stats.total_lessons > 0) {
-                    console.log(`User has ${data.stats.total_lessons} completed lessons - loading lesson interface`);
-                    noLessons.classList.add('hidden');
-                    loadNextLesson();
-                } else {
-                    console.log('No completed lessons - showing assessment prompt');
-                    noLessons.classList.remove('hidden');
+
+                const totalCompleted = Number(data?.stats?.total_lessons || 0);
+
+                // ✅ If they have completed ANY lessons, load next as before
+                if (totalCompleted > 0) {
+                console.log(`User has ${totalCompleted} completed lessons - loading lesson interface`);
+                noLessons.classList.add('hidden');
+                loadNextLesson();
+                return;
                 }
-                
+
+                // ✅ NEW: If assessment is done (new user after assessment), load FIRST lesson even if completed=0
+                if (hasCompletedAssessment() || data?.stats?.reading_level) {
+                console.log('Assessment complete but no completed lessons yet - loading first lesson');
+                noLessons.classList.add('hidden');
+                loadNextLesson();
+                return;
+                }
+
+                // Otherwise, they truly haven't completed assessment yet
+                console.log('Assessment not complete - showing assessment prompt');
+                noLessons.classList.remove('hidden');
+
             } catch (error) {
                 console.error('Error checking for lessons:', error);
-                
-                // On error, try to load lessons anyway (user has 63!)
+
+                // Fallback: if assessment looks complete, attempt to load the lesson anyway
                 const noLessons = document.getElementById('noLessons');
-                if (noLessons) {
-                    noLessons.classList.add('hidden');
-                    loadNextLesson();
+                if (noLessons && hasCompletedAssessment()) {
+                noLessons.classList.add('hidden');
+                loadNextLesson();
                 }
             }
-        }
+            }
+
 
         function showSection(sectionName, event) {
             if (event) {
