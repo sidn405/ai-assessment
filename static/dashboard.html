@@ -1714,10 +1714,86 @@
                     <h2 style="color: #1e3a5f; margin-bottom: 1.5rem; font-size: 2rem;">
                         📅 Weekly Goals
                     </h2>
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: #f8fafc; border: 1px solid #e6eaf2; border-radius: 14px;">
+                        <div style="font-weight: 800; color: #1e3a5f;">Set a Weekly Goal</div>
+                        <div style="color:#555;margin-top:.35rem;">
+                            Choose how many lessons you want to complete this week — we’ll track progress automatically.
+                        </div>
+
+                        <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-top:.9rem;">
+                            <input id="weeklyLessonsTarget" type="number" min="1" max="50" value="5"
+                                style="width:140px;padding:.75rem;border:1px solid #d9dfea;border-radius:10px;font-weight:700;">
+                            <button class="btn btn-primary" onclick="saveWeeklyGoal()">Save Goal</button>
+                            <span id="weeklyGoalStatus" style="color:#2A398A;font-weight:700;"></span>
+                        </div>
+                        </div>
+
+                        <div id="weeklyGoalsContainer">
+                        <p style="color:#666;font-size:1.1rem;">Loading your goals...</p>
+                        </div>
+
                     <div id="weeklyGoalsContainer">
                         <p style="color: #666; font-size: 1.1rem;">Loading your goals...</p>
                     </div>
                 </div>
+
+                <div class="card" id="rewardsExplainerCard" style="margin-top: 1.5rem;">
+                    <h2 style="display:flex;align-items:center;gap:.6rem;color:#1e3a5f;">
+                        🏆 Reading Rewards
+                    </h2>
+
+                    <p style="color:#555;font-size:1.05rem;line-height:1.6;margin-top:.75rem;">
+                        Achieve 365 turns your reading practice into progress you can see. Earn <strong>points</strong>,
+                        unlock <strong>badges</strong>, and level up as you build strong habits — it’s designed to keep you
+                        motivated and consistent.
+                    </p>
+
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-top:1rem;">
+                        <div style="background:#f6f8ff;border:1px solid #e6eaff;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;color:#2A398A;margin-bottom:.4rem;">⭐ Points</div>
+                        <ul style="margin:0;padding-left:1.1rem;color:#444;line-height:1.7;">
+                            <li><strong>+10</strong> each completed lesson</li>
+                            <li><strong>+15</strong> good score</li>
+                            <li><strong>+25</strong> high score</li>
+                            <li><strong>+50</strong> perfect score</li>
+                            <li><strong>+5</strong> daily streak bonus</li>
+                            <li><strong>+100</strong> weekly goal completed</li>
+                            <li><strong>+20</strong> each badge earned</li>
+                        </ul>
+                        </div>
+
+                        <div style="background:#f6fff9;border:1px solid #e3f6ea;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;color:#1e6b3a;margin-bottom:.4rem;">🎖 Badges</div>
+                        <p style="margin:0;color:#444;line-height:1.6;">
+                            Badges celebrate milestones like your first lesson, perfect streaks, and consistency.
+                            Each badge also awards bonus points.
+                        </p>
+                        <p style="margin:.6rem 0 0;color:#444;">
+                            Tip: Check the badges list in this page to see what you’re close to unlocking.
+                        </p>
+                        </div>
+
+                        <div style="background:#fffaf2;border:1px solid #ffe9c7;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;color:#8a5a00;margin-bottom:.4rem;">📈 Levels</div>
+                        <p style="margin:0;color:#444;line-height:1.6;">
+                            Your level grows as your total points increase. Levels help you track long-term improvement
+                            and reward consistent learning over time.
+                        </p>
+                        <p style="margin:.6rem 0 0;color:#444;">
+                            <strong>Level up every 500 total points.</strong>
+                        </p>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:1rem;background:linear-gradient(135deg,#2A398A 0%,#4a56af 100%);color:#fff;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;margin-bottom:.25rem;">Why this helps</div>
+                        <div style="opacity:.95;line-height:1.6;">
+                        The rewards system keeps you engaged, encourages steady practice, and makes your growth measurable —
+                        so you can build reading confidence step-by-step.
+                        </div>
+                    </div>
+                    </div>
+
 
                 <!-- Recent Activity -->
                 <div class="card">
@@ -3873,6 +3949,8 @@
                 
                 const data = await response.json();
                 console.log('Stats data received:', data);
+
+                toggleAssessmentCTA(data);
                 
                 if (!data.success || !data.stats) {
                     throw new Error('Invalid response');
@@ -3970,6 +4048,68 @@
             }
         }
 
+        function toggleAssessmentCTA(progressData) {
+            const gettingStarted = document.getElementById('gettingStarted');
+            if (!gettingStarted) return;
+
+            const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
+            const assessmentDone =
+                totalCompleted > 0 ||
+                !!progressData?.stats?.reading_level ||
+                hasCompletedAssessment?.(); // if you already have this helper
+
+            // If assessment is done, hide the big CTA card on Overview.
+            if (assessmentDone) {
+                gettingStarted.classList.add('hidden');
+                // (optional) show a “Continue Learning” card if you have one:
+                const continueLearning = document.getElementById('continueLearning');
+                if (continueLearning) continueLearning.classList.remove('hidden');
+            } else {
+                gettingStarted.classList.remove('hidden');
+                const continueLearning = document.getElementById('continueLearning');
+                if (continueLearning) continueLearning.classList.add('hidden');
+            }
+        }
+
+        async function saveWeeklyGoal() {
+            const token = localStorage.getItem('token');
+            const statusEl = document.getElementById('weeklyGoalStatus');
+            const input = document.getElementById('weeklyLessonsTarget');
+
+            if (!token || !input) return;
+
+            const target = Math.max(1, Math.min(50, parseInt(input.value || '5', 10)));
+
+            try {
+                if (statusEl) statusEl.textContent = 'Saving...';
+
+                const res = await fetch('/api/student/weekly-goals/set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token,
+                    goal_type: 'lessons_completed',
+                    target_value: target
+                })
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                throw new Error(data?.detail || 'Unable to save goal.');
+                }
+
+                if (statusEl) statusEl.textContent = 'Saved ✅';
+
+                // refresh the Progress widgets
+                if (typeof loadGamificationData === 'function') {
+                await loadGamificationData();
+                }
+            } catch (e) {
+                console.error(e);
+                if (statusEl) statusEl.textContent = 'Could not save ❌';
+            }
+        }
+
         async function loadWeeklyGoals() {
             const token = localStorage.getItem('token');
             
@@ -4005,7 +4145,7 @@
                 }
             } catch (error) {
                 console.error('Error loading weekly goals:', error);
-                const goalsContainer = document.querySelector('.weekly-goals-container');
+                const goalsContainer = document.getElementById('weeklyGoalsContainer');
                 if (goalsContainer) {
                     goalsContainer.innerHTML = '<p style="color: #999; padding: 1rem;">Unable to load weekly goals.</p>';
                 }
