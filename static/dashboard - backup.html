@@ -30,10 +30,10 @@
     <title>Achieve 365 - Student Dashboard</title>
     
     <!-- Main Styles -->
-    <link rel="stylesheet" href="/static/styles.css">
+    <!--<link rel="stylesheet" href="/static/styles.css">-->
     
     <!-- Responsive Styles -->
-    <link rel="stylesheet" href="/static/responsive.css">
+    <!--<link rel="stylesheet" href="/static/responsive.css">-->
     
     <!-- Custom Styles for this page -->
     <style>
@@ -1004,9 +1004,344 @@
                 border: 2px solid currentColor;
             }
         }
+
+    
+        /* Profile Photo in Upper Right */
+        .profile-photo-container {
+            position: fixed !important;
+            top: 1rem !important;
+            right: 1rem !important;
+            z-index: 1000 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.75rem !important;
+            background: white !important;
+            padding: 0.5rem 1rem !important;
+            border-radius: 50px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .profile-photo-container:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+            transform: translateY(-2px) !important;
+        }
+
+        /* Simplified Profile Photo - No Initials */
+        .profile-photo {
+            width: 50px !important;
+            height: 50px !important;
+            border-radius: 50% !important;
+            background: linear-gradient(135deg, #700d0b 0%, #B40200 100%) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: 2px solid white !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        }
+
+        .profile-photo #avatarEmoji {
+            font-size: 1.5rem !important;
+            line-height: 1 !important;
+        }
+
+        /* Avatar Prompt Tooltip */
+        .avatar-prompt {
+            position: absolute !important;
+            top: 50px !important;
+            right: 0 !important;
+            background: var(--gold-accent) !important;
+            color: white !important;
+            padding: 0.5rem 1rem !important;
+            border-radius: 8px !important;
+            font-size: 0.85rem !important;
+            font-weight: 600 !important;
+            white-space: nowrap !important;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4) !important;
+            animation: bounce 2s infinite !important;
+            z-index: 1001 !important;
+        }
+
+        .avatar-prompt::before {
+            content: '' !important;
+            position: absolute !important;
+            top: -6px !important;
+            right: 20px !important;
+            width: 0 !important;
+            height: 0 !important;
+            border-left: 6px solid transparent !important;
+            border-right: 6px solid transparent !important;
+            border-bottom: 6px solid var(--gold-accent) !important;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            60% {
+                transform: translateY(-5px);
+            }
+        }
+
+        .profile-photo.default {
+            background: linear-gradient(135deg, #700d0b 0%, #B40200 100%) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            color: white !important;
+            font-size: 1.2rem !important;
+            font-weight: 600 !important;
+        }
+
+        .profile-name {
+            font-weight: 600 !important;
+            color: var(--navy-primary) !important;
+            max-width: 150px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+
+        /* Profile Modal */
+        .profile-modal {
+            display: none !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: rgba(0,0,0,0.5) !important;
+            z-index: 2000 !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        .profile-modal.active {
+            display: flex !important;
+        }
+
+        .profile-modal-content {
+            background: white !important;
+            border-radius: 16px !important;
+            padding: 2rem !important;
+            width: 90% !important;
+            max-width: 600px !important;
+            max-height: 80vh !important;
+            overflow-y: auto !important;
+        }
+
+        .profile-modal-header {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            margin-bottom: 1.5rem !important;
+            padding-bottom: 1rem !important;
+            border-bottom: 2px solid var(--light-gray) !important;
+        }
+
+        .profile-modal-close {
+            background: none !important;
+            border: none !important;
+            font-size: 1.5rem !important;
+            cursor: pointer !important;
+            color: var(--text-gray) !important;
+        }
+
+        .profile-modal-close:hover {
+            color: var(--danger) !important;
+        }
+
+        .profile-tabs {
+            display: flex !important;
+            gap: 1rem !important;
+            margin-bottom: 1.5rem !important;
+            border-bottom: 2px solid var(--light-gray) !important;
+        }
+
+        .profile-tab {
+            padding: 0.75rem 1.5rem !important;
+            background: none !important;
+            border: none !important;
+            border-bottom: 3px solid transparent !important;
+            cursor: pointer !important;
+            font-weight: 600 !important;
+            color: var(--text-gray) !important;
+            transition: all 0.3s !important;
+        }
+
+        .profile-tab:hover {
+            color: var(--navy-primary) !important;
+        }
+
+        .profile-tab.active {
+            color: var(--navy-primary) !important;
+            border-bottom-color: var(--navy-primary) !important;
+        }
+
+        .profile-tab-content {
+            display: none !important;
+        }
+
+        .profile-tab-content.active {
+            display: block !important;
+        }
+
+        /* Avatar Grid */
+        .avatar-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) !important;
+            gap: 1rem !important;
+            margin: 1rem 0 !important;
+        }
+
+        .avatar-option {
+            width: 80px !important;
+            height: 80px !important;
+            border-radius: 50% !important;
+            border: 3px solid transparent !important;
+            cursor: pointer !important;
+            transition: all 0.3s !important;
+            font-size: 3rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        .avatar-option:hover {
+            transform: scale(1.1) !important;
+            border-color: var(--navy-primary) !important;
+        }
+
+        .avatar-option.selected {
+            border-color: var(--gold-accent) !important;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.5) !important;
+        }
+
+        /* Photo Upload */
+        .photo-upload-area {
+            border: 2px dashed var(--navy-primary) !important;
+            border-radius: 12px !important;
+            padding: 2rem !important;
+            text-align: center !important;
+            cursor: pointer !important;
+            transition: all 0.3s !important;
+        }
+
+        .photo-upload-area:hover {
+            background: var(--light-gray) !important;
+            border-color: var(--gold-accent) !important;
+        }
+
+        .photo-preview {
+            margin: 1rem auto !important;
+            width: 150px !important;
+            height: 150px !important;
+            border-radius: 50% !important;
+            object-fit: cover !important;
+            display: none !important;
+        }
+
+        .photo-preview.active {
+            display: block !important;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .profile-photo-container {
+                top: 0.5rem !important;
+                right: 0.5rem !important;
+                padding: 0.4rem 0.75rem !important;
+            }
+            
+            .profile-photo {
+                width: 35px !important;
+                height: 35px !important;
+            }
+            
+            .profile-name {
+                font-size: 0.9rem !important;
+                max-width: 100px !important;
+            }
+            
+            .avatar-grid {
+                grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)) !important;
+            }
+            
+            .avatar-option {
+                width: 60px !important;
+                height: 60px !important;
+                font-size: 2rem !important;
+            }
+        }
     </style>
 </head>
 <body>
+
+    <!-- Profile Photo Display (Upper Right) -->
+    <div class="profile-photo-container" onclick="openProfileModal()">
+        <div id="profilePhotoDisplay" class="profile-photo default">
+            <span id="avatarEmoji">👤</span>
+        </div>
+        <span class="profile-name" id="profileNameDisplay"></span>
+        
+        <!-- Tooltip prompt for new users -->
+        <div id="avatarPrompt" class="avatar-prompt" style="display: none;">
+            Click to choose your avatar! 👆
+        </div>
+    </div>
+
+    <!-- Profile Photo Modal -->
+    <div class="profile-modal" id="profileModal">
+        <div class="profile-modal-content">
+            <div class="profile-modal-header">
+                <h2>Update Profile Photo</h2>
+                <button class="profile-modal-close" onclick="closeProfileModal()">✕</button>
+            </div>
+            
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-tab="upload" onclick="switchProfileTab('upload')">
+                    📸 Upload Photo
+                </button>
+                <button class="profile-tab" data-tab="avatar" onclick="switchProfileTab('avatar')">
+                    😊 Choose Avatar
+                </button>
+            </div>
+            
+            <!-- Upload Tab -->
+            <div id="uploadTab" class="profile-tab-content active">
+                <div class="photo-upload-area" onclick="document.getElementById('photoInput').click()">
+                    <p style="font-size: 3rem; margin-bottom: 0.5rem;">📷</p>
+                    <p style="font-weight: 600; margin-bottom: 0.5rem;">Click to upload photo</p>
+                    <p style="font-size: 0.9rem; color: #666;">JPG, PNG, GIF (max 5MB)</p>
+                </div>
+                
+                <input type="file" id="photoInput" accept="image/*" style="display: none;" onchange="previewPhoto(event)">
+                
+                <img id="photoPreview" class="photo-preview" src="" alt="Preview">
+                
+                <button id="uploadButton" class="btn btn-primary" onclick="uploadPhoto()" style="width: 100%; margin-top: 1rem; display: none;">
+                    Upload Photo
+                </button>
+            </div>
+            
+            <!-- Avatar Tab -->
+            <div id="avatarTab" class="profile-tab-content">
+                <p style="margin-bottom: 1rem; color: #666;">Choose an avatar:</p>
+                
+                <div class="avatar-grid" id="avatarGrid">
+                    <!-- Avatars generated by JavaScript -->
+                </div>
+                
+                <button class="btn btn-primary" onclick="saveAvatar()" style="width: 100%; margin-top: 1rem;">
+                    Save Avatar
+                </button>
+            </div>
+        </div>
+    </div>
     <div class="dashboard">
 
         <!-- Mobile Menu Overlay -->
@@ -1074,19 +1409,19 @@
 
                 <div class="progress-grid">
                     <div class="progress-card">
-                        <span class="progress-value" id="lessonsCompleted">0</span>
+                        <span class="progress-value" id="lessonsCompleted"></span>
                         <span class="progress-label">Lessons Completed</span>
                     </div>
                     <div class="progress-card">
-                        <span class="progress-value" id="averageScore">-</span>
+                        <span class="progress-value" id="averageScore"></span>
                         <span class="progress-label">Average Score</span>
                     </div>
                     <div class="progress-card">
-                        <span class="progress-value" id="currentLevel">-</span>
+                        <span class="progress-value" id="currentLevel"></span>
                         <span class="progress-label">Reading Level</span>
                     </div>
                     <div class="progress-card">
-                        <span class="progress-value" id="streak">0</span>
+                        <span class="progress-value" id="streak"></span>
                         <span class="progress-label">Day Streak</span>
                     </div>
                 </div>
@@ -1191,35 +1526,35 @@
                     <!-- Lessons Completed - Orange Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(255,107,107,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📚</div>
-                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="lessonsCompleted">3</div>
+                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressLessonsCompleted"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Lessons Completed</div>
                     </div>
 
                     <!-- Average Score - Purple Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(102,126,234,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⭐</div>
-                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="averageScore">-</div>
+                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressAvgScore"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Average Score</div>
                     </div>
 
                     <!-- Reading Score - Green Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #11998E 0%, #38EF7D 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(17,153,142,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📊</div>
-                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="readingScore">-</div>
+                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressReadingScore"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Reading Score</div>
                     </div>
 
                     <!-- Reading Level - Blue Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(79,172,254,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
-                        <div style="font-size: 2.2rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); padding: 0 1rem;">intermediate</div>
+                        <div style="font-size: 2.2rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressReadingLevel" padding: 0 1rem;></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Reading Level</div>
                     </div>
 
                     <!-- Day Streak - Pink Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #F093FB 0%, #F5576C 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(240,147,251,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔥</div>
-                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">0</div>
+                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressDayStreak"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Day Streak</div>
                     </div>
                 </div>
@@ -1342,83 +1677,136 @@
             console.log('=== INITIALIZATION COMPLETE ===');
         });
 
-        function showSection(section, event) {
-            console.log('=== showSection called ===');
-            console.log('Section:', section);
-            console.log('Event:', event);
+        async function checkForNextLesson() {
+            const token = localStorage.getItem('token');
 
-            
-            
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
+
+            // Helper: assessment is considered "done" if the user has interests and/or a reading level/estimate
+            const hasCompletedAssessment = () => {
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+
+                // interests might be an array OR a JSON string (your logs show it as a string)
+                let interestsCount = 0;
+                if (Array.isArray(u.interests)) {
+                interestsCount = u.interests.length;
+                } else if (typeof u.interests === 'string') {
+                try {
+                    const parsed = JSON.parse(u.interests);
+                    if (Array.isArray(parsed)) interestsCount = parsed.length;
+                } catch (_) {}
+                }
+
+                return (
+                interestsCount > 0 ||
+                !!u.reading_level ||
+                !!u.level_estimate
+                );
+            };
+
+            try {
+                console.log('Checking for next lesson...');
+
+                const response = await fetch(`/api/student/progress?token=${token}`);
+                const data = await response.json();
+
+                console.log('Progress check:', data.stats);
+
+                const noLessons = document.getElementById('noLessons');
+                if (!noLessons) {
+                console.error('noLessons element not found!');
+                return;
+                }
+
+                const totalCompleted = Number(data?.stats?.total_lessons || 0);
+
+                // ✅ If they have completed ANY lessons, load next as before
+                if (totalCompleted > 0) {
+                console.log(`User has ${totalCompleted} completed lessons - loading lesson interface`);
+                noLessons.classList.add('hidden');
+                loadNextLesson();
+                return;
+                }
+
+                // ✅ NEW: If assessment is done (new user after assessment), load FIRST lesson even if completed=0
+                if (hasCompletedAssessment() || data?.stats?.reading_level) {
+                console.log('Assessment complete but no completed lessons yet - loading first lesson');
+                noLessons.classList.add('hidden');
+                loadNextLesson();
+                return;
+                }
+
+                // Otherwise, they truly haven't completed assessment yet
+                console.log('Assessment not complete - showing assessment prompt');
+                noLessons.classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Error checking for lessons:', error);
+
+                // Fallback: if assessment looks complete, attempt to load the lesson anyway
+                const noLessons = document.getElementById('noLessons');
+                if (noLessons && hasCompletedAssessment()) {
+                noLessons.classList.add('hidden');
+                loadNextLesson();
+                }
+            }
+            }
+
+
+        function showSection(sectionName, event) {
             if (event) {
                 event.preventDefault();
             }
             
+            console.log('Switching to section:', sectionName);
+            
             // Hide all sections
-            document.querySelectorAll('[id$="Section"]').forEach(el => {
-                console.log('Hiding:', el.id);
-                el.classList.add('hidden');
+            const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
+            sections.forEach(id => {
+                const section = document.getElementById(id);
+                if (section) {
+                    section.classList.add('hidden');
+                }
             });
             
-            // Update nav links
-            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            // ========== FIX: Remove active from ALL nav items ==========
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            // ===========================================================
             
             // Show selected section
-            const sectionId = section + 'Section';
-            console.log('Showing section:', sectionId);
-            const targetSection = document.getElementById(sectionId);
-            console.log('Target section element:', targetSection);
-            
+            const targetSection = document.getElementById(sectionName + 'Section');
             if (targetSection) {
                 targetSection.classList.remove('hidden');
-                console.log('Section shown successfully');
+            }
+            
+            // ========== FIX: Add active to clicked nav item ==========
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             } else {
-                console.error('Section not found:', sectionId);
-            }            
-            
-            // Update active nav
-            if (event && event.target) {
-                const navLink = event.target.closest('.nav-link');
-                if (navLink) {
-                    navLink.classList.add('active');
-                    console.log('Nav link activated');
+                // If no event (called programmatically), find and activate the nav item
+                const navItem = document.querySelector(`.nav-item[onclick*="${sectionName}"]`);
+                if (navItem) {
+                    navItem.classList.add('active');
                 }
             }
+            // =========================================================
             
-            // Load section data
-            if (section === 'assessment') {
-                console.log('Triggering loadAssessment...');
+            // Load data for specific sections
+            if (sectionName === 'overview' || sectionName === 'progress') {
+                console.log('Loading stats for ' + sectionName + ' section...');
+                loadAllStats();
+            } else if (sectionName === 'lessons') {
+                console.log('Lessons section - checking for next lesson...');
+                checkForNextLesson();
+            } else if (sectionName === 'assessment') {
+                console.log('Assessment section - loading assessment...');
                 loadAssessment();
-            } else if (section === 'lessons') {
-                console.log('Lessons section - checking lesson state...');
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                
-                if (user.reading_level || user.level_estimate) {
-                    // User has completed assessment
-                    const noLessons = document.getElementById('noLessons');
-                    if (noLessons) noLessons.classList.add('hidden');
-                    
-                    // ========== FIX: ONLY LOAD IF NO LESSON IS DISPLAYED ==========
-                    const lessonContent = document.getElementById('lessonContent');
-                    const isLessonVisible = lessonContent && lessonContent.style.display !== 'none';
-                    const hasCurrentLesson = currentLesson && currentLesson.id;
-                    
-                    if (!isLessonVisible || !hasCurrentLesson) {
-                        console.log('No lesson displayed - loading first lesson');
-                        loadNextLesson();
-                    } else {
-                        console.log('Lesson already displayed - keeping current lesson');
-                    }
-                    // ==============================================================
-                } else {
-                    // Show "complete assessment first"
-                    const noLessons = document.getElementById('noLessons');
-                    if (noLessons) noLessons.classList.remove('hidden');
-                }
-            } else if (section === 'progress') {
-                console.log('Progress section - loading data...');
-                loadProgressData();
             }
-
         }
 
         async function loadAssessment() {
@@ -2164,7 +2552,7 @@
 
         // Session configuration
         const SESSION_CONFIG = {
-            WARNING_TIME: 27 * 60 * 1000,      // 7 minutes in milliseconds
+            WARNING_TIME: 37 * 60 * 1000,      // 7 minutes in milliseconds
             TIMEOUT_TIME: 10 * 60 * 1000,     // 10 minutes in milliseconds
             MAX_BREAK_TIME: 30 * 60 * 1000,   // 30 minutes in milliseconds
             ACTIVITY_CHECK_INTERVAL: 30 * 1000 // Check every 30 seconds
@@ -3203,7 +3591,7 @@
             showSection('lessons');
         }
 
-        async function loadProgressData() {
+        async function loadAllStats() {
             const token = localStorage.getItem('token');
             
             if (!token) {
@@ -3212,9 +3600,8 @@
             }
             
             try {
-                console.log('Loading progress data...');
+                console.log('Loading all stats...');
                 
-                // Fix: Use parentheses, not backticks
                 const response = await fetch(`/api/student/progress?token=${token}`);
                 
                 if (!response.ok) {
@@ -3222,43 +3609,55 @@
                 }
                 
                 const data = await response.json();
-                console.log('Progress data received:', data);
+                console.log('Stats data received:', data);
                 
-                // Helper function to safely update elements
-                function safeUpdate(id, value) {
-                    const element = document.getElementById(id);
-                    if (element) {
-                        element.textContent = value;
-                        console.log(`✓ Updated ${id}: ${value}`);
-                    } else {
-                        console.warn(`⚠ Element not found: ${id}`);
+                if (!data.success || !data.stats) {
+                    throw new Error('Invalid response');
+                }
+                
+                // Extract values ONCE
+                const stats = {
+                    lessons: data.stats.total_lessons || 0,
+                    avgScore: data.stats.average_score || 0,
+                    avgScoreFormatted: data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-',
+                    level: data.user?.reading_level || 'intermediate',
+                    streak: data.stats.streak || 0,
+                    userName: data.user?.full_name || data.user?.email || 'Student'
+                };
+                
+                // Update ALL elements at once (Overview + Progress + Sidebar)
+                const updates = {
+                    // Overview section
+                    'lessonsCompleted': stats.lessons,
+                    'averageScore': stats.avgScoreFormatted,
+                    'currentLevel': stats.level,
+                    'streak': stats.streak,
+                    'welcomeName': stats.userName,
+                    
+                    // Progress section (same values!)
+                    'progressLessonsCompleted': stats.lessons,
+                    'progressAvgScore': stats.avgScoreFormatted,
+                    'progressReadingScore': Math.round(stats.avgScore) || '-',
+                    'progressReadingLevel': stats.level,
+                    'progressDayStreak': stats.streak,
+                    'progressTotalTime': data.stats.total_time_minutes || 0,
+                    
+                    // Sidebar
+                    'userName': stats.userName,
+                    'userLevel': stats.level
+                };
+                
+                // Apply all updates
+                for (const [id, value] of Object.entries(updates)) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.textContent = value;
                     }
                 }
                 
-                // Update Overview section stats (if they exist)
-                if (data.stats) {
-                    safeUpdate('lessonsCompleted', data.stats.total_lessons || 0);
-                    safeUpdate('averageScore', data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-');
-                    safeUpdate('currentLevel', data.stats.reading_level || 'beginner');
-                    safeUpdate('streak', data.stats.streak || 0);
-                }
+                console.log('✓ All stats updated:', stats);
                 
-                // Update Progress section stats (if they exist)
-                if (data.stats) {
-                    safeUpdate('progressTotalLessons', data.stats.total_lessons || 0);
-                    safeUpdate('progressAvgScore', data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-');
-                    safeUpdate('progressTotalTime', data.stats.total_time_minutes || 0);
-                    safeUpdate('readingScore', data.stats.average_score ? Math.round(data.stats.average_score) : '-');
-                }
-                
-                // Update user info in sidebar
-                if (data.user) {
-                    safeUpdate('userName', data.user.full_name || data.user.email || 'Student');
-                    safeUpdate('welcomeName', data.user.full_name || data.user.email || 'Student');
-                    safeUpdate('userLevel', data.user.reading_level || 'beginner');
-                }
-                
-                // Display recent sessions
+                // Display Recent Activity
                 const activityList = document.getElementById('recentActivityList');
                 if (activityList) {
                     if (!data.sessions || data.sessions.length === 0) {
@@ -3278,7 +3677,7 @@
                                     <div>
                                         <strong style="color: var(--navy-primary);">${session.passage_title || 'Lesson'}</strong>
                                         <div style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
-                                            ${formattedDate} • ${session.difficulty || 'N/A'} • ${session.word_count || 0} words
+                                            ${formattedDate} • ${session.difficulty || 'intermediate'} • ${session.word_count || 0} words
                                         </div>
                                     </div>
                                     <div style="text-align: right;">
@@ -3295,15 +3694,57 @@
                     }
                 }
                 
-                console.log('✓ Progress data loaded successfully');
+                console.log('✓ Recent activity updated');
                 
             } catch (error) {
-                console.error('Error loading progress data:', error);
+                console.error('Error loading stats:', error);
                 
-                // Show user-friendly error message
+                // Show error message
                 const activityList = document.getElementById('recentActivityList');
                 if (activityList) {
                     activityList.innerHTML = '<p style="color: #DC3545; padding: 2rem; text-align: center;">Unable to load progress data. Please refresh the page.</p>';
+                }
+            }
+        }
+
+        async function loadWeeklyGoals() {
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/student/weekly-goals?token=${token}`);
+                const data = await response.json();
+                
+                const goalsContainer = document.querySelector('.weekly-goals-container');
+                if (!goalsContainer) {
+                    console.warn('Weekly goals container not found');
+                    return;
+                }
+                
+                if (data.success && data.goals && data.goals.length > 0) {
+                    goalsContainer.innerHTML = data.goals.map(goal => `
+                        <div style="padding: 1rem; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <span style="font-size: 1.5rem;">${goal.icon}</span>
+                                <span style="font-weight: 500;">${goal.name}</span>
+                            </div>
+                            <div style="flex: 1; max-width: 200px; margin: 0 1rem;">
+                                <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; width: ${goal.progress}%; transition: width 0.3s;"></div>
+                                </div>
+                            </div>
+                            <span style="font-weight: 600; color: #667eea;">${goal.current}/${goal.target}</span>
+                        </div>
+                    `).join('');
+                    
+                    console.log('✓ Weekly goals loaded');
+                } else {
+                    goalsContainer.innerHTML = '<p style="color: #666; padding: 1rem;">No active goals this week. Keep learning!</p>';
+                }
+            } catch (error) {
+                console.error('Error loading weekly goals:', error);
+                const goalsContainer = document.querySelector('.weekly-goals-container');
+                if (goalsContainer) {
+                    goalsContainer.innerHTML = '<p style="color: #999; padding: 1rem;">Unable to load weekly goals.</p>';
                 }
             }
         }
@@ -3917,7 +4358,8 @@
         // ========== INITIALIZE ON PAGE LOAD ==========
 
         document.addEventListener('DOMContentLoaded', function() {
-            // ... existing DOMContentLoaded code ...
+            loadAllStats();
+            loadWeeklyGoals();  // ADD THIS
             
             // Initialize session tracking
             initializeSession();
@@ -3944,6 +4386,327 @@
         if (menuIcon) menuIcon.textContent = icon;
         if (menuIconMain) menuIconMain.textContent = icon;
     }
+
+    // Avatars array (with diverse options)
+    const avatars = [
+        // Happy faces
+        '😀', '😃', '😄', '😊', '🙂', '😇', '😎', '🤓', '🥳', '🤗',
+        
+        // African American Students (dark skin)
+        '🧑🏿‍🎓', '👨🏿‍🎓', '👩🏿‍🎓',
+        
+        // African American Professionals (dark skin)
+        '🧑🏿‍💻', '👨🏿‍💻', '👩🏿‍💻',  // Tech
+        '🧑🏿‍🏫', '👨🏿‍🏫', '👩🏿‍🏫',  // Teachers
+        '🧑🏿‍🔬', '👨🏿‍🔬', '👩🏿‍🔬',  // Scientists
+        '🧑🏿', '👨🏿', '👩🏿',
+        
+        // Medium-dark skin
+        '🧑🏾‍🎓', '👨🏾‍🎓', '👩🏾‍🎓',
+        '🧑🏾‍💻', '👨🏾‍💻', '👩🏾‍💻',
+        '🧑🏾', '👨🏾', '👩🏾',
+        
+        // Medium skin
+        '🧑🏽‍🎓', '👨🏽‍🎓', '👩🏽‍🎓',
+        '🧑🏽‍💻', '👨🏽‍💻', '👩🏽‍💻',
+        
+        // Light-medium skin
+        '🧑🏼‍🎓', '👨🏼‍🎓', '👩🏼‍🎓',
+        
+        // Superheroes
+        '🦸🏿', '🦸🏾', '🦸🏽', '🦸',
+        '🦹🏿', '🦹🏾', '🦹🏽', '🦹',
+        
+        // Additional
+        '🧙🏿', '🧙🏾', '🤔'
+    ];
+
+    let selectedAvatar = null;
+    const DEFAULT_AVATAR = '👤';
+
+    // ========== TAB SWITCHING ==========
+    function switchProfileTab(tabName) {
+        console.log('Switching to tab:', tabName);
+        
+        // Remove active from all tabs and content
+        document.querySelectorAll('.profile-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        document.querySelectorAll('.profile-tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        
+        // Activate selected tab and content
+        if (tabName === 'upload') {
+            document.querySelector('[data-tab="upload"]').classList.add('active');
+            document.getElementById('uploadTab').classList.add('active');
+        } else if (tabName === 'avatar') {
+            document.querySelector('[data-tab="avatar"]').classList.add('active');
+            document.getElementById('avatarTab').classList.add('active');
+            
+            // Generate avatar grid when switching to avatar tab
+            generateAvatarGrid();
+        }
+    }
+
+    // ========== AVATAR FUNCTIONS ==========
+    function generateAvatarGrid() {
+        const grid = document.getElementById('avatarGrid');
+        if (!grid) {
+            console.error('Avatar grid not found!');
+            return;
+        }
+        
+        grid.innerHTML = avatars.map(avatar => `
+            <div class="avatar-option" onclick="selectAvatar('${avatar}', this)">
+                ${avatar}
+            </div>
+        `).join('');
+        
+        console.log('Avatar grid generated with', avatars.length, 'avatars');
+    }
+
+    function selectAvatar(avatar, element) {
+        // Remove selection from all
+        document.querySelectorAll('.avatar-option').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        // Select this one
+        element.classList.add('selected');
+        selectedAvatar = avatar;
+        
+        console.log('Selected avatar:', avatar);
+    }
+
+    async function saveAvatar() {
+        if (!selectedAvatar) {
+            alert('Please select an avatar first');
+            return;
+        }
+        
+        const token = localStorage.getItem('token');
+        
+        try {
+            const response = await fetch('/api/profile/set-avatar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token, avatar: selectedAvatar })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update display
+                setAvatar(selectedAvatar);
+                closeProfileModal();
+                showSuccessMessage('Avatar saved! ✓');
+            } else {
+                alert('Error saving avatar: ' + (data.detail || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error saving avatar:', error);
+            alert('Error saving avatar. Check console for details.');
+        }
+    }
+
+    function setAvatar(avatar) {
+        const avatarEmoji = document.getElementById('avatarEmoji');
+        if (avatarEmoji) {
+            avatarEmoji.textContent = avatar;
+        }
+    }
+
+    // ========== PHOTO UPLOAD FUNCTIONS ==========
+    function previewPhoto(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File too large. Maximum size is 5MB.');
+            return;
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            alert('Please upload an image file (JPG, PNG, or GIF)');
+            return;
+        }
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('photoPreview');
+            const uploadButton = document.getElementById('uploadButton');
+            
+            if (preview) {
+                preview.src = e.target.result;
+                preview.classList.add('active');
+            }
+            
+            if (uploadButton) {
+                uploadButton.style.display = 'block';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function uploadPhoto() {
+        const fileInput = document.getElementById('photoInput');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            alert('Please select a photo first');
+            return;
+        }
+        
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('token', token);
+        formData.append('photo', file);
+        
+        try {
+            // Show loading state
+            const uploadButton = document.getElementById('uploadButton');
+            const originalText = uploadButton.textContent;
+            uploadButton.textContent = 'Uploading...';
+            uploadButton.disabled = true;
+            
+            const response = await fetch('/api/profile/upload-photo', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update display
+                const avatarEmoji = document.getElementById('avatarEmoji');
+                if (avatarEmoji) {
+                    avatarEmoji.innerHTML = `<img src="${data.photo_url}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+                }
+                
+                closeProfileModal();
+                showSuccessMessage('Photo uploaded! ✓');
+                
+                // Reset form
+                fileInput.value = '';
+                document.getElementById('photoPreview').classList.remove('active');
+                uploadButton.style.display = 'none';
+            } else {
+                alert('Error uploading photo: ' + (data.detail || 'Unknown error'));
+            }
+            
+            // Reset button
+            uploadButton.textContent = originalText;
+            uploadButton.disabled = false;
+            
+        } catch (error) {
+            console.error('Error uploading photo:', error);
+            alert('Error uploading photo. Check console for details.');
+            
+            // Reset button
+            const uploadButton = document.getElementById('uploadButton');
+            uploadButton.textContent = 'Upload Photo';
+            uploadButton.disabled = false;
+        }
+    }
+
+    // ========== MODAL FUNCTIONS ==========
+    function openProfileModal() {
+        const modal = document.getElementById('profileModal');
+        modal.classList.add('active');
+        
+        // Hide any prompts
+        const prompt = document.getElementById('avatarPrompt');
+        if (prompt) prompt.style.display = 'none';
+        
+        console.log('Modal opened');
+    }
+
+    function closeProfileModal() {
+        const modal = document.getElementById('profileModal');
+        modal.classList.remove('active');
+        
+        // Reset selected avatar
+        selectedAvatar = null;
+        
+        console.log('Modal closed');
+    }
+
+    // ========== LOAD PROFILE PHOTO ==========
+    async function loadProfilePhoto() {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        try {
+            const response = await fetch(`/api/profile/photo?token=${token}`);
+            const data = await response.json();
+            
+            if (data.success && data.photo_url) {
+                setAvatar(data.photo_url);
+            } else {
+                setAvatar(DEFAULT_AVATAR);
+            }
+        } catch (error) {
+            console.error('Error loading profile photo:', error);
+            setAvatar(DEFAULT_AVATAR);
+        }
+    }
+
+    // ========== SUCCESS MESSAGE ==========
+    function showSuccessMessage(message) {
+        const successDiv = document.createElement('div');
+        successDiv.style.cssText = `
+            position: fixed;
+            top: 100px;
+            right: 1rem;
+            background: #28a745;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        `;
+        successDiv.textContent = message;
+        
+        document.body.appendChild(successDiv);
+        
+        setTimeout(() => {
+            successDiv.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => successDiv.remove(), 300);
+        }, 2000);
+    }
+
+    // ========== INITIALIZE ON PAGE LOAD ==========
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing profile photo system...');
+        
+        // Load profile photo
+        loadProfilePhoto();
+        
+        // Set user name
+        const userName = document.getElementById('userName');
+        if (userName) {
+            document.getElementById('profileNameDisplay').textContent = userName.textContent;
+        }
+        
+        // Close modal when clicking outside
+        const modal = document.getElementById('profileModal');
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeProfileModal();
+                }
+            });
+        }
+        
+        console.log('Profile photo system initialized');
+    });
     
     </script>
 </body>

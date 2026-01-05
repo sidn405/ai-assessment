@@ -1277,6 +1277,107 @@
                 font-size: 2rem !important;
             }
         }
+
+        .ai-tutor {
+            position: fixed;
+            bottom: 1.25rem;
+            right: 1.25rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+            z-index: 100000;
+            transform: translateY(140%);
+            opacity: 0;
+            transition: transform 0.45s ease, opacity 0.45s ease;
+            }
+
+            .ai-tutor.show {
+            transform: translateY(0);
+            opacity: 1;
+            }
+
+            .ai-tutor.hidden { display: none; }
+
+            .tutor-avatar {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: #fff;
+            border: 3px solid rgba(0,0,0,0.08);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            }
+
+            .avatar-face { width: 64px; height: 64px; position: relative; }
+
+            .eyes { display: flex; justify-content: space-between; padding: 18px 10px 0 10px; }
+            .eye { width: 10px; height: 10px; border-radius: 50%; background: #1f2a44; }
+
+            .mouth {
+            position: absolute;
+            left: 50%;
+            top: 42px;
+            width: 28px;
+            height: 14px;
+            transform: translateX(-50%);
+            border-bottom: 4px solid #1f2a44;
+            border-radius: 0 0 20px 20px;
+            transition: all 0.25s ease;
+            }
+
+            /* emotion mouths */
+            .mouth.happy { border-bottom-width: 5px; }
+            .mouth.encouraging { border-bottom-width: 4px; width: 26px; }
+            .mouth.celebrating { border-bottom-width: 6px; width: 30px; }
+
+            .tutor-speech-bubble{
+            background: #fff;
+            border-radius: 14px;
+            padding: 12px 14px;
+            max-width: 360px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+            border: 1px solid rgba(0,0,0,0.06);
+            position: relative;
+            }
+
+            .tutor-speech-bubble::before{
+            content: "";
+            position: absolute;
+            right: -12px;
+            bottom: 20px;
+            border-left: 12px solid #fff;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+            }
+
+            .speech-text { font-weight: 600; line-height: 1.35; }
+
+            .speech-continue{
+            margin-top: 10px;
+            border: none;
+            border-radius: 10px;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-weight: 700;
+            }
+
+            .tutor-close, .tutor-mute{
+            position: absolute;
+            top: -10px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #e0e0e0;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+            }
+
+            .tutor-close { right: -10px; color: #e74c3c; }
+            .tutor-mute { left: -10px; }
+
     </style>
 </head>
 <body>
@@ -1634,6 +1735,120 @@
         // Debug: Track loadNextLesson calls
         let lessonCallCount = 0;
         const originalLoadNextLesson = loadNextLesson;
+
+        // ============================================
+        // AI TUTOR (Dashboard-integrated)
+        // ============================================
+        let tutorMuted = false;
+
+        function getStudentNameForTutor() {
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            return user.full_name || user.name || document.getElementById('userName')?.textContent?.trim() || 'there';
+        } catch {
+            return 'there';
+        }
+        }
+
+        function ensureVoicesLoaded() {
+        if (window.speechSynthesis?.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = () => {};
+        }
+        }
+
+        function showTutorUI() {
+        const tutor = document.getElementById('aiTutor');
+        if (!tutor) return;
+        tutor.classList.remove('hidden');
+        // force reflow so transition applies
+        void tutor.offsetWidth;
+        tutor.classList.add('show');
+        }
+
+        function hideTutor() {
+        const tutor = document.getElementById('aiTutor');
+        if (!tutor) return;
+        tutor.classList.remove('show');
+        window.speechSynthesis?.cancel();
+        // keep it in DOM but hidden after animation
+        setTimeout(() => tutor.classList.add('hidden'), 450);
+        }
+
+        function toggleTutorMute() {
+        tutorMuted = !tutorMuted;
+        const icon = document.getElementById('muteIcon');
+        if (icon) icon.textContent = tutorMuted ? '🔇' : '🔊';
+        if (tutorMuted) window.speechSynthesis?.cancel();
+        }
+
+        function tutorSpeak(text) {
+        if (tutorMuted || !window.speechSynthesis) return;
+
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 0.9;
+        u.pitch = 1.1;
+        u.volume = 1.0;
+
+        const voices = window.speechSynthesis.getVoices?.() || [];
+        const preferred = voices.find(v =>
+            /Google|Samantha|Female/i.test(v.name)
+        );
+        if (preferred) u.voice = preferred;
+
+        window.speechSynthesis.speak(u);
+        }
+
+        function displayTutorMessage(message, emotion = 'happy') {
+        showTutorUI();
+
+        const msg = document.getElementById('tutorMessage');
+        const mouth = document.getElementById('avatarMouth');
+
+        if (msg) msg.textContent = message;
+        if (mouth) mouth.className = `mouth ${emotion}`;
+
+        tutorSpeak(message);
+        }
+
+        async function showTutor(context, extra = {}) {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const studentName = getStudentNameForTutor();
+
+        try {
+            const res = await fetch('/api/tutor/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token,
+                context,
+                student_name: studentName,
+                ...extra
+            })
+            });
+
+            const data = await res.json();
+            if (data?.success) {
+            displayTutorMessage(data.message, data.emotion);
+            }
+        } catch (e) {
+            console.error('Tutor error:', e);
+        }
+        }
+
+        // Call when a lesson is rendered on the dashboard
+        let tutorTimers = [];
+        function startTutorForLesson() {
+        ensureVoicesLoaded();
+        tutorTimers.forEach(t => clearTimeout(t));
+        tutorTimers = [];
+
+        tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
+        tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
+        }
+
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
@@ -2646,6 +2861,8 @@
             if (loading) loading.classList.remove('hidden');
             
             lessonStartTime = Date.now();
+            startTutorForLesson();
+
             
             try {
                 console.log('Fetching lesson from API...');
@@ -3059,6 +3276,28 @@
                 } catch (saveError) {
                     console.error('Error saving progress:', saveError);
                     // Continue anyway - show results
+                }
+
+                // ===== AI Tutor reaction =====
+                try {
+                // what the lesson count will become after this submission
+                const completedEl = document.getElementById('lessonsCompleted');
+                const nextLessonNumber = (parseInt(completedEl?.textContent) || 0) + 1;
+
+                if (score >= 80) {
+                    showTutor('success', { score, lesson_number: nextLessonNumber });
+                } else if (score < 60) {
+                    showTutor('struggle', { score, lesson_number: nextLessonNumber });
+                } else {
+                    showTutor('success', { score, lesson_number: nextLessonNumber });
+                }
+
+                // milestone every 10 lessons
+                if (nextLessonNumber % 10 === 0) {
+                    setTimeout(() => showTutor('milestone', { lesson_number: nextLessonNumber }), 2500);
+                }
+                } catch (e) {
+                console.warn('Tutor trigger failed:', e);
                 }
                 
                 // Show results
@@ -4709,5 +4948,27 @@
     });
     
     </script>
+
+    <!-- AI Tutor Avatar -->
+    <div id="aiTutor" class="ai-tutor hidden">
+    <div class="tutor-avatar">
+        <div class="avatar-face" id="avatarFace">
+        <div class="eyes">
+            <div class="eye left"></div>
+            <div class="eye right"></div>
+        </div>
+        <div class="mouth" id="avatarMouth"></div>
+        </div>
+    </div>
+
+    <div class="tutor-speech-bubble">
+        <div class="speech-text" id="tutorMessage"></div>
+        <button class="speech-continue" onclick="hideTutor()">Got it! ✓</button>
+    </div>
+
+    <button class="tutor-close" onclick="hideTutor()">✕</button>
+    <button class="tutor-mute" onclick="toggleTutorMute()"><span id="muteIcon">🔊</span></button>
+    </div>
+
 </body>
 </html>
