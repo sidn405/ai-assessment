@@ -1284,287 +1284,106 @@
 
         .ai-tutor {
             position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            z-index: 100000;
+            bottom: 1.25rem;
+            right: 1.25rem;
             display: flex;
+            gap: 0.75rem;
             align-items: flex-end;
-            gap: 1rem;
-            animation: slideInUp 0.5s ease;
-        }
-
-        .ai-tutor.hidden {
-            display: none;
-        }
-
-        @keyframes slideInUp {
-            from {
-                transform: translateY(100px);
-                opacity: 0;
+            z-index: 100000;
+            transform: translateY(140%);
+            opacity: 0;
+            transition: transform 0.45s ease, opacity 0.45s ease;
             }
-            to {
-                transform: translateY(0);
-                opacity: 1;
+
+            .ai-tutor.show {
+            transform: translateY(0);
+            opacity: 1;
             }
-        }
 
-        /* Avatar Face */
-        .tutor-avatar {
-            width: 120px;
-            height: 120px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-            border: 4px solid white;
-            animation: bounce 2s infinite;
-        }
+            .ai-tutor.hidden { display: none; }
 
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% {
-                transform: translateY(0);
+            /* Avatar Face */
+            .tutor-avatar {
+                width: 120px;
+                height: 120px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+                border: 4px solid white;
+                animation: bounce 2s infinite;
             }
-            40% {
-                transform: translateY(-10px);
-            }
-            60% {
-                transform: translateY(-5px);
-            }
-        }
 
-        .avatar-face {
-            width: 80%;
-            height: 80%;
-            position: relative;
-        }
+            .avatar-face { width: 64px; height: 64px; position: relative; }
 
-        /* Eyes */
-        .eyes {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 20px;
-            gap: 15px;
-        }
+            .eyes { display: flex; justify-content: space-between; padding: 18px 10px 0 10px; }
+            .eye { width: 10px; height: 10px; border-radius: 50%; background: #1f2a44; }
 
-        .eye {
-            width: 16px;
-            height: 16px;
-            background: white;
-            border-radius: 50%;
-            position: relative;
-            animation: blink 4s infinite;
-        }
-
-        .eye::after {
-            content: '';
+            .mouth {
             position: absolute;
-            width: 8px;
-            height: 8px;
-            background: #2C3E50;
-            border-radius: 50%;
-            top: 4px;
-            left: 4px;
-            animation: lookAround 3s infinite;
-        }
+            left: 50%;
+            top: 42px;
+            width: 28px;
+            height: 14px;
+            transform: translateX(-50%);
+            border-bottom: 4px solid #1f2a44;
+            border-radius: 0 0 20px 20px;
+            transition: all 0.25s ease;
+            }
 
-        @keyframes blink {
-            0%, 90%, 100% {
-                height: 16px;
-            }
-            95% {
-                height: 2px;
-            }
-        }
+            /* emotion mouths */
+            .mouth.happy { border-bottom-width: 5px; }
+            .mouth.encouraging { border-bottom-width: 4px; width: 26px; }
+            .mouth.celebrating { border-bottom-width: 6px; width: 30px; }
 
-        @keyframes lookAround {
-            0%, 100% {
-                left: 4px;
-            }
-            25% {
-                left: 6px;
-            }
-            75% {
-                left: 2px;
-            }
-        }
-
-        /* Mouth */
-        .mouth {
-            width: 30px;
-            height: 15px;
-            border: 3px solid white;
-            border-top: none;
-            border-radius: 0 0 30px 30px;
-            margin: 15px auto 0;
-            animation: talk 0.5s infinite;
-        }
-
-        .mouth.happy {
-            animation: smile 0.5s ease;
-            border-radius: 0 0 30px 30px;
-        }
-
-        .mouth.celebrating {
-            border-radius: 30px 30px 0 0;
-            border-top: 3px solid white;
-            border-bottom: none;
-            animation: laugh 0.3s infinite;
-        }
-
-        @keyframes talk {
-            0%, 100% {
-                height: 15px;
-            }
-            50% {
-                height: 20px;
-            }
-        }
-
-        @keyframes smile {
-            to {
-                width: 35px;
-                height: 18px;
-            }
-        }
-
-        @keyframes laugh {
-            0%, 100% {
-                transform: scaleX(1);
-            }
-            50% {
-                transform: scaleX(1.2);
-            }
-        }
-
-        /* Speech Bubble */
-        .tutor-speech-bubble {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-            max-width: 350px;
+            .tutor-speech-bubble{
+            background: #fff;
+            border-radius: 14px;
+            padding: 12px 14px;
+            max-width: 360px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+            border: 1px solid rgba(0,0,0,0.06);
             position: relative;
-            animation: fadeIn 0.3s ease;
-        }
+            }
 
-        .tutor-speech-bubble::before {
-            content: '';
+            .tutor-speech-bubble::before{
+            content: "";
             position: absolute;
+            right: -12px;
             bottom: 20px;
-            right: -15px;
-            width: 0;
-            height: 0;
-            border-left: 15px solid white;
+            border-left: 12px solid #fff;
             border-top: 10px solid transparent;
             border-bottom: 10px solid transparent;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.8);
             }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
 
-        .speech-text {
-            font-size: 1.1rem;
-            line-height: 1.6;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-            font-weight: 500;
-        }
+            .speech-text { font-weight: 600; line-height: 1.35; }
 
-        .speech-continue {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            .speech-continue{
+            margin-top: 10px;
             border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
+            border-radius: 10px;
+            padding: 8px 10px;
             cursor: pointer;
-            width: 100%;
-            transition: all 0.3s;
-        }
+            font-weight: 700;
+            }
 
-        .speech-continue:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        /* Control Buttons */
-        .tutor-close,
-        .tutor-mute {
+            .tutor-close, .tutor-mute{
             position: absolute;
             top: -10px;
-            background: white;
-            border: 2px solid #E0E0E0;
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            border: 2px solid #e0e0e0;
+            background: #fff;
             cursor: pointer;
-            font-size: 1rem;
-            transition: all 0.3s;
-        }
-
-        .tutor-close {
-            right: -10px;
-            color: #E74C3C;
-        }
-
-        .tutor-mute {
-            left: -10px;
-        }
-
-        .tutor-close:hover {
-            background: #E74C3C;
-            color: white;
-            transform: rotate(90deg);
-        }
-
-        .tutor-mute:hover {
-            background: var(--navy-primary);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-            .ai-tutor {
-                bottom: 1rem;
-                right: 1rem;
-                left: 1rem;
-                flex-direction: column;
-                align-items: center;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.15);
             }
-            
-            .tutor-avatar {
-                width: 100px;
-                height: 100px;
-            }
-            
-            .tutor-speech-bubble {
-                max-width: 100%;
-            }
-            
-            .tutor-speech-bubble::before {
-                bottom: -15px;
-                right: 50%;
-                transform: translateX(50%);
-                border-left: 10px solid transparent;
-                border-right: 10px solid transparent;
-                border-top: 15px solid white;
-                border-bottom: none;
-            }
-        }
+
+            .tutor-close { right: -10px; color: #e74c3c; }
+            .tutor-mute { left: -10px; }
+
 
     </style>
 </head>
