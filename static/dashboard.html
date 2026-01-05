@@ -2772,6 +2772,8 @@
                 if (!response.ok) throw new Error('Failed to load gamification data');
                 
                 const data = await response.json();
+                const gamification = data;
+
                 console.log('Gamification data:', data);
                 
                 // Update points display
