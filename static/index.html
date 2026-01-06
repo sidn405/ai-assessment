@@ -1298,8 +1298,8 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        full_name: name,
-                        email: email,
+                        full_name: full_name.trim(),
+                        email: email.trim(),
                         password: password,
                         age: age,
                         age_band: age_band,
