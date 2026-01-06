@@ -979,9 +979,10 @@
                     <label for="loginPassword">Password</label>
                     <input type="password" id="loginPassword" required>
                 </div>
-                <!-- ✅ ADD FORGOT PASSWORD LINK -->
+                <!-- In login modal, update the forgot password link: -->
                 <div style="text-align: right; margin-bottom: 1rem;">
-                    <a href="#" onclick="closeModal('login'); openModal('forgotPassword'); return false;" 
+                    <a href="#" 
+                    onclick="event.preventDefault(); closeModal('login'); setTimeout(() => openModal('forgotPassword'), 100); return false;" 
                     style="color: var(--navy-primary); font-size: 0.9rem; text-decoration: none;">
                         Forgot Password?
                     </a>
@@ -1078,27 +1079,81 @@
 
     <script>
         function openModal(type) {
-            const modal = type === 'login' ? 'loginModal' : 'registerModal';
-            document.getElementById(modal).classList.add('active');
+            console.log('Opening modal:', type);
+            
+            // Close all modals first
+            closeAllModals();
+            
+            // Map of modal types to IDs
+            const modalMap = {
+                'login': 'loginModal',
+                'register': 'registerModal',
+                'forgotPassword': 'forgotPasswordModal'
+            };
+            
+            const modalId = modalMap[type];
+            if (!modalId) {
+                console.error('❌ Unknown modal type:', type);
+                return;
+            }
+            
+            const modalElement = document.getElementById(modalId);
+            if (modalElement) {
+                modalElement.classList.add('active');
+                console.log('✅ Opened:', modalId);
+            } else {
+                console.error('❌ Modal element not found:', modalId);
+            }
         }
 
         function closeModal(type) {
-            const modal = type === 'login' ? 'loginModal' : 'registerModal';
-            document.getElementById(modal).classList.remove('active');
-        }
-
-        // Close modal on outside click
-        window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
-                event.target.classList.remove('active');
+            console.log('Closing modal:', type);
+            
+            const modalMap = {
+                'login': 'loginModal',
+                'register': 'registerModal',
+                'forgotPassword': 'forgotPasswordModal'
+            };
+            
+            const modalId = modalMap[type];
+            if (!modalId) {
+                console.error('❌ Unknown modal type:', type);
+                return;
+            }
+            
+            const modalElement = document.getElementById(modalId);
+            if (modalElement) {
+                modalElement.classList.remove('active');
+                console.log('✅ Closed:', modalId);
+            } else {
+                console.error('❌ Modal element not found:', modalId);
             }
         }
+
+        function closeAllModals() {
+            const modals = ['loginModal', 'registerModal', 'forgotPasswordModal'];
+            modals.forEach(id => {
+                const modal = document.getElementById(id);
+                if (modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                const modals = document.querySelectorAll('.modal.active');
+                modals.forEach(modal => modal.classList.remove('active'));
+            }
+        };
 
         // Login form handler
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
+            const forgotPassword = document.getElementById('forgotPassword').value;
             const errorDiv = document.getElementById('loginError');
 
             try {
