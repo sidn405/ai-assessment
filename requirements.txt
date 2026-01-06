@@ -10,4 +10,4 @@ psycopg2-binary==2.9.9
 httpx==0.25.1
 
 # Email
-resend==2.19.0end
+resend==2.19.0
