@@ -979,11 +979,51 @@
                     <label for="loginPassword">Password</label>
                     <input type="password" id="loginPassword" required>
                 </div>
+                <!-- ✅ ADD FORGOT PASSWORD LINK -->
+                <div style="text-align: right; margin-bottom: 1rem;">
+                    <a href="#" onclick="closeModal('login'); openModal('forgotPassword'); return false;" 
+                    style="color: var(--navy-primary); font-size: 0.9rem; text-decoration: none;">
+                        Forgot Password?
+                    </a>
+                </div>
                 <div class="form-error" id="loginError"></div>
                 <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Login</button>
             </form>
             <p style="text-align: center; margin-top: 1.5rem;">
                 Don't have an account? <a href="#" onclick="closeModal('login'); openModal('register')" style="color: var(--navy-primary); font-weight: 600;">Register here</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotPasswordModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('forgotPassword')">&times;</button>
+            <h2 style="color: var(--navy-primary); margin-bottom: 1rem;">Reset Your Password</h2>
+            <p style="color: #666; margin-bottom: 2rem;">
+                Enter your email address and we'll send you a link to reset your password.
+            </p>
+            
+            <form id="forgotPasswordForm">
+                <div class="form-group">
+                    <label for="forgotEmail">Email</label>
+                    <input type="email" id="forgotEmail" required placeholder="your@email.com">
+                </div>
+                
+                <div class="form-error" id="forgotPasswordError"></div>
+                <div class="form-success" id="forgotPasswordSuccess" style="display: none; background: #d4edda; color: #155724; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                    ✅ Check your email for reset instructions
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                    Send Reset Link
+                </button>
+            </form>
+            
+            <p style="text-align: center; margin-top: 1.5rem;">
+                <a href="#" onclick="closeModal('forgotPassword'); openModal('login')" style="color: var(--navy-primary); font-weight: 600;">
+                    Back to Login
+                </a>
             </p>
         </div>
     </div>
@@ -1006,6 +1046,20 @@
                     <label for="registerPassword">Password</label>
                     <input type="password" id="registerPassword" required minlength="6">
                 </div>
+
+                <!-- ✅ ADD AGE FIELD -->
+            <div class="form-group">
+                <label for="registerAge">Age</label>
+                <input 
+                    type="number" 
+                    id="registerAge" 
+                    required 
+                    min="5" 
+                    max="100"
+                    placeholder="Enter your age"
+                    style="width: 100%;"
+                >
+
                 <div class="form-group">
                     <label for="registerRole">I am a...</label>
                     <select id="registerRole" required>
@@ -1075,20 +1129,101 @@
             }
         });
 
+        // Forgot Password Form Handler
+        document.getElementById('forgotPasswordForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('forgotEmail').value;
+            const errorDiv = document.getElementById('forgotPasswordError');
+            const successDiv = document.getElementById('forgotPasswordSuccess');
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            
+            // Hide previous messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            // Disable button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            
+            try {
+                const response = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    successDiv.style.display = 'block';
+                    successDiv.textContent = data.message;
+                    
+                    // Clear form
+                    document.getElementById('forgotEmail').value = '';
+                    
+                    // Auto-close after 5 seconds
+                    setTimeout(() => {
+                        closeModal('forgotPassword');
+                        openModal('login');
+                    }, 5000);
+                } else {
+                    errorDiv.textContent = data.detail || 'Failed to send reset email';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Forgot password error:', error);
+                errorDiv.textContent = 'Failed to send reset email. Please try again.';
+                errorDiv.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send Reset Link';
+            }
+        });
+
         // Register form handler
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const full_name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
+            const age = parseInt(document.getElementById('registerAge').value);
             const role = document.getElementById('registerRole').value;
             const errorDiv = document.getElementById('registerError');
 
+            // Validate age
+            if (age < 5 || age > 100) {
+                errorDiv.textContent = 'Please enter a valid age (5-100)';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Determine age band
+            let age_band;
+            if (age >= 5 && age <= 10) {
+                age_band = 'child';
+            } else if (age >= 11 && age <= 13) {
+                age_band = 'preteen';
+            } else if (age >= 14 && age <= 17) {
+                age_band = 'teen';
+            } else if (age >= 18 && age <= 25) {
+                age_band = 'young_adult';
+            } else {
+                age_band = 'adult';
+            }
+            
             try {
                 const response = await fetch('/api/register', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email, password, full_name, role })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: name,
+                        email: email,
+                        password: password,
+                        age: age,
+                        age_band: age_band,
+                        role: role
+                    })
                 });
 
                 const data = await response.json();

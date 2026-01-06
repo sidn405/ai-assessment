@@ -1,4 +1,4 @@
-# MFS Literacy Platform - Phase 2: Complete Backend
+# Achieve 365 Reading Rewards
 # AI-Powered Adaptive Learning System
 
 from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
@@ -20,6 +20,8 @@ from pathlib import Path
 import random
 import traceback
 from openai import OpenAI
+import resend
+import secrets
 
 # Import our new utilities
 from readability import analyze_readability, get_difficulty_for_user
@@ -56,6 +58,12 @@ DATABASE = DATABASE_URL if USE_POSTGRES else "mfs_literacy.db"
 
 # Initialize content generator
 content_generator = ContentGenerator(OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+# Configure Resend
+resend.api_key = os.getenv("RESEND_API_KEY")  # Add this to your .env file
+
+# Store password reset tokens (in production, use database)
+password_reset_tokens = {}
 
 print(f"Using {'PostgreSQL' if USE_POSTGRES else 'SQLite'} database")
 print(f"OpenAI API {'configured' if OPENAI_API_KEY else 'NOT configured'}")
@@ -319,6 +327,163 @@ async def login(credentials: UserLogin):
             "level_estimate": user.get('level_estimate')
         }
     }
+    
+# ============================================
+# PASSWORD RESET
+# ============================================
+    
+@app.post("/api/auth/forgot-password")
+async def forgot_password(request: dict):
+    """Send password reset email"""
+    email = request.get('email')
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check if user exists
+        if USE_POSTGRES:
+            cursor.execute("SELECT id, full_name FROM users WHERE email = %s", (email,))
+        else:
+            cursor.execute("SELECT id, full_name FROM users WHERE email = ?", (email,))
+        
+        result = cursor.fetchone()
+        
+        # Always return success (security best practice - don't reveal if email exists)
+        if not result:
+            return {
+                "success": True,
+                "message": "If that email exists, a reset link has been sent."
+            }
+        
+        user_id = result['id']
+        user_name = result['full_name']
+        
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        
+        # Store token with expiration (1 hour)
+        password_reset_tokens[reset_token] = {
+            'user_id': user_id,
+            'email': email,
+            'expires': datetime.now() + timedelta(hours=1)
+        }
+        
+        # Create reset link
+        reset_link = f"https://ai-assessment-production-e027.up.railway.app/reset-password?token={reset_token}"
+        
+        # Send email via Resend
+        try:
+            resend.Emails.send({
+                "from": "Achieve 365 <noreply@achieve-365.org>",  # Update with your domain
+                "to": email,
+                "subject": "Reset Your Achieve 365 Password",
+                "html": f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2A398A;">Reset Your Password</h2>
+                        <p>Hi {user_name},</p>
+                        <p>We received a request to reset your password for your Achieve 365 account.</p>
+                        <p>Click the button below to reset your password:</p>
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{reset_link}" 
+                               style="background: #2A398A; 
+                                      color: white; 
+                                      padding: 12px 30px; 
+                                      text-decoration: none; 
+                                      border-radius: 5px;
+                                      display: inline-block;">
+                                Reset Password
+                            </a>
+                        </div>
+                        <p>Or copy and paste this link into your browser:</p>
+                        <p style="word-break: break-all; color: #666;">{reset_link}</p>
+                        <p style="color: #999; font-size: 14px;">
+                            This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.
+                        </p>
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                        <p style="color: #999; font-size: 12px;">
+                            Achieve 365 - Empowering Adult Literacy
+                        </p>
+                    </div>
+                """
+            })
+            
+            print(f"✅ Password reset email sent to {email}")
+            
+        except Exception as email_error:
+            print(f"❌ Email error: {email_error}")
+            raise HTTPException(status_code=500, detail="Failed to send reset email")
+        
+        return {
+            "success": True,
+            "message": "If that email exists, a reset link has been sent."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Forgot password error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process request")
+    finally:
+        conn.close()
+
+@app.post("/api/auth/reset-password")
+async def reset_password(request: dict):
+    """Reset password using token"""
+    token = request.get('token')
+    new_password = request.get('password')
+    
+    if not token or not new_password:
+        raise HTTPException(status_code=400, detail="Token and password are required")
+    
+    # Validate token
+    if token not in password_reset_tokens:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    token_data = password_reset_tokens[token]
+    
+    # Check expiration
+    if datetime.now() > token_data['expires']:
+        del password_reset_tokens[token]
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    
+    # Update password
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE users SET password_hash = %s WHERE id = %s",
+                (password_hash.decode('utf-8'), token_data['user_id'])
+            )
+        else:
+            cursor.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (password_hash.decode('utf-8'), token_data['user_id'])
+            )
+        
+        conn.commit()
+        
+        # Delete used token
+        del password_reset_tokens[token]
+        
+        return {
+            "success": True,
+            "message": "Password reset successfully"
+        }
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Password reset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset password")
+    finally:
+        conn.close()
 
 # ============================================
 # ASSESSMENT ENDPOINTS (Phase 1 + Phase 2)
