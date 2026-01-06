@@ -1946,6 +1946,29 @@
         let lessonCallCount = 0;
         const originalLoadNextLesson = loadNextLesson;
 
+        function hasCompletedAssessment(progressData = null) {
+            // If backend already returned a reading_level, assessment is effectively complete
+            const rl =
+            progressData?.user?.reading_level ||
+            progressData?.stats?.reading_level;
+
+            if (rl && String(rl).trim().length > 0) return true;
+
+            // Fallback: check cached user
+            try {
+            const u = JSON.parse(localStorage.getItem("user") || "{}");
+            if (u.reading_level && String(u.reading_level).trim()) return true;
+
+            if (u.interests) {
+                const interests = typeof u.interests === "string" ? JSON.parse(u.interests) : u.interests;
+                if (Array.isArray(interests) && interests.length > 0) return true;
+            }
+            } catch (_) {}
+
+            // Optional: local flag if you set it after onboarding
+            return localStorage.getItem("assessmentCompleted") === "true";
+        }
+
         // ============================================
         // AI TUTOR (Dashboard-integrated)
         // ============================================
