@@ -2332,8 +2332,26 @@
         function renderAssessmentWithOther() {
             console.log('=== renderAssessment START ===');
             const container = document.getElementById('assessmentQuestions');
-            container.innerHTML = '<h3 style="margin-bottom: 2rem; color: var(--navy-primary);">Help us personalize your learning experience:</h3>';
-            
+            container.innerHTML = `
+                <h3 style="margin-bottom: 1rem; color: var(--navy-primary);">
+                    Help us personalize your learning experience:
+                </h3>
+                <div style="
+                    background: #e7f3ff; 
+                    padding: 1rem; 
+                    border-radius: 8px; 
+                    margin-bottom: 2rem;
+                    border-left: 4px solid var(--navy-primary);
+                ">
+                    <strong>📝 How to answer:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.5rem; line-height: 1.6;">
+                        <li>Click on any answer that fits you</li>
+                        <li>Or click "Other" and type your own answer</li>
+                        <li>Choose whatever feels right!</li>
+                    </ul>
+                </div>
+            `;
+                                              
             currentAssessment.forEach((q, index) => {
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'question-card';
