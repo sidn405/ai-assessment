@@ -372,13 +372,13 @@ async def forgot_password(request: dict):
             'expires': datetime.now() + timedelta(hours=1)
         }
         
-        # Create reset link
+        # Create reset link need to change to clients url
         reset_link = f"https://ai-assessment-production-e027.up.railway.app/reset-password?token={reset_token}"
         
         # Send email via Resend
         try:
             resend.Emails.send({
-                "from": "Achieve 365 <noreply@achieve-365.org>",  # Update with your domain
+                "from": "Achieve 365 <noreply@4dgaming.games>",  # Update with your domain
                 "to": email,
                 "subject": "Reset Your Achieve 365 Password",
                 "html": f"""
