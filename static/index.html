@@ -1148,39 +1148,65 @@
             }
         };
 
-        // Login form handler
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            const forgotPassword = document.getElementById('forgotPassword').value;
-            const errorDiv = document.getElementById('loginError');
-
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email, password })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('user', JSON.stringify(data.user));
+        // Login Form Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('loginForm');
+            
+            if (loginForm) {
+                loginForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    console.log('Login form submitted');
                     
-                    if (data.user.role === 'admin') {
-                        window.location.href = '/admin-dashboard';
-                    } else {
-                        window.location.href = '/dashboard';
+                    const email = document.getElementById('loginEmail').value;
+                    const password = document.getElementById('loginPassword').value;
+                    const errorDiv = document.getElementById('loginError');
+                    
+                    console.log('Login attempt for:', email);
+                    
+                    if (errorDiv) {
+                        errorDiv.style.display = 'none';
+                        errorDiv.textContent = '';
                     }
-                } else {
-                    errorDiv.textContent = data.detail || 'Login failed';
-                    errorDiv.classList.add('active');
-                }
-            } catch (error) {
-                errorDiv.textContent = 'An error occurred. Please try again.';
-                errorDiv.classList.add('active');
+                    
+                    try {
+                        console.log('Sending login request...');
+                        const response = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password })
+                        });
+                        
+                        console.log('Login response status:', response.status);
+                        const data = await response.json();
+                        console.log('Login response data:', data);
+                        
+                        if (data.success) {
+                            console.log('✅ Login successful');
+                            localStorage.setItem('token', data.token);
+                            localStorage.setItem('user', JSON.stringify(data.user));
+                            
+                            if (data.user.role === 'admin') {
+                                window.location.href = '/admin-dashboard';
+                            } else {
+                                window.location.href = '/dashboard';
+                            }
+                        } else {
+                            console.log('❌ Login failed:', data.detail);
+                            if (errorDiv) {
+                                errorDiv.textContent = data.detail || 'Login failed';
+                                errorDiv.style.display = 'block';
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        if (errorDiv) {
+                            errorDiv.textContent = 'Login failed. Please try again.';
+                            errorDiv.style.display = 'block';
+                        }
+                    }
+                });
+            } else {
+                console.error('❌ Login form not found!');
             }
         });
 

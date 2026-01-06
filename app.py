@@ -238,6 +238,11 @@ async def serve_reading():
 async def serve_writing():
     return FileResponse("static/writing.html")
 
+@app.get("/reset-password")
+async def reset_password_page():
+    """Serve the password reset page"""
+    return FileResponse('static/reset-password.html')
+
 # ============================================
 # AUTHENTICATION (Original)
 # ============================================
