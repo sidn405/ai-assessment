@@ -1005,6 +1005,68 @@
             }
         }
 
+        /* ========== MOBILE MODAL FIX ========== */
+
+        /* Make modals scrollable on mobile */
+        @media (max-width: 768px) {
+            /* Essay Results Modal */
+            #essay-results-modal,
+            #celebration-modal,
+            #comprehension-essay-modal {
+                padding: 1rem !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            
+            /* Modal content should fit screen */
+            #essay-results-modal > div,
+            #celebration-modal > div,
+            #comprehension-essay-modal > div {
+                max-height: 90vh !important;
+                overflow-y: auto !important;
+                margin: auto !important;
+            }
+            
+            /* Lesson Results Card - Mobile */
+            #lessonResultsCard {
+                max-height: 90vh !important;
+                overflow-y: auto !important;
+            }
+            
+            /* Make sure buttons are always visible */
+            .btn-primary {
+                position: sticky !important;
+                bottom: 0 !important;
+                background: var(--navy-primary) !important;
+                z-index: 10 !important;
+                margin-top: 1rem !important;
+            }
+            
+            /* Prevent body scroll when modal is open */
+            body.modal-open {
+                overflow: hidden !important;
+                position: fixed !important;
+                width: 100% !important;
+            }
+        }
+
+        /* General Modal Improvements */
+        .modal-content {
+            max-height: 85vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Ensure feedback text is fully visible */
+        #tutorMessage,
+        #resultsMessage,
+        .speech-text {
+            max-height: 60vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 1rem;
+        }
+
     
         /* Profile Photo in Upper Right */
         .profile-photo-container {
@@ -1536,18 +1598,83 @@
 
                 <div class="card">
                     <h2>Getting Started</h2>
+
+                    <!-- shown only BEFORE assessment -->
                     <div id="gettingStarted">
                         <div class="alert alert-info">
-                            <strong>Welcome to your literacy journey!</strong> Start by taking our assessment to help us understand your interests and reading level.
+                            <strong>Welcome to your literacy journey!</strong>
+                            Start by taking our assessment to help us understand your interests and reading level.
                         </div>
-                        <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">Take Assessment</button>
+                        <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
+                            Take Assessment
+                        </button>
                     </div>
-                    <div id="continuelearning" class="hidden">
-                        <p>Ready to continue your learning journey?</p>
-                        <button class="btn btn-primary" onclick="showSection('lessons', event)">Continue Learning</button>
+
+                    <!-- shown only AFTER assessment -->
+                    <div id="continueLearning" class="hidden">
+                        <div class="alert alert-success">
+                            ✅ Assessment complete! Your lessons are now personalized to your interests and reading level.
+                        </div>
+                        <button class="btn btn-primary" onclick="showSection('lessons', event)">
+                            Continue Learning
+                        </button>
                     </div>
                 </div>
-            </div>
+                
+                <!-- ✅ MOVE THIS INSIDE overviewSection -->
+                <div class="card" id="rewardsMotivationCard" style="margin-top: 1.25rem;">
+                    <h2>🏆 Rewards & Motivation</h2>
+
+                    <div class="alert alert-info">
+                        <strong>How it helps you:</strong>
+                        Points and badges keep you consistent, celebrate progress, and help Achieve 365 personalize lessons to what you need most.
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1rem;">
+                        <div style="background: var(--light-gray); border-radius: 12px; padding: 1rem;">
+                            <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.25rem;">⭐ Points</div>
+                            <div style="color: var(--text-gray); font-size:.95rem;">
+                                Earn points for completing lessons, scoring high, keeping streaks, and hitting weekly goals.
+                            </div>
+                            <div style="margin-top:.75rem; font-size:.9rem;">
+                                <div>✅ Lesson complete: <strong>10</strong></div>
+                                <div>🎯 Perfect score: <strong>50</strong></div>
+                                <div>📈 High score: <strong>25</strong></div>
+                                <div>🔥 Daily streak: <strong>5</strong></div>
+                            </div>
+                        </div>
+
+                        <div style="background: var(--light-gray); border-radius: 12px; padding: 1rem;">
+                            <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.25rem;">🏅 Badges</div>
+                            <div style="color: var(--text-gray); font-size:.95rem;">
+                                Badges celebrate milestones (first lesson, streaks, 50 lessons, time-of-day achievements).
+                            </div>
+                            <div style="margin-top:.75rem; font-size:.9rem;">
+                                <div>🎯 <strong>Getting Started</strong> — Complete your first lesson</div>
+                                <div>📚 <strong>Bookworm</strong> — 50 lessons completed</div>
+                                <div>🔥 <strong>Triple Perfect</strong> — 3 perfect scores in a row</div>
+                                <div>🏆 <strong>Perfect Week</strong> — Achieve all weekly goals</div>
+                                <div>🌅 <strong>Early Bird</strong> — Complete lesson before 9 AM</div>
+                                <div>🦉 <strong>Night Owl</strong> — Complete lesson after 9 PM</div>
+                                <div>👑 <strong>Consistency King</strong> — 7-day streak</div>
+                                <div>⚡ <strong>Speed Reader</strong> — 10 lessons in one week</div>
+                            </div>
+                        </div>
+
+                        <div style="background: var(--light-gray); border-radius: 12px; padding: 1rem;">
+                            <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.25rem;">🏁 Levels</div>
+                            <div style="color: var(--text-gray); font-size:.95rem;">
+                                Your level increases as your total points grow—showing long-term consistency and effort.
+                            </div>
+                            <div style="margin-top:.75rem; font-size:.9rem;">
+                                <div>⬆️ Level up every <strong>500</strong> total points</div>
+                                <div>🎉 Level-ups unlock more recognition and momentum</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div> <!-- ✅ CLOSE overviewSection HERE -->
 
             <!-- Assessment Section -->
             <div id="assessmentSection" class="hidden">
@@ -1564,8 +1691,8 @@
                     <div id="assessmentQuestions" class="hidden"></div>
                 </div>
             </div>
-
-            <!-- Lessons Section -->
+            
+            <!-- Lessons Section (NEW SECTION STARTS) -->
             <div id="lessonsSection" class="hidden">
                 <div class="header">
                     <h1>📚 Your Personalized Lessons</h1>
@@ -1678,7 +1805,7 @@
                         <!-- Points Card -->
                         <div style="text-align: center; background: rgba(255,255,255,0.95); padding: 2rem 2.5rem; border-radius: 16px; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-8px) scale(1.05)'" onmouseout="this.style.transform='translateY(0) scale(1)'">
                             <div style="font-size: 3rem; margin-bottom: 0.5rem;">💎</div>
-                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                                 <span id="userPoints">0</span> pts
                             </div>
                             <div style="color: #666; font-weight: 600; margin-top: 0.5rem;">Points Earned</div>
@@ -1687,7 +1814,7 @@
                         <!-- Level Card -->
                         <div style="text-align: center; background: rgba(255,255,255,0.95); padding: 2rem 2.5rem; border-radius: 16px; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-8px) scale(1.05)'" onmouseout="this.style.transform='translateY(0) scale(1)'">
                             <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎖️</div>
-                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #F093FB 0%, #F5576C 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                            <div style="font-size: 3rem; font-weight: bold; background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                                 Level <span id="userLevel">1</span>
                             </div>
                             <div style="color: #666; font-weight: 600; margin-top: 0.5rem;">Current Level</div>
@@ -1714,10 +1841,86 @@
                     <h2 style="color: #1e3a5f; margin-bottom: 1.5rem; font-size: 2rem;">
                         📅 Weekly Goals
                     </h2>
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: #f8fafc; border: 1px solid #e6eaf2; border-radius: 14px;">
+                        <div style="font-weight: 800; color: #1e3a5f;">Set a Weekly Goal</div>
+                        <div style="color:#555;margin-top:.35rem;">
+                            Choose how many lessons you want to complete this week — we’ll track progress automatically.
+                        </div>
+
+                        <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-top:.9rem;">
+                            <input id="weeklyLessonsTarget" type="number" min="1" max="50" value="5"
+                                style="width:140px;padding:.75rem;border:1px solid #d9dfea;border-radius:10px;font-weight:700;">
+                            <button class="btn btn-primary" onclick="saveWeeklyGoal()">Save Goal</button>
+                            <span id="weeklyGoalStatus" style="color:#2A398A;font-weight:700;"></span>
+                        </div>
+                        </div>
+
+                        <div id="weeklyGoalsContainer">
+                        <p style="color:#666;font-size:1.1rem;">Loading your goals...</p>
+                        </div>
+
                     <div id="weeklyGoalsContainer">
                         <p style="color: #666; font-size: 1.1rem;">Loading your goals...</p>
                     </div>
                 </div>
+
+                <div class="card" id="rewardsExplainerCard" style="margin-top: 1.5rem;">
+                    <h2 style="display:flex;align-items:center;gap:.6rem;color:#1e3a5f;">
+                        🏆 Reading Rewards
+                    </h2>
+
+                    <p style="color:#555;font-size:1.05rem;line-height:1.6;margin-top:.75rem;">
+                        Achieve 365 turns your reading practice into progress you can see. Earn <strong>points</strong>,
+                        unlock <strong>badges</strong>, and level up as you build strong habits — it’s designed to keep you
+                        motivated and consistent.
+                    </p>
+
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-top:1rem;">
+                        <div style="background:#f6f8ff;border:1px solid #e6eaff;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;color:#2A398A;margin-bottom:.4rem;">⭐ Points</div>
+                        <ul style="margin:0;padding-left:1.1rem;color:#444;line-height:1.7;">
+                            <li><strong>+10</strong> each completed lesson</li>
+                            <li><strong>+15</strong> good score</li>
+                            <li><strong>+25</strong> high score</li>
+                            <li><strong>+50</strong> perfect score</li>
+                            <li><strong>+5</strong> daily streak bonus</li>
+                            <li><strong>+100</strong> weekly goal completed</li>
+                            <li><strong>+20</strong> each badge earned</li>
+                        </ul>
+                        </div>
+
+                        <div style="background:#f6fff9;border:1px solid #e3f6ea;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;color:#1e6b3a;margin-bottom:.4rem;">🎖 Badges</div>
+                        <p style="margin:0;color:#444;line-height:1.6;">
+                            Badges celebrate milestones like your first lesson, perfect streaks, and consistency.
+                            Each badge also awards bonus points.
+                        </p>
+                        <p style="margin:.6rem 0 0;color:#444;">
+                            Tip: Check the badges list in this page to see what you’re close to unlocking.
+                        </p>
+                        </div>
+
+                        <div style="background:#fffaf2;border:1px solid #ffe9c7;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;color:#8a5a00;margin-bottom:.4rem;">📈 Levels</div>
+                        <p style="margin:0;color:#444;line-height:1.6;">
+                            Your level grows as your total points increase. Levels help you track long-term improvement
+                            and reward consistent learning over time.
+                        </p>
+                        <p style="margin:.6rem 0 0;color:#444;">
+                            <strong>Level up every 500 total points.</strong>
+                        </p>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:1rem;background:linear-gradient(135deg,#2A398A 0%,#4a56af 100%);color:#fff;border-radius:14px;padding:1rem;">
+                        <div style="font-weight:800;margin-bottom:.25rem;">Why this helps</div>
+                        <div style="opacity:.95;line-height:1.6;">
+                        The rewards system keeps you engaged, encourages steady practice, and makes your growth measurable —
+                        so you can build reading confidence step-by-step.
+                        </div>
+                    </div>
+                    </div>
+
 
                 <!-- Recent Activity -->
                 <div class="card">
@@ -1742,6 +1945,29 @@
         // Debug: Track loadNextLesson calls
         let lessonCallCount = 0;
         const originalLoadNextLesson = loadNextLesson;
+
+        function hasCompletedAssessment(progressData = null) {
+            // If backend already returned a reading_level, assessment is effectively complete
+            const rl =
+            progressData?.user?.reading_level ||
+            progressData?.stats?.reading_level;
+
+            if (rl && String(rl).trim().length > 0) return true;
+
+            // Fallback: check cached user
+            try {
+            const u = JSON.parse(localStorage.getItem("user") || "{}");
+            if (u.reading_level && String(u.reading_level).trim()) return true;
+
+            if (u.interests) {
+                const interests = typeof u.interests === "string" ? JSON.parse(u.interests) : u.interests;
+                if (Array.isArray(interests) && interests.length > 0) return true;
+            }
+            } catch (_) {}
+
+            // Optional: local flag if you set it after onboarding
+            return localStorage.getItem("assessmentCompleted") === "true";
+        }
 
         // ============================================
         // AI TUTOR (Dashboard-integrated)
@@ -1991,61 +2217,55 @@
                 loadNextLesson();
                 }
             }
-            }
+        }
 
 
         function showSection(sectionName, event) {
-            if (event) {
-                event.preventDefault();
-            }
-            
-            console.log('Switching to section:', sectionName);
-            
+            if (event) event.preventDefault();
+
             // Hide all sections
             const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
             sections.forEach(id => {
-                const section = document.getElementById(id);
-                if (section) {
-                    section.classList.add('hidden');
-                }
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
             });
-            
-            // ========== FIX: Remove active from ALL nav items ==========
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            // ===========================================================
-            
-            // Show selected section
+
+            // Remove active from nav links
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+
+            // Show target section
             const targetSection = document.getElementById(sectionName + 'Section');
-            if (targetSection) {
-                targetSection.classList.remove('hidden');
-            }
-            
-            // ========== FIX: Add active to clicked nav item ==========
-            if (event && event.currentTarget) {
+            if (targetSection) targetSection.classList.remove('hidden');
+            else console.error('Target section not found:', sectionName + 'Section');
+
+            const rewards = document.getElementById('rewardsMotivationOverview');
+                if (rewards) {
+                rewards.style.display = (sectionName === 'overview') ? '' : 'none';
+                }
+
+            // Only set active if we actually have an event/currentTarget
+            if (event && event.currentTarget && event.currentTarget.classList) {
                 event.currentTarget.classList.add('active');
             } else {
-                // If no event (called programmatically), find and activate the nav item
-                const navItem = document.querySelector(`.nav-item[onclick*="${sectionName}"]`);
-                if (navItem) {
-                    navItem.classList.add('active');
-                }
+                // optional: set active via href / id mapping if needed
+                const link = document.querySelector(`a.nav-link[onclick*="showSection('${sectionName}'"]`);
+                if (link) link.classList.add('active');
             }
-            // =========================================================
-            
-            // Load data for specific sections
+
+            // Load data for the section
             if (sectionName === 'overview' || sectionName === 'progress') {
-                console.log('Loading stats for ' + sectionName + ' section...');
                 loadAllStats();
+                if (sectionName === 'progress' && typeof loadGamificationData === 'function') {
+                loadGamificationData();
+                }
             } else if (sectionName === 'lessons') {
-                console.log('Lessons section - checking for next lesson...');
                 checkForNextLesson();
             } else if (sectionName === 'assessment') {
-                console.log('Assessment section - loading assessment...');
                 loadAssessment();
             }
-        }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
 
         async function loadAssessment() {
             console.log('=== loadAssessment START ===');
@@ -2135,8 +2355,26 @@
         function renderAssessmentWithOther() {
             console.log('=== renderAssessment START ===');
             const container = document.getElementById('assessmentQuestions');
-            container.innerHTML = '<h3 style="margin-bottom: 2rem; color: var(--navy-primary);">Help us personalize your learning experience:</h3>';
-            
+            container.innerHTML = `
+                <h3 style="margin-bottom: 1rem; color: var(--navy-primary);">
+                    Help us personalize your learning experience:
+                </h3>
+                <div style="
+                    background: #e7f3ff; 
+                    padding: 1rem; 
+                    border-radius: 8px; 
+                    margin-bottom: 2rem;
+                    border-left: 4px solid var(--navy-primary);
+                ">
+                    <strong>📝 How to answer:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.5rem; line-height: 1.6;">
+                        <li>Click on any answer that fits you</li>
+                        <li>Or click "Other" and type your own answer</li>
+                        <li>Choose whatever feels right!</li>
+                    </ul>
+                </div>
+            `;
+                                              
             currentAssessment.forEach((q, index) => {
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'question-card';
@@ -2335,7 +2573,7 @@
             document.getElementById('gettingStarted').classList.add('hidden');
             
             // Show continue learning if it exists
-            const continueDiv = document.getElementById('continuelearning');
+            const continueDiv = document.getElementById('continueLearning');
             if (continueDiv) {
                 continueDiv.classList.remove('hidden');
             }
@@ -2659,6 +2897,8 @@
                 if (!response.ok) throw new Error('Failed to load gamification data');
                 
                 const data = await response.json();
+                const gamification = data;
+
                 console.log('Gamification data:', data);
                 
                 // Update points display
@@ -2676,6 +2916,7 @@
                 
                 // Display badges
                 displayBadges(data.badges);
+                renderWeeklyGoals(gamification.weekly_goals);
                 
                 // Display weekly goals
                 if (data.weekly_goals) {
@@ -3058,18 +3299,72 @@
                 const vocabSection = document.getElementById('vocabularySection');
                 const vocabList = document.getElementById('vocabularyList');
                 
-                if (lesson.vocabulary && Array.isArray(lesson.vocabulary) && lesson.vocabulary.length > 0) {
-                    if (vocabSection) vocabSection.classList.remove('hidden');
+                // Handle both 'vocabulary' and 'vocabulary_words' field names
+                const vocabWords = lesson.vocabulary_words || lesson.vocabulary || [];
+                
+                // Parse if it's a string
+                let parsedVocab = vocabWords;
+                if (typeof vocabWords === 'string') {
+                    try {
+                        parsedVocab = JSON.parse(vocabWords);
+                    } catch (e) {
+                        console.error('Error parsing vocabulary:', e);
+                        parsedVocab = [];
+                    }
+                }
+                
+                console.log('📚 Vocabulary data:', parsedVocab);
+                console.log('📚 Vocabulary count:', parsedVocab.length);
+                
+                if (parsedVocab && Array.isArray(parsedVocab) && parsedVocab.length > 0) {
+                    if (vocabSection) {
+                        vocabSection.classList.remove('hidden');
+                        
+                        // Update header with count
+                        const vocabHeader = vocabSection.querySelector('h3');
+                        if (vocabHeader) {
+                            vocabHeader.innerHTML = `📚 Key Vocabulary <span style="
+                                font-size: 0.9rem; 
+                                opacity: 0.8; 
+                                font-weight: normal;
+                            ">(${parsedVocab.length} words)</span>`;
+                        }
+                    }
+                    
                     if (vocabList) {
-                        vocabList.innerHTML = lesson.vocabulary.map(v => `
-                            <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 4px; margin-bottom: 0.5rem;">
-                                <strong style="color: #D4AF37; font-size: 1.1rem;">${v.word || 'Word'}</strong>
-                                <p style="margin-top: 0.5rem; margin-bottom: 0;">${v.definition || ''}</p>
+                        vocabList.innerHTML = parsedVocab.map((v, index) => `
+                            <div style="
+                                background: rgba(255,255,255,0.1); 
+                                padding: 1.25rem; 
+                                border-radius: 8px; 
+                                margin-bottom: 0.75rem;
+                                border-left: 4px solid var(--gold-accent);
+                                transition: all 0.3s;
+                                animation: slideDown 0.3s ease ${index * 0.05}s both;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.15)'; this.style.borderLeftWidth='6px'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.1)'; this.style.borderLeftWidth='4px'">
+                                <strong style="
+                                    color: var(--gold-accent); 
+                                    font-size: 1.2rem;
+                                    display: block;
+                                    margin-bottom: 0.5rem;
+                                    letter-spacing: 0.5px;
+                                ">${v.word || 'Word'}</strong>
+                                <p style="
+                                    margin: 0; 
+                                    line-height: 1.6;
+                                    color: rgba(255,255,255,0.9);
+                                    font-size: 0.95rem;
+                                ">${v.definition || ''}</p>
                             </div>
                         `).join('');
+                        
+                        console.log(`✅ Displayed ${parsedVocab.length} vocabulary words`);
                     }
                 } else {
                     if (vocabSection) vocabSection.classList.add('hidden');
+                    console.log('⚠️ No vocabulary words in lesson');
                 }
                 
                 // Display questions if available
@@ -3689,6 +3984,45 @@
             }
         }
 
+        // ========== MOBILE MODAL SCROLL FIX ==========
+
+        function openModalMobile(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            
+            // Prevent body scroll on mobile
+            if (window.innerWidth <= 768) {
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+                document.body.style.position = 'fixed';
+                document.body.style.width = '100%';
+            }
+            
+            modal.classList.add('active');
+            
+            // Scroll modal to top
+            setTimeout(() => {
+                modal.scrollTop = 0;
+                const content = modal.querySelector('.modal-content, .profile-modal-content');
+                if (content) content.scrollTop = 0;
+            }, 100);
+        }
+
+        function closeModalMobile(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            
+            // Restore body scroll
+            if (window.innerWidth <= 768) {
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.position = '';
+                document.body.style.width = '';
+            }
+            
+            modal.classList.remove('active');
+        }
+
         // ========== SHOW ESSAY RESULTS ==========
 
         function showEssayResults(data) {
@@ -3833,6 +4167,21 @@
             `;
             
             document.body.appendChild(modal);
+    
+            // ✅ PREVENT BODY SCROLL ON MOBILE
+            if (window.innerWidth <= 768) {
+                document.body.style.overflow = 'hidden';
+                document.body.style.position = 'fixed';
+                document.body.style.width = '100%';
+                document.body.style.top = `-${window.scrollY}px`;
+            }
+            
+            // ✅ SCROLL MODAL TO TOP
+            setTimeout(() => {
+                modal.scrollTop = 0;
+                const content = modal.querySelector('div');
+                if (content) content.scrollTop = 0;
+            }, 100);
             
             // Add click handler
             document.getElementById('continue-learning-btn').addEventListener('click', closeEssayResultsAndContinue);
@@ -3840,6 +4189,21 @@
 
         function closeEssayResultsAndContinue() {
             const modal = document.getElementById('essay-results-modal');
+            
+            // ✅ RESTORE BODY SCROLL ON MOBILE (BEFORE REMOVING MODAL)
+            if (window.innerWidth <= 768) {
+                const scrollY = document.body.style.top;
+                document.body.style.overflow = '';
+                document.body.style.position = '';
+                document.body.style.width = '';
+                document.body.style.top = '';
+                
+                // Restore scroll position
+                if (scrollY) {
+                    window.scrollTo(0, parseInt(scrollY || '0') * -1);
+                }
+            }
+            
             if (modal) {
                 modal.style.animation = 'fadeOut 0.3s ease';
                 setTimeout(() => modal.remove(), 300);
@@ -3852,6 +4216,11 @@
             
             // Show lessons section
             showSection('lessons');
+            
+            // ✅ SCROLL TO TOP ON MOBILE
+            setTimeout(() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }, 400);
         }
 
         async function loadAllStats() {
@@ -3873,6 +4242,8 @@
                 
                 const data = await response.json();
                 console.log('Stats data received:', data);
+
+                toggleAssessmentCTA(data);
                 
                 if (!data.success || !data.stats) {
                     throw new Error('Invalid response');
@@ -3970,6 +4341,83 @@
             }
         }
 
+        function toggleAssessmentCTA(progressData) {
+            const gettingStarted = document.getElementById('gettingStarted');
+            if (!gettingStarted) return;
+
+            const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
+            const assessmentDone =
+                totalCompleted > 0 ||
+                !!progressData?.stats?.reading_level ||
+                hasCompletedAssessment?.(); // if you already have this helper
+
+            // If assessment is done, hide the big CTA card on Overview.
+            if (assessmentDone) {
+                gettingStarted.classList.add('hidden');
+                // (optional) show a “Continue Learning” card if you have one:
+                const continueLearning = document.getElementById('continueLearning');
+                if (continueLearning) continueLearning.classList.remove('hidden');
+            } else {
+                gettingStarted.classList.remove('hidden');
+                const continueLearning = document.getElementById('continueLearning');
+                if (continueLearning) continueLearning.classList.add('hidden');
+            }
+        }
+
+        async function saveWeeklyGoal(event) {
+            event.preventDefault();
+
+            const token = localStorage.getItem('token');
+            const target = Number(document.getElementById('weeklyLessonsTarget').value || 5);
+
+            const res = await fetch('/api/student/weekly-goals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, goal_type: 'lessons_completed', target_value: target })
+            });
+
+            if (!res.ok) {
+                const txt = await res.text();
+                alert('Failed to save weekly goal: ' + txt);
+                return;
+            }
+
+            document.getElementById('weeklyGoalSaved')?.classList.remove('hidden');
+
+            // refresh gamification/progress UI
+            loadAllStats();
+            setTimeout(() => document.getElementById('weeklyGoalSaved')?.classList.add('hidden'), 1500);
+            }
+
+            function renderWeeklyGoals(goals) {
+            const box = document.getElementById('weeklyGoalsContainer');
+            if (!box) return;
+
+            if (!goals || goals.length === 0) {
+                box.innerHTML = `<div style="color:var(--text-gray);">No goal set yet. Choose a target above.</div>`;
+                return;
+            }
+
+            const g = goals.find(x => x.goal_type === 'lessons_completed') || goals[0];
+            const pct = Math.min(100, Math.round((g.current_value / g.target_value) * 100));
+
+            box.innerHTML = `
+                <div style="display:flex; justify-content:space-between; margin-bottom:.35rem;">
+                <div><strong>${g.current_value}</strong> of <strong>${g.target_value}</strong> lessons</div>
+                <div style="font-weight:700; color:${g.completed ? '#155724' : 'var(--navy-primary)'};">
+                    ${g.completed ? '✅ Completed' : pct + '%'}
+                </div>
+                </div>
+                <div style="height:10px; background:#e5e7eb; border-radius:999px; overflow:hidden;">
+                <div style="height:10px; width:${pct}%; background: linear-gradient(90deg, var(--navy-primary), var(--gold-accent));"></div>
+                </div>
+                <div style="margin-top:.5rem; color:var(--text-gray); font-size:.9rem;">
+                Bonus for completing: <strong>${g.points_reward}</strong> points
+                </div>
+            `;
+            }
+
+
         async function loadWeeklyGoals() {
             const token = localStorage.getItem('token');
             
@@ -3985,18 +4433,33 @@
                 
                 if (data.success && data.goals && data.goals.length > 0) {
                     goalsContainer.innerHTML = data.goals.map(goal => `
-                        <div style="padding: 1rem; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <span style="font-size: 1.5rem;">${goal.icon}</span>
-                                <span style="font-weight: 500;">${goal.name}</span>
+                        <div class="card">
+                            <h2>📅 Weekly Goals</h2>
+
+                            <div class="alert alert-info" style="margin-bottom:1rem;">
+                                Set a simple weekly target. When you hit it, you earn a bonus and build consistency.
                             </div>
-                            <div style="flex: 1; max-width: 200px; margin: 0 1rem;">
-                                <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
-                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; width: ${goal.progress}%; transition: width 0.3s;"></div>
+
+                            <form id="weeklyGoalsForm" onsubmit="saveWeeklyGoal(event)" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                                <div style="display:flex; flex-direction:column; gap:.35rem;">
+                                <label style="font-weight:600; color: var(--navy-primary);">Lessons per week</label>
+                                <input id="weeklyLessonsTarget" type="number" min="1" max="25" value="5"
+                                        style="padding:.7rem .9rem; border:1px solid #e5e7eb; border-radius:10px; width:180px;" />
                                 </div>
+
+                                <button class="btn btn-primary" type="submit">Save Goal</button>
+
+                                <div id="weeklyGoalSaved" class="hidden" style="color:#155724; font-weight:600;">
+                                ✅ Saved!
+                                </div>
+                            </form>
+
+                            <div style="margin-top:1rem;">
+                                <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.35rem;">This week’s progress</div>
+                                <div id="weeklyGoalsContainer">Loading your goals...</div>
                             </div>
-                            <span style="font-weight: 600; color: #667eea;">${goal.current}/${goal.target}</span>
-                        </div>
+                            </div>
+
                     `).join('');
                     
                     console.log('✓ Weekly goals loaded');
@@ -4005,7 +4468,7 @@
                 }
             } catch (error) {
                 console.error('Error loading weekly goals:', error);
-                const goalsContainer = document.querySelector('.weekly-goals-container');
+                const goalsContainer = document.getElementById('weeklyGoalsContainer');
                 if (goalsContainer) {
                     goalsContainer.innerHTML = '<p style="color: #999; padding: 1rem;">Unable to load weekly goals.</p>';
                 }

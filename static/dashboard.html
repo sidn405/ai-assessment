@@ -2098,6 +2098,72 @@
         tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
         }
 
+        let tutorSeqId = 0;
+
+        async function startTutorIntroSequence() {
+          const mySeq = ++tutorSeqId;
+
+          // Cancel anything left over from previous lesson
+          try { speechSynthesis.cancel(); } catch (_) {}
+
+          // 1) Greeting
+          const greet = await fetchTutorMessage("greeting");
+          if (mySeq !== tutorSeqId) return;
+          await speakTutor(greet.message, greet.emotion);
+
+          if (mySeq !== tutorSeqId) return;
+
+          // 2) Wait 5 seconds
+          await wait(5000);
+          if (mySeq !== tutorSeqId) return;
+
+          // 3) Instruction ("Time to read..." is one possible backend instruction variant)
+          const instruction = await fetchTutorMessage("instruction");
+          if (mySeq !== tutorSeqId) return;
+          await speakTutor(instruction.message, instruction.emotion);
+        }
+
+        async function fetchTutorMessage(context, extra = {}) {
+          const token = localStorage.getItem("token");
+          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          const student_name = (user.full_name || user.email || "there").split("@")[0];
+
+          const res = await fetch("/api/tutor/message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+            token,
+            context,
+            student_name,
+            ...extra,
+            }),
+          });
+
+          const data = await res.json();
+          if (!data?.success) throw new Error(data?.detail || "Tutor message failed");
+          return data; // { message, emotion }
+        }
+
+        function speakTutor(text, emotion) {
+          return new Promise((resolve) => {
+            // update UI (use your existing functions)
+            showTutorUI?.();
+            setTutorExpression?.(emotion);
+            setTutorBubbleText?.(text);
+
+            const u = new SpeechSynthesisUtterance(text);
+
+            u.onend = () => resolve();
+            u.onerror = () => resolve();
+
+            speechSynthesis.speak(u);
+          });
+        }
+
+        function wait(ms) {
+         return new Promise((r) => setTimeout(r, ms));
+        }
+
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
@@ -3125,7 +3191,7 @@
             if (loading) loading.classList.remove('hidden');
             
             lessonStartTime = Date.now();
-            startTutorForLesson();
+            startTutorIntroSequence();
 
             
             try {
