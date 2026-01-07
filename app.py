@@ -178,14 +178,19 @@ init_db()
 # Helper functions
 def get_db():
     if USE_POSTGRES:
-        conn = psycopg2.connect(DATABASE)
-        return conn
+        return psycopg2.connect(DATABASE)
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0, check_same_thread=False)
-        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.row_factory = sqlite3.Row
         return conn
 
+import psycopg2.extras
+
+def get_cursor(conn):
+    if USE_POSTGRES:
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    return conn.cursor()
 
 def create_token(user_id: int, role: str) -> str:
     payload = {
@@ -852,7 +857,7 @@ async def run_gamification_migration(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         # Run all CREATE TABLE statements from gamification_migration.sql
@@ -3608,7 +3613,8 @@ async def get_analytics(token: str):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     # Total students
     cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'")
