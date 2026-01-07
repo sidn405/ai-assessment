@@ -2089,15 +2089,23 @@
 
         // Call when a lesson is rendered on the dashboard
         let tutorTimers = [];
-        function startTutorForLesson() {
-        ensureVoicesLoaded();
-        unlockSpeechOnce(); // ✅ ADDED THIS LINE
-        
-        tutorTimers.forEach(t => clearTimeout(t));
-        tutorTimers = [];
+        let tutorHasGreeted = false; // Track if greeting has been shown this session
 
-        tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
-        tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
+        function startTutorForLesson() {
+            ensureVoicesLoaded();
+            unlockSpeechOnce(); // ✅ ADDED THIS LINE
+
+            tutorTimers.forEach(t => clearTimeout(t));
+            tutorTimers = [];
+
+            // Only greet on first lesson of the session
+            if (!tutorHasGreeted) {
+                tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
+                tutorHasGreeted = true;
+            }
+            
+            // Always show instruction
+            tutorTimers.push(setTimeout(() => showTutor('instruction'), tutorHasGreeted ? 900 : 5900));
         }
 
 
