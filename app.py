@@ -188,9 +188,8 @@ def get_db():
 import psycopg2.extras
 
 def get_cursor(conn):
-    if USE_POSTGRES:
-        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    return conn.cursor()
+    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) if USE_POSTGRES else conn.cursor()
+
 
 def create_token(user_id: int, role: str) -> str:
     payload = {
@@ -3737,23 +3736,37 @@ async def get_active_sessions(token: str):
             raise HTTPException(status_code=403, detail="Admin only")
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         if USE_POSTGRES:
             cursor.execute("""
-                SELECT s.*, full_name, email 
-                FROM user_sessions s
-                JOIN users u ON s.user_id = u.id
-                WHERE s.status IN ('active', 'on_break')
-                ORDER BY s.last_activity DESC
+                SELECT
+                    us.id AS session_id,
+                    us.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    us.status,
+                    us.session_start,
+                    us.last_activity
+                FROM user_sessions us
+                JOIN users u ON u.id = us.user_id
+                WHERE us.session_end IS NULL
+                ORDER BY us.last_activity DESC NULLS LAST, us.session_start DESC
             """)
         else:
             cursor.execute("""
-                SELECT s.*, full_name, email 
-                FROM user_sessions s
-                JOIN users u ON s.user_id = u.id
-                WHERE s.status IN ('active', 'on_break')
-                ORDER BY s.last_activity DESC
+                SELECT
+                    us.id AS session_id,
+                    us.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    us.status,
+                    us.session_start,
+                    us.last_activity
+                FROM user_sessions us
+                JOIN users u ON u.id = us.user_id
+                WHERE us.session_end IS NULL
+                ORDER BY us.last_activity DESC, us.session_start DESC
             """)
         
         sessions = []
@@ -3790,17 +3803,18 @@ async def get_recent_activity(token: str, hours: int = 24):
             raise HTTPException(status_code=403, detail="Admin only")
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         if USE_POSTGRES:
             cursor.execute("""
-                SELECT a.*, full_name, email 
+                SELECT a.*, u.full_name, u.email
                 FROM activity_log a
                 JOIN users u ON a.user_id = u.id
-                WHERE a.timestamp > NOW() - INTERVAL '%s hours'
+                WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour')
                 ORDER BY a.timestamp DESC
                 LIMIT 100
-            """, (hours,))
+                """, (hours,))
+
         else:
             cursor.execute("""
                 SELECT a.*, full_name, email 
@@ -3816,7 +3830,8 @@ async def get_recent_activity(token: str, hours: int = 24):
             activities.append({
                 'id': row['id'] if hasattr(row, 'keys') else row[0],
                 'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
+                'user_name': row['full_name'] if hasattr(row, 'keys') else row[-2],
+                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
                 'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
                 'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
                 'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
@@ -3833,6 +3848,126 @@ async def get_recent_activity(token: str, hours: int = 24):
     except Exception as e:
         print(f"Error getting activity: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/admin/alerts/unread")
+async def get_unread_alerts(token: str, limit: int = 50):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = FALSE
+                ORDER BY a.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = 0
+                ORDER BY a.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall() or []
+        alerts = [dict(r) for r in rows]
+        return {"success": True, "count": len(alerts), "alerts": alerts}
+
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        conn.close()
+        
+@app.get("/api/admin/essays/needs-review")
+async def get_essays_needing_review(token: str, limit: int = 50):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = TRUE
+                  AND e.admin_reviewed = FALSE
+                ORDER BY e.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = 1
+                  AND e.admin_reviewed = 0
+                ORDER BY e.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall() or []
+        essays = [dict(r) for r in rows]
+        return {"success": True, "count": len(essays), "essays": essays}
+
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        conn.close()
+
+
     
 # ============================================================
 # GAMIFICATION SYSTEM

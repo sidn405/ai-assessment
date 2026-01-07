@@ -752,10 +752,17 @@
                 border: 2px solid currentColor;
             }
         }
+
+        .activity-list { display: flex; flex-direction: column; gap: 10px; }
+        .activity-item { padding: 10px 12px; border: 1px solid rgba(0,0,0,0.06); border-radius: 10px; background: #fff; }
+        .activity-title { font-size: 14px; }
+        .activity-meta { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+        .activity-details { font-size: 13px; margin-top: 6px; opacity: 0.9; }
+
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body
+<body>
     <div class="dashboard">
 
         <!-- Mobile Menu Overlay -->
@@ -1007,85 +1014,64 @@
                     </div>
                 </div>
             </div>
+          
+        <!-- Add this as a new section in your admin dashboard -->
+
+        <div id="sessionTrackingSection" class="section hidden">
+            <div class="header">
+                <h1>Session Tracking &amp; Activity</h1>
+                <p>Monitor live sessions, breaks, timeouts, and activity logs</p>
+            </div>
+            
+            <!-- Real-time Stats -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="activeUsersCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Active Users</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="usersOnBreakCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">On Break</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="timeoutsToday">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Timeouts Today</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="totalSessions">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Total Sessions Today</div>
+                </div>
+            </div>
+            
+            <!-- Active Sessions Table -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Active Sessions</h2>
+                    <button onclick="loadActiveSessions()" class="btn btn-primary">🔄 Refresh</button>
+                </div>
+                <div id="activeSessionsTable"></div>
+            </div>
+            
+            <!-- Recent Activity Log -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Recent Activity</h2>
+                    <select id="activityTimeFilter" onchange="loadRecentActivity()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
+                        <option value="1">Last 1 Hour</option>
+                        <option value="6">Last 6 Hours</option>
+                        <option value="24" selected>Last 24 Hours</option>
+                        <option value="168">Last 7 Days</option>
+                    </select>
+                </div>
+                <div id="recentActivityTable"></div>
+            </div>
+        </div>
+
         </main>
-    </div>
-
-    <!-- Student Detail Modal -->
-    <div id="studentModal" class="modal">
-        <div class="modal-content">
-            <button class="close-modal" onclick="closeStudentModal()">&times;</button>
-            <h2 id="studentModalName" style="margin-bottom: 2rem;"></h2>
-            
-            <div id="studentProgressLoading" class="loading">
-                <div class="spinner"></div>
-                <p>Loading student progress...</p>
             </div>
-            
-            <div id="studentProgressContent" class="hidden">
-                <h3>Progress Overview</h3>
-                <div id="studentProgressData"></div>
-            </div>
-        </div>
-    </div>
-
-    
-    <!-- Add this as a new section in your admin dashboard -->
-
-    <div id="sessionTrackingSection" class="section hidden">
-        <div class="header">
-            <h1>Session Tracking &amp; Activity</h1>
-            <p>Monitor live sessions, breaks, timeouts, and activity logs</p>
-        </div>
-        
-        <!-- Real-time Stats -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="activeUsersCount">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">Active Users</div>
-            </div>
-            
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="usersOnBreakCount">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">On Break</div>
-            </div>
-            
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="timeoutsToday">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">Timeouts Today</div>
-            </div>
-            
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="totalSessions">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">Total Sessions Today</div>
-            </div>
-        </div>
-        
-        <!-- Active Sessions Table -->
-        <div class="card" style="margin-bottom: 2rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Active Sessions</h2>
-                <button onclick="loadActiveSessions()" class="btn btn-primary">🔄 Refresh</button>
-            </div>
-            <div id="activeSessionsTable"></div>
-        </div>
-        
-        <!-- Recent Activity Log -->
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Recent Activity</h2>
-                <select id="activityTimeFilter" onchange="loadRecentActivity()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
-                    <option value="1">Last 1 Hour</option>
-                    <option value="6">Last 6 Hours</option>
-                    <option value="24" selected>Last 24 Hours</option>
-                    <option value="168">Last 7 Days</option>
-                </select>
-            </div>
-            <div id="recentActivityTable"></div>
-        </div>
-    </div>
-
-</main>
-    </div>
 
     <!-- Student Detail Modal -->
     <div id="studentModal" class="modal">
@@ -1129,6 +1115,7 @@
             
             loadAnalytics();
             loadPlatformActivityChart();
+            loadOverviewRecentActivity(168); // last 7 days
         });
 
         async function loadAnalytics() {
@@ -1146,13 +1133,6 @@
                 console.error('Error loading analytics:', error);
             }
         }
-
-        // ========== PLATFORM ACTIVITY CHART (Overview) ==========
-        // Expects an optional API:
-        //   GET /api/admin/platform-activity?token=...
-        // Response shape (recommended):
-        //   { success:true, labels:[...], engagement:[...], completion_rate:[...] }
-        // If the endpoint doesn't exist yet, the chart will render a "no data" baseline.
 
         let platformActivityChart = null;
 
@@ -1283,7 +1263,7 @@
 
             try {
                 // Pull the last 24h by default (same endpoint session tracking uses)
-                const response = await fetch(`/api/admin/activity/recent?token=${token}&hours=24`);
+                const response = await fetch(`/api/admin/activity/recent?token=${encodeURIComponent(token)}&hours=${hours}`);
                 const data = await response.json();
 
                 if (!data.success || !Array.isArray(data.activities)) {
@@ -1318,6 +1298,66 @@
                 container.innerHTML = '<p style="color:#666;">Unable to load activity</p>';
             }
         }
+
+        async function loadRecentStudentActivity(hours = 168) {
+            const el = document.getElementById("recentStudentActivity");
+            if (!el) return;
+
+            el.textContent = "Loading recent activity...";
+
+            try {
+                const res = await fetch(`/api/admin/activity/recent?token=${encodeURIComponent(token)}&hours=${hours}`);
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                el.textContent = data.detail || "Failed to load recent activity.";
+                return;
+                }
+
+                const activities = data.activities || [];
+                if (!activities.length) {
+                el.textContent = "No recent activity.";
+                return;
+                }
+
+                // Render as a clean list
+                const items = activities.slice(0, 12).map(a => {
+                const when = a.timestamp ? new Date(a.timestamp) : null;
+                const whenText = when && !isNaN(when) ? when.toLocaleString() : (a.timestamp || "");
+                const who = a.user_name || `User ${a.user_id}`;
+                const type = a.activity_type || "activity";
+                const details = a.activity_details ? String(a.activity_details) : "";
+
+                return `
+                    <div class="activity-item">
+                    <div class="activity-title">
+                        <strong>${escapeHtml(who)}</strong> — ${escapeHtml(type)}
+                    </div>
+                    <div class="activity-meta">
+                        <span>${escapeHtml(whenText)}</span>
+                    </div>
+                    ${details ? `<div class="activity-details">${escapeHtml(details)}</div>` : ""}
+                    </div>
+                `;
+                }).join("");
+
+                el.innerHTML = `<div class="activity-list">${items}</div>`;
+            } catch (err) {
+                el.textContent = "Error loading recent activity.";
+                console.error(err);
+            }
+        }
+
+            // tiny helper to avoid HTML injection
+            function escapeHtml(str) {
+            return String(str)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
 
         function showSection(section, event) {
             event = event || window.event || null;
