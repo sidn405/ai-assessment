@@ -1967,10 +1967,12 @@
             const token = localStorage.getItem('token');
             
             try {
-                const response = await fetch(`/api/admin/student/${studentId}/progress?token=${token}`);
+                const response = await fetch(`/api/admin/student/${studentId}/progress?token=${encodeURIComponent(token)}`);
                 const data = await response.json();
-                
-                renderStudentProgress(data.progress);
+
+                // Always pass an array
+                renderStudentProgress(Array.isArray(data.progress) ? data.progress : []);
+
                 
                 document.getElementById('studentProgressLoading').classList.add('hidden');
                 document.getElementById('studentProgressContent').classList.remove('hidden');
@@ -1980,10 +1982,11 @@
         }
 
         function renderStudentProgress(progress) {
+            progress = Array.isArray(progress) ? progress : [];   // ✅ add this
             const container = document.getElementById('studentProgressData');
             
-            if (progress.length === 0) {
-                container.innerHTML = '<p>No lessons completed yet.</p>';
+            if (!progress.length) {
+                container.innerHTML = `<p style="color:#666;">No progress records yet.</p>`;
                 return;
             }
             
@@ -2015,8 +2018,8 @@
                     <tbody>
                         ${progress.slice(0, 10).map(p => `
                             <tr>
-                                <td>${p.title || 'Untitled'}</td>
-                                <td>${p.topic || 'General'}</td>
+                                <td>${p.title || (p.lesson_id ? `Lesson #${p.lesson_id}` : (p.passage_id ? `Passage #${p.passage_id}` : 'Untitled'))}</td>
+                                <td>${p.topic || p.activity_details || 'General'}</td>
                                 <td>${p.score ? p.score + '%' : 'N/A'}</td>
                                 <td>${p.completed_at ? new Date(p.completed_at).toLocaleDateString() : 'In Progress'}</td>
                             </tr>

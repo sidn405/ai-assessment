@@ -3547,7 +3547,11 @@ async def get_student_details(student_id: int, token: str):
     else:
         cursor.execute("SELECT * FROM users WHERE id = ?", (student_id,))
     
-    student = dict(cursor.fetchone())
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Student not found")
+    student = dict(row)
     
     # Get session history
     if USE_POSTGRES:
@@ -3613,19 +3617,41 @@ async def get_student_progress(student_id: int, token: str):
     conn = get_db()
     cursor = get_cursor(conn)
 
-    # Basic student info
+    # Student basic info
     cursor.execute(
         """
-        SELECT id, email, full_name, level_estimate, total_passages_read,
-               comprehension_score, last_active, created_at
-        FROM users
-        WHERE id = %s AND role = 'student'
+        SELECT
+            sl.id,
+            sl.passage_id,
+            sl.completion_status,
+            sl.comprehension_score,
+            sl.time_spent_seconds,
+            sl.completed_at,
+            sl.started_at,
+            p.title,
+            p.topic
+        FROM session_logs sl
+        LEFT JOIN passages p ON p.id = sl.passage_id
+        WHERE sl.user_id = %s
+        ORDER BY sl.started_at DESC
+        LIMIT 50
         """ if USE_POSTGRES else
         """
-        SELECT id, email, full_name, level_estimate, total_passages_read,
-               comprehension_score, last_active, created_at
-        FROM users
-        WHERE id = ? AND role = 'student'
+        SELECT
+            sl.id,
+            sl.passage_id,
+            sl.completion_status,
+            sl.comprehension_score,
+            sl.time_spent_seconds,
+            sl.completed_at,
+            sl.started_at,
+            p.title,
+            p.topic
+        FROM session_logs sl
+        LEFT JOIN passages p ON p.id = sl.passage_id
+        WHERE sl.user_id = ?
+        ORDER BY sl.started_at DESC
+        LIMIT 50
         """,
         (student_id,)
     )
@@ -3636,65 +3662,79 @@ async def get_student_progress(student_id: int, token: str):
 
     student = dict(student)
 
-    # Recent sessions (last 30)
-    cursor.execute(
-        """
-        SELECT id, passage_id, started_at, completed_at, completion_status,
-               time_spent_seconds, comprehension_score
-        FROM session_logs
-        WHERE user_id = %s
-        ORDER BY started_at DESC
-        LIMIT 30
-        """ if USE_POSTGRES else
-        """
-        SELECT id, passage_id, started_at, completed_at, completion_status,
-               time_spent_seconds, comprehension_score
-        FROM session_logs
-        WHERE user_id = ?
-        ORDER BY started_at DESC
-        LIMIT 30
-        """,
-        (student_id,)
-    )
-    sessions = [dict(r) for r in (cursor.fetchall() or [])]
+    rows = [dict(r) for r in (cursor.fetchall() or [])]
 
-    # Aggregate stats
-    cursor.execute(
-        """
-        SELECT
-          COUNT(*) AS total_sessions,
-          SUM(CASE WHEN completion_status='completed' THEN 1 ELSE 0 END) AS completed_sessions,
-          AVG(NULLIF(time_spent_seconds, 0)) AS avg_time_spent_seconds,
-          AVG(comprehension_score) AS avg_score
-        FROM session_logs
-        WHERE user_id = %s
-        """ if USE_POSTGRES else
-        """
-        SELECT
-          COUNT(*) AS total_sessions,
-          SUM(CASE WHEN completion_status='completed' THEN 1 ELSE 0 END) AS completed_sessions,
-          AVG(NULLIF(time_spent_seconds, 0)) AS avg_time_spent_seconds,
-          AVG(comprehension_score) AS avg_score
-        FROM session_logs
-        WHERE user_id = ?
-        """,
-        (student_id,)
-    )
-    stats_row = cursor.fetchone() or {}
-    stats = dict(stats_row)
+    progress_rows = [{
+        "id": r["id"],
+        "lesson_id": r.get("passage_id"),
+        "title": r.get("title") or (f"Passage #{r.get('passage_id')}" if r.get("passage_id") else "Untitled"),
+        "topic": r.get("topic") or "General",
+        "completed": (r.get("completion_status") == "completed"),
+        "score": r.get("comprehension_score"),
+        "time_spent": r.get("time_spent_seconds"),
+        "completed_at": str(r.get("completed_at") or r.get("started_at") or ""),
+    } for r in rows]
+
+    # 1) Try progress table (empty in your screenshot)
+    try:
+        cursor.execute(
+            """
+            SELECT id, lesson_id, completed, score, time_spent, completed_at
+            FROM progress
+            WHERE user_id = %s
+            ORDER BY completed_at DESC NULLS LAST
+            LIMIT 50
+            """ if USE_POSTGRES else
+            """
+            SELECT id, lesson_id, completed, score, time_spent, completed_at
+            FROM progress
+            WHERE user_id = ?
+            ORDER BY completed_at DESC
+            LIMIT 50
+            """,
+            (student_id,)
+        )
+        progress_rows = [dict(r) for r in (cursor.fetchall() or [])]
+    except Exception:
+        progress_rows = []
+
+    # 2) If progress table is empty, build progress-like rows from session_logs
+    if not progress_rows:
+        cursor.execute(
+            """
+            SELECT id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at, started_at
+            FROM session_logs
+            WHERE user_id = %s
+            ORDER BY started_at DESC
+            LIMIT 50
+            """ if USE_POSTGRES else
+            """
+            SELECT id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at, started_at
+            FROM session_logs
+            WHERE user_id = ?
+            ORDER BY started_at DESC
+            LIMIT 50
+            """,
+            (student_id,)
+        )
+        sessions = [dict(r) for r in (cursor.fetchall() or [])]
+
+        # Normalize into the "progress" shape the frontend expects
+        progress_rows = [{
+            "id": s["id"],
+            "lesson_id": s.get("passage_id"),
+            "completed": (s.get("completion_status") == "completed"),
+            "score": s.get("comprehension_score"),
+            "time_spent": s.get("time_spent_seconds"),
+            "completed_at": str(s.get("completed_at") or s.get("started_at") or ""),
+        } for s in sessions]
 
     conn.close()
 
     return {
         "success": True,
         "student": student,
-        "stats": {
-            "total_sessions": int(stats.get("total_sessions") or 0),
-            "completed_sessions": int(stats.get("completed_sessions") or 0),
-            "avg_time_spent_seconds": float(stats.get("avg_time_spent_seconds") or 0),
-            "avg_score": float(stats.get("avg_score") or 0),
-        },
-        "recent_sessions": sessions,
+        "progress": progress_rows,   # ✅ THIS is what your UI expects
     }
 
 @app.get("/api/admin/analytics")
