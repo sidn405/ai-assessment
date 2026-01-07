@@ -796,6 +796,150 @@ def get_interest_assessment():  # ← Remove 'async'
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/admin/reading-level-distribution")
+async def get_reading_level_distribution(token: str):
+    """Get distribution of students across reading levels"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT 
+                    COALESCE(reading_level, 'Not Assessed') as level,
+                    COUNT(*) as count
+                FROM users 
+                WHERE role = 'student'
+                GROUP BY reading_level
+                ORDER BY 
+                    CASE reading_level
+                        WHEN 'beginner' THEN 1
+                        WHEN 'intermediate' THEN 2
+                        WHEN 'advanced' THEN 3
+                        ELSE 4
+                    END
+            """)
+        else:
+            cursor.execute("""
+                SELECT 
+                    COALESCE(reading_level, 'Not Assessed') as level,
+                    COUNT(*) as count
+                FROM users 
+                WHERE role = 'student'
+                GROUP BY reading_level
+                ORDER BY 
+                    CASE reading_level
+                        WHEN 'beginner' THEN 1
+                        WHEN 'intermediate' THEN 2
+                        WHEN 'advanced' THEN 3
+                        ELSE 4
+                    END
+            """)
+        
+        rows = cursor.fetchall()
+        distribution = []
+        
+        for row in rows:
+            distribution.append({
+                'level': (row['level'] if hasattr(row, 'keys') else row[0]).title(),
+                'count': row['count'] if hasattr(row, 'keys') else row[1]
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "distribution": distribution
+        }
+        
+    except Exception as e:
+        conn.close()
+        print(f"Error getting reading level distribution: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/interest-topics")
+async def get_interest_topics(token: str):
+    """Get breakdown of popular interest topics"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT interest_tags 
+                FROM users 
+                WHERE role = 'student' 
+                AND interest_tags IS NOT NULL 
+                AND interest_tags != '[]'
+            """)
+        else:
+            cursor.execute("""
+                SELECT interest_tags 
+                FROM users 
+                WHERE role = 'student' 
+                AND interest_tags IS NOT NULL 
+                AND interest_tags != '[]'
+            """)
+        
+        rows = cursor.fetchall()
+        
+        # Count all interests
+        interest_counts = {}
+        
+        for row in rows:
+            tags_str = row['interest_tags'] if hasattr(row, 'keys') else row[0]
+            try:
+                tags = json.loads(tags_str) if isinstance(tags_str, str) else tags_str
+                if isinstance(tags, list):
+                    for tag in tags:
+                        tag = tag.strip().lower()
+                        if tag:
+                            interest_counts[tag] = interest_counts.get(tag, 0) + 1
+            except:
+                pass
+        
+        conn.close()
+        
+        # Sort by count and get top 10
+        sorted_interests = sorted(interest_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        topics = [
+            {
+                'topic': topic.title(),
+                'count': count
+            }
+            for topic, count in sorted_interests
+        ]
+        
+        # If no data, provide sample data
+        if not topics:
+            topics = [
+                {'topic': 'Science', 'count': 0},
+                {'topic': 'Technology', 'count': 0},
+                {'topic': 'History', 'count': 0},
+                {'topic': 'Arts', 'count': 0},
+                {'topic': 'Sports', 'count': 0}
+            ]
+        
+        return {
+            "success": True,
+            "topics": topics
+        }
+        
+    except Exception as e:
+        conn.close()
+        print(f"Error getting interest topics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/assessment/submit")
 async def submit_assessment(request: Request):

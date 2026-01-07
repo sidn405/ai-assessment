@@ -994,22 +994,26 @@
                     </div>
                 </div>
 
+                <!-- Reading Level Distribution -->
                 <div class="card">
                     <h2>Reading Level Distribution</h2>
-                    <div class="chart-container">
-                        <div class="chart-placeholder">
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="readingLevelChart" aria-label="Reading level distribution visualization" role="img"></canvas>
+                        <div id="readingLevelFallback" class="chart-placeholder" style="display:none;">
                             📊 Distribution of students across reading levels<br>
-                            <small>Pie chart or bar graph would display here</small>
+                            <small>Chart data unavailable</small>
                         </div>
                     </div>
                 </div>
 
+                <!-- Interest Topics Breakdown -->
                 <div class="card">
                     <h2>Interest Topics Breakdown</h2>
-                    <div class="chart-container">
-                        <div class="chart-placeholder">
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="interestTopicsChart" aria-label="Interest topics visualization" role="img"></canvas>
+                        <div id="interestTopicsFallback" class="chart-placeholder" style="display:none;">
                             📊 Most popular interest areas among students<br>
-                            <small>Horizontal bar chart would display here</small>
+                            <small>Chart data unavailable</small>
                         </div>
                     </div>
                 </div>
@@ -1312,7 +1316,6 @@
         function showSection(section, event) {
             event = event || window.event || null;
 
-            // Map navigation names to actual section IDs
             const sectionMap = {
                 'overview': 'overviewSection',
                 'students': 'studentsSection',
@@ -1322,33 +1325,26 @@
                 'essayAlerts': 'essayAlertsSection'
             };
 
-            // Hide all top-level sections (anything ending in "Section")
             document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
-
-            // Update nav links
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
 
-            // Show selected section
             const sectionId = sectionMap[section] || (section + 'Section');
             const sectionEl = document.getElementById(sectionId);
 
             if (sectionEl) {
                 sectionEl.classList.remove('hidden');
-            } else {
-                console.warn(`showSection(): unknown section "${section}" -> "${sectionId}"`);
             }
 
             if (section === 'students') {
                 loadStudents();
             }
 
-            // Update active nav (best-effort)
-            if (event && event.target) {
-                const navLink = event.target.closest && event.target.closest('.nav-link');
-                if (navLink) navLink.classList.add('active');
+            // ✅ ADD THIS - Load charts when Analytics section is shown
+            if (section === 'analytics') {
+                loadReadingLevelChart();
+                loadInterestTopicsChart();
             }
 
-            // Section-specific loads
             if (section === 'essay alerts' || section === 'essayAlerts') {
                 loadEssayAlerts();
             }
@@ -1361,7 +1357,208 @@
                 stopAutoRefresh();
             }
 
-            console.log('✓ Admin section loaded:', section);
+            if (event && event.target) {
+                const navLink = event.target.closest && event.target.closest('.nav-link');
+                if (navLink) navLink.classList.add('active');
+            }
+        }
+
+        // ========== READING LEVEL DISTRIBUTION CHART ==========
+
+        let readingLevelChart = null;
+
+        async function loadReadingLevelChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('readingLevelChart');
+            const fallback = document.getElementById('readingLevelFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/reading-level-distribution?token=${encodeURIComponent(token)}`);
+                const data = await response.json();
+
+                if (data.success && data.distribution && data.distribution.length > 0) {
+                    renderReadingLevelChart(data.distribution);
+                } else {
+                    // Show fallback if no data
+                    canvas.style.display = 'none';
+                    if (fallback) fallback.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading reading level chart:', error);
+                canvas.style.display = 'none';
+                if (fallback) fallback.style.display = 'block';
+            }
+        }
+
+        function renderReadingLevelChart(distribution) {
+            const canvas = document.getElementById('readingLevelChart');
+            if (!canvas) return;
+
+            if (readingLevelChart) {
+                readingLevelChart.destroy();
+                readingLevelChart = null;
+            }
+
+            const labels = distribution.map(d => d.level);
+            const counts = distribution.map(d => d.count);
+
+            // Color scheme matching your UI
+            const colors = [
+                '#2A398A',  // Navy primary (Beginner)
+                '#4a56af',  // Navy light (Intermediate)
+                '#D4AF37',  // Gold accent (Advanced)
+                '#6c757d'   // Gray (Not Assessed)
+            ];
+
+            readingLevelChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: colors,
+                        borderColor: '#ffffff',
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: {
+                                    size: 14,
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} students (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ========== INTEREST TOPICS CHART ==========
+
+        let interestTopicsChart = null;
+
+        async function loadInterestTopicsChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('interestTopicsChart');
+            const fallback = document.getElementById('interestTopicsFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/interest-topics?token=${encodeURIComponent(token)}`);
+                const data = await response.json();
+
+                if (data.success && data.topics && data.topics.length > 0) {
+                    renderInterestTopicsChart(data.topics);
+                } else {
+                    canvas.style.display = 'none';
+                    if (fallback) fallback.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading interest topics chart:', error);
+                canvas.style.display = 'none';
+                if (fallback) fallback.style.display = 'block';
+            }
+        }
+
+        function renderInterestTopicsChart(topics) {
+            const canvas = document.getElementById('interestTopicsChart');
+            if (!canvas) return;
+
+            if (interestTopicsChart) {
+                interestTopicsChart.destroy();
+                interestTopicsChart = null;
+            }
+
+            const labels = topics.map(t => t.topic);
+            const counts = topics.map(t => t.count);
+
+            interestTopicsChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Number of Students',
+                        data: counts,
+                        backgroundColor: '#4a56af',
+                        borderColor: '#2A398A',
+                        borderWidth: 2,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',  // Horizontal bars
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.x} students interested`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                font: {
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            },
+                            grid: {
+                                color: '#E0E0E0'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                font: {
+                                    size: 13,
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         
