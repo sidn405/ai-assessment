@@ -2048,19 +2048,17 @@
         window.speechSynthesis.speak(u);
         }
 
-        async function displayTutorMessage(message, emotion = 'happy') {
-          const bubble = document.querySelector('.tutor-speech-bubble');
-          const textEl = document.getElementById('tutorText');
+        function displayTutorMessage(message, emotion = 'happy') {
+        showTutorUI();
 
-          if (bubble) bubble.classList.remove('hidden');
-          if (textEl) textEl.textContent = message;
+        const msg = document.getElementById('tutorMessage');
+        const mouth = document.getElementById('avatarMouth');
 
-          setTutorMood(emotion);
+        if (msg) msg.textContent = message;
+        if (mouth) mouth.className = `mouth ${emotion}`;
 
-          // IMPORTANT: wait until speech completes (or fails)
-          await tutorSpeak(message);
+        tutorSpeak(message);
         }
-
 
         async function showTutor(context, extra = {}) {
         const token = localStorage.getItem('token');
@@ -2098,78 +2096,6 @@
 
         tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
         tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
-        }
-
-        const wait = (ms) => new Promise(r => setTimeout(r, ms));
-
-        let tutorSeqId = 0;
-
-        async function startTutorIntroSequence() {
-          const mySeq = ++tutorSeqId;
-
-          // Greeting immediately (so it shows during "Generating lesson...")
-          await showTutor('greeting');
-
-          if (mySeq !== tutorSeqId) return;
-          await wait(500);
-
-          // Instruction AFTER greeting completes
-          await showTutor('instruction');
-
-          if (mySeq !== tutorSeqId) return;
-        }
-
-        async function fetchTutorMessage(context, extra = {}) {
-          const token = localStorage.getItem("token");
-          const user = JSON.parse(localStorage.getItem("user") || "{}");
-          const student_name = (user.full_name || user.email || "there").split("@")[0];
-
-          const res = await fetch("/api/tutor/message", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-            token,
-            context,
-            student_name,
-            ...extra,
-            }),
-          });
-
-          const data = await res.json();
-          if (!data?.success) throw new Error(data?.detail || "Tutor message failed");
-          return data; // { message, emotion }
-        }
-
-        function tutorSpeak(text) {
-          return new Promise((resolve) => {
-            try {
-              if (tutorMuted) return resolve(false);
-
-              // Cancel any current speech when a NEW tutor message starts
-              window.speechSynthesis.cancel();
-
-              const utterance = new SpeechSynthesisUtterance(text);
-
-              // Choose voice if you have a selector; otherwise browser default
-              if (selectedVoice) utterance.voice = selectedVoice;
-
-              utterance.rate = 0.95;
-              utterance.pitch = 1.05;
-
-              utterance.onend = () => resolve(true);
-              utterance.onerror = () => resolve(false);
-
-              window.speechSynthesis.speak(utterance);
-            } catch (e) {
-              // Autoplay blocks will land here sometimes
-              resolve(false);
-            }
-          });
-        }
-
-
-        function wait(ms) {
-         return new Promise((r) => setTimeout(r, ms));
         }
 
 
@@ -3199,7 +3125,7 @@
             if (loading) loading.classList.remove('hidden');
             
             lessonStartTime = Date.now();
-            startTutorIntroSequence();
+            startTutorForLesson();
 
             
             try {
