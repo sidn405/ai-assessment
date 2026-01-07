@@ -2091,6 +2091,8 @@
         let tutorTimers = [];
         function startTutorForLesson() {
         ensureVoicesLoaded();
+        unlockSpeechOnce(); // ✅ ADDED THIS LINE
+        
         tutorTimers.forEach(t => clearTimeout(t));
         tutorTimers = [];
 
