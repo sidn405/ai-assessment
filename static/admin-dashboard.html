@@ -804,7 +804,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('easy alerts')">
+                    <a href="#" class="nav-link" onclick="showSection('essay alerts')">
                         <span>📝</span> Essay Alerts
                     </a>
                 </li>
@@ -1031,8 +1031,11 @@
     
     <!-- Add this as a new section in your admin dashboard -->
 
-    <div id="sessionTrackingSection" class="section">
-        <h1>Session Tracking & Activity</h1>
+    <div id="sessionTrackingSection" class="section hidden">
+        <div class="header">
+            <h1>Session Tracking &amp; Activity</h1>
+            <p>Monitor live sessions, breaks, timeouts, and activity logs</p>
+        </div>
         
         <!-- Real-time Stats -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
@@ -1078,6 +1081,27 @@
                 </select>
             </div>
             <div id="recentActivityTable"></div>
+        </div>
+    </div>
+
+</main>
+    </div>
+
+    <!-- Student Detail Modal -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeStudentModal()">&times;</button>
+            <h2 id="studentModalName" style="margin-bottom: 2rem;"></h2>
+            
+            <div id="studentProgressLoading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading student progress...</p>
+            </div>
+            
+            <div id="studentProgressContent" class="hidden">
+                <h3>Progress Overview</h3>
+                <div id="studentProgressData"></div>
+            </div>
         </div>
     </div>
 
@@ -1259,7 +1283,6 @@
                 'analytics': 'analyticsSection',
                 'session tracking': 'sessionTrackingSection',
                 'sessionTracking': 'sessionTrackingSection',
-                'easy alerts': 'essayAlertsSection',
                 'essayAlerts': 'essayAlertsSection'
             };
 
@@ -1286,7 +1309,7 @@
             }
 
             // Section-specific loads
-            if (section === 'easy alerts' || section === 'essayAlerts') {
+            if (section === 'essay alerts' || section === 'essayAlerts') {
                 loadEssayAlerts();
             }
 

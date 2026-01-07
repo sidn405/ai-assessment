@@ -3725,6 +3725,114 @@ async def get_platform_activity(token: str, days: int = 7):
     # (optional: implement if you ever flip USE_POSTGRES off)
     conn.close()
     return {"success": True, "labels": [], "engagement": [], "completion_rate": []}
+
+# ========== ADMIN ENDPOINTS ==========
+
+@app.get("/api/admin/sessions/active")
+async def get_active_sessions(token: str):
+    """Get all active sessions (admin only)"""
+    try:
+        user_data = verify_token(token)
+        if user_data["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT s.*, u.name, u.email 
+                FROM user_sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.status IN ('active', 'on_break')
+                ORDER BY s.last_activity DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT s.*, u.name, u.email 
+                FROM user_sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.status IN ('active', 'on_break')
+                ORDER BY s.last_activity DESC
+            """)
+        
+        sessions = []
+        for row in cursor.fetchall():
+            sessions.append({
+                'session_id': row['id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
+                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
+                'status': row['status'] if hasattr(row, 'keys') else row[4],
+                'session_start': str(row['session_start'] if hasattr(row, 'keys') else row[2]),
+                'last_activity': str(row['last_activity'] if hasattr(row, 'keys') else row[3]),
+                'break_start': str(row['break_start']) if (row['break_start'] if hasattr(row, 'keys') else row[5]) else None
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "sessions": sessions,
+            "count": len(sessions)
+        }
+        
+    except Exception as e:
+        print(f"Error getting active sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/activity/recent")
+async def get_recent_activity(token: str, hours: int = 24):
+    """Get recent activity logs (admin only)"""
+    try:
+        user_data = verify_token(token)
+        if user_data["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT a.*, u.name, u.email 
+                FROM activity_log a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.timestamp > NOW() - INTERVAL '%s hours'
+                ORDER BY a.timestamp DESC
+                LIMIT 100
+            """, (hours,))
+        else:
+            cursor.execute("""
+                SELECT a.*, u.name, u.email 
+                FROM activity_log a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
+                ORDER BY a.timestamp DESC
+                LIMIT 100
+            """, (hours,))
+        
+        activities = []
+        for row in cursor.fetchall():
+            activities.append({
+                'id': row['id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
+                'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
+                'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
+                'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "activities": activities,
+            "count": len(activities)
+        }
+        
+    except Exception as e:
+        print(f"Error getting activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     
 # ============================================================
 # GAMIFICATION SYSTEM
@@ -5273,114 +5381,6 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
         'text': random.choice(messages),
         'emotion': emotion
     }
-
-# ========== ADMIN ENDPOINTS ==========
-
-@app.get("/api/admin/sessions/active")
-async def get_active_sessions(token: str):
-    """Get all active sessions (admin only)"""
-    try:
-        user_data = verify_token(token)
-        if user_data["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Admin only")
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT s.*, u.name, u.email 
-                FROM user_sessions s
-                JOIN users u ON s.user_id = u.id
-                WHERE s.status IN ('active', 'on_break')
-                ORDER BY s.last_activity DESC
-            """)
-        else:
-            cursor.execute("""
-                SELECT s.*, u.name, u.email 
-                FROM user_sessions s
-                JOIN users u ON s.user_id = u.id
-                WHERE s.status IN ('active', 'on_break')
-                ORDER BY s.last_activity DESC
-            """)
-        
-        sessions = []
-        for row in cursor.fetchall():
-            sessions.append({
-                'session_id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
-                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
-                'status': row['status'] if hasattr(row, 'keys') else row[4],
-                'session_start': str(row['session_start'] if hasattr(row, 'keys') else row[2]),
-                'last_activity': str(row['last_activity'] if hasattr(row, 'keys') else row[3]),
-                'break_start': str(row['break_start']) if (row['break_start'] if hasattr(row, 'keys') else row[5]) else None
-            })
-        
-        conn.close()
-        
-        return {
-            "success": True,
-            "sessions": sessions,
-            "count": len(sessions)
-        }
-        
-    except Exception as e:
-        print(f"Error getting active sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/admin/activity/recent")
-async def get_recent_activity(token: str, hours: int = 24):
-    """Get recent activity logs (admin only)"""
-    try:
-        user_data = verify_token(token)
-        if user_data["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Admin only")
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT a.*, u.name, u.email 
-                FROM activity_log a
-                JOIN users u ON a.user_id = u.id
-                WHERE a.timestamp > NOW() - INTERVAL '%s hours'
-                ORDER BY a.timestamp DESC
-                LIMIT 100
-            """, (hours,))
-        else:
-            cursor.execute("""
-                SELECT a.*, u.name, u.email 
-                FROM activity_log a
-                JOIN users u ON a.user_id = u.id
-                WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
-                ORDER BY a.timestamp DESC
-                LIMIT 100
-            """, (hours,))
-        
-        activities = []
-        for row in cursor.fetchall():
-            activities.append({
-                'id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
-                'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
-                'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
-                'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
-            })
-        
-        conn.close()
-        
-        return {
-            "success": True,
-            "activities": activities,
-            "count": len(activities)
-        }
-        
-    except Exception as e:
-        print(f"Error getting activity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # Mount static files
 try:
