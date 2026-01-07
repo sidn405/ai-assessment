@@ -1299,55 +1299,6 @@
             }
         }
 
-        async function loadRecentStudentActivity(hours = 168) {
-            const el = document.getElementById("recentStudentActivity");
-            if (!el) return;
-
-            el.textContent = "Loading recent activity...";
-
-            try {
-                const res = await fetch(`/api/admin/activity/recent?token=${encodeURIComponent(token)}&hours=${hours}`);
-                const data = await res.json();
-
-                if (!res.ok || !data.success) {
-                el.textContent = data.detail || "Failed to load recent activity.";
-                return;
-                }
-
-                const activities = data.activities || [];
-                if (!activities.length) {
-                el.textContent = "No recent activity.";
-                return;
-                }
-
-                // Render as a clean list
-                const items = activities.slice(0, 12).map(a => {
-                const when = a.timestamp ? new Date(a.timestamp) : null;
-                const whenText = when && !isNaN(when) ? when.toLocaleString() : (a.timestamp || "");
-                const who = a.user_name || `User ${a.user_id}`;
-                const type = a.activity_type || "activity";
-                const details = a.activity_details ? String(a.activity_details) : "";
-
-                return `
-                    <div class="activity-item">
-                    <div class="activity-title">
-                        <strong>${escapeHtml(who)}</strong> — ${escapeHtml(type)}
-                    </div>
-                    <div class="activity-meta">
-                        <span>${escapeHtml(whenText)}</span>
-                    </div>
-                    ${details ? `<div class="activity-details">${escapeHtml(details)}</div>` : ""}
-                    </div>
-                `;
-                }).join("");
-
-                el.innerHTML = `<div class="activity-list">${items}</div>`;
-            } catch (err) {
-                el.textContent = "Error loading recent activity.";
-                console.error(err);
-            }
-        }
-
             // tiny helper to avoid HTML injection
             function escapeHtml(str) {
             return String(str)
@@ -1356,7 +1307,7 @@
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
-        }
+            }
 
 
         function showSection(section, event) {
