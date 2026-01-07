@@ -179,13 +179,13 @@ init_db()
 def get_db():
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE)
-        conn.cursor_factory = psycopg2.extras.RealDictCursor
         return conn
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0, check_same_thread=False)
         conn.execute('PRAGMA journal_mode=WAL')
         conn.row_factory = sqlite3.Row
         return conn
+
 
 def create_token(user_id: int, role: str) -> str:
     payload = {
@@ -3655,6 +3655,70 @@ async def get_analytics(token: str):
         "average_score": round(float(avg_score), 2) if avg_score else 0,
         "active_students": active_students
     }
+
+@app.get("/api/admin/platform-activity")
+async def get_platform_activity(token: str, days: int = 7):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    days = max(1, min(int(days or 7), 30))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if USE_POSTGRES:
+        cursor.execute(
+            """
+            WITH day_series AS (
+              SELECT generate_series(
+                CURRENT_DATE - (%s::int - 1),
+                CURRENT_DATE,
+                interval '1 day'
+              )::date AS day
+            ),
+            agg AS (
+              SELECT
+                CAST(started_at AS date) AS day,
+                COUNT(*) AS starts,
+                SUM(CASE WHEN completion_status = 'completed' THEN 1 ELSE 0 END) AS completes,
+                COUNT(DISTINCT user_id) AS engaged
+              FROM session_logs
+              WHERE started_at >= (CURRENT_DATE - (%s::int - 1))
+                AND started_at <  (CURRENT_DATE + 1)
+              GROUP BY 1
+            )
+            SELECT
+              s.day,
+              COALESCE(a.engaged, 0) AS engaged,
+              COALESCE(a.starts, 0) AS starts,
+              COALESCE(a.completes, 0) AS completes,
+              CASE
+                WHEN COALESCE(a.starts, 0) = 0 THEN 0
+                ELSE ROUND((a.completes::numeric / a.starts::numeric) * 100, 2)
+              END AS completion_rate
+            FROM day_series s
+            LEFT JOIN agg a USING (day)
+            ORDER BY s.day;
+            """,
+            (days, days),
+        )
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return {
+            "success": True,
+            "labels": [r["day"].strftime("%b %d") for r in rows],
+            "engagement": [int(r["engaged"]) for r in rows],
+            "completion_rate": [float(r["completion_rate"]) for r in rows],
+        }
+
+    # SQLite fallback (if needed later)
+    cursor = conn.cursor()
+    # (optional: implement if you ever flip USE_POSTGRES off)
+    conn.close()
+    return {"success": True, "labels": [], "engagement": [], "completion_rate": []}
     
 # ============================================================
 # GAMIFICATION SYSTEM
