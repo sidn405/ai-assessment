@@ -2048,17 +2048,19 @@
         window.speechSynthesis.speak(u);
         }
 
-        function displayTutorMessage(message, emotion = 'happy') {
-        showTutorUI();
+        async function displayTutorMessage(message, emotion = 'happy') {
+          const bubble = document.querySelector('.tutor-speech-bubble');
+          const textEl = document.getElementById('tutorText');
 
-        const msg = document.getElementById('tutorMessage');
-        const mouth = document.getElementById('avatarMouth');
+          if (bubble) bubble.classList.remove('hidden');
+          if (textEl) textEl.textContent = message;
 
-        if (msg) msg.textContent = message;
-        if (mouth) mouth.className = `mouth ${emotion}`;
+          setTutorMood(emotion);
 
-        tutorSpeak(message);
+          // IMPORTANT: wait until speech completes (or fails)
+          await tutorSpeak(message);
         }
+
 
         async function showTutor(context, extra = {}) {
         const token = localStorage.getItem('token');
@@ -2098,29 +2100,23 @@
         tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
         }
 
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
         let tutorSeqId = 0;
 
         async function startTutorIntroSequence() {
           const mySeq = ++tutorSeqId;
 
-          // Cancel anything left over from previous lesson
-          try { speechSynthesis.cancel(); } catch (_) {}
-
-          // 1) Greeting
-          const greet = await fetchTutorMessage("greeting");
-          if (mySeq !== tutorSeqId) return;
-          await speakTutor(greet.message, greet.emotion);
+          // Greeting immediately (so it shows during "Generating lesson...")
+          await showTutor('greeting');
 
           if (mySeq !== tutorSeqId) return;
+          await wait(500);
 
-          // 2) Wait 5 seconds
-          await wait(5000);
-          if (mySeq !== tutorSeqId) return;
+          // Instruction AFTER greeting completes
+          await showTutor('instruction');
 
-          // 3) Instruction ("Time to read..." is one possible backend instruction variant)
-          const instruction = await fetchTutorMessage("instruction");
           if (mySeq !== tutorSeqId) return;
-          await speakTutor(instruction.message, instruction.emotion);
         }
 
         async function fetchTutorMessage(context, extra = {}) {
@@ -2144,21 +2140,33 @@
           return data; // { message, emotion }
         }
 
-        function speakTutor(text, emotion) {
+        function tutorSpeak(text) {
           return new Promise((resolve) => {
-            // update UI (use your existing functions)
-            showTutorUI?.();
-            setTutorExpression?.(emotion);
-            setTutorBubbleText?.(text);
+            try {
+              if (tutorMuted) return resolve(false);
 
-            const u = new SpeechSynthesisUtterance(text);
+              // Cancel any current speech when a NEW tutor message starts
+              window.speechSynthesis.cancel();
 
-            u.onend = () => resolve();
-            u.onerror = () => resolve();
+              const utterance = new SpeechSynthesisUtterance(text);
 
-            speechSynthesis.speak(u);
+              // Choose voice if you have a selector; otherwise browser default
+              if (selectedVoice) utterance.voice = selectedVoice;
+
+              utterance.rate = 0.95;
+              utterance.pitch = 1.05;
+
+              utterance.onend = () => resolve(true);
+              utterance.onerror = () => resolve(false);
+
+              window.speechSynthesis.speak(utterance);
+            } catch (e) {
+              // Autoplay blocks will land here sometimes
+              resolve(false);
+            }
           });
         }
+
 
         function wait(ms) {
          return new Promise((r) => setTimeout(r, ms));
