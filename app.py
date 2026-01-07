@@ -3671,7 +3671,7 @@ async def get_platform_activity(token: str, days: int = 7):
     days = max(1, min(int(days or 7), 30))
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)   # <-- THIS is the missing piece
 
     if USE_POSTGRES:
         cursor.execute(
