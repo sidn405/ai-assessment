@@ -903,7 +903,7 @@
                         </table>
                     </div>
                     <!-- Add this section to your admin dashboard sections -->
-                    <div id="essayAlertsSection" class="section">
+                    <div id="essayAlertsSection" class="hidden">
                         <h1>📝 Essay Reviews & Student Alerts</h1>
                         <p style="color: #666; margin-bottom: 2rem;">
                             Monitor student comprehension and provide assistance when needed
@@ -1073,68 +1073,7 @@
                 <div id="recentActivityTable"></div>
             </div>
         </div>
-        <!-- Essay Alerts Section -->
-        <div id="essayAlertsSection" class="hidden">
-            <div class="header">
-                <h1>📝 Essay Reviews & Student Alerts</h1>
-                <p>Monitor student comprehension and provide assistance when needed</p>
-            </div>
             
-            <!-- Stats Cards -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-                <div style="
-                    background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
-                    color: white;
-                    padding: 2rem;
-                    border-radius: 16px;
-                    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
-                    text-align: center;
-                ">
-                    <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="unreadAlertsCount">0</div>
-                    <div style="font-size: 1.1rem; opacity: 0.95;">🚨 Unread Alerts</div>
-                </div>
-                
-                <div style="
-                    background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
-                    color: white;
-                    padding: 2rem;
-                    border-radius: 16px;
-                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-                    text-align: center;
-                ">
-                    <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="essaysNeedingReviewCount">0</div>
-                    <div style="font-size: 1.1rem; opacity: 0.95;">📝 Essays to Review</div>
-                </div>
-                
-                <div style="
-                    background: linear-gradient(135deg, #11998E 0%, #38EF7D 100%);
-                    color: white;
-                    padding: 2rem;
-                    border-radius: 16px;
-                    box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
-                    text-align: center;
-                ">
-                    <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="totalEssaysToday">0</div>
-                    <div style="font-size: 1.1rem; opacity: 0.95;">✅ Essays Today</div>
-                </div>
-            </div>
-            
-            <!-- Student Alerts -->
-            <div class="card" style="margin-bottom: 2rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h2 style="margin: 0;">🚨 Student Alerts - Need Help</h2>
-                    <button onclick="loadEssayAlerts()" class="btn btn-primary">🔄 Refresh</button>
-                </div>
-                <div id="studentAlertsTable"></div>
-            </div>
-            
-            <!-- Essays Needing Review -->
-            <div class="card">
-                <h2 style="margin-bottom: 1.5rem;">📝 Essays Needing Review</h2>
-                <div id="essaysReviewTable"></div>
-            </div>
-        </div>
-
         <!-- Essay Details Modal -->
         <div id="essayDetailsModal" class="modal">
             <div class="modal-content" style="max-width: 900px;">
@@ -1416,7 +1355,6 @@
                 'analytics': 'analyticsSection',
                 'session tracking': 'sessionTrackingSection',
                 'sessionTracking': 'sessionTrackingSection',
-                'essayAlerts': 'essayAlertsSection',
                 'essayAlerts': 'essayAlertsSection'
             };
 
