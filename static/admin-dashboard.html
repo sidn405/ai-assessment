@@ -1105,6 +1105,15 @@
         }
 
         function showSection(section, event) {
+            // Map navigation names to actual section IDs
+            const sectionMap = {
+                'overview': 'overviewSection',
+                'students': 'studentsSection',
+                'analytics': 'analyticsSection',
+                'session tracking': 'sessionTrackingSection',
+                'easy alerts': 'essayAlertsSection'
+            };
+            
             // Hide all sections
             document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
             
