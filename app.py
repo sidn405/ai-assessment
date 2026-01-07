@@ -3741,7 +3741,7 @@ async def get_active_sessions(token: str):
         
         if USE_POSTGRES:
             cursor.execute("""
-                SELECT s.*, u.name, u.email 
+                SELECT s.*, full_name, email 
                 FROM user_sessions s
                 JOIN users u ON s.user_id = u.id
                 WHERE s.status IN ('active', 'on_break')
@@ -3749,7 +3749,7 @@ async def get_active_sessions(token: str):
             """)
         else:
             cursor.execute("""
-                SELECT s.*, u.name, u.email 
+                SELECT s.*, full_name, email 
                 FROM user_sessions s
                 JOIN users u ON s.user_id = u.id
                 WHERE s.status IN ('active', 'on_break')
@@ -3794,7 +3794,7 @@ async def get_recent_activity(token: str, hours: int = 24):
         
         if USE_POSTGRES:
             cursor.execute("""
-                SELECT a.*, u.name, u.email 
+                SELECT a.*, full_name, email 
                 FROM activity_log a
                 JOIN users u ON a.user_id = u.id
                 WHERE a.timestamp > NOW() - INTERVAL '%s hours'
@@ -3803,7 +3803,7 @@ async def get_recent_activity(token: str, hours: int = 24):
             """, (hours,))
         else:
             cursor.execute("""
-                SELECT a.*, u.name, u.email 
+                SELECT a.*, full_name, email 
                 FROM activity_log a
                 JOIN users u ON a.user_id = u.id
                 WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
