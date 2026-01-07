@@ -2101,13 +2101,13 @@
             // Only greet on first lesson of the session
             if (!tutorHasGreeted) {
                 tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
+                tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
                 tutorHasGreeted = true;
+            } else {
+                // Subsequent lessons: just instruction
+                tutorTimers.push(setTimeout(() => showTutor('instruction'), 900));
             }
-            
-            // Always show instruction
-            tutorTimers.push(setTimeout(() => showTutor('instruction'), tutorHasGreeted ? 900 : 5900));
         }
-
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
