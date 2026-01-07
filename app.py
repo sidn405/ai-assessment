@@ -3629,7 +3629,7 @@ async def get_student_progress(student_id: int, token: str):
             sl.completed_at,
             sl.started_at,
             p.title,
-            p.topic
+            p.difficulty_level
         FROM session_logs sl
         LEFT JOIN passages p ON p.id = sl.passage_id
         WHERE sl.user_id = %s
@@ -3646,7 +3646,7 @@ async def get_student_progress(student_id: int, token: str):
             sl.completed_at,
             sl.started_at,
             p.title,
-            p.topic
+            p.difficulty_level
         FROM session_logs sl
         LEFT JOIN passages p ON p.id = sl.passage_id
         WHERE sl.user_id = ?
@@ -3655,12 +3655,12 @@ async def get_student_progress(student_id: int, token: str):
         """,
         (student_id,)
     )
-    student = cursor.fetchone()
-    if not student:
+    student_row = cursor.fetchone()
+    if not student_row:
         conn.close()
         raise HTTPException(status_code=404, detail="Student not found")
 
-    student = dict(student)
+    student = dict(student_row)
 
     rows = [dict(r) for r in (cursor.fetchall() or [])]
 
