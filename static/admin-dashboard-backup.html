@@ -73,7 +73,7 @@
             min-height: 100vh;
         }
         
-        /* Sidebar */
+        /* ⭐ FIXED Z-INDEX - Sidebar above content */
         .sidebar {
             width: 280px;
             background: var(--navy-primary);
@@ -82,6 +82,7 @@
             position: fixed;
             height: 100vh;
             overflow-y: auto;
+            z-index: 100;
         }
         
         .logo {
@@ -158,12 +159,21 @@
             color: var(--navy-primary);
         }
         
-        /* Main Content */
+        /* ⭐ FIXED Z-INDEX - Content below sidebar */
         .main-content {
             margin-left: 280px;
             flex: 1;
             padding: 2rem;
             width: calc(100% - 280px);
+            position: relative;
+            z-index: 1;
+            overflow-x: hidden; /* ADD THIS */
+        }
+
+        .main-content h2 {
+            display: block;
+            width: 100%;
+            clear: both;
         }
         
         .header {
@@ -184,14 +194,24 @@
         .header p {
             opacity: 0.9;
         }
+
+        #sessionTrackingSection > h2,
+        #essayAlertsSection > h2,
+        .main-content > div > h2 {
+            margin-left: 0;
+            padding-left: 0;
+            clear: both;
+        }
         
-        /* Cards */
+        /* ⭐ FIXED Z-INDEX - Cards stay below sidebar */
         .card {
             background: var(--white);
             border-radius: 8px;
             padding: 2rem;
             margin-bottom: 2rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: relative;
+            z-index: 10;
         }
         
         .card h2 {
@@ -202,31 +222,30 @@
         /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
         
         .stat-card {
-            background: var(--white);
+            background: linear-gradient(135deg, var(--navy-light) 0%, var(--navy-primary) 100%);
+            color: var(--white);
             padding: 2rem;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            border-left: 4px solid var(--navy-primary);
+            text-align: center;
         }
         
         .stat-value {
             font-size: 2.5rem;
             font-weight: 700;
-            color: var(--navy-primary);
             display: block;
             margin-bottom: 0.5rem;
+            color: var(--gold-accent);
         }
         
         .stat-label {
-            color: var(--text-gray);
-            font-size: 0.95rem;
-            opacity: 0.8;
+            font-size: 0.9rem;
+            opacity: 0.9;
         }
         
         .stat-change {
@@ -286,6 +305,8 @@
             background: #d1ecf1;
             color: #0c5460;
         }
+
+        .hidden { display: none; }
         
         /* Action Buttons */
         .btn {
@@ -1013,22 +1034,22 @@
         
         <!-- Real-time Stats -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-            <div class="stat-card" style="background: linear-gradient(135deg, #11998E 0%, #38EF7D 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                 <div style="font-size: 3rem; font-weight: bold;" id="activeUsersCount">0</div>
                 <div style="font-size: 1.1rem; opacity: 0.9;">Active Users</div>
             </div>
             
-            <div class="stat-card" style="background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                 <div style="font-size: 3rem; font-weight: bold;" id="usersOnBreakCount">0</div>
                 <div style="font-size: 1.1rem; opacity: 0.9;">On Break</div>
             </div>
             
-            <div class="stat-card" style="background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                 <div style="font-size: 3rem; font-weight: bold;" id="timeoutsToday">0</div>
                 <div style="font-size: 1.1rem; opacity: 0.9;">Timeouts Today</div>
             </div>
             
-            <div class="stat-card" style="background: linear-gradient(135deg, #F093FB 0%, #F5576C 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                 <div style="font-size: 3rem; font-weight: bold;" id="totalSessions">0</div>
                 <div style="font-size: 1.1rem; opacity: 0.9;">Total Sessions Today</div>
             </div>
