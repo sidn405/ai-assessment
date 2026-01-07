@@ -1973,6 +1973,7 @@
         // AI TUTOR (Dashboard-integrated)
         // ============================================
         let tutorMuted = false;
+        let tutorHasGreeted = false;
         let speechUnlocked = false;
 
         function unlockSpeechOnce() {
@@ -2088,8 +2089,6 @@
         }
 
         // Call when a lesson is rendered on the dashboard
-        let tutorTimers = [];
-        let tutorHasGreeted = false; // Track if greeting has been shown this session
 
         function startTutorForLesson() {
             ensureVoicesLoaded();
