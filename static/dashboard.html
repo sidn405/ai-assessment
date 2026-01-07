@@ -3170,7 +3170,7 @@
                 // =============================
                 
                 displayLesson(lesson);
-                requestAnimationFrame();
+                requestAnimationFrame(() => startTutorForLesson());
                 
             } catch (error) {
                 console.error('Error loading lesson:', error);
