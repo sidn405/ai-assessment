@@ -114,7 +114,8 @@ class WritingRevision(BaseModel):
 def init_db():
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE)
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         # Original tables (simplified - assume migration ran)
         # Users, assessments, lessons, progress tables exist
@@ -136,7 +137,8 @@ def init_db():
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0)
         conn.execute('PRAGMA journal_mode=WAL')
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         # Create all tables for SQLite (for local development)
         cursor.execute('''
@@ -210,7 +212,7 @@ def verify_token(token: str) -> dict:
 def update_user_activity(user_id: int):
     """Update last_active timestamp"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     if USE_POSTGRES:
         cursor.execute("UPDATE users SET last_active = NOW() WHERE id = %s", (user_id,))
     else:
@@ -254,7 +256,8 @@ async def reset_password_page():
 @app.post("/api/register")
 async def register(user: UserCreate):
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
     
@@ -300,7 +303,8 @@ async def register(user: UserCreate):
 @app.post("/api/login")
 async def login(credentials: UserLogin):
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     if USE_POSTGRES:
         cursor.execute("SELECT * FROM users WHERE email = %s", (credentials.email,))
@@ -350,7 +354,8 @@ async def forgot_password(request: dict):
         raise HTTPException(status_code=400, detail="Email is required")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     try:
         # Check if user exists
@@ -461,7 +466,8 @@ async def reset_password(request: dict):
     
     # Update password
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     try:
         password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
@@ -815,7 +821,8 @@ async def submit_assessment(request: Request):
     
     # Update user profile
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     if USE_POSTGRES:
         cursor.execute(
@@ -908,7 +915,8 @@ async def run_migration(request: Request):
     
     try:
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         # Verify we're connected to PostgreSQL
         results.append("Checking database connection...")
@@ -1128,7 +1136,8 @@ async def run_migration(request: Request):
 async def check_tables():
     """Check which tables exist in the database"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     try:
         # Query to get all table names
@@ -1214,7 +1223,8 @@ async def onboard_interests(request: Request):
     
     # Update user profile
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     if USE_POSTGRES:
         cursor.execute(
@@ -1256,7 +1266,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     user_id = user_data["user_id"]
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+
     
     # Get user profile
     if USE_POSTGRES:
@@ -1450,7 +1461,8 @@ async def upload_profile_photo(request: Request):
         
         # Save to database
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         if USE_POSTGRES:
             cursor.execute(
@@ -1496,7 +1508,8 @@ async def set_avatar(request: Request):
         
         # Save to database
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         if USE_POSTGRES:
             cursor.execute(
@@ -3517,19 +3530,28 @@ async def get_all_students(token: str):
     user_data = verify_token(token)
     if user_data["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)  # ✅ important (RealDictCursor for Postgres)
+
     cursor.execute(
-        """SELECT id, email, full_name, level_estimate, total_passages_read, 
-           comprehension_score, last_active, created_at 
-           FROM users WHERE role = 'student'
-           ORDER BY created_at DESC"""
+        """
+        SELECT id, email, full_name, level_estimate, total_passages_read,
+               comprehension_score, last_active, created_at
+        FROM users
+        WHERE role = 'student'
+        ORDER BY created_at DESC
+        """
     )
-    students = [dict(row) for row in cursor.fetchall()]
+
+    rows = cursor.fetchall() or []
+
+    # Works for RealDictCursor (Postgres) and sqlite3.Row (SQLite)
+    students = [dict(r) for r in rows]
+
     conn.close()
-    
     return {"students": students}
+
 
 @app.get("/api/admin/student/{student_id}/details")
 async def get_student_details(student_id: int, token: str):
@@ -5360,7 +5382,8 @@ async def end_session(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         # Update session
         if USE_POSTGRES:

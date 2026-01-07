@@ -106,7 +106,8 @@ class WritingRevision(BaseModel):
 def init_db():
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE)
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         # Original tables (simplified - assume migration ran)
         # Users, assessments, lessons, progress tables exist
@@ -128,7 +129,8 @@ def init_db():
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0)
         conn.execute('PRAGMA journal_mode=WAL')
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+
         
         # Create all tables for SQLite (for local development)
         cursor.execute('''
