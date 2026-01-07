@@ -1259,39 +1259,38 @@
             const container = document.getElementById('recentActivity');
             if (!token || !container) return;
 
-            container.innerHTML = '<p style="color:#666;">Loading recent activity...</p>';
+            container.innerHTML = '<p style="color:#666;">Loading recent activity.</p>';
 
             try {
-                // Pull the last 24h by default (same endpoint session tracking uses)
                 const response = await fetch(`/api/admin/activity/recent?token=${encodeURIComponent(token)}&hours=${hours}`);
                 const data = await response.json();
 
                 if (!data.success || !Array.isArray(data.activities)) {
-                    container.innerHTML = '<p style="color:#666;">No recent activity</p>';
-                    return;
+                container.innerHTML = '<p style="color:#666;">No recent activity</p>';
+                return;
                 }
 
-                const items = data.activities
-                    .filter(a => (a.activity_type || '').startsWith('lesson'))
-                    .slice(0, 8);
+                // Prefer lesson events, but FALL BACK to any activity if none exist
+                const lessonItems = data.activities.filter(a => (a.activity_type || '').startsWith('lesson')).slice(0, 8);
+                const items = lessonItems.length ? lessonItems : data.activities.slice(0, 8);
 
-                if (items.length === 0) {
-                    container.innerHTML = '<p style="color:#666;">No lesson activity yet</p>';
-                    return;
+                if (!items.length) {
+                container.innerHTML = '<p style="color:#666;">No recent activity</p>';
+                return;
                 }
 
                 container.innerHTML = items.map(a => `
-                    <div style="display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid #eee;">
-                        <div>
-                            <div style="font-weight:600;">${a.user_name || 'Student'}</div>
-                            <div style="font-size:0.9rem; color:#666;">
-                                ${(a.activity_type || '').replace('_',' ')}${a.activity_details ? ' • ' + a.activity_details : ''}
-                            </div>
-                        </div>
-                        <div style="font-size:0.85rem; color:#666; white-space:nowrap;">
-                            ${formatDateTime(a.timestamp)}
-                        </div>
+                <div style="display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid #eee;">
+                    <div>
+                    <div style="font-weight:600;">${a.user_name || 'Student'}</div>
+                    <div style="font-size:0.9rem; color:#666;">
+                        ${(a.activity_type || '').replaceAll('_',' ')}${a.activity_details ? ' • ' + a.activity_details : ''}
                     </div>
+                    </div>
+                    <div style="font-size:0.85rem; color:#666; white-space:nowrap;">
+                    ${formatDateTime(a.timestamp)}
+                    </div>
+                </div>
                 `).join('');
             } catch (error) {
                 console.error('Error loading overview recent activity:', error);
@@ -1337,6 +1336,10 @@
                 sectionEl.classList.remove('hidden');
             } else {
                 console.warn(`showSection(): unknown section "${section}" -> "${sectionId}"`);
+            }
+
+            if (section === 'students') {
+                loadStudents();
             }
 
             // Update active nav (best-effort)
