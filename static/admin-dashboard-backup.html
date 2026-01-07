@@ -752,7 +752,15 @@
                 border: 2px solid currentColor;
             }
         }
+
+        .activity-list { display: flex; flex-direction: column; gap: 10px; }
+        .activity-item { padding: 10px 12px; border: 1px solid rgba(0,0,0,0.06); border-radius: 10px; background: #fff; }
+        .activity-title { font-size: 14px; }
+        .activity-meta { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+        .activity-details { font-size: 13px; margin-top: 6px; opacity: 0.9; }
+
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="dashboard">
@@ -803,7 +811,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('easy alerts')">
+                    <a href="#" class="nav-link" onclick="showSection('essay alerts')">
                         <span>📝</span> Essay Alerts
                     </a>
                 </li>
@@ -842,8 +850,9 @@
 
                 <div class="card">
                     <h2>Platform Activity</h2>
-                    <div class="chart-container">
-                        <div class="chart-placeholder">
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="platformActivityChart" aria-label="Student engagement and completion rate visualization" role="img"></canvas>
+                        <div id="platformActivityFallback" class="chart-placeholder" style="display:none;">
                             📊 Student engagement and completion rate visualization<br>
                             <small>Chart visualization would go here</small>
                         </div>
@@ -985,28 +994,88 @@
                     </div>
                 </div>
 
+                <!-- Reading Level Distribution -->
                 <div class="card">
                     <h2>Reading Level Distribution</h2>
-                    <div class="chart-container">
-                        <div class="chart-placeholder">
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="readingLevelChart" aria-label="Reading level distribution visualization" role="img"></canvas>
+                        <div id="readingLevelFallback" class="chart-placeholder" style="display:none;">
                             📊 Distribution of students across reading levels<br>
-                            <small>Pie chart or bar graph would display here</small>
+                            <small>Chart data unavailable</small>
                         </div>
                     </div>
                 </div>
 
+                <!-- Interest Topics Breakdown -->
                 <div class="card">
                     <h2>Interest Topics Breakdown</h2>
-                    <div class="chart-container">
-                        <div class="chart-placeholder">
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="interestTopicsChart" aria-label="Interest topics visualization" role="img"></canvas>
+                        <div id="interestTopicsFallback" class="chart-placeholder" style="display:none;">
                             📊 Most popular interest areas among students<br>
-                            <small>Horizontal bar chart would display here</small>
+                            <small>Chart data unavailable</small>
                         </div>
                     </div>
                 </div>
             </div>
+          
+        <!-- Add this as a new section in your admin dashboard -->
+
+        <div id="sessionTrackingSection" class="section hidden">
+            <div class="header">
+                <h1>Session Tracking &amp; Activity</h1>
+                <p>Monitor live sessions, breaks, timeouts, and activity logs</p>
+            </div>
+            
+            <!-- Real-time Stats -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="activeUsersCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Active Users</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="usersOnBreakCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">On Break</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="timeoutsToday">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Timeouts Today</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="totalSessions">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Total Sessions Today</div>
+                </div>
+            </div>
+            
+            <!-- Active Sessions Table -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Active Sessions</h2>
+                    <button onclick="loadActiveSessions()" class="btn btn-primary">🔄 Refresh</button>
+                </div>
+                <div id="activeSessionsTable"></div>
+            </div>
+            
+            <!-- Recent Activity Log -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Recent Activity</h2>
+                    <select id="activityTimeFilter" onchange="loadRecentActivity()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
+                        <option value="1">Last 1 Hour</option>
+                        <option value="6">Last 6 Hours</option>
+                        <option value="24" selected>Last 24 Hours</option>
+                        <option value="168">Last 7 Days</option>
+                    </select>
+                </div>
+                <div id="recentActivityTable"></div>
+            </div>
+        </div>
+
         </main>
-    </div>
+            </div>
 
     <!-- Student Detail Modal -->
     <div id="studentModal" class="modal">
@@ -1023,59 +1092,6 @@
                 <h3>Progress Overview</h3>
                 <div id="studentProgressData"></div>
             </div>
-        </div>
-    </div>
-
-    
-    <!-- Add this as a new section in your admin dashboard -->
-
-    <div id="sessionTrackingSection" class="section">
-        <h1>Session Tracking & Activity</h1>
-        
-        <!-- Real-time Stats -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="activeUsersCount">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">Active Users</div>
-            </div>
-            
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="usersOnBreakCount">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">On Break</div>
-            </div>
-            
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="timeoutsToday">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">Timeouts Today</div>
-            </div>
-            
-            <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; font-weight: bold;" id="totalSessions">0</div>
-                <div style="font-size: 1.1rem; opacity: 0.9;">Total Sessions Today</div>
-            </div>
-        </div>
-        
-        <!-- Active Sessions Table -->
-        <div class="card" style="margin-bottom: 2rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Active Sessions</h2>
-                <button onclick="loadActiveSessions()" class="btn btn-primary">🔄 Refresh</button>
-            </div>
-            <div id="activeSessionsTable"></div>
-        </div>
-        
-        <!-- Recent Activity Log -->
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Recent Activity</h2>
-                <select id="activityTimeFilter" onchange="loadRecentActivity()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
-                    <option value="1">Last 1 Hour</option>
-                    <option value="6">Last 6 Hours</option>
-                    <option value="24" selected>Last 24 Hours</option>
-                    <option value="168">Last 7 Days</option>
-                </select>
-            </div>
-            <div id="recentActivityTable"></div>
         </div>
     </div>
 
@@ -1102,6 +1118,8 @@
             document.getElementById('adminName').textContent = user.full_name;
             
             loadAnalytics();
+            loadPlatformActivityChart();
+            loadOverviewRecentActivity(168); // last 7 days
         });
 
         async function loadAnalytics() {
@@ -1120,37 +1138,218 @@
             }
         }
 
+        let platformActivityChart = null;
+
+        async function loadPlatformActivityChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('platformActivityChart');
+            const fallback = document.getElementById('platformActivityFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/api/admin/platform-activity?token=${token}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+
+                    const labels = data.labels || data.days || [];
+                    const engagement = data.engagement || data.active_users || [];
+                    const completion = data.completion_rate || data.completion || [];
+
+                    if (Array.isArray(labels) && labels.length && Array.isArray(engagement) && Array.isArray(completion)) {
+                        renderPlatformActivityChart(labels, engagement, completion);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Platform activity chart: endpoint unavailable or failed.', e);
+            }
+
+            // Fallback: render a 7-day empty chart (so the UI is no longer a placeholder)
+            const labels = Array.from({ length: 7 }).map((_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - (6 - i));
+                return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            });
+
+            renderPlatformActivityChart(labels, new Array(7).fill(0), new Array(7).fill(0), { noData: true });
+        }
+
+        function renderPlatformActivityChart(labels, engagementCounts, completionRates, opts = {}) {
+            const canvas = document.getElementById('platformActivityChart');
+            if (!canvas) return;
+
+            if (platformActivityChart) {
+                platformActivityChart.destroy();
+                platformActivityChart = null;
+            }
+
+            // Small helper label when no real data exists yet
+            const subtitleElId = 'platformActivityNoDataNote';
+            let note = document.getElementById(subtitleElId);
+            if (!note) {
+                note = document.createElement('div');
+                note.id = subtitleElId;
+                note.style.marginTop = '0.75rem';
+                note.style.fontSize = '0.85rem';
+                note.style.opacity = '0.7';
+                canvas.parentElement.appendChild(note);
+            }
+            note.textContent = opts.noData
+                ? 'No activity series found yet. Add /api/admin/platform-activity to populate this chart.'
+                : '';
+
+            platformActivityChart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Engagement (active students)',
+                            data: engagementCounts,
+                            tension: 0.35,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Completion rate (%)',
+                            data: completionRates,
+                            tension: 0.35,
+                            yAxisID: 'y1',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const label = ctx.dataset.label || '';
+                                    const value = ctx.parsed.y;
+                                    if (ctx.dataset.yAxisID === 'y1') return `${label}: ${value}%`;
+                                    return `${label}: ${value}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Students' }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            suggestedMax: 100,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Completion %' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Overview: Recent Student Activity (uses the same activity_log feed)
+        async function loadOverviewRecentActivity(hours = 168) {
+            const token = localStorage.getItem('token');
+            const container = document.getElementById('recentActivity');
+            if (!token || !container) return;
+
+            container.innerHTML = '<p style="color:#666;">Loading recent activity.</p>';
+
+            try {
+                const response = await fetch(`/api/admin/activity/recent?token=${encodeURIComponent(token)}&hours=${hours}`);
+                const data = await response.json();
+
+                if (!data.success || !Array.isArray(data.activities)) {
+                container.innerHTML = '<p style="color:#666;">No recent activity</p>';
+                return;
+                }
+
+                // Prefer lesson events, but FALL BACK to any activity if none exist
+                const lessonItems = data.activities.filter(a => (a.activity_type || '').startsWith('lesson')).slice(0, 8);
+                const items = lessonItems.length ? lessonItems : data.activities.slice(0, 8);
+
+                if (!items.length) {
+                container.innerHTML = '<p style="color:#666;">No recent activity</p>';
+                return;
+                }
+
+                container.innerHTML = items.map(a => `
+                <div style="display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid #eee;">
+                    <div>
+                    <div style="font-weight:600;">${a.user_name || 'Student'}</div>
+                    <div style="font-size:0.9rem; color:#666;">
+                        ${(a.activity_type || '').replaceAll('_',' ')}${a.activity_details ? ' • ' + a.activity_details : ''}
+                    </div>
+                    </div>
+                    <div style="font-size:0.85rem; color:#666; white-space:nowrap;">
+                    ${formatDateTime(a.timestamp)}
+                    </div>
+                </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading overview recent activity:', error);
+                container.innerHTML = '<p style="color:#666;">Unable to load activity</p>';
+            }
+        }
+
+            // tiny helper to avoid HTML injection
+            function escapeHtml(str) {
+            return String(str)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+            }
+
+
         function showSection(section, event) {
-            // Map navigation names to actual section IDs
+            event = event || window.event || null;
+
             const sectionMap = {
                 'overview': 'overviewSection',
                 'students': 'studentsSection',
                 'analytics': 'analyticsSection',
                 'session tracking': 'sessionTrackingSection',
-                'easy alerts': 'essayAlertsSection'
+                'sessionTracking': 'sessionTrackingSection',
+                'essayAlerts': 'essayAlertsSection'
             };
 
-            // Hide all sections
             document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
-            
-            // Update nav links
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-            
-            // Show selected section
-            const sectionId = section + 'Section';
-            document.getElementById(sectionId).classList.remove('hidden');
-            
-            // Update active nav
-            if (event && event.target) {
-                const navLink = event.target.closest('.nav-link');
-                if (navLink) navLink.classList.add('active');
+
+            const sectionId = sectionMap[section] || (section + 'Section');
+            const sectionEl = document.getElementById(sectionId);
+
+            if (sectionEl) {
+                sectionEl.classList.remove('hidden');
             }
 
-            if (section === 'essayAlerts') {
+            if (section === 'students') {
+                loadStudents();
+            }
+
+            // ✅ ADD THIS - Load charts when Analytics section is shown
+            if (section === 'analytics') {
+                loadReadingLevelChart();
+                loadInterestTopicsChart();
+            }
+
+            if (section === 'essay alerts' || section === 'essayAlerts') {
                 loadEssayAlerts();
             }
 
-            if (section === 'sessionTracking') {
+            if (section === 'session tracking' || section === 'sessionTracking') {
                 loadActiveSessions();
                 loadRecentActivity();
                 startAutoRefresh();
@@ -1158,7 +1357,208 @@
                 stopAutoRefresh();
             }
 
-            console.log('✓ Essay alerts admin panel loaded');
+            if (event && event.target) {
+                const navLink = event.target.closest && event.target.closest('.nav-link');
+                if (navLink) navLink.classList.add('active');
+            }
+        }
+
+        // ========== READING LEVEL DISTRIBUTION CHART ==========
+
+        let readingLevelChart = null;
+
+        async function loadReadingLevelChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('readingLevelChart');
+            const fallback = document.getElementById('readingLevelFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/reading-level-distribution?token=${encodeURIComponent(token)}`);
+                const data = await response.json();
+
+                if (data.success && data.distribution && data.distribution.length > 0) {
+                    renderReadingLevelChart(data.distribution);
+                } else {
+                    // Show fallback if no data
+                    canvas.style.display = 'none';
+                    if (fallback) fallback.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading reading level chart:', error);
+                canvas.style.display = 'none';
+                if (fallback) fallback.style.display = 'block';
+            }
+        }
+
+        function renderReadingLevelChart(distribution) {
+            const canvas = document.getElementById('readingLevelChart');
+            if (!canvas) return;
+
+            if (readingLevelChart) {
+                readingLevelChart.destroy();
+                readingLevelChart = null;
+            }
+
+            const labels = distribution.map(d => d.level);
+            const counts = distribution.map(d => d.count);
+
+            // Color scheme matching your UI
+            const colors = [
+                '#2A398A',  // Navy primary (Beginner)
+                '#4a56af',  // Navy light (Intermediate)
+                '#D4AF37',  // Gold accent (Advanced)
+                '#6c757d'   // Gray (Not Assessed)
+            ];
+
+            readingLevelChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: colors,
+                        borderColor: '#ffffff',
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: {
+                                    size: 14,
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} students (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ========== INTEREST TOPICS CHART ==========
+
+        let interestTopicsChart = null;
+
+        async function loadInterestTopicsChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('interestTopicsChart');
+            const fallback = document.getElementById('interestTopicsFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/interest-topics?token=${encodeURIComponent(token)}`);
+                const data = await response.json();
+
+                if (data.success && data.topics && data.topics.length > 0) {
+                    renderInterestTopicsChart(data.topics);
+                } else {
+                    canvas.style.display = 'none';
+                    if (fallback) fallback.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading interest topics chart:', error);
+                canvas.style.display = 'none';
+                if (fallback) fallback.style.display = 'block';
+            }
+        }
+
+        function renderInterestTopicsChart(topics) {
+            const canvas = document.getElementById('interestTopicsChart');
+            if (!canvas) return;
+
+            if (interestTopicsChart) {
+                interestTopicsChart.destroy();
+                interestTopicsChart = null;
+            }
+
+            const labels = topics.map(t => t.topic);
+            const counts = topics.map(t => t.count);
+
+            interestTopicsChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Number of Students',
+                        data: counts,
+                        backgroundColor: '#4a56af',
+                        borderColor: '#2A398A',
+                        borderWidth: 2,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',  // Horizontal bars
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.x} students interested`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                font: {
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            },
+                            grid: {
+                                color: '#E0E0E0'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                font: {
+                                    size: 13,
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         
@@ -1764,10 +2164,12 @@
             const token = localStorage.getItem('token');
             
             try {
-                const response = await fetch(`/api/admin/student/${studentId}/progress?token=${token}`);
+                const response = await fetch(`/api/admin/student/${studentId}/progress?token=${encodeURIComponent(token)}`);
                 const data = await response.json();
-                
-                renderStudentProgress(data.progress);
+
+                // Always pass an array
+                renderStudentProgress(Array.isArray(data.progress) ? data.progress : []);
+
                 
                 document.getElementById('studentProgressLoading').classList.add('hidden');
                 document.getElementById('studentProgressContent').classList.remove('hidden');
@@ -1777,10 +2179,11 @@
         }
 
         function renderStudentProgress(progress) {
+            progress = Array.isArray(progress) ? progress : [];   // ✅ add this
             const container = document.getElementById('studentProgressData');
             
-            if (progress.length === 0) {
-                container.innerHTML = '<p>No lessons completed yet.</p>';
+            if (!progress.length) {
+                container.innerHTML = `<p style="color:#666;">No progress records yet.</p>`;
                 return;
             }
             
@@ -1812,8 +2215,8 @@
                     <tbody>
                         ${progress.slice(0, 10).map(p => `
                             <tr>
-                                <td>${p.title || 'Untitled'}</td>
-                                <td>${p.topic || 'General'}</td>
+                                <td>${p.title || (p.lesson_id ? `Lesson #${p.lesson_id}` : (p.passage_id ? `Passage #${p.passage_id}` : 'Untitled'))}</td>
+                                <td>${p.topic || p.activity_details || 'General'}</td>
                                 <td>${p.score ? p.score + '%' : 'N/A'}</td>
                                 <td>${p.completed_at ? new Date(p.completed_at).toLocaleDateString() : 'In Progress'}</td>
                             </tr>

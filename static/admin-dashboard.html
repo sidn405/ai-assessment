@@ -1073,7 +1073,101 @@
                 <div id="recentActivityTable"></div>
             </div>
         </div>
+        <!-- Essay Alerts Section -->
+        <div id="essayAlertsSection" class="hidden">
+            <div class="header">
+                <h1>📝 Essay Reviews & Student Alerts</h1>
+                <p>Monitor student comprehension and provide assistance when needed</p>
+            </div>
+            
+            <!-- Stats Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div style="
+                    background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+                    color: white;
+                    padding: 2rem;
+                    border-radius: 16px;
+                    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+                    text-align: center;
+                ">
+                    <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="unreadAlertsCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.95;">🚨 Unread Alerts</div>
+                </div>
+                
+                <div style="
+                    background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+                    color: white;
+                    padding: 2rem;
+                    border-radius: 16px;
+                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                    text-align: center;
+                ">
+                    <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="essaysNeedingReviewCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.95;">📝 Essays to Review</div>
+                </div>
+                
+                <div style="
+                    background: linear-gradient(135deg, #11998E 0%, #38EF7D 100%);
+                    color: white;
+                    padding: 2rem;
+                    border-radius: 16px;
+                    box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+                    text-align: center;
+                ">
+                    <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="totalEssaysToday">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.95;">✅ Essays Today</div>
+                </div>
+            </div>
+            
+            <!-- Student Alerts -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="margin: 0;">🚨 Student Alerts - Need Help</h2>
+                    <button onclick="loadEssayAlerts()" class="btn btn-primary">🔄 Refresh</button>
+                </div>
+                <div id="studentAlertsTable"></div>
+            </div>
+            
+            <!-- Essays Needing Review -->
+            <div class="card">
+                <h2 style="margin-bottom: 1.5rem;">📝 Essays Needing Review</h2>
+                <div id="essaysReviewTable"></div>
+            </div>
+        </div>
 
+        <!-- Essay Details Modal -->
+        <div id="essayDetailsModal" class="modal">
+            <div class="modal-content" style="max-width: 900px;">
+                <button class="close-modal" onclick="closeEssayModal()">&times;</button>
+                <h2 id="essayModalTitle"></h2>
+                
+                <div id="essayDetailsContent"></div>
+                
+                <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid #dee2e6;">
+                    <h3>Admin Actions</h3>
+                    <textarea 
+                        id="adminNotesInput" 
+                        placeholder="Add your notes for this student..."
+                        style="width: 100%; padding: 1rem; border: 2px solid #dee2e6; border-radius: 8px; min-height: 100px; font-family: inherit; margin: 1rem 0;"
+                    ></textarea>
+                    <div style="display: flex; gap: 1rem;">
+                        <button onclick="markEssayReviewed()" class="btn btn-primary">
+                            ✅ Mark as Reviewed
+                        </button>
+                        <button onclick="closeEssayModal()" style="
+                            padding: 0.75rem 1.5rem;
+                            background: #6c757d;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                        ">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
         </main>
             </div>
 
@@ -1322,6 +1416,7 @@
                 'analytics': 'analyticsSection',
                 'session tracking': 'sessionTrackingSection',
                 'sessionTracking': 'sessionTrackingSection',
+                'essayAlerts': 'essayAlertsSection',
                 'essayAlerts': 'essayAlertsSection'
             };
 
@@ -1360,6 +1455,10 @@
             if (event && event.target) {
                 const navLink = event.target.closest && event.target.closest('.nav-link');
                 if (navLink) navLink.classList.add('active');
+            }
+
+            if (section === 'essay alerts' || section === 'essayAlerts') {
+                loadEssayAlerts();
             }
         }
 
@@ -1561,7 +1660,441 @@
             });
         }
 
-        
+        // ========== ESSAY ALERTS & REVIEWS - COMPLETE ==========
+
+        let currentEssayId = null;
+        let currentAlertId = null;
+
+        async function loadEssayAlerts() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                console.log('Loading essay alerts...');
+                
+                // Get unread alerts
+                const alertsResp = await fetch(`/api/admin/alerts/unread?token=${encodeURIComponent(token)}`);
+                const alertsData = await alertsResp.json();
+                
+                // Get essays needing review
+                const essaysResp = await fetch(`/api/admin/essays/needs-review?token=${encodeURIComponent(token)}`);
+                const essaysData = await essaysResp.json();
+                
+                console.log('Alerts:', alertsData);
+                console.log('Essays:', essaysData);
+                
+                // Update counts
+                document.getElementById('unreadAlertsCount').textContent = alertsData.count || 0;
+                document.getElementById('essaysNeedingReviewCount').textContent = essaysData.count || 0;
+                
+                // Get today's essay count
+                const todayEssays = essaysData.essays ? essaysData.essays.filter(e => {
+                    const created = new Date(e.created_at);
+                    const today = new Date();
+                    return created.toDateString() === today.toDateString();
+                }).length : 0;
+                document.getElementById('totalEssaysToday').textContent = todayEssays;
+                
+                // Display alerts
+                displayStudentAlerts(alertsData.alerts || []);
+                
+                // Display essays
+                displayEssaysForReview(essaysData.essays || []);
+                
+            } catch (error) {
+                console.error('Error loading essay alerts:', error);
+                alert('Failed to load essay data. Check console for details.');
+            }
+        }
+
+        function displayStudentAlerts(alerts) {
+            const container = document.getElementById('studentAlertsTable');
+            
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div style="
+                        text-align: center;
+                        padding: 3rem;
+                        color: #28A745;
+                    ">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                        <div style="font-size: 1.2rem; font-weight: bold;">All Clear!</div>
+                        <div style="color: #666; margin-top: 0.5rem;">No students currently need assistance</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const priorityColors = {
+                urgent: { bg: '#dc3545', icon: '🚨' },
+                high: { bg: '#ff6b6b', icon: '⚠️' },
+                normal: { bg: '#ffc107', icon: '📌' }
+            };
+            
+            container.innerHTML = `
+                <div style="overflow-x: auto;">
+                    ${alerts.map(alert => {
+                        const priority = priorityColors[alert.priority] || priorityColors.normal;
+                        
+                        return `
+                            <div style="
+                                padding: 1.5rem;
+                                border-left: 5px solid ${priority.bg};
+                                background: #f8f9fa;
+                                margin-bottom: 1rem;
+                                border-radius: 4px;
+                                transition: transform 0.2s;
+                            " onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='translateX(0)'">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: bold; font-size: 1.1rem; color: #1e3a5f; margin-bottom: 0.5rem;">
+                                            ${priority.icon} ${escapeHtml(alert.message)}
+                                        </div>
+                                        <div style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                                            <strong>Student:</strong> ${escapeHtml(alert.user_name)} (${escapeHtml(alert.user_email)})
+                                        </div>
+                                        <div style="color: #666; font-size: 0.85rem;">
+                                            <strong>Time:</strong> ${formatDateTime(alert.created_at)}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style="
+                                            background: ${priority.bg};
+                                            color: white;
+                                            padding: 0.5rem 1rem;
+                                            border-radius: 20px;
+                                            font-size: 0.85rem;
+                                            font-weight: bold;
+                                            text-transform: uppercase;
+                                        ">
+                                            ${alert.priority}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                ${alert.details ? `
+                                    <details style="margin-top: 1rem; cursor: pointer;">
+                                        <summary style="font-weight: bold; color: #667eea;">View Details</summary>
+                                        <div style="
+                                            margin-top: 0.75rem;
+                                            padding: 1rem;
+                                            background: white;
+                                            border-radius: 8px;
+                                            font-size: 0.9rem;
+                                        ">
+                                            <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">${escapeHtml(JSON.stringify(JSON.parse(alert.details), null, 2))}</pre>
+                                        </div>
+                                    </details>
+                                ` : ''}
+                                
+                                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                    ${alert.essay_id ? `
+                                        <button 
+                                            onclick="viewEssayDetails(${alert.essay_id})"
+                                            style="
+                                                padding: 0.5rem 1rem;
+                                                background: #667eea;
+                                                color: white;
+                                                border: none;
+                                                border-radius: 6px;
+                                                cursor: pointer;
+                                                font-size: 0.9rem;
+                                            ">
+                                            View Essay
+                                        </button>
+                                    ` : ''}
+                                    <button 
+                                        onclick="markAlertResolved(${alert.alert_id})"
+                                        style="
+                                            padding: 0.5rem 1rem;
+                                            background: #28A745;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 6px;
+                                            cursor: pointer;
+                                            font-size: 0.9rem;
+                                        ">
+                                        Mark Resolved ✓
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function displayEssaysForReview(essays) {
+            const container = document.getElementById('essaysReviewTable');
+            
+            if (essays.length === 0) {
+                container.innerHTML = `
+                    <div style="
+                        text-align: center;
+                        padding: 3rem;
+                        color: #666;
+                    ">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+                        <div style="font-size: 1.2rem; font-weight: bold;">No essays to review</div>
+                        <div style="margin-top: 0.5rem;">All essays have been reviewed!</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                            <th style="padding: 1rem; text-align: left;">Student</th>
+                            <th style="padding: 1rem; text-align: left;">Essay #</th>
+                            <th style="padding: 1rem; text-align: left;">Score</th>
+                            <th style="padding: 1rem; text-align: left;">Level</th>
+                            <th style="padding: 1rem; text-align: left;">Date</th>
+                            <th style="padding: 1rem; text-align: left;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${essays.map(essay => {
+                            const scoreColor = essay.comprehension_score >= 75 ? '#28A745' : 
+                                            essay.comprehension_score >= 60 ? '#ffc107' : '#dc3545';
+                            
+                            return `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 1rem;">
+                                        <div style="font-weight: bold;">${escapeHtml(essay.user_name)}</div>
+                                        <div style="font-size: 0.85rem; color: #666;">${escapeHtml(essay.user_email)}</div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <strong>#${essay.essay_number}</strong>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            background: ${scoreColor};
+                                            color: white;
+                                            padding: 0.25rem 0.75rem;
+                                            border-radius: 12px;
+                                            font-weight: bold;
+                                        ">
+                                            ${essay.comprehension_score}/100
+                                        </span>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="text-transform: capitalize;">${essay.comprehension_level}</span>
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.9rem;">
+                                        ${formatDateTime(essay.created_at)}
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <button 
+                                            onclick="viewEssayDetails(${essay.essay_id})"
+                                            style="
+                                                padding: 0.5rem 1rem;
+                                                background: #667eea;
+                                                color: white;
+                                                border: none;
+                                                border-radius: 6px;
+                                                cursor: pointer;
+                                                font-size: 0.9rem;
+                                            ">
+                                            View Essay
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function viewEssayDetails(essayId) {
+            const token = localStorage.getItem('token');
+            currentEssayId = essayId;
+            
+            document.getElementById('essayDetailsModal').classList.add('active');
+            document.getElementById('essayModalTitle').textContent = 'Loading essay...';
+            document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/admin/essay/${essayId}/details?token=${encodeURIComponent(token)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayEssayDetails(data.essay);
+                }
+            } catch (error) {
+                console.error('Error loading essay:', error);
+                document.getElementById('essayDetailsContent').innerHTML = '<p style="color: #dc3545;">Failed to load essay details.</p>';
+            }
+        }
+
+        function displayEssayDetails(essay) {
+            document.getElementById('essayModalTitle').textContent = `Essay #${essay.essay_number} - ${essay.user_name}`;
+            
+            const aiFeedback = typeof essay.ai_feedback === 'string' ? JSON.parse(essay.ai_feedback) : essay.ai_feedback;
+            const lessonTopics = typeof essay.lesson_topics === 'string' ? JSON.parse(essay.lesson_topics) : (essay.lesson_topics || []);
+            
+            document.getElementById('essayDetailsContent').innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Student</div>
+                        <div style="font-weight: bold;">${escapeHtml(essay.user_name)}</div>
+                        <div style="font-size: 0.85rem; color: #666;">${escapeHtml(essay.user_email)}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Score</div>
+                        <div style="font-size: 2rem; font-weight: bold; color: ${essay.comprehension_score >= 75 ? '#28A745' : essay.comprehension_score >= 60 ? '#ffc107' : '#dc3545'};">
+                            ${essay.comprehension_score}/100
+                        </div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Level</div>
+                        <div style="font-weight: bold;">${essay.word_count} words</div>
+                    </div>
+                </div>
+                
+                ${lessonTopics.length > 0 ? `
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;">Recent Lessons Covered</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${lessonTopics.map(topic => `
+                                <span style="
+                                    background: #667eea;
+                                    color: white;
+                                    padding: 0.5rem 1rem;
+                                    border-radius: 20px;
+                                    font-size: 0.9rem;
+                                ">
+                                    ${escapeHtml(topic)}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">Essay Text</h3>
+                    <div style="
+                        background: #f8f9fa;
+                        padding: 1.5rem;
+                        border-radius: 8px;
+                        border-left: 4px solid #2A398A;
+                        line-height: 1.8;
+                        max-height: 400px;
+                        overflow-y: auto;
+                    ">
+                        ${escapeHtml(essay.essay_text).replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+                
+                ${aiFeedback ? `
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;">AI Feedback</h3>
+                        <div style="background: #e8f5e9; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #28A745;">
+                            <p style="margin-bottom: 1rem;">${escapeHtml(aiFeedback.ai_feedback || aiFeedback.feedback || 'No feedback provided')}</p>
+                            
+                            ${aiFeedback.strengths && aiFeedback.strengths.length > 0 ? `
+                                <div style="margin-top: 1rem;">
+                                    <strong>Strengths:</strong>
+                                    <ul style="margin: 0.5rem 0 0 1.5rem;">
+                                        ${aiFeedback.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            
+                            ${aiFeedback.areas_for_improvement && aiFeedback.areas_for_improvement.length > 0 ? `
+                                <div style="margin-top: 1rem;">
+                                    <strong>Areas for Improvement:</strong>
+                                    <ul style="margin: 0.5rem 0 0 1.5rem;">
+                                        ${aiFeedback.areas_for_improvement.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${essay.difficulty_recommendation ? `
+                    <div style="
+                        padding: 1rem;
+                        background: ${essay.difficulty_recommendation === 'advance' ? '#d4edda' : essay.difficulty_recommendation === 'support_needed' ? '#f8d7da' : '#fff3cd'};
+                        border-radius: 8px;
+                        margin-bottom: 2rem;
+                    ">
+                        <strong>Recommendation:</strong> 
+                        ${essay.difficulty_recommendation === 'advance' ? '✅ Ready to advance' : 
+                        essay.difficulty_recommendation === 'support_needed' ? '⚠️ Needs additional support' : 
+                        'Continue at current level'}
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        async function markAlertResolved(alertId) {
+            const token = localStorage.getItem('token');
+            const notes = prompt('Add any notes about this alert (optional):');
+            
+            if (notes === null) return; // User cancelled
+            
+            try {
+                const response = await fetch(`/api/admin/alert/${alertId}/mark-resolved`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, notes })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Alert marked as resolved!');
+                    loadEssayAlerts(); // Reload alerts
+                }
+            } catch (error) {
+                console.error('Error marking alert resolved:', error);
+                alert('Failed to mark alert as resolved');
+            }
+        }
+
+        async function markEssayReviewed() {
+            const token = localStorage.getItem('token');
+            const notes = document.getElementById('adminNotesInput').value;
+            
+            if (!currentEssayId) return;
+            
+            try {
+                const response = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, notes })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Essay marked as reviewed!');
+                    closeEssayModal();
+                    loadEssayAlerts(); // Reload essays
+                }
+            } catch (error) {
+                console.error('Error marking essay reviewed:', error);
+                alert('Failed to mark essay as reviewed');
+            }
+        }
+
+        function closeEssayModal() {
+            document.getElementById('essayDetailsModal').classList.remove('active');
+            document.getElementById('adminNotesInput').value = '';
+            currentEssayId = null;
+        }
+
+        // Helper function to escape HTML (prevents XSS)
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         async function loadStudents() {
             const token = localStorage.getItem('token');

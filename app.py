@@ -4244,7 +4244,351 @@ async def get_essays_needing_review(token: str, limit: int = 50):
             pass
         conn.close()
 
+# ============================================
+# ESSAY ALERTS & REVIEW ENDPOINTS
+# ============================================
 
+@app.get("/api/admin/alerts/unread")
+async def get_unread_alerts(token: str, limit: int = 50):
+    """Get unread admin alerts"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = FALSE
+                ORDER BY 
+                    CASE a.priority
+                        WHEN 'urgent' THEN 1
+                        WHEN 'high' THEN 2
+                        WHEN 'normal' THEN 3
+                        ELSE 4
+                    END,
+                    a.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = 0
+                ORDER BY 
+                    CASE a.priority
+                        WHEN 'urgent' THEN 1
+                        WHEN 'high' THEN 2
+                        WHEN 'normal' THEN 3
+                        ELSE 4
+                    END,
+                    a.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall()
+        alerts = []
+        
+        for row in rows:
+            alerts.append({
+                'alert_id': row['alert_id'] if hasattr(row, 'keys') else row[0],
+                'alert_type': row['alert_type'] if hasattr(row, 'keys') else row[1],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[2],
+                'user_name': row['user_name'] if hasattr(row, 'keys') else row[3],
+                'user_email': row['user_email'] if hasattr(row, 'keys') else row[4],
+                'essay_id': row['essay_id'] if hasattr(row, 'keys') else row[5],
+                'priority': row['priority'] if hasattr(row, 'keys') else row[6],
+                'message': row['message'] if hasattr(row, 'keys') else row[7],
+                'details': row['details'] if hasattr(row, 'keys') else row[8],
+                'created_at': str(row['created_at'] if hasattr(row, 'keys') else row[9])
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "count": len(alerts),
+            "alerts": alerts
+        }
+
+    except Exception as e:
+        conn.close()
+        print(f"Error getting unread alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/essays/needs-review")
+async def get_essays_needing_review(token: str, limit: int = 50):
+    """Get essays that need admin review"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.word_count,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = TRUE
+                  AND e.admin_reviewed = FALSE
+                ORDER BY e.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.word_count,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = 1
+                  AND e.admin_reviewed = 0
+                ORDER BY e.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall()
+        essays = []
+        
+        for row in rows:
+            essays.append({
+                'essay_id': row['essay_id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['user_name'] if hasattr(row, 'keys') else row[2],
+                'user_email': row['user_email'] if hasattr(row, 'keys') else row[3],
+                'essay_number': row['essay_number'] if hasattr(row, 'keys') else row[4],
+                'comprehension_score': row['comprehension_score'] if hasattr(row, 'keys') else row[5],
+                'comprehension_level': row['comprehension_level'] if hasattr(row, 'keys') else row[6],
+                'word_count': row['word_count'] if hasattr(row, 'keys') else row[7],
+                'created_at': str(row['created_at'] if hasattr(row, 'keys') else row[8])
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "count": len(essays),
+            "essays": essays
+        }
+
+    except Exception as e:
+        conn.close()
+        print(f"Error getting essays needing review: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/essay/{essay_id}/details")
+async def get_essay_details(essay_id: int, token: str):
+    """Get full essay details including text, feedback, and student info"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    e.*,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    u.reading_level
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.id = %s
+            """, (essay_id,))
+        else:
+            cursor.execute("""
+                SELECT
+                    e.*,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    u.reading_level
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.id = ?
+            """, (essay_id,))
+
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Essay not found")
+        
+        essay = dict(row)
+        
+        # Parse JSON fields
+        if essay.get('ai_feedback'):
+            try:
+                essay['ai_feedback'] = json.loads(essay['ai_feedback']) if isinstance(essay['ai_feedback'], str) else essay['ai_feedback']
+            except:
+                pass
+        
+        if essay.get('lesson_topics'):
+            try:
+                essay['lesson_topics'] = json.loads(essay['lesson_topics']) if isinstance(essay['lesson_topics'], str) else essay['lesson_topics']
+            except:
+                essay['lesson_topics'] = []
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "essay": essay
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.close()
+        print(f"Error getting essay details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/alert/{alert_id}/mark-resolved")
+async def mark_alert_resolved(alert_id: int, request: Request):
+    """Mark an alert as resolved"""
+    data = await request.json()
+    token = data.get('token')
+    admin_notes = data.get('notes', '')
+    
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE admin_alerts
+                SET is_read = TRUE,
+                    resolved_at = NOW(),
+                    resolved_by = %s,
+                    admin_notes = %s
+                WHERE id = %s
+            """, (user_data['user_id'], admin_notes, alert_id))
+        else:
+            cursor.execute("""
+                UPDATE admin_alerts
+                SET is_read = 1,
+                    resolved_at = datetime('now'),
+                    resolved_by = ?,
+                    admin_notes = ?
+                WHERE id = ?
+            """, (user_data['user_id'], admin_notes, alert_id))
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": "Alert marked as resolved"
+        }
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error marking alert resolved: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/essay/{essay_id}/mark-reviewed")
+async def mark_essay_reviewed(essay_id: int, request: Request):
+    """Mark an essay as reviewed by admin"""
+    data = await request.json()
+    token = data.get('token')
+    admin_notes = data.get('notes', '')
+    
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE user_essays
+                SET admin_reviewed = TRUE,
+                    admin_reviewed_at = NOW(),
+                    admin_reviewed_by = %s,
+                    admin_notes = %s
+                WHERE id = %s
+            """, (user_data['user_id'], admin_notes, essay_id))
+        else:
+            cursor.execute("""
+                UPDATE user_essays
+                SET admin_reviewed = 1,
+                    admin_reviewed_at = datetime('now'),
+                    admin_reviewed_by = ?,
+                    admin_notes = ?
+                WHERE id = ?
+            """, (user_data['user_id'], admin_notes, essay_id))
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": "Essay marked as reviewed"
+        }
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error marking essay reviewed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     
 # ============================================================
 # GAMIFICATION SYSTEM

@@ -1,4 +1,4 @@
-# MFS Literacy Platform - Phase 2: Complete Backend
+# Achieve 365 Reading Rewards
 # AI-Powered Adaptive Learning System
 
 from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
@@ -20,6 +20,8 @@ from pathlib import Path
 import random
 import traceback
 from openai import OpenAI
+import resend
+import secrets
 
 # Import our new utilities
 from readability import analyze_readability, get_difficulty_for_user
@@ -56,6 +58,12 @@ DATABASE = DATABASE_URL if USE_POSTGRES else "mfs_literacy.db"
 
 # Initialize content generator
 content_generator = ContentGenerator(OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+# Configure Resend
+resend.api_key = os.getenv("RESEND_API_KEY")  # Add this to your .env file
+
+# Store password reset tokens (in production, use database)
+password_reset_tokens = {}
 
 print(f"Using {'PostgreSQL' if USE_POSTGRES else 'SQLite'} database")
 print(f"OpenAI API {'configured' if OPENAI_API_KEY else 'NOT configured'}")
@@ -106,8 +114,7 @@ class WritingRevision(BaseModel):
 def init_db():
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE)
-        cursor = get_cursor(conn)
-
+        cursor = conn.cursor()
         
         # Original tables (simplified - assume migration ran)
         # Users, assessments, lessons, progress tables exist
@@ -129,8 +136,7 @@ def init_db():
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0)
         conn.execute('PRAGMA journal_mode=WAL')
-        cursor = get_cursor(conn)
-
+        cursor = conn.cursor()
         
         # Create all tables for SQLite (for local development)
         cursor.execute('''
@@ -172,14 +178,18 @@ init_db()
 # Helper functions
 def get_db():
     if USE_POSTGRES:
-        conn = psycopg2.connect(DATABASE)
-        conn.cursor_factory = psycopg2.extras.RealDictCursor
-        return conn
+        return psycopg2.connect(DATABASE)
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0, check_same_thread=False)
-        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.row_factory = sqlite3.Row
         return conn
+
+import psycopg2.extras
+
+def get_cursor(conn):
+    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) if USE_POSTGRES else conn.cursor()
+
 
 def create_token(user_id: int, role: str) -> str:
     payload = {
@@ -231,6 +241,11 @@ async def serve_reading():
 @app.get("/writing", response_class=HTMLResponse)
 async def serve_writing():
     return FileResponse("static/writing.html")
+
+@app.get("/reset-password")
+async def reset_password_page():
+    """Serve the password reset page"""
+    return FileResponse('static/reset-password.html')
 
 # ============================================
 # AUTHENTICATION (Original)
@@ -321,6 +336,163 @@ async def login(credentials: UserLogin):
             "level_estimate": user.get('level_estimate')
         }
     }
+    
+# ============================================
+# PASSWORD RESET
+# ============================================
+    
+@app.post("/api/auth/forgot-password")
+async def forgot_password(request: dict):
+    """Send password reset email"""
+    email = request.get('email')
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check if user exists
+        if USE_POSTGRES:
+            cursor.execute("SELECT id, full_name FROM users WHERE email = %s", (email,))
+        else:
+            cursor.execute("SELECT id, full_name FROM users WHERE email = ?", (email,))
+        
+        result = cursor.fetchone()
+        
+        # Always return success (security best practice - don't reveal if email exists)
+        if not result:
+            return {
+                "success": True,
+                "message": "If that email exists, a reset link has been sent."
+            }
+        
+        user_id = result['id']
+        user_name = result['full_name']
+        
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        
+        # Store token with expiration (1 hour)
+        password_reset_tokens[reset_token] = {
+            'user_id': user_id,
+            'email': email,
+            'expires': datetime.now() + timedelta(hours=1)
+        }
+        
+        # Create reset link need to change to clients url
+        reset_link = f"https://ai-assessment-production-e027.up.railway.app/reset-password?token={reset_token}"
+        
+        # Send email via Resend
+        try:
+            resend.Emails.send({
+                "from": "Achieve 365 <noreply@4dgaming.games>",  # Update with your domain
+                "to": email,
+                "subject": "Reset Your Achieve 365 Password",
+                "html": f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2A398A;">Reset Your Password</h2>
+                        <p>Hi {user_name},</p>
+                        <p>We received a request to reset your password for your Achieve 365 account.</p>
+                        <p>Click the button below to reset your password:</p>
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{reset_link}" 
+                               style="background: #2A398A; 
+                                      color: white; 
+                                      padding: 12px 30px; 
+                                      text-decoration: none; 
+                                      border-radius: 5px;
+                                      display: inline-block;">
+                                Reset Password
+                            </a>
+                        </div>
+                        <p>Or copy and paste this link into your browser:</p>
+                        <p style="word-break: break-all; color: #666;">{reset_link}</p>
+                        <p style="color: #999; font-size: 14px;">
+                            This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.
+                        </p>
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                        <p style="color: #999; font-size: 12px;">
+                            Achieve 365 - Empowering Adult Literacy
+                        </p>
+                    </div>
+                """
+            })
+            
+            print(f"✅ Password reset email sent to {email}")
+            
+        except Exception as email_error:
+            print(f"❌ Email error: {email_error}")
+            raise HTTPException(status_code=500, detail="Failed to send reset email")
+        
+        return {
+            "success": True,
+            "message": "If that email exists, a reset link has been sent."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Forgot password error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process request")
+    finally:
+        conn.close()
+
+@app.post("/api/auth/reset-password")
+async def reset_password(request: dict):
+    """Reset password using token"""
+    token = request.get('token')
+    new_password = request.get('password')
+    
+    if not token or not new_password:
+        raise HTTPException(status_code=400, detail="Token and password are required")
+    
+    # Validate token
+    if token not in password_reset_tokens:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    token_data = password_reset_tokens[token]
+    
+    # Check expiration
+    if datetime.now() > token_data['expires']:
+        del password_reset_tokens[token]
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    
+    # Update password
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE users SET password_hash = %s WHERE id = %s",
+                (password_hash.decode('utf-8'), token_data['user_id'])
+            )
+        else:
+            cursor.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (password_hash.decode('utf-8'), token_data['user_id'])
+            )
+        
+        conn.commit()
+        
+        # Delete used token
+        del password_reset_tokens[token]
+        
+        return {
+            "success": True,
+            "message": "Password reset successfully"
+        }
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Password reset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset password")
+    finally:
+        conn.close()
 
 # ============================================
 # ASSESSMENT ENDPOINTS (Phase 1 + Phase 2)
@@ -624,6 +796,150 @@ def get_interest_assessment():  # ← Remove 'async'
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/admin/reading-level-distribution")
+async def get_reading_level_distribution(token: str):
+    """Get distribution of students across reading levels"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT 
+                    COALESCE(reading_level, 'Not Assessed') as level,
+                    COUNT(*) as count
+                FROM users 
+                WHERE role = 'student'
+                GROUP BY reading_level
+                ORDER BY 
+                    CASE reading_level
+                        WHEN 'beginner' THEN 1
+                        WHEN 'intermediate' THEN 2
+                        WHEN 'advanced' THEN 3
+                        ELSE 4
+                    END
+            """)
+        else:
+            cursor.execute("""
+                SELECT 
+                    COALESCE(reading_level, 'Not Assessed') as level,
+                    COUNT(*) as count
+                FROM users 
+                WHERE role = 'student'
+                GROUP BY reading_level
+                ORDER BY 
+                    CASE reading_level
+                        WHEN 'beginner' THEN 1
+                        WHEN 'intermediate' THEN 2
+                        WHEN 'advanced' THEN 3
+                        ELSE 4
+                    END
+            """)
+        
+        rows = cursor.fetchall()
+        distribution = []
+        
+        for row in rows:
+            distribution.append({
+                'level': (row['level'] if hasattr(row, 'keys') else row[0]).title(),
+                'count': row['count'] if hasattr(row, 'keys') else row[1]
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "distribution": distribution
+        }
+        
+    except Exception as e:
+        conn.close()
+        print(f"Error getting reading level distribution: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/interest-topics")
+async def get_interest_topics(token: str):
+    """Get breakdown of popular interest topics"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT interest_tags 
+                FROM users 
+                WHERE role = 'student' 
+                AND interest_tags IS NOT NULL 
+                AND interest_tags != '[]'
+            """)
+        else:
+            cursor.execute("""
+                SELECT interest_tags 
+                FROM users 
+                WHERE role = 'student' 
+                AND interest_tags IS NOT NULL 
+                AND interest_tags != '[]'
+            """)
+        
+        rows = cursor.fetchall()
+        
+        # Count all interests
+        interest_counts = {}
+        
+        for row in rows:
+            tags_str = row['interest_tags'] if hasattr(row, 'keys') else row[0]
+            try:
+                tags = json.loads(tags_str) if isinstance(tags_str, str) else tags_str
+                if isinstance(tags, list):
+                    for tag in tags:
+                        tag = tag.strip().lower()
+                        if tag:
+                            interest_counts[tag] = interest_counts.get(tag, 0) + 1
+            except:
+                pass
+        
+        conn.close()
+        
+        # Sort by count and get top 10
+        sorted_interests = sorted(interest_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        topics = [
+            {
+                'topic': topic.title(),
+                'count': count
+            }
+            for topic, count in sorted_interests
+        ]
+        
+        # If no data, provide sample data
+        if not topics:
+            topics = [
+                {'topic': 'Science', 'count': 0},
+                {'topic': 'Technology', 'count': 0},
+                {'topic': 'History', 'count': 0},
+                {'topic': 'Arts', 'count': 0},
+                {'topic': 'Sports', 'count': 0}
+            ]
+        
+        return {
+            "success": True,
+            "topics": topics
+        }
+        
+    except Exception as e:
+        conn.close()
+        print(f"Error getting interest topics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/assessment/submit")
 async def submit_assessment(request: Request):
@@ -684,7 +1000,7 @@ async def run_gamification_migration(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         # Run all CREATE TABLE statements from gamification_migration.sql
@@ -1873,7 +2189,7 @@ POINTS_CONFIG = {
     'high_score': 25,  # 80%+
     'good_score': 15,  # 60-79%
     'daily_streak': 5,
-    'weekly_goal': 1000,
+    'weekly_goal': 100,
     'badge_earned': 20
 }
 
@@ -2268,6 +2584,7 @@ async def save_lesson_progress(request: Request):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
 
 @app.get("/api/student/gamification")
 async def get_gamification_data(token: str):
@@ -2345,99 +2662,6 @@ async def get_gamification_data(token: str):
     except Exception as e:
         print(f"Error getting gamification: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-class WeeklyGoalSetRequest(BaseModel):
-    token: str
-    goal_type: str = "lessons_completed"
-    target_value: int = 5
-
-@app.post("/api/student/weekly-goals/set")
-async def set_weekly_goal(req: WeeklyGoalSetRequest):
-    """Set/update the student's weekly goal target."""
-    user_data = verify_token(req.token)
-    user_id = user_data["user_id"]
-
-    goal_type = (req.goal_type or "lessons_completed").strip()
-    target_value = max(1, min(50, int(req.target_value or 5)))
-
-    week_start_dt = datetime.now() - timedelta(days=datetime.now().weekday())
-    week_start = week_start_dt.date()
-    week_end = (week_start_dt + timedelta(days=6)).date()
-
-    conn = get_db()
-    cursor = conn.cursor()
-
-    try:
-        # Does a goal already exist this week?
-        if USE_POSTGRES:
-            cursor.execute(
-                "SELECT id, current_value, completed, points_reward FROM weekly_goals WHERE user_id=%s AND week_start=%s AND goal_type=%s",
-                (user_id, week_start, goal_type),
-            )
-        else:
-            cursor.execute(
-                "SELECT id, current_value, completed, points_reward FROM weekly_goals WHERE user_id=? AND week_start=? AND goal_type=?",
-                (user_id, week_start, goal_type),
-            )
-
-        row = cursor.fetchone()
-
-        if not row:
-            # Create it
-            points_reward = POINTS_CONFIG.get("weekly_goal", 100)
-            if USE_POSTGRES:
-                cursor.execute(
-                    """INSERT INTO weekly_goals (user_id, week_start, week_end, goal_type, target_value, current_value, completed, points_reward)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                    (user_id, week_start, week_end, goal_type, target_value, 0, False, points_reward),
-                )
-            else:
-                cursor.execute(
-                    """INSERT INTO weekly_goals (user_id, week_start, week_end, goal_type, target_value, current_value, completed, points_reward)
-                       VALUES (?,?,?,?,?,?,?,?)""",
-                    (user_id, week_start, week_end, goal_type, target_value, 0, 0, points_reward),
-                )
-        else:
-            goal_id = row[0] if isinstance(row, tuple) else row["id"]
-            current_value = row[1] if isinstance(row, tuple) else row["current_value"]
-            completed = row[2] if isinstance(row, tuple) else row["completed"]
-
-            # Update target value
-            if USE_POSTGRES:
-                cursor.execute(
-                    "UPDATE weekly_goals SET target_value=%s, week_end=%s WHERE id=%s",
-                    (target_value, week_end, goal_id),
-                )
-            else:
-                cursor.execute(
-                    "UPDATE weekly_goals SET target_value=?, week_end=? WHERE id=?",
-                    (target_value, week_end, goal_id),
-                )
-
-            # If they lower target and it becomes complete now, mark complete + award points once
-            if (not completed) and (current_value >= target_value):
-                if USE_POSTGRES:
-                    cursor.execute(
-                        "UPDATE weekly_goals SET completed=TRUE, completed_at=NOW() WHERE id=%s",
-                        (goal_id,),
-                    )
-                else:
-                    cursor.execute(
-                        "UPDATE weekly_goals SET completed=1, completed_at=datetime('now') WHERE id=?",
-                        (goal_id,),
-                    )
-                conn.commit()
-                award_points(user_id, POINTS_CONFIG.get("weekly_goal", 100), "Weekly goal completed", "goal")
-
-        conn.commit()
-        conn.close()
-        return {"success": True, "goal_type": goal_type, "target_value": target_value}
-
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 # ============================================
 # PHASE 2: ENHANCED ANALYTICS
@@ -3431,6 +3655,594 @@ async def debug_lesson_generation(token: str):
 # ============================================
 # ADMIN ENDPOINTS (Original + Enhanced)
 # ============================================
+
+@app.get("/api/admin/students")
+async def get_all_students(token: str):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = get_cursor(conn)
+    cursor.execute(
+        """SELECT id, email, full_name, level_estimate, total_passages_read, 
+           comprehension_score, last_active, created_at 
+           FROM users WHERE role = 'student'
+           ORDER BY created_at DESC"""
+    )
+    students = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return {"students": students}
+
+@app.get("/api/admin/student/{student_id}/details")
+async def get_student_details(student_id: int, token: str):
+    """Get detailed progress for a specific student"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = get_cursor(conn)
+    
+    # Get student info
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (student_id,))
+    else:
+        cursor.execute("SELECT * FROM users WHERE id = ?", (student_id,))
+    
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Student not found")
+    student = dict(row)
+    
+    # Get session history
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT sl.*, p.title, p.word_count, p.difficulty_level
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.user_id = %s
+               ORDER BY sl.started_at DESC
+               LIMIT 20""",
+            (student_id,)
+        )
+    else:
+        cursor.execute(
+            """SELECT sl.*, p.title, p.word_count, p.difficulty_level
+               FROM session_logs sl
+               JOIN passages p ON sl.passage_id = p.id
+               WHERE sl.user_id = ?
+               ORDER BY sl.started_at DESC
+               LIMIT 20""",
+            (student_id,)
+        )
+    
+    sessions = [dict(row) for row in cursor.fetchall()]
+    
+    # Get writing exercises
+    if USE_POSTGRES:
+        cursor.execute(
+            """SELECT prompt, score, submitted_at, revised_response IS NOT NULL as has_revision
+               FROM writing_exercises
+               WHERE user_id = %s
+               ORDER BY submitted_at DESC
+               LIMIT 10""",
+            (student_id,)
+        )
+    else:
+        cursor.execute(
+            """SELECT prompt, score, submitted_at, 
+                      CASE WHEN revised_response IS NOT NULL THEN 1 ELSE 0 END as has_revision
+               FROM writing_exercises
+               WHERE user_id = ?
+               ORDER BY submitted_at DESC
+               LIMIT 10""",
+            (student_id,)
+        )
+    
+    writing = [dict(row) for row in cursor.fetchall()]
+    
+    conn.close()
+    
+    return {
+        "student": student,
+        "sessions": sessions,
+        "writing": writing
+    }
+    
+@app.get("/api/admin/student/{student_id}/progress")
+async def get_student_progress(student_id: int, token: str):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    # Student basic info
+    cursor.execute(
+        """
+        SELECT
+            sl.id,
+            sl.passage_id,
+            sl.completion_status,
+            sl.comprehension_score,
+            sl.time_spent_seconds,
+            sl.completed_at,
+            sl.started_at,
+            p.title,
+            p.difficulty_level
+        FROM session_logs sl
+        LEFT JOIN passages p ON p.id = sl.passage_id
+        WHERE sl.user_id = %s
+        ORDER BY sl.started_at DESC
+        LIMIT 50
+        """ if USE_POSTGRES else
+        """
+        SELECT
+            sl.id,
+            sl.passage_id,
+            sl.completion_status,
+            sl.comprehension_score,
+            sl.time_spent_seconds,
+            sl.completed_at,
+            sl.started_at,
+            p.title,
+            p.difficulty_level
+        FROM session_logs sl
+        LEFT JOIN passages p ON p.id = sl.passage_id
+        WHERE sl.user_id = ?
+        ORDER BY sl.started_at DESC
+        LIMIT 50
+        """,
+        (student_id,)
+    )
+    student_row = cursor.fetchone()
+    if not student_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    student = dict(student_row)
+
+    rows = [dict(r) for r in (cursor.fetchall() or [])]
+
+    progress_rows = [{
+        "id": r["id"],
+        "lesson_id": r.get("passage_id"),
+        "title": r.get("title") or (f"Passage #{r.get('passage_id')}" if r.get("passage_id") else "Untitled"),
+        "topic": r.get("topic") or "General",
+        "completed": (r.get("completion_status") == "completed"),
+        "score": r.get("comprehension_score"),
+        "time_spent": r.get("time_spent_seconds"),
+        "completed_at": str(r.get("completed_at") or r.get("started_at") or ""),
+    } for r in rows]
+
+    # 1) Try progress table (empty in your screenshot)
+    try:
+        cursor.execute(
+            """
+            SELECT id, lesson_id, completed, score, time_spent, completed_at
+            FROM progress
+            WHERE user_id = %s
+            ORDER BY completed_at DESC NULLS LAST
+            LIMIT 50
+            """ if USE_POSTGRES else
+            """
+            SELECT id, lesson_id, completed, score, time_spent, completed_at
+            FROM progress
+            WHERE user_id = ?
+            ORDER BY completed_at DESC
+            LIMIT 50
+            """,
+            (student_id,)
+        )
+        progress_rows = [dict(r) for r in (cursor.fetchall() or [])]
+    except Exception:
+        progress_rows = []
+
+    # 2) If progress table is empty, build progress-like rows from session_logs
+    if not progress_rows:
+        cursor.execute(
+            """
+            SELECT id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at, started_at
+            FROM session_logs
+            WHERE user_id = %s
+            ORDER BY started_at DESC
+            LIMIT 50
+            """ if USE_POSTGRES else
+            """
+            SELECT id, passage_id, completion_status, comprehension_score, time_spent_seconds, completed_at, started_at
+            FROM session_logs
+            WHERE user_id = ?
+            ORDER BY started_at DESC
+            LIMIT 50
+            """,
+            (student_id,)
+        )
+        sessions = [dict(r) for r in (cursor.fetchall() or [])]
+
+        # Normalize into the "progress" shape the frontend expects
+        progress_rows = [{
+            "id": s["id"],
+            "lesson_id": s.get("passage_id"),
+            "completed": (s.get("completion_status") == "completed"),
+            "score": s.get("comprehension_score"),
+            "time_spent": s.get("time_spent_seconds"),
+            "completed_at": str(s.get("completed_at") or s.get("started_at") or ""),
+        } for s in sessions]
+
+    conn.close()
+
+    return {
+        "success": True,
+        "student": student,
+        "progress": progress_rows,   # ✅ THIS is what your UI expects
+    }
+
+@app.get("/api/admin/analytics")
+async def get_analytics(token: str):
+    """Get basic analytics (Phase 1 compatibility)"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    
+    # Total students
+    cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'")
+    result = cursor.fetchone()
+    total_students = result['count'] if USE_POSTGRES else result[0]
+    
+    # Total lessons completed
+    if USE_POSTGRES:
+        cursor.execute("SELECT COUNT(*) as count FROM session_logs WHERE completion_status = 'completed'")
+        result = cursor.fetchone()
+        total_completed = result['count']
+    else:
+        cursor.execute("SELECT COUNT(*) as count FROM session_logs WHERE completion_status = 'completed'")
+        result = cursor.fetchone()
+        total_completed = result[0] if result else 0
+    
+    # Average score
+    cursor.execute("SELECT AVG(comprehension_score) as avg_score FROM session_logs WHERE comprehension_score IS NOT NULL")
+    result = cursor.fetchone()
+    if USE_POSTGRES:
+        avg_score = result['avg_score'] if result['avg_score'] is not None else 0
+    else:
+        avg_score = result[0] if result and result[0] is not None else 0
+    
+    # Active students (completed in last 7 days)
+    if USE_POSTGRES:
+        cursor.execute(
+            "SELECT COUNT(DISTINCT user_id) as count FROM session_logs WHERE started_at >= NOW() - INTERVAL '7 days'"
+        )
+        result = cursor.fetchone()
+        active_students = result['count']
+    else:
+        cursor.execute(
+            "SELECT COUNT(DISTINCT user_id) as count FROM session_logs WHERE DATE(started_at) >= DATE('now', '-7 days')"
+        )
+        result = cursor.fetchone()
+        active_students = result[0] if result else 0
+    
+    conn.close()
+    
+    return {
+        "total_students": total_students,
+        "total_lessons_completed": total_completed,
+        "average_score": round(float(avg_score), 2) if avg_score else 0,
+        "active_students": active_students
+    }
+
+@app.get("/api/admin/platform-activity")
+async def get_platform_activity(token: str, days: int = 7):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    days = max(1, min(int(days or 7), 30))
+
+    conn = get_db()
+    cursor = get_cursor(conn)   # <-- THIS is the missing piece
+
+    if USE_POSTGRES:
+        cursor.execute(
+            """
+            WITH day_series AS (
+              SELECT generate_series(
+                CURRENT_DATE - (%s::int - 1),
+                CURRENT_DATE,
+                interval '1 day'
+              )::date AS day
+            ),
+            agg AS (
+              SELECT
+                CAST(started_at AS date) AS day,
+                COUNT(*) AS starts,
+                SUM(CASE WHEN completion_status = 'completed' THEN 1 ELSE 0 END) AS completes,
+                COUNT(DISTINCT user_id) AS engaged
+              FROM session_logs
+              WHERE started_at >= (CURRENT_DATE - (%s::int - 1))
+                AND started_at <  (CURRENT_DATE + 1)
+              GROUP BY 1
+            )
+            SELECT
+              s.day,
+              COALESCE(a.engaged, 0) AS engaged,
+              COALESCE(a.starts, 0) AS starts,
+              COALESCE(a.completes, 0) AS completes,
+              CASE
+                WHEN COALESCE(a.starts, 0) = 0 THEN 0
+                ELSE ROUND((a.completes::numeric / a.starts::numeric) * 100, 2)
+              END AS completion_rate
+            FROM day_series s
+            LEFT JOIN agg a USING (day)
+            ORDER BY s.day;
+            """,
+            (days, days),
+        )
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return {
+            "success": True,
+            "labels": [r["day"].strftime("%b %d") for r in rows],
+            "engagement": [int(r["engaged"]) for r in rows],
+            "completion_rate": [float(r["completion_rate"]) for r in rows],
+        }
+
+    # SQLite fallback (if needed later)
+    cursor = conn.cursor()
+    # (optional: implement if you ever flip USE_POSTGRES off)
+    conn.close()
+    return {"success": True, "labels": [], "engagement": [], "completion_rate": []}
+
+# ========== ADMIN ENDPOINTS ==========
+
+@app.get("/api/admin/sessions/active")
+async def get_active_sessions(token: str):
+    """Get all active sessions (admin only)"""
+    try:
+        user_data = verify_token(token)
+        if user_data["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        conn = get_db()
+        cursor = get_cursor(conn)
+        
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    us.id AS session_id,
+                    us.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    us.status,
+                    us.session_start,
+                    us.last_activity
+                FROM user_sessions us
+                JOIN users u ON u.id = us.user_id
+                WHERE us.session_end IS NULL
+                ORDER BY us.last_activity DESC NULLS LAST, us.session_start DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT
+                    us.id AS session_id,
+                    us.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    us.status,
+                    us.session_start,
+                    us.last_activity
+                FROM user_sessions us
+                JOIN users u ON u.id = us.user_id
+                WHERE us.session_end IS NULL
+                ORDER BY us.last_activity DESC, us.session_start DESC
+            """)
+        
+        sessions = []
+        for row in cursor.fetchall():
+            sessions.append({
+                'session_id': row['id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
+                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
+                'status': row['status'] if hasattr(row, 'keys') else row[4],
+                'session_start': str(row['session_start'] if hasattr(row, 'keys') else row[2]),
+                'last_activity': str(row['last_activity'] if hasattr(row, 'keys') else row[3]),
+                'break_start': str(row['break_start']) if (row['break_start'] if hasattr(row, 'keys') else row[5]) else None
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "sessions": sessions,
+            "count": len(sessions)
+        }
+        
+    except Exception as e:
+        print(f"Error getting active sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/activity/recent")
+async def get_recent_activity(token: str, hours: int = 24):
+    """Get recent activity logs (admin only)"""
+    try:
+        user_data = verify_token(token)
+        if user_data["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        conn = get_db()
+        cursor = get_cursor(conn)
+        
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT a.*, u.full_name, u.email
+                FROM activity_log a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour')
+                ORDER BY a.timestamp DESC
+                LIMIT 100
+                """, (hours,))
+
+        else:
+            cursor.execute("""
+                SELECT a.*, full_name, email 
+                FROM activity_log a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
+                ORDER BY a.timestamp DESC
+                LIMIT 100
+            """, (hours,))
+        
+        activities = []
+        for row in cursor.fetchall():
+            activities.append({
+                'id': row['id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['full_name'] if hasattr(row, 'keys') else row[-2],
+                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
+                'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
+                'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
+                'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "activities": activities,
+            "count": len(activities)
+        }
+        
+    except Exception as e:
+        print(f"Error getting activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/admin/alerts/unread")
+async def get_unread_alerts(token: str, limit: int = 50):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = FALSE
+                ORDER BY a.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = 0
+                ORDER BY a.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall() or []
+        alerts = [dict(r) for r in rows]
+        return {"success": True, "count": len(alerts), "alerts": alerts}
+
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        conn.close()
+        
+@app.get("/api/admin/essays/needs-review")
+async def get_essays_needing_review(token: str, limit: int = 50):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = TRUE
+                  AND e.admin_reviewed = FALSE
+                ORDER BY e.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = 1
+                  AND e.admin_reviewed = 0
+                ORDER BY e.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall() or []
+        essays = [dict(r) for r in rows]
+        return {"success": True, "count": len(essays), "essays": essays}
+
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        conn.close()
 
 
     
@@ -4981,114 +5793,6 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
         'text': random.choice(messages),
         'emotion': emotion
     }
-
-# ========== ADMIN ENDPOINTS ==========
-
-@app.get("/api/admin/sessions/active")
-async def get_active_sessions(token: str):
-    """Get all active sessions (admin only)"""
-    try:
-        user_data = verify_token(token)
-        if user_data["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Admin only")
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT s.*, u.name, u.email 
-                FROM user_sessions s
-                JOIN users u ON s.user_id = u.id
-                WHERE s.status IN ('active', 'on_break')
-                ORDER BY s.last_activity DESC
-            """)
-        else:
-            cursor.execute("""
-                SELECT s.*, u.name, u.email 
-                FROM user_sessions s
-                JOIN users u ON s.user_id = u.id
-                WHERE s.status IN ('active', 'on_break')
-                ORDER BY s.last_activity DESC
-            """)
-        
-        sessions = []
-        for row in cursor.fetchall():
-            sessions.append({
-                'session_id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
-                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
-                'status': row['status'] if hasattr(row, 'keys') else row[4],
-                'session_start': str(row['session_start'] if hasattr(row, 'keys') else row[2]),
-                'last_activity': str(row['last_activity'] if hasattr(row, 'keys') else row[3]),
-                'break_start': str(row['break_start']) if (row['break_start'] if hasattr(row, 'keys') else row[5]) else None
-            })
-        
-        conn.close()
-        
-        return {
-            "success": True,
-            "sessions": sessions,
-            "count": len(sessions)
-        }
-        
-    except Exception as e:
-        print(f"Error getting active sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/admin/activity/recent")
-async def get_recent_activity(token: str, hours: int = 24):
-    """Get recent activity logs (admin only)"""
-    try:
-        user_data = verify_token(token)
-        if user_data["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Admin only")
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT a.*, u.name, u.email 
-                FROM activity_log a
-                JOIN users u ON a.user_id = u.id
-                WHERE a.timestamp > NOW() - INTERVAL '%s hours'
-                ORDER BY a.timestamp DESC
-                LIMIT 100
-            """, (hours,))
-        else:
-            cursor.execute("""
-                SELECT a.*, u.name, u.email 
-                FROM activity_log a
-                JOIN users u ON a.user_id = u.id
-                WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
-                ORDER BY a.timestamp DESC
-                LIMIT 100
-            """, (hours,))
-        
-        activities = []
-        for row in cursor.fetchall():
-            activities.append({
-                'id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
-                'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
-                'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
-                'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
-            })
-        
-        conn.close()
-        
-        return {
-            "success": True,
-            "activities": activities,
-            "count": len(activities)
-        }
-        
-    except Exception as e:
-        print(f"Error getting activity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # Mount static files
 try:
