@@ -4018,13 +4018,14 @@ async def get_active_sessions(token: str):
         if USE_POSTGRES:
             cursor.execute("""
                 SELECT
-                    us.id AS session_id,
+                    us.id,
                     us.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
+                    u.full_name,
+                    u.email,
                     us.status,
                     us.session_start,
-                    us.last_activity
+                    us.last_activity,
+                    us.break_start
                 FROM user_sessions us
                 JOIN users u ON u.id = us.user_id
                 WHERE us.session_end IS NULL
@@ -4033,31 +4034,48 @@ async def get_active_sessions(token: str):
         else:
             cursor.execute("""
                 SELECT
-                    us.id AS session_id,
+                    us.id,
                     us.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
+                    u.full_name,
+                    u.email,
                     us.status,
                     us.session_start,
-                    us.last_activity
+                    us.last_activity,
+                    us.break_start
                 FROM user_sessions us
                 JOIN users u ON u.id = us.user_id
                 WHERE us.session_end IS NULL
                 ORDER BY us.last_activity DESC, us.session_start DESC
             """)
         
+        rows = cursor.fetchall()
         sessions = []
-        for row in cursor.fetchall():
-            sessions.append({
-                'session_id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
-                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
-                'status': row['status'] if hasattr(row, 'keys') else row[4],
-                'session_start': str(row['session_start'] if hasattr(row, 'keys') else row[2]),
-                'last_activity': str(row['last_activity'] if hasattr(row, 'keys') else row[3]),
-                'break_start': str(row['break_start']) if (row['break_start'] if hasattr(row, 'keys') else row[5]) else None
-            })
+        
+        for row in rows:
+            if hasattr(row, 'keys'):
+                # PostgreSQL with RealDictCursor
+                sessions.append({
+                    'session_id': row['id'],
+                    'user_id': row['user_id'],
+                    'user_name': row['full_name'],
+                    'user_email': row['email'],
+                    'status': row['status'],
+                    'session_start': str(row['session_start']),
+                    'last_activity': str(row['last_activity']) if row['last_activity'] else None,
+                    'break_start': str(row['break_start']) if row['break_start'] else None
+                })
+            else:
+                # SQLite with Row
+                sessions.append({
+                    'session_id': row[0],
+                    'user_id': row[1],
+                    'user_name': row[2],
+                    'user_email': row[3],
+                    'status': row[4],
+                    'session_start': str(row[5]),
+                    'last_activity': str(row[6]) if row[6] else None,
+                    'break_start': str(row[7]) if row[7] else None
+                })
         
         conn.close()
         
@@ -4069,6 +4087,8 @@ async def get_active_sessions(token: str):
         
     except Exception as e:
         print(f"Error getting active sessions: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/admin/activity/recent")
@@ -4084,17 +4104,32 @@ async def get_recent_activity(token: str, hours: int = 24):
         
         if USE_POSTGRES:
             cursor.execute("""
-                SELECT a.*, u.full_name, u.email
+                SELECT 
+                    a.id,
+                    a.user_id,
+                    a.session_id,
+                    a.activity_type,
+                    a.activity_details,
+                    a.timestamp,
+                    u.full_name,
+                    u.email
                 FROM activity_log a
                 JOIN users u ON a.user_id = u.id
                 WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour')
                 ORDER BY a.timestamp DESC
                 LIMIT 100
-                """, (hours,))
-
+            """, (hours,))
         else:
             cursor.execute("""
-                SELECT a.*, full_name, email 
+                SELECT 
+                    a.id,
+                    a.user_id,
+                    a.session_id,
+                    a.activity_type,
+                    a.activity_details,
+                    a.timestamp,
+                    u.full_name,
+                    u.email
                 FROM activity_log a
                 JOIN users u ON a.user_id = u.id
                 WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
@@ -4102,17 +4137,34 @@ async def get_recent_activity(token: str, hours: int = 24):
                 LIMIT 100
             """, (hours,))
         
+        rows = cursor.fetchall()
         activities = []
-        for row in cursor.fetchall():
-            activities.append({
-                'id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['full_name'] if hasattr(row, 'keys') else row[-2],
-                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
-                'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
-                'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
-                'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
-            })
+        
+        for row in rows:
+            if hasattr(row, 'keys'):
+                # PostgreSQL with RealDictCursor
+                activities.append({
+                    'id': row['id'],
+                    'user_id': row['user_id'],
+                    'session_id': row['session_id'],
+                    'user_name': row['full_name'],
+                    'user_email': row['email'],
+                    'activity_type': row['activity_type'],
+                    'activity_details': row['activity_details'],
+                    'timestamp': str(row['timestamp'])
+                })
+            else:
+                # SQLite with Row
+                activities.append({
+                    'id': row[0],
+                    'user_id': row[1],
+                    'session_id': row[2],
+                    'activity_type': row[3],
+                    'activity_details': row[4],
+                    'timestamp': str(row[5]),
+                    'user_name': row[6],
+                    'user_email': row[7]
+                })
         
         conn.close()
         
@@ -4124,6 +4176,8 @@ async def get_recent_activity(token: str, hours: int = 24):
         
     except Exception as e:
         print(f"Error getting activity: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/admin/alerts/unread")
