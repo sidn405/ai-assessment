@@ -3603,6 +3603,99 @@ async def get_student_details(student_id: int, token: str):
         "sessions": sessions,
         "writing": writing
     }
+    
+@app.get("/api/admin/student/{student_id}/progress")
+async def get_student_progress(student_id: int, token: str):
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    # Basic student info
+    cursor.execute(
+        """
+        SELECT id, email, full_name, level_estimate, total_passages_read,
+               comprehension_score, last_active, created_at
+        FROM users
+        WHERE id = %s AND role = 'student'
+        """ if USE_POSTGRES else
+        """
+        SELECT id, email, full_name, level_estimate, total_passages_read,
+               comprehension_score, last_active, created_at
+        FROM users
+        WHERE id = ? AND role = 'student'
+        """,
+        (student_id,)
+    )
+    student = cursor.fetchone()
+    if not student:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    student = dict(student)
+
+    # Recent sessions (last 30)
+    cursor.execute(
+        """
+        SELECT id, passage_id, started_at, completed_at, completion_status,
+               time_spent_seconds, comprehension_score
+        FROM session_logs
+        WHERE user_id = %s
+        ORDER BY started_at DESC
+        LIMIT 30
+        """ if USE_POSTGRES else
+        """
+        SELECT id, passage_id, started_at, completed_at, completion_status,
+               time_spent_seconds, comprehension_score
+        FROM session_logs
+        WHERE user_id = ?
+        ORDER BY started_at DESC
+        LIMIT 30
+        """,
+        (student_id,)
+    )
+    sessions = [dict(r) for r in (cursor.fetchall() or [])]
+
+    # Aggregate stats
+    cursor.execute(
+        """
+        SELECT
+          COUNT(*) AS total_sessions,
+          SUM(CASE WHEN completion_status='completed' THEN 1 ELSE 0 END) AS completed_sessions,
+          AVG(NULLIF(time_spent_seconds, 0)) AS avg_time_spent_seconds,
+          AVG(comprehension_score) AS avg_score
+        FROM session_logs
+        WHERE user_id = %s
+        """ if USE_POSTGRES else
+        """
+        SELECT
+          COUNT(*) AS total_sessions,
+          SUM(CASE WHEN completion_status='completed' THEN 1 ELSE 0 END) AS completed_sessions,
+          AVG(NULLIF(time_spent_seconds, 0)) AS avg_time_spent_seconds,
+          AVG(comprehension_score) AS avg_score
+        FROM session_logs
+        WHERE user_id = ?
+        """,
+        (student_id,)
+    )
+    stats_row = cursor.fetchone() or {}
+    stats = dict(stats_row)
+
+    conn.close()
+
+    return {
+        "success": True,
+        "student": student,
+        "stats": {
+            "total_sessions": int(stats.get("total_sessions") or 0),
+            "completed_sessions": int(stats.get("completed_sessions") or 0),
+            "avg_time_spent_seconds": float(stats.get("avg_time_spent_seconds") or 0),
+            "avg_score": float(stats.get("avg_score") or 0),
+        },
+        "recent_sessions": sessions,
+    }
 
 @app.get("/api/admin/analytics")
 async def get_analytics(token: str):
