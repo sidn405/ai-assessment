@@ -3519,7 +3519,7 @@ async def get_all_students(token: str):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     cursor.execute(
         """SELECT id, email, full_name, level_estimate, total_passages_read, 
            comprehension_score, last_active, created_at 
@@ -3539,7 +3539,7 @@ async def get_student_details(student_id: int, token: str):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     # Get student info
     if USE_POSTGRES:
