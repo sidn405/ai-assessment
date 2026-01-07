@@ -1254,7 +1254,7 @@
         }
 
         // Overview: Recent Student Activity (uses the same activity_log feed)
-        async function loadOverviewRecentActivity() {
+        async function loadOverviewRecentActivity(hours = 168) {
             const token = localStorage.getItem('token');
             const container = document.getElementById('recentActivity');
             if (!token || !container) return;
