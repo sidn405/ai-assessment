@@ -2382,6 +2382,8 @@ async def create_weekly_goal(request: Request):
     goal_type = data.get('goal_type')
     custom_target = data.get('custom_target')
     
+    print(f"Creating goal - Type: {goal_type}, Custom Target: {custom_target}, Type: {type(custom_target)}")
+    
     if not token:
         raise HTTPException(status_code=401, detail='No token provided')
     
@@ -2399,11 +2401,21 @@ async def create_weekly_goal(request: Request):
         raise HTTPException(status_code=400, detail='Invalid goal type')
     
     goal_config = WEEKLY_GOAL_TYPES[goal_type]
-    target = custom_target if custom_target else goal_config['default_target']
+    
+    # Convert custom_target to int if provided
+    if custom_target:
+        try:
+            target = int(custom_target)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail='Invalid target value')
+    else:
+        target = goal_config['default_target']
     
     # Validate target
     if target < 1:
         raise HTTPException(status_code=400, detail='Target must be at least 1')
+    
+    print(f"Final target value: {target}, user_id: {user_id}")
     
     conn = get_db()
     cursor = get_cursor(conn)
@@ -2426,32 +2438,34 @@ async def create_weekly_goal(request: Request):
             )
         
         if cursor.fetchone():
-            conn.close()
             raise HTTPException(status_code=400, detail='Goal already exists for this week')
+        
+        print(f"Inserting goal - user_id: {user_id}, week_start: {week_start}, week_end: {week_end}, goal_type: {goal_type}, target: {target}, points: {goal_config['points_reward']}")
         
         # Create new goal with week_end
         if USE_POSTGRES:
-            cursor.execute(
-                """INSERT INTO weekly_goals 
+            sql = """INSERT INTO weekly_goals 
                    (user_id, week_start, week_end, goal_type, target_value, current_value, 
                     completed, points_reward)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                   RETURNING id""",
-                (user_id, week_start, week_end, goal_type, target, 0, False, goal_config['points_reward'])
-            )
+                   RETURNING id"""
+            params = (user_id, week_start, week_end, goal_type, target, 0, False, goal_config['points_reward'])
+            print(f"PostgreSQL Query: {sql}")
+            print(f"Parameters: {params}")
+            cursor.execute(sql, params)
             goal_id = cursor.fetchone()[0]
         else:
-            cursor.execute(
-                """INSERT INTO weekly_goals 
+            sql = """INSERT INTO weekly_goals 
                    (user_id, week_start, week_end, goal_type, target_value, current_value, 
                     completed, points_reward)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (user_id, week_start, week_end, goal_type, target, 0, 0, goal_config['points_reward'])
-            )
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+            params = (user_id, week_start, week_end, goal_type, target, 0, 0, goal_config['points_reward'])
+            print(f"SQLite Query: {sql}")
+            print(f"Parameters: {params}")
+            cursor.execute(sql, params)
             goal_id = cursor.lastrowid
         
         conn.commit()
-        conn.close()
         
         return {
             'success': True,
@@ -2461,12 +2475,16 @@ async def create_weekly_goal(request: Request):
         }
         
     except HTTPException:
+        conn.rollback()
         raise
     except Exception as e:
         conn.rollback()
-        conn.close()
         print(f"Error creating weekly goal: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error type: {type(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        conn.close()
 
 # Points configuration
 POINTS_CONFIG = {
@@ -2891,7 +2909,7 @@ def create_weekly_goal(user_id, goal_type, custom_target=None):
 def update_weekly_goals(user_id, session_data=None):
     """Update progress on all active weekly goals"""
     conn = get_db()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor()
     goals_completed = []
     
     try:
@@ -5509,6 +5527,79 @@ def check_and_award_badges(user_id):
         conn.close()
         print(f"Error checking badges: {e}")
         return []
+
+def update_weekly_goals(user_id):
+    """Update weekly goals progress"""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    
+    try:
+        from datetime import datetime, timedelta
+        week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+        week_start = week_start.date()
+        week_end = week_start + timedelta(days=6)
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT * FROM weekly_goals WHERE user_id = %s AND week_start = %s AND goal_type = 'lessons_completed'",
+                (user_id, week_start)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM weekly_goals WHERE user_id = ? AND week_start = ? AND goal_type = 'lessons_completed'",
+                (user_id, week_start)
+            )
+        
+        goal = cursor.fetchone()
+        
+        if not goal:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "INSERT INTO weekly_goals (user_id, week_start, week_end, goal_type, target_value, points_reward) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (user_id, week_start, week_end, 'lessons_completed', 5, 100)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO weekly_goals (user_id, week_start, week_end, goal_type, target_value, points_reward) VALUES (?, ?, ?, ?, ?, ?)",
+                    (user_id, week_start, week_end, 'lessons_completed', 5, 100)
+                )
+            conn.commit()
+        else:
+            goal_id = goal['id'] if hasattr(goal, 'keys') else goal[0]
+            current_value = goal['current_value'] if hasattr(goal, 'keys') else goal[5]
+            target = goal['target_value'] if hasattr(goal, 'keys') else goal[4]
+            completed = goal['completed'] if hasattr(goal, 'keys') else goal[6]
+            
+            new_value = current_value + 1
+            
+            if new_value >= target and not completed:
+                if USE_POSTGRES:
+                    cursor.execute(
+                        "UPDATE weekly_goals SET current_value = %s, completed = TRUE, completed_at = NOW() WHERE id = %s",
+                        (new_value, goal_id)
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE weekly_goals SET current_value = ?, completed = 1, completed_at = datetime('now') WHERE id = ?",
+                        (new_value, goal_id)
+                    )
+                conn.commit()
+                
+                points_reward = goal['points_reward'] if hasattr(goal, 'keys') else goal[7]
+                award_points(user_id, points_reward, 'Weekly goal completed', 'goal')
+            else:
+                if USE_POSTGRES:
+                    cursor.execute("UPDATE weekly_goals SET current_value = %s WHERE id = %s", (new_value, goal_id))
+                else:
+                    cursor.execute("UPDATE weekly_goals SET current_value = ? WHERE id = ?", (new_value, goal_id))
+                conn.commit()
+        
+        conn.close()
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error updating weekly goals: {e}")
 
 @app.get("/api/student/gamification")
 async def get_gamification_data(token: str):
