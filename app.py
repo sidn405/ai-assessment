@@ -2453,7 +2453,8 @@ async def create_weekly_goal(request: Request):
             print(f"PostgreSQL Query: {sql}")
             print(f"Parameters: {params}")
             cursor.execute(sql, params)
-            goal_id = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            goal_id = result['id'] if hasattr(result, 'keys') else result[0]  # ✅
         else:
             sql = """INSERT INTO weekly_goals 
                    (user_id, week_start, week_end, goal_type, target_value, current_value, 
