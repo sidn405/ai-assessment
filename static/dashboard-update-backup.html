@@ -2252,8 +2252,22 @@
                         <button class="btn btn-primary" onclick="openGoalModal()">+ Add Goal</button>
                     </div>
                     <div class="goals-grid" id="goals-container">
-                        <!-- Weekly goals will be loaded dynamically here -->
-                        <p style="color: #666; padding: 1rem;">Loading goals...</p>
+                        <div class="goal-card completed">
+                            <div class="goal-header">
+                                <div class="goal-title">
+                                    <span class="goal-icon">✅</span>
+                                    <span>Complete 5 Lessons This Week</span>
+                                </div>
+                                <div class="goal-progress">8/5</div>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 100%;"></div>
+                            </div>
+                            <div class="goal-status">
+                                <span>👏</span>
+                                <span>Completed! Amazing work!</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -3621,10 +3635,11 @@
                 
                 // Display badges
                 displayBadges(data.badges);
+                renderWeeklyGoals(gamification.weekly_goals);
                 
-                // Display weekly goals - use the correct function
+                // Display weekly goals
                 if (data.weekly_goals) {
-                    loadWeeklyGoals(data.weekly_goals);
+                    displayWeeklyGoals(data.weekly_goals);
                 }
                 
                 return data;
