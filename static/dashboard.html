@@ -3294,40 +3294,49 @@
         let availableGoalTypes = [];
 
         // Load gamification data from backend
+        // ===== GAMIFICATION DATA LOADING =====
+        // Note: Using /api/student/gamification which returns properly formatted data
         async function loadGamificationData() {
             const token = localStorage.getItem('token');
             if (!token) return;
             
             try {
                 console.log('Loading gamification data...');
-                const response = await fetch(`/api/gamification/data?token=${token}`);
-                
+                const response = await fetch(`/api/student/gamification?token=${token}`);
                 if (!response.ok) throw new Error('Failed to load gamification data');
                 
                 const data = await response.json();
                 console.log('Gamification data:', data);
                 
-                // Update points and level
-                const pointsEl = document.getElementById('userPoints');
-                if (pointsEl) pointsEl.textContent = data.points || 0;
+                // Update points display
+                if (document.getElementById('userPoints')) {
+                    document.getElementById('userPoints').textContent = data.points.current_points;
+                }
+                if (document.getElementById('userLevel')) {
+                    document.getElementById('userLevel').textContent = data.points.level;
+                }
                 
-                const levelEl = document.getElementById('userLevel');
-                if (levelEl) levelEl.textContent = data.level || 1;
+                // Update badge count
+                if (document.getElementById('badgeCount')) {
+                    document.getElementById('badgeCount').textContent = data.badges.length;
+                }
                 
-                const badgeCountEl = document.getElementById('badgeCount');
-                if (badgeCountEl) badgeCountEl.textContent = data.badges_count || 0;
+                // Display badges in both containers (overview and progress sections)
+                displayBadges(data.badges);  // For overview section (badgesContainer)
+                loadBadges(data.badges || []);  // For progress section (badges-container)
                 
-                // Load badges
-                loadBadges(data.badges || []);
-                
-                // Load weekly goals
-                loadWeeklyGoals(data.weekly_goals || []);
+                // Display weekly goals
+                if (data.weekly_goals) {
+                    loadWeeklyGoals(data.weekly_goals);
+                }
                 
                 // Load available goal types
                 availableGoalTypes = data.available_goal_types || Object.keys(WEEKLY_GOAL_TYPES).map(type => ({
                     type,
                     ...WEEKLY_GOAL_TYPES[type]
                 }));
+                
+                return data;
                 
             } catch (error) {
                 console.error('Error loading gamification:', error);
@@ -3591,48 +3600,6 @@
         }
 
         // ========== FEATURE 4: GAMIFICATION FUNCTIONS ==========
-
-        async function loadGamificationData() {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-            
-            try {
-                console.log('Loading gamification data...');
-                const response = await fetch(`/api/student/gamification?token=${token}`);
-                if (!response.ok) throw new Error('Failed to load gamification data');
-                
-                const data = await response.json();
-                const gamification = data;
-
-                console.log('Gamification data:', data);
-                
-                // Update points display
-                if (document.getElementById('userPoints')) {
-                    document.getElementById('userPoints').textContent = data.points.current_points;
-                }
-                if (document.getElementById('userLevel')) {
-                    document.getElementById('userLevel').textContent = data.points.level;
-                }
-                
-                // Update badge count
-                if (document.getElementById('badgeCount')) {
-                    document.getElementById('badgeCount').textContent = data.badges.length;
-                }
-                
-                // Display badges
-                displayBadges(data.badges);
-                
-                // Display weekly goals - use the correct function
-                if (data.weekly_goals) {
-                    loadWeeklyGoals(data.weekly_goals);
-                }
-                
-                return data;
-                
-            } catch (error) {
-                console.error('Error loading gamification:', error);
-            }
-        }
 
         function displayBadges(badges) {
             const badgesContainer = document.getElementById('badgesContainer');
