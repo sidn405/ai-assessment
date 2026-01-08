@@ -5106,62 +5106,6 @@
             }
 
 
-        async function loadWeeklyGoals() {
-            const token = localStorage.getItem('token');
-            
-            try {
-                const response = await fetch(`/api/student/weekly-goals?token=${token}`);
-                const data = await response.json();
-                
-                const goalsContainer = document.querySelector('.weekly-goals-container');
-                if (!goalsContainer) {
-                    console.warn('Weekly goals container not found');
-                    return;
-                }
-                
-                if (data.success && data.goals && data.goals.length > 0) {
-                    goalsContainer.innerHTML = data.goals.map(goal => `
-                        <div class="card">
-                            <h2>📅 Weekly Goals</h2>
-
-                            <div class="alert alert-info" style="margin-bottom:1rem;">
-                                Set a simple weekly target. When you hit it, you earn a bonus and build consistency.
-                            </div>
-
-                            <form id="weeklyGoalsForm" onsubmit="saveWeeklyGoal(event)" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
-                                <div style="display:flex; flex-direction:column; gap:.35rem;">
-                                <label style="font-weight:600; color: var(--navy-primary);">Lessons per week</label>
-                                <input id="weeklyLessonsTarget" type="number" min="1" max="25" value="5"
-                                        style="padding:.7rem .9rem; border:1px solid #e5e7eb; border-radius:10px; width:180px;" />
-                                </div>
-
-                                <button class="btn btn-primary" type="submit">Save Goal</button>
-
-                                <div id="weeklyGoalSaved" class="hidden" style="color:#155724; font-weight:600;">
-                                ✅ Saved!
-                                </div>
-                            </form>
-
-                            <div style="margin-top:1rem;">
-                                <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.35rem;">This week’s progress</div>
-                                <div id="weeklyGoalsContainer">Loading your goals...</div>
-                            </div>
-                            </div>
-
-                    `).join('');
-                    
-                    console.log('✓ Weekly goals loaded');
-                } else {
-                    goalsContainer.innerHTML = '<p style="color: #666; padding: 1rem;">No active goals this week. Keep learning!</p>';
-                }
-            } catch (error) {
-                console.error('Error loading weekly goals:', error);
-                const goalsContainer = document.getElementById('weeklyGoalsContainer');
-                if (goalsContainer) {
-                    goalsContainer.innerHTML = '<p style="color: #999; padding: 1rem;">Unable to load weekly goals.</p>';
-                }
-            }
-        }
 
         // Add notification function
         function showNotification(message, type = 'info') {
