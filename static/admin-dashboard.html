@@ -2183,10 +2183,25 @@
             // Make API call to mark alert as resolved, then reload
         }
 
-        function viewEssayDetails(essayId) {
-            // TODO: Implement essay details view
-            alert(`View essay ${essayId} details - implement modal or page`);
-            // Show full essay text, AI feedback, and allow admin to add notes
+        async function viewEssayDetails(essayId) {
+            const token = localStorage.getItem('token');
+            currentEssayId = essayId;
+            
+            document.getElementById('essayDetailsModal').classList.add('active');
+            document.getElementById('essayModalTitle').textContent = 'Loading essay...';
+            document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/admin/essay/${essayId}/details?token=${encodeURIComponent(token)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayEssayDetails(data.essay);
+                }
+            } catch (error) {
+                console.error('Error loading essay:', error);
+                document.getElementById('essayDetailsContent').innerHTML = '<p style="color: #dc3545;">Failed to load essay details.</p>';
+            }
         }
 
         // ========== LOAD RECENT ACTIVITY ==========
