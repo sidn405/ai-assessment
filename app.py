@@ -2300,14 +2300,14 @@ async def get_gamification_data(token: str):
                 'earned_at': row['earned_at'] if hasattr(row, 'keys') else row[4]
             })
         
-        # Get weekly goals (current week only)
+        # Get weekly goals (current week only) - removed goal_name and icon
         week_start = datetime.now() - timedelta(days=datetime.now().weekday())
         week_start = week_start.date()
         
         if USE_POSTGRES:
             cursor.execute(
-                """SELECT id, goal_type, goal_name, target_value, current_value, 
-                          completed, points_reward, icon
+                """SELECT id, goal_type, target_value, current_value, 
+                          completed, points_reward
                    FROM weekly_goals 
                    WHERE user_id = %s AND week_start = %s
                    ORDER BY created_at DESC""",
@@ -2315,8 +2315,8 @@ async def get_gamification_data(token: str):
             )
         else:
             cursor.execute(
-                """SELECT id, goal_type, goal_name, target_value, current_value, 
-                          completed, points_reward, icon
+                """SELECT id, goal_type, target_value, current_value, 
+                          completed, points_reward
                    FROM weekly_goals 
                    WHERE user_id = ? AND week_start = ?
                    ORDER BY created_at DESC""",
@@ -2326,15 +2326,18 @@ async def get_gamification_data(token: str):
         goal_rows = cursor.fetchall()
         weekly_goals = []
         for row in goal_rows:
+            goal_type = row['goal_type'] if hasattr(row, 'keys') else row[1]
+            goal_config = WEEKLY_GOAL_TYPES.get(goal_type, {})
+            
             weekly_goals.append({
                 'id': row['id'] if hasattr(row, 'keys') else row[0],
-                'goal_type': row['goal_type'] if hasattr(row, 'keys') else row[1],
-                'goal_name': row['goal_name'] if hasattr(row, 'keys') else row[2],
-                'target_value': row['target_value'] if hasattr(row, 'keys') else row[3],
-                'current_value': row['current_value'] if hasattr(row, 'keys') else row[4],
-                'completed': row['completed'] if hasattr(row, 'keys') else row[5],
-                'points_reward': row['points_reward'] if hasattr(row, 'keys') else row[6],
-                'icon': row['icon'] if hasattr(row, 'keys') else row[7]
+                'goal_type': goal_type,
+                'goal_name': goal_config.get('name', goal_type),  # Get from config
+                'target_value': row['target_value'] if hasattr(row, 'keys') else row[2],
+                'current_value': row['current_value'] if hasattr(row, 'keys') else row[3],
+                'completed': row['completed'] if hasattr(row, 'keys') else row[4],
+                'points_reward': row['points_reward'] if hasattr(row, 'keys') else row[5],
+                'icon': goal_config.get('icon', '🎯')  # Get from config
             })
         
         # Get available goal types (ones not yet created this week)
@@ -2425,26 +2428,24 @@ async def create_weekly_goal(request: Request):
             conn.close()
             raise HTTPException(status_code=400, detail='Goal already exists for this week')
         
-        # Create new goal
+        # Create new goal (without goal_name, icon columns)
         if USE_POSTGRES:
             cursor.execute(
                 """INSERT INTO weekly_goals 
-                   (user_id, week_start, goal_type, goal_name, target_value, current_value, 
-                    completed, points_reward, icon)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   (user_id, week_start, goal_type, target_value, current_value, 
+                    completed, points_reward)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING id""",
-                (user_id, week_start, goal_type, goal_config['name'], target, 0, 
-                 False, goal_config['points_reward'], goal_config['icon'])
+                (user_id, week_start, goal_type, target, 0, False, goal_config['points_reward'])
             )
             goal_id = cursor.fetchone()[0]
         else:
             cursor.execute(
                 """INSERT INTO weekly_goals 
-                   (user_id, week_start, goal_type, goal_name, target_value, current_value, 
-                    completed, points_reward, icon)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (user_id, week_start, goal_type, goal_config['name'], target, 0, 
-                 0, goal_config['points_reward'], goal_config['icon'])
+                   (user_id, week_start, goal_type, target_value, current_value, 
+                    completed, points_reward)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, week_start, goal_type, target, 0, 0, goal_config['points_reward'])
             )
             goal_id = cursor.lastrowid
         
