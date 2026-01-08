@@ -1875,8 +1875,17 @@
         function displayEssayDetails(essay) {
             document.getElementById('essayModalTitle').textContent = `Essay #${essay.essay_number} - ${essay.user_name}`;
             
-            const aiFeedback = typeof essay.ai_feedback === 'string' ? JSON.parse(essay.ai_feedback) : essay.ai_feedback;
-            const lessonTopics = typeof essay.lesson_topics === 'string' ? JSON.parse(essay.lesson_topics) : (essay.lesson_topics || []);
+            const aiFeedbackParsed = safeJsonParse(essay.ai_feedback, null);
+
+            // Always give the UI an object to work with:
+            const aiFeedback =
+            (aiFeedbackParsed && typeof aiFeedbackParsed === 'object')
+                ? aiFeedbackParsed
+                : { raw: (typeof essay.ai_feedback === 'string' ? essay.ai_feedback : '') };
+
+            // Always give the UI an array:
+            const lessonTopics = normalizeStringArray(essay.lesson_topics);
+
             
             document.getElementById('essayDetailsContent').innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
@@ -2203,6 +2212,35 @@
                 document.getElementById('essayDetailsContent').innerHTML = '<p style="color: #dc3545;">Failed to load essay details.</p>';
             }
         }
+
+        function safeJsonParse(val, fallback) {
+            if (val === null || val === undefined) return fallback;
+            if (typeof val !== 'string') return val; // already object/array
+            const s = val.trim();
+            if (!s || s === 'None' || s === 'NULL') return fallback;
+            try {
+                return JSON.parse(s);
+            } catch (e) {
+                return fallback;
+            }
+            }
+
+            function normalizeStringArray(val) {
+            // Accept: array, JSON string array, or "a, b, c" / "a\nb\nc"
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string') {
+                const parsed = safeJsonParse(val, null);
+                if (Array.isArray(parsed)) return parsed;
+
+                // fallback: split by commas/newlines/semicolons
+                return val
+                .split(/[,;\n]/)
+                .map(x => x.trim())
+                .filter(Boolean);
+            }
+            return [];
+            }
+
 
         // ========== LOAD RECENT ACTIVITY ==========
 
