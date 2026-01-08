@@ -2501,7 +2501,7 @@ async def save_lesson_progress(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Save session
         if USE_POSTGRES:
