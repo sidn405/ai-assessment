@@ -2454,7 +2454,7 @@ async def create_weekly_goal(request: Request):
             print(f"Parameters: {params}")
             cursor.execute(sql, params)
             result = cursor.fetchone()
-            goal_id = result['id'] if hasattr(result, 'keys') else result[0]  # ✅
+            goal_id = result['id'] if hasattr(result, 'keys') else result[0]
         else:
             sql = """INSERT INTO weekly_goals 
                    (user_id, week_start, week_end, goal_type, target_value, current_value, 
@@ -3238,82 +3238,7 @@ async def save_lesson_progress(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
     
 
-@app.get("/api/student/gamification")
-async def get_gamification_data(token: str):
-    """Get gamification data"""
-    try:
-        user_data = verify_token(token)
-        user_id = user_data["user_id"]
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Get points
-        if USE_POSTGRES:
-            cursor.execute("SELECT * FROM user_points WHERE user_id = %s", (user_id,))
-        else:
-            cursor.execute("SELECT * FROM user_points WHERE user_id = ?", (user_id,))
-        
-        points_row = cursor.fetchone()
-        
-        if points_row:
-            points_data = {
-                'current_points': points_row['points'] if hasattr(points_row, 'keys') else points_row[2],
-                'total_earned': points_row['total_earned'] if hasattr(points_row, 'keys') else points_row[3],
-                'level': points_row['level'] if hasattr(points_row, 'keys') else points_row[4]
-            }
-        else:
-            points_data = {'current_points': 0, 'total_earned': 0, 'level': 1}
-        
-        # Get badges
-        if USE_POSTGRES:
-            cursor.execute("SELECT * FROM user_badges WHERE user_id = %s ORDER BY earned_at DESC", (user_id,))
-        else:
-            cursor.execute("SELECT * FROM user_badges WHERE user_id = ? ORDER BY earned_at DESC", (user_id,))
-        
-        badges = []
-        for row in cursor.fetchall():
-            badges.append({
-                'type': row['badge_type'] if hasattr(row, 'keys') else row[2],
-                'name': row['badge_name'] if hasattr(row, 'keys') else row[3],
-                'description': row['description'] if hasattr(row, 'keys') else row[4],
-                'icon': row['icon'] if hasattr(row, 'keys') else row[5],
-                'earned_at': row['earned_at'] if hasattr(row, 'keys') else row[6]
-            })
-        
-        # Get weekly goals
-        from datetime import datetime, timedelta
-        week_start = datetime.now() - timedelta(days=datetime.now().weekday())
-        week_start = week_start.date()
-        
-        if USE_POSTGRES:
-            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = %s AND week_start = %s", (user_id, week_start))
-        else:
-            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = ? AND week_start = ?", (user_id, week_start))
-        
-        goals = []
-        for row in cursor.fetchall():
-            goals.append({
-                'goal_type': row['goal_type'] if hasattr(row, 'keys') else row[3],
-                'target_value': row['target_value'] if hasattr(row, 'keys') else row[4],
-                'current_value': row['current_value'] if hasattr(row, 'keys') else row[5],
-                'completed': row['completed'] if hasattr(row, 'keys') else row[6],
-                'points_reward': row['points_reward'] if hasattr(row, 'keys') else row[7]
-            })
-        
-        conn.close()
-        
-        return {
-            'success': True,
-            'points': points_data,
-            'badges': badges,
-            'available_badges': BADGES,
-            'weekly_goals': goals
-        }
-        
-    except Exception as e:
-        print(f"Error getting gamification: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# DUPLICATE ENDPOINT REMOVED - Using the one at line 5605 instead
 
 # ============================================
 # PHASE 2: ENHANCED ANALYTICS
@@ -5651,14 +5576,19 @@ async def get_gamification_data(token: str):
         week_start = week_start.date()
         
         if USE_POSTGRES:
-            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = %s AND week_start = %s", (user_id, week_start))
+            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = %s AND week_start = %s ORDER BY created_at DESC", (user_id, week_start))
         else:
-            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = ? AND week_start = ?", (user_id, week_start))
+            cursor.execute("SELECT * FROM weekly_goals WHERE user_id = ? AND week_start = ? ORDER BY created_at DESC", (user_id, week_start))
         
         goals = []
         for row in cursor.fetchall():
+            goal_type = row['goal_type'] if hasattr(row, 'keys') else row[3]
+            goal_config = WEEKLY_GOAL_TYPES.get(goal_type, {})
+            
             goals.append({
-                'goal_type': row['goal_type'] if hasattr(row, 'keys') else row[3],
+                'goal_type': goal_type,
+                'goal_name': goal_config.get('name', goal_type),
+                'icon': goal_config.get('icon', '🎯'),
                 'target_value': row['target_value'] if hasattr(row, 'keys') else row[4],
                 'current_value': row['current_value'] if hasattr(row, 'keys') else row[5],
                 'completed': row['completed'] if hasattr(row, 'keys') else row[6],
