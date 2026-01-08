@@ -5044,7 +5044,7 @@ async def submit_essay(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Get user info - USING full_name
         if USE_POSTGRES:
@@ -5287,7 +5287,7 @@ def get_next_difficulty_level(current_level):
 def update_user_difficulty(user_id, new_level, essay_id, reason):
     """Update user's reading level and increase LESSON word count by 100"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor()
     
     try:
         # Get current level and word counts
@@ -5389,7 +5389,7 @@ def update_user_difficulty(user_id, new_level, essay_id, reason):
 def create_admin_alert(user_id, essay_id, alert_type, priority, message, details):
     """Create admin alert"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor()
     
     try:
         if USE_POSTGRES:
