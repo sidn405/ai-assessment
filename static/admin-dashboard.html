@@ -902,12 +902,12 @@
                             </tbody>
                         </table>
                     </div>
-                    <!-- Add this section to your admin dashboard sections -->
+                    <!-- Essay Alerts Section - COMPLETE & CORRECTED -->
                     <div id="essayAlertsSection" class="hidden">
-                        <h1>📝 Essay Reviews & Student Alerts</h1>
-                        <p style="color: #666; margin-bottom: 2rem;">
-                            Monitor student comprehension and provide assistance when needed
-                        </p>
+                        <div class="header">
+                            <h1>📝 Essay Reviews & Student Alerts</h1>
+                            <p>Monitor student comprehension and provide assistance when needed</p>
+                        </div>
                         
                         <!-- Stats Cards -->
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
@@ -947,6 +947,26 @@
                                 <div style="font-size: 1.1rem; opacity: 0.95;">✅ Essays Today</div>
                             </div>
                         </div>
+                        
+                        <!-- Student Alerts -->
+                        <div class="card" style="margin-bottom: 2rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                <h2 style="margin: 0;">🚨 Student Alerts - Need Help</h2>
+                                <button onclick="loadEssayAlerts()" class="btn btn-primary">🔄 Refresh</button>
+                            </div>
+                            <div id="studentAlertsTable">
+                                <p style="text-align: center; padding: 2rem; color: #666;">Loading alerts...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Essays Needing Review -->
+                        <div class="card">
+                            <h2 style="margin-bottom: 1.5rem;">📝 Essays Needing Review</h2>
+                            <div id="essaysReviewTable">
+                                <p style="text-align: center; padding: 2rem; color: #666;">Loading essays...</p>
+                            </div>
+                        </div>
+                    </div>
                         
                         <!-- Student Alerts -->
                         <div class="card" style="margin-bottom: 2rem;">
