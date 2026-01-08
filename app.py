@@ -136,7 +136,7 @@ def init_db():
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0)
         conn.execute('PRAGMA journal_mode=WAL')
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Create all tables for SQLite (for local development)
         cursor.execute('''
@@ -210,7 +210,7 @@ def verify_token(token: str) -> dict:
 def update_user_activity(user_id: int):
     """Update last_active timestamp"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     if USE_POSTGRES:
         cursor.execute("UPDATE users SET last_active = NOW() WHERE id = %s", (user_id,))
     else:
