@@ -300,7 +300,7 @@ async def register(user: UserCreate):
 @app.post("/api/login")
 async def login(credentials: UserLogin):
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     if USE_POSTGRES:
         cursor.execute("SELECT * FROM users WHERE email = %s", (credentials.email,))
