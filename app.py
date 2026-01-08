@@ -30,8 +30,6 @@ from content_generator import ContentGenerator
 # Use word count range from database
 import random
 
-from flask import Flask, request, jsonify, send_from_directory
-import jwt
 
 # Initialize FastAPI
 app = FastAPI(title="Achieve 365 - Phase 2")
@@ -2232,28 +2230,23 @@ async def get_writing_history(token: str, limit: int = 10):
     return {"exercises": exercises}
 
 # ============================================================
-# ENHANCED GAMIFICATION BACKEND
+# GAMIFICATION BACKEND & ENDPOINTS
 # ============================================================
 
-# ============================================================
-# GAMIFICATION ENDPOINTS
-# ============================================================
-
-@app.route('/api/gamification/data', methods=['GET'])
-def get_gamification_data():
+@app.get('/api/gamification/data')
+async def get_gamification_data(token: str):
     """Get all gamification data for user"""
-    token = request.args.get('token')
     
     if not token:
-        return jsonify({'success': False, 'detail': 'No token provided'}), 401
+        raise HTTPException(status_code=401, detail='No token provided')
     
     user = validate_token(token)
     if not user:
-        return jsonify({'success': False, 'detail': 'Invalid token'}), 401
+        raise HTTPException(status_code=401, detail='Invalid token')
     
     user_id = user['id']
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         # Get points and level
@@ -2308,7 +2301,6 @@ def get_gamification_data():
             })
         
         # Get weekly goals (current week only)
-        from datetime import datetime, timedelta
         week_start = datetime.now() - timedelta(days=datetime.now().weekday())
         week_start = week_start.date()
         
@@ -2362,7 +2354,7 @@ def get_gamification_data():
         
         conn.close()
         
-        return jsonify({
+        return {
             'success': True,
             'points': current_points,
             'total_earned': total_earned,
@@ -2371,50 +2363,49 @@ def get_gamification_data():
             'badges_count': len(badges),
             'weekly_goals': weekly_goals,
             'available_goal_types': available_types
-        })
+        }
         
     except Exception as e:
         conn.close()
         print(f"Error getting gamification data: {e}")
-        return jsonify({'success': False, 'detail': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.route('/api/gamification/goals/create', methods=['POST'])
-def create_weekly_goal():
+@app.post('/api/gamification/goals/create')
+async def create_weekly_goal(request: Request):
     """Create a new weekly goal"""
-    data = request.get_json()
+    data = await request.json()
     token = data.get('token')
     goal_type = data.get('goal_type')
     custom_target = data.get('custom_target')
     
     if not token:
-        return jsonify({'success': False, 'error': 'No token provided'}), 401
+        raise HTTPException(status_code=401, detail='No token provided')
     
     if not goal_type:
-        return jsonify({'success': False, 'error': 'No goal type provided'}), 400
+        raise HTTPException(status_code=400, detail='No goal type provided')
     
     user = validate_token(token)
     if not user:
-        return jsonify({'success': False, 'error': 'Invalid token'}), 401
+        raise HTTPException(status_code=401, detail='Invalid token')
     
     user_id = user['id']
     
     # Validate goal type
     if goal_type not in WEEKLY_GOAL_TYPES:
-        return jsonify({'success': False, 'error': 'Invalid goal type'}), 400
+        raise HTTPException(status_code=400, detail='Invalid goal type')
     
     goal_config = WEEKLY_GOAL_TYPES[goal_type]
     target = custom_target if custom_target else goal_config['default_target']
     
     # Validate target
     if target < 1:
-        return jsonify({'success': False, 'error': 'Target must be at least 1'}), 400
+        raise HTTPException(status_code=400, detail='Target must be at least 1')
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
-        from datetime import datetime, timedelta
         week_start = datetime.now() - timedelta(days=datetime.now().weekday())
         week_start = week_start.date()
         
@@ -2432,7 +2423,7 @@ def create_weekly_goal():
         
         if cursor.fetchone():
             conn.close()
-            return jsonify({'success': False, 'error': 'Goal already exists for this week'}), 400
+            raise HTTPException(status_code=400, detail='Goal already exists for this week')
         
         # Create new goal
         if USE_POSTGRES:
@@ -2460,18 +2451,20 @@ def create_weekly_goal():
         conn.commit()
         conn.close()
         
-        return jsonify({
+        return {
             'success': True,
             'goal_id': goal_id,
             'goal_type': goal_type,
             'message': f'Weekly goal "{goal_config["name"]}" created successfully!'
-        })
+        }
         
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         conn.close()
         print(f"Error creating weekly goal: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Points configuration
 POINTS_CONFIG = {
