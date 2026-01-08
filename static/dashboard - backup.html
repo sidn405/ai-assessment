@@ -1978,26 +1978,26 @@
         let tutorTimers = [];
 
         function unlockSpeechOnce() {
-        if (speechUnlocked || !window.speechSynthesis) return;
-        speechUnlocked = true;
+          if (speechUnlocked || !window.speechSynthesis) return;
+          speechUnlocked = true;
 
-        const u = new SpeechSynthesisUtterance(" ");
-        u.volume = 0;
-        speechSynthesis.cancel();
-        try { speechSynthesis.resume(); } catch(e) {}
-        setTimeout(() => speechSynthesis.speak(u), 60);
+          const u = new SpeechSynthesisUtterance(" ");
+          u.volume = 0;
+          speechSynthesis.cancel();
+          try { speechSynthesis.resume(); } catch(e) {}
+          setTimeout(() => speechSynthesis.speak(u), 60);
         }
 
         document.addEventListener("click", unlockSpeechOnce, { once: true });
 
 
         function getStudentNameForTutor() {
-        try {
+          try {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             return user.full_name || user.name || document.getElementById('userName')?.textContent?.trim() || 'there';
-        } catch {
+          } catch {
             return 'there';
-        }
+          }
         }
 
         function ensureVoicesLoaded() {
@@ -2007,68 +2007,68 @@
         }
 
         function showTutorUI() {
-        const tutor = document.getElementById('aiTutor');
-        if (!tutor) return;
-        tutor.classList.remove('hidden');
-        // force reflow so transition applies
-        void tutor.offsetWidth;
-        tutor.classList.add('show');
+          const tutor = document.getElementById('aiTutor');
+          if (!tutor) return;
+            tutor.classList.remove('hidden');
+            // force reflow so transition applies
+            void tutor.offsetWidth;
+          tutor.classList.add('show');
         }
 
 
         function hideTutor() {
-        const tutor = document.getElementById('aiTutor');
-        if (!tutor) return;
-        tutor.classList.remove('show');
-        window.speechSynthesis?.cancel();
-        // keep it in DOM but hidden after animation
-        setTimeout(() => tutor.classList.add('hidden'), 450);
+          const tutor = document.getElementById('aiTutor');
+          if (!tutor) return;
+           tutor.classList.remove('show');
+           window.speechSynthesis?.cancel();
+           // keep it in DOM but hidden after animation
+          setTimeout(() => tutor.classList.add('hidden'), 450);
         }
 
         function toggleTutorMute() {
-        tutorMuted = !tutorMuted;
-        const icon = document.getElementById('muteIcon');
-        if (icon) icon.textContent = tutorMuted ? '🔇' : '🔊';
-        if (tutorMuted) window.speechSynthesis?.cancel();
+          tutorMuted = !tutorMuted;
+          const icon = document.getElementById('muteIcon');
+          if (icon) icon.textContent = tutorMuted ? '🔇' : '🔊';
+          if (tutorMuted) window.speechSynthesis?.cancel();
         }
 
         function tutorSpeak(text) {
-        if (tutorMuted || !window.speechSynthesis) return;
+          if (tutorMuted || !window.speechSynthesis) return;
 
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.9;
-        u.pitch = 1.1;
-        u.volume = 1.0;
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(text);
+          u.rate = 0.9;
+          u.pitch = 1.1;
+          u.volume = 1.0;
 
-        const voices = window.speechSynthesis.getVoices?.() || [];
-        const preferred = voices.find(v =>
+          const voices = window.speechSynthesis.getVoices?.() || [];
+          const preferred = voices.find(v =>
             /Google|Samantha|Female/i.test(v.name)
-        );
-        if (preferred) u.voice = preferred;
+          );
+          if (preferred) u.voice = preferred;
 
-        window.speechSynthesis.speak(u);
+          window.speechSynthesis.speak(u);
         }
 
         function displayTutorMessage(message, emotion = 'happy') {
-        showTutorUI();
+          showTutorUI();
 
-        const msg = document.getElementById('tutorMessage');
-        const mouth = document.getElementById('avatarMouth');
+          const msg = document.getElementById('tutorMessage');
+          const mouth = document.getElementById('avatarMouth');
 
-        if (msg) msg.textContent = message;
-        if (mouth) mouth.className = `mouth ${emotion}`;
+          if (msg) msg.textContent = message;
+          if (mouth) mouth.className = `mouth ${emotion}`;
 
-        tutorSpeak(message);
+          tutorSpeak(message);
         }
 
         async function showTutor(context, extra = {}) {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+          const token = localStorage.getItem('token');
+          if (!token) return;
 
-        const studentName = getStudentNameForTutor();
+          const studentName = getStudentNameForTutor();
 
-        try {
+          try {
             const res = await fetch('/api/tutor/message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2078,35 +2078,36 @@
                 student_name: studentName,
                 ...extra
             })
-            });
+          });
 
-            const data = await res.json();
-            if (data?.success) {
+          const data = await res.json();  // ✅ parse first
+
+          // ✅ guard after parse
+          if (!data?.message || !data.message.trim()) return;
+
+          if (data?.success) {
             displayTutorMessage(data.message, data.emotion);
-            }
+          }
         } catch (e) {
             console.error('Tutor error:', e);
         }
-        }
+      }
+
 
         // Call when a lesson is rendered on the dashboard
 
         function startTutorForLesson() {
-            ensureVoicesLoaded();
-            unlockSpeechOnce(); // ✅ ADDED THIS LINE
+          ensureVoicesLoaded();
+          unlockSpeechOnce();
 
-            tutorTimers.forEach(t => clearTimeout(t));
-            tutorTimers = [];
+          tutorTimers.forEach(t => clearTimeout(t));
+          tutorTimers = [];
 
-            // Only greet on first lesson of the session
-            if (!tutorHasGreeted) {
-                tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
-                tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
-                tutorHasGreeted = true;
-            } else {
-                // Subsequent lessons: just instruction
-                tutorTimers.push(setTimeout(() => showTutor('instruction'), 900));
-            }
+          // Always just give the instruction (no greeting)
+          tutorTimers.push(setTimeout(() => showTutor('instruction'), 900));
+
+          // Keep this flag if other code depends on it, but greeting is removed.
+          tutorHasGreeted = true;
         }
 
         // Wrap function to log all calls

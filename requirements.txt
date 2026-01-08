@@ -11,3 +11,4 @@ httpx==0.25.1
 
 # Email
 resend==2.19.0
+flask

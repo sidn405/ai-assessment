@@ -595,6 +595,17 @@
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
+        .stat-card.red { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .stat-card.purple { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .stat-card.green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .stat-card.blue { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .stat-card.pink { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
+
+        .stat-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
         .stat-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 4px 16px rgba(0,0,0,0.15);
@@ -612,6 +623,401 @@
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+
+        .achievements-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 30px;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .achievements-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .achievements-header h2 {
+            font-size: 24px;
+        }
+
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .achievement-card {
+            background: white;
+            color: #333;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .achievement-icon {
+            font-size: 48px;
+            margin-bottom: 8px;
+        }
+
+        .achievement-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .achievement-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 24px;
+            color: #333;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .goals-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .goal-card {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border-radius: 12px;
+            padding: 24px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .goal-card.completed {
+            background: linear-gradient(135deg, #FFD89B 0%, #19547B 100%);
+        }
+
+        .goal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .goal-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .goal-icon {
+            font-size: 24px;
+        }
+
+        .goal-progress {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            background: rgba(255,255,255,0.3);
+            border-radius: 20px;
+            height: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            background: white;
+            height: 100%;
+            border-radius: 20px;
+            transition: width 0.5s ease;
+        }
+
+        .goal-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .badges-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .badge-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s;
+        }
+
+        .badge-card.earned {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border-color: #f39c12;
+            transform: scale(1.02);
+        }
+
+        .badge-card.locked {
+            opacity: 0.5;
+        }
+
+        .badge-icon {
+            font-size: 56px;
+            margin-bottom: 12px;
+            filter: grayscale(100%);
+        }
+
+        .badge-card.earned .badge-icon {
+            filter: none;
+            animation: bounce 0.5s;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .badge-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .badge-description {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .badge-points {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .activity-list {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .activity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .activity-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .activity-info h4 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .activity-meta {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .activity-score {
+            font-size: 20px;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 8px;
+        }
+
+        .score-perfect {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .score-high {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .score-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            margin-bottom: 24px;
+        }
+
+        .modal-header h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .modal-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .goal-options {
+            display: grid;
+            gap: 16px;
+        }
+
+        .goal-option {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .goal-option:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .goal-option.selected {
+            border-color: #667eea;
+            background: #e8eaf6;
+        }
+
+        .goal-option-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .goal-option-icon {
+            font-size: 32px;
+        }
+
+        .goal-option-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .goal-option-desc {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .goal-option-default {
+            color: #667eea;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .input-group {
+            margin-top: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
         }
 
         /* ========== RESPONSIVE ADJUSTMENTS ========== */
@@ -1836,31 +2242,75 @@
                     </div>
                 </div>
 
-                <!-- WEEKLY GOALS - COLORFUL -->
-                <div style="margin-top: 2rem; background: white; border-radius: 20px; padding: 2.5rem; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-                    <h2 style="color: #1e3a5f; margin-bottom: 1.5rem; font-size: 2rem;">
-                        📅 Weekly Goals
-                    </h2>
-                    <div style="margin-bottom: 1rem; padding: 1rem; background: #f8fafc; border: 1px solid #e6eaf2; border-radius: 14px;">
-                        <div style="font-weight: 800; color: #1e3a5f;">Set a Weekly Goal</div>
-                        <div style="color:#555;margin-top:.35rem;">
-                            Choose how many lessons you want to complete this week — we’ll track progress automatically.
+                <!-- Weekly Goals Section -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <span>📋</span>
+                            <span>Weekly Goals</span>
                         </div>
+                        <button class="btn btn-primary" onclick="openGoalModal()">+ Add Goal</button>
+                    </div>
+                    <div class="goals-grid" id="goals-container">
+                        <div class="goal-card completed">
+                            <div class="goal-header">
+                                <div class="goal-title">
+                                    <span class="goal-icon">✅</span>
+                                    <span>Complete 5 Lessons This Week</span>
+                                </div>
+                                <div class="goal-progress">8/5</div>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 100%;"></div>
+                            </div>
+                            <div class="goal-status">
+                                <span>👏</span>
+                                <span>Completed! Amazing work!</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                        <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-top:.9rem;">
-                            <input id="weeklyLessonsTarget" type="number" min="1" max="50" value="5"
-                                style="width:140px;padding:.75rem;border:1px solid #d9dfea;border-radius:10px;font-weight:700;">
-                            <button class="btn btn-primary" onclick="saveWeeklyGoal()">Save Goal</button>
-                            <span id="weeklyGoalStatus" style="color:#2A398A;font-weight:700;"></span>
+                <!-- Badges Section -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <span>🎖️</span>
+                            <span>Badges</span>
                         </div>
-                        </div>
+                    </div>
+                    <div class="badges-grid" id="badges-container">
+                        <!-- Badges will be loaded here -->
+                    </div>
+                </div>
 
-                        <div id="weeklyGoalsContainer">
-                        <p style="color:#666;font-size:1.1rem;">Loading your goals...</p>
+                <!-- Add Goal Modal -->
+                <div class="modal" id="goal-modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2>Set a Weekly Goal</h2>
+                            <p>Choose a goal to work towards this week</p>
                         </div>
+                        <div class="goal-options" id="goal-options">
+                            <!-- Goal options will be loaded here -->
+                        </div>
+                        <div class="input-group" id="custom-target-group" style="display: none;">
+                            <label>Custom Target</label>
+                            <input type="number" id="custom-target" min="1" placeholder="Enter your target">
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn btn-secondary" onclick="closeGoalModal()">Cancel</button>
+                            <button class="btn btn-primary" onclick="createGoal()">Create Goal</button>
+                        </div>
+                    </div>
+                </div>
 
-                    <div id="weeklyGoalsContainer">
-                        <p style="color: #666; font-size: 1.1rem;">Loading your goals...</p>
+                <!-- Notification -->
+                <div class="notification" id="notification">
+                    <div class="notification-icon" id="notif-icon">🎉</div>
+                    <div class="notification-content">
+                        <h4 id="notif-title">Congratulations!</h4>
+                        <p id="notif-message">You earned a new badge!</p>
                     </div>
                 </div>
 
@@ -2826,6 +3276,264 @@
                 showCelebrationModal(score, correctCount, totalQuestions);
             }, 600);
         }
+
+        // ============================================================
+        // GAMIFICATION FUNCTIONS - REAL API INTEGRATION
+        // ============================================================
+
+        // Sample data for badges definition (matches backend)
+        const BADGES = {
+            'first_lesson': { name: 'Getting Started', description: 'Complete your first lesson', icon: '🎯', points: 20 },
+            'perfect_streak_3': { name: 'Triple Perfect', description: '3 perfect scores in a row', icon: '🔥', points: 50 },
+            'speed_reader': { name: 'Speed Reader', description: '10 lessons in one week', icon: '⚡', points: 100 },
+            'bookworm': { name: 'Bookworm', description: 'Complete 50 lessons total', icon: '📚', points: 200 },
+            'perfect_week': { name: 'Perfect Week', description: 'Achieve all weekly goals', icon: '🏆', points: 150 },
+            'early_bird': { name: 'Early Bird', description: 'Complete lesson before 9 AM', icon: '🌅', points: 30 },
+            'night_owl': { name: 'Night Owl', description: 'Complete lesson after 9 PM', icon: '🦉', points: 30 },
+            'consistency_king': { name: 'Consistency King', description: '7-day streak', icon: '👑', points: 100 },
+            'intermediate_master': { name: 'Intermediate Master', description: '10 intermediate lessons', icon: '⭐', points: 75 },
+            'reading_marathon': { name: 'Reading Marathon', description: 'Read for 60 minutes in one day', icon: '🏃', points: 80 },
+            'perfect_ten': { name: 'Perfect Ten', description: 'Score 100% on 10 lessons', icon: '💯', points: 150 }
+        };
+
+        const WEEKLY_GOAL_TYPES = {
+            'lessons_completed': { name: 'Complete Lessons', description: 'Complete a certain number of lessons', default_target: 5, points_reward: 100, icon: '📖' },
+            'reading_time': { name: 'Reading Time', description: 'Read for a total number of minutes', default_target: 60, points_reward: 80, icon: '⏱️' },
+            'perfect_scores': { name: 'Perfect Scores', description: 'Achieve perfect scores (100%)', default_target: 3, points_reward: 120, icon: '💯' },
+            'daily_streak': { name: 'Daily Streak', description: 'Read on consecutive days', default_target: 5, points_reward: 90, icon: '🔥' },
+            'average_score': { name: 'Average Score', description: 'Maintain an average score', default_target: 80, points_reward: 110, icon: '⭐' }
+        };
+
+        let selectedGoalType = null;
+        let availableGoalTypes = [];
+
+        // Load gamification data from backend
+        async function loadGamificationData() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                console.log('Loading gamification data...');
+                const response = await fetch(`/api/gamification/data?token=${token}`);
+                
+                if (!response.ok) throw new Error('Failed to load gamification data');
+                
+                const data = await response.json();
+                console.log('Gamification data:', data);
+                
+                // Update points and level
+                const pointsEl = document.getElementById('userPoints');
+                if (pointsEl) pointsEl.textContent = data.points || 0;
+                
+                const levelEl = document.getElementById('userLevel');
+                if (levelEl) levelEl.textContent = data.level || 1;
+                
+                const badgeCountEl = document.getElementById('badgeCount');
+                if (badgeCountEl) badgeCountEl.textContent = data.badges_count || 0;
+                
+                // Load badges
+                loadBadges(data.badges || []);
+                
+                // Load weekly goals
+                loadWeeklyGoals(data.weekly_goals || []);
+                
+                // Load available goal types
+                availableGoalTypes = data.available_goal_types || Object.keys(WEEKLY_GOAL_TYPES).map(type => ({
+                    type,
+                    ...WEEKLY_GOAL_TYPES[type]
+                }));
+                
+            } catch (error) {
+                console.error('Error loading gamification:', error);
+            }
+        }
+
+        // Load badges from backend
+        function loadBadges(userBadges) {
+            const container = document.getElementById('badges-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            // Show all badges (earned and locked)
+            Object.keys(BADGES).forEach(badgeType => {
+                const badge = BADGES[badgeType];
+                const earned = userBadges.some(ub => ub.badge_type === badgeType);
+                
+                const badgeCard = document.createElement('div');
+                badgeCard.className = `badge-card ${earned ? 'earned' : 'locked'}`;
+                badgeCard.innerHTML = `
+                    <div class="badge-icon">${badge.icon}</div>
+                    <div class="badge-name">${badge.name}</div>
+                    <div class="badge-description">${badge.description}</div>
+                    <div class="badge-points">${earned ? 'Earned!' : badge.points + ' points'}</div>
+                `;
+                container.appendChild(badgeCard);
+            });
+        }
+
+        // Load weekly goals
+        function loadWeeklyGoals(goals) {
+            const container = document.getElementById('goals-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            if (goals.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No goals set yet. Click "Add Goal" to create one!</p>';
+                return;
+            }
+            
+            goals.forEach(goal => {
+                const progress = Math.min((goal.current_value / goal.target_value) * 100, 100);
+                const isComplete = goal.completed;
+                
+                const goalCard = document.createElement('div');
+                goalCard.className = `goal-card ${isComplete ? 'completed' : ''}`;
+                goalCard.innerHTML = `
+                    <div class="goal-header">
+                        <div class="goal-title">
+                            <span class="goal-icon">${goal.icon || '🎯'}</span>
+                            <span>${goal.goal_name || goal.goal_type}</span>
+                        </div>
+                        <div class="goal-progress">${goal.current_value}/${goal.target_value}</div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%;"></div>
+                    </div>
+                    <div class="goal-status">
+                        <span>${isComplete ? '👏' : '🎯'}</span>
+                        <span>${isComplete ? 'Completed! Amazing work!' : `${goal.points_reward} points when complete`}</span>
+                    </div>
+                `;
+                container.appendChild(goalCard);
+            });
+        }
+
+        // Open goal modal
+        function openGoalModal() {
+            const modal = document.getElementById('goal-modal');
+            const optionsContainer = document.getElementById('goal-options');
+            
+            if (!modal || !optionsContainer) return;
+            
+            optionsContainer.innerHTML = '';
+            
+            // Use available goal types from backend
+            const goalTypesToShow = availableGoalTypes.length > 0 ? availableGoalTypes : 
+                Object.keys(WEEKLY_GOAL_TYPES).map(type => ({ type, ...WEEKLY_GOAL_TYPES[type] }));
+            
+            goalTypesToShow.forEach(goal => {
+                const option = document.createElement('div');
+                option.className = 'goal-option';
+                option.onclick = () => selectGoal(goal.type);
+                option.innerHTML = `
+                    <div class="goal-option-header">
+                        <div class="goal-option-icon">${goal.icon}</div>
+                        <div class="goal-option-title">${goal.name}</div>
+                    </div>
+                    <div class="goal-option-desc">${goal.description}</div>
+                    <div class="goal-option-default">Default: ${goal.default_target} • ${goal.points_reward} points</div>
+                `;
+                option.dataset.goalType = goal.type;
+                optionsContainer.appendChild(option);
+            });
+            
+            modal.classList.add('show');
+        }
+
+        // Close goal modal
+        function closeGoalModal() {
+            const modal = document.getElementById('goal-modal');
+            if (modal) modal.classList.remove('show');
+            selectedGoalType = null;
+            document.getElementById('custom-target-group').style.display = 'none';
+            document.getElementById('custom-target').value = '';
+        }
+
+        // Select goal type
+        function selectGoal(goalType) {
+            selectedGoalType = goalType;
+            
+            // Remove selected class from all options
+            document.querySelectorAll('.goal-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked option
+            const selectedOption = document.querySelector(`[data-goal-type="${goalType}"]`);
+            if (selectedOption) {
+                selectedOption.classList.add('selected');
+            }
+            
+            // Show custom target input
+            document.getElementById('custom-target-group').style.display = 'block';
+        }
+
+        // Create weekly goal
+        async function createGoal() {
+            if (!selectedGoalType) {
+                showNotification('⚠️ Please select a goal type', 'error');
+                return;
+            }
+            
+            const token = localStorage.getItem('token');
+            const customTarget = document.getElementById('custom-target').value;
+            
+            try {
+                const response = await fetch('/api/gamification/goals/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        goal_type: selectedGoalType,
+                        custom_target: customTarget ? parseInt(customTarget) : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('✅ Goal Created!', 'success');
+                    closeGoalModal();
+                    loadGamificationData(); // Reload to show new goal
+                } else {
+                    showNotification('❌ ' + (data.error || 'Failed to create goal'), 'error');
+                }
+            } catch (error) {
+                console.error('Error creating goal:', error);
+                showNotification('❌ Error creating goal', 'error');
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = 'notification show';
+            notification.innerHTML = `
+                <div class="notification-icon">${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</div>
+                <div class="notification-content">
+                    <h4>${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info'}</h4>
+                    <p>${message}</p>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Initialize gamification on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load gamification when on progress section
+            const currentSection = document.querySelector('.main-content > div:not(.hidden)');
+            if (currentSection && currentSection.id === 'progressSection') {
+                loadGamificationData();
+            }
+        });
 
         // ========== FEATURE 1: "OTHER" OPTION HANDLING ==========
 
