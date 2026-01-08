@@ -350,7 +350,7 @@ async def forgot_password(request: dict):
         raise HTTPException(status_code=400, detail="Email is required")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         # Check if user exists
