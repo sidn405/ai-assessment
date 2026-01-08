@@ -5603,7 +5603,7 @@ async def start_session(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Close any existing active sessions
         if USE_POSTGRES:
@@ -5678,7 +5678,7 @@ async def update_activity(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update last activity
         if USE_POSTGRES:
@@ -5731,7 +5731,7 @@ async def start_break(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update session to break status
         if USE_POSTGRES:
@@ -5784,7 +5784,7 @@ async def end_break(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Get break start time
         if USE_POSTGRES:
@@ -5866,7 +5866,7 @@ async def log_timeout_warning(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Create timeout event
         if USE_POSTGRES:
@@ -5923,7 +5923,7 @@ async def log_timeout_response(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update timeout event
         if USE_POSTGRES:
@@ -6048,7 +6048,7 @@ async def end_session(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update session
         if USE_POSTGRES:
