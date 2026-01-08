@@ -3325,10 +3325,9 @@
                 displayBadges(data.badges);  // For overview section (badgesContainer)
                 loadBadges(data.badges || []);  // For progress section (badges-container)
                 
-                // Display weekly goals
-                if (data.weekly_goals) {
-                    loadWeeklyGoals(data.weekly_goals);
-                }
+                // Display weekly goals - always call even if empty to clear "Loading..." text
+                console.log('Weekly goals from API:', data.weekly_goals);
+                loadWeeklyGoals(data.weekly_goals || []);
                 
                 // Load available goal types
                 availableGoalTypes = data.available_goal_types || Object.keys(WEEKLY_GOAL_TYPES).map(type => ({
@@ -3340,6 +3339,8 @@
                 
             } catch (error) {
                 console.error('Error loading gamification:', error);
+                // Show empty state even on error
+                loadWeeklyGoals([]);
             }
         }
 
@@ -3369,16 +3370,22 @@
 
         // Load weekly goals
         function loadWeeklyGoals(goals) {
+            console.log('loadWeeklyGoals called with:', goals);
             const container = document.getElementById('goals-container');
-            if (!container) return;
-            
-            container.innerHTML = '';
-            
-            if (goals.length === 0) {
-                container.innerHTML = '<p style="color: #666;">No goals set yet. Click "Add Goal" to create one!</p>';
+            if (!container) {
+                console.error('goals-container not found!');
                 return;
             }
             
+            container.innerHTML = '';
+            
+            if (!goals || goals.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No goals set yet. Click "Add Goal" to create one!</p>';
+                console.log('No goals to display');
+                return;
+            }
+            
+            console.log('Rendering', goals.length, 'goals');
             goals.forEach(goal => {
                 const progress = Math.min((goal.current_value / goal.target_value) * 100, 100);
                 const isComplete = goal.completed;
@@ -3403,6 +3410,7 @@
                 `;
                 container.appendChild(goalCard);
             });
+            console.log('Goals rendered successfully');
         }
 
         // Open goal modal
@@ -3488,6 +3496,15 @@
                 
                 const data = await response.json();
                 
+                // Check for HTTP errors (400, 500, etc.)
+                if (!response.ok) {
+                    // FastAPI returns errors in 'detail' field
+                    const errorMessage = data.detail || data.error || 'Failed to create goal';
+                    showNotification('❌ ' + errorMessage, 'error');
+                    return;
+                }
+                
+                // Success case
                 if (data.success) {
                     showNotification('✅ Goal Created!', 'success');
                     closeGoalModal();
