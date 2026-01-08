@@ -5324,7 +5324,7 @@ BADGES = {
 def award_points(user_id, points, reason, activity_type='general'):
     """Award points to a user"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         if USE_POSTGRES:
@@ -5397,7 +5397,7 @@ def award_points(user_id, points, reason, activity_type='general'):
 def has_badge(user_id, badge_type):
     """Check if user has badge"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     if USE_POSTGRES:
         cursor.execute("SELECT id FROM user_badges WHERE user_id = %s AND badge_type = %s", (user_id, badge_type))
@@ -5411,7 +5411,7 @@ def has_badge(user_id, badge_type):
 def award_badge(user_id, badge_type, badge_name, description, icon):
     """Award badge to user"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         if USE_POSTGRES:
@@ -5439,7 +5439,7 @@ def award_badge(user_id, badge_type, badge_name, description, icon):
 def check_and_award_badges(user_id):
     """Check and award new badges"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     new_badges = []
     
     try:
@@ -5517,7 +5517,7 @@ def check_and_award_badges(user_id):
 def update_weekly_goals(user_id):
     """Update weekly goals progress"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         from datetime import datetime, timedelta
@@ -5594,7 +5594,7 @@ async def get_gamification_data(token: str):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Get points
         if USE_POSTGRES:
