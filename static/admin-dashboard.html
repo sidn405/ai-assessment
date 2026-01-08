@@ -878,7 +878,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                         <h2 style="margin: 0;">All Students</h2>
                         <input type="text" id="searchStudents" placeholder="Search students..." 
-                               style="padding: 0.5rem 1rem; border: 2px solid var(--medium-gray); border-radius: 4px; width: 300px;">
+                            style="padding: 0.5rem 1rem; border: 2px solid var(--medium-gray); border-radius: 4px; width: 300px;">
                     </div>
                     
                     <div id="studentsLoading" class="loading">
@@ -902,26 +902,10 @@
                             </tbody>
                         </table>
                     </div>
-                                        
-                       <!-- Student Alerts -->
-                        <div class="card" style="margin-bottom: 2rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                                <h2 style="margin: 0;">🚨 Student Alerts - Need Help</h2>
-                                <button onclick="loadEssayAlerts()" class="btn btn-primary">🔄 Refresh</button>
-                            </div>
-                            <div id="studentAlertsTable"></div>
-                        </div>
-                        
-                        <!-- Essays Needing Review -->
-                        <div class="card">
-                            <h2 style="margin-bottom: 1.5rem;">📝 Essays Needing Review</h2>
-                            <div id="essaysReviewTable"></div>
-                        </div>
-                    </div>
-
                 </div>
             </div>
-            <!-- Essay Alerts Section - COMPLETE & CORRECTED -->
+
+            <!-- Essay Alerts Section -->
             <div id="essayAlertsSection" class="hidden">
                 <div class="header">
                     <h1>📝 Essay Reviews & Student Alerts</h1>
@@ -966,7 +950,27 @@
                         <div style="font-size: 1.1rem; opacity: 0.95;">✅ Essays Today</div>
                     </div>
                 </div>
+                
+                <!-- Student Alerts -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2 style="margin: 0;">🚨 Student Alerts - Need Help</h2>
+                        <button onclick="loadEssayAlerts()" class="btn btn-primary">🔄 Refresh</button>
+                    </div>
+                    <div id="studentAlertsTable">
+                        <p style="text-align: center; padding: 2rem; color: #666;">Loading alerts...</p>
+                    </div>
+                </div>
+                
+                <!-- Essays Needing Review -->
+                <div class="card">
+                    <h2 style="margin-bottom: 1.5rem;">📝 Essays Needing Review</h2>
+                    <div id="essaysReviewTable">
+                        <p style="text-align: center; padding: 2rem; color: #666;">Loading essays...</p>
+                    </div>
+                </div>
             </div>
+
             <!-- Analytics Section -->
             <div id="analyticsSection" class="hidden">
                 <div class="header">
@@ -993,7 +997,7 @@
                         <span class="stat-label">Satisfaction Score</span>
                     </div>
                 </div>
-            </div>
+
                 <!-- Reading Level Distribution -->
                 <div class="card">
                     <h2>Reading Level Distribution</h2>
