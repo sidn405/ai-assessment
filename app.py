@@ -1467,7 +1467,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                  True, 1)  # Auto-approve AI content for now
             )
             result = cursor.fetchone()
-            passage_id = result['id']
+            passage_id = result['id'] if hasattr(result, 'keys') else result[0]  # ← FIX
         else:
             cursor.execute(
                 """INSERT INTO passages 
@@ -3382,7 +3382,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Step 8: Save to database
         print("Step 8: Saving passage to database...")
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor()
         
         try:
             if USE_POSTGRES:
