@@ -6143,7 +6143,7 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
     elif context == 'instruction':
         messages = [
             f"Alright {first_name}, read this passage carefully. Take your time and enjoy the story! Then we'll check your understanding.",
-            f"Here's your reading for today, {first_name}. Focus on the main ideas and interesting details. You've got this!",
+            f"Here's your next reading for today, {first_name}. Focus on the main ideas and interesting details. You've got this!",
             f"Let's dive into this passage together, {first_name}! Read at your own pace, and I'll be here when you're ready for questions.",
             f"Time to read, {first_name}! Remember, it's not a race. Understanding is what matters most!"
         ]
