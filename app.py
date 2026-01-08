@@ -3227,7 +3227,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Step 3: Get user profile
         print("Step 3: Fetching user from database...")
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         if USE_POSTGRES:
             cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
@@ -4485,7 +4485,7 @@ async def get_essay_details(essay_id: int, token: str):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
 
     try:
         if USE_POSTGRES:
@@ -4517,18 +4517,30 @@ async def get_essay_details(essay_id: int, token: str):
             conn.close()
             raise HTTPException(status_code=404, detail="Essay not found")
         
-        essay = dict(row)
+        # Convert row to dict properly
+        if hasattr(row, 'keys'):
+            # PostgreSQL RealDictCursor - already a dict-like object
+            essay = dict(row)
+        else:
+            # SQLite Row - convert using column names
+            essay = {}
+            for key in row.keys():
+                essay[key] = row[key]
         
         # Parse JSON fields
         if essay.get('ai_feedback'):
             try:
-                essay['ai_feedback'] = json.loads(essay['ai_feedback']) if isinstance(essay['ai_feedback'], str) else essay['ai_feedback']
+                if isinstance(essay['ai_feedback'], str):
+                    essay['ai_feedback'] = json.loads(essay['ai_feedback'])
             except:
                 pass
         
         if essay.get('lesson_topics'):
             try:
-                essay['lesson_topics'] = json.loads(essay['lesson_topics']) if isinstance(essay['lesson_topics'], str) else essay['lesson_topics']
+                if isinstance(essay['lesson_topics'], str):
+                    essay['lesson_topics'] = json.loads(essay['lesson_topics'])
+                elif not isinstance(essay['lesson_topics'], list):
+                    essay['lesson_topics'] = []
             except:
                 essay['lesson_topics'] = []
         
@@ -4544,8 +4556,9 @@ async def get_essay_details(essay_id: int, token: str):
     except Exception as e:
         conn.close()
         print(f"Error getting essay details: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/admin/alert/{alert_id}/mark-resolved")
 async def mark_alert_resolved(alert_id: int, request: Request):
