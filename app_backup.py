@@ -136,7 +136,7 @@ def init_db():
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0)
         conn.execute('PRAGMA journal_mode=WAL')
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Create all tables for SQLite (for local development)
         cursor.execute('''
@@ -210,7 +210,7 @@ def verify_token(token: str) -> dict:
 def update_user_activity(user_id: int):
     """Update last_active timestamp"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     if USE_POSTGRES:
         cursor.execute("UPDATE users SET last_active = NOW() WHERE id = %s", (user_id,))
     else:
@@ -300,7 +300,7 @@ async def register(user: UserCreate):
 @app.post("/api/login")
 async def login(credentials: UserLogin):
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     if USE_POSTGRES:
         cursor.execute("SELECT * FROM users WHERE email = %s", (credentials.email,))
@@ -350,7 +350,7 @@ async def forgot_password(request: dict):
         raise HTTPException(status_code=400, detail="Email is required")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         # Check if user exists
@@ -1467,7 +1467,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                  True, 1)  # Auto-approve AI content for now
             )
             result = cursor.fetchone()
-            passage_id = result['id']
+            passage_id = result['id'] if hasattr(result, 'keys') else result[0]  # ← FIX
         else:
             cursor.execute(
                 """INSERT INTO passages 
@@ -2501,7 +2501,7 @@ async def save_lesson_progress(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Save session
         if USE_POSTGRES:
@@ -3227,7 +3227,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Step 3: Get user profile
         print("Step 3: Fetching user from database...")
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         if USE_POSTGRES:
             cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
@@ -3382,7 +3382,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Step 8: Save to database
         print("Step 8: Saving passage to database...")
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         try:
             if USE_POSTGRES:
@@ -4018,13 +4018,14 @@ async def get_active_sessions(token: str):
         if USE_POSTGRES:
             cursor.execute("""
                 SELECT
-                    us.id AS session_id,
+                    us.id,
                     us.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
+                    u.full_name,
+                    u.email,
                     us.status,
                     us.session_start,
-                    us.last_activity
+                    us.last_activity,
+                    us.break_start
                 FROM user_sessions us
                 JOIN users u ON u.id = us.user_id
                 WHERE us.session_end IS NULL
@@ -4033,31 +4034,48 @@ async def get_active_sessions(token: str):
         else:
             cursor.execute("""
                 SELECT
-                    us.id AS session_id,
+                    us.id,
                     us.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
+                    u.full_name,
+                    u.email,
                     us.status,
                     us.session_start,
-                    us.last_activity
+                    us.last_activity,
+                    us.break_start
                 FROM user_sessions us
                 JOIN users u ON u.id = us.user_id
                 WHERE us.session_end IS NULL
                 ORDER BY us.last_activity DESC, us.session_start DESC
             """)
         
+        rows = cursor.fetchall()
         sessions = []
-        for row in cursor.fetchall():
-            sessions.append({
-                'session_id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['name'] if hasattr(row, 'keys') else row[-2],
-                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
-                'status': row['status'] if hasattr(row, 'keys') else row[4],
-                'session_start': str(row['session_start'] if hasattr(row, 'keys') else row[2]),
-                'last_activity': str(row['last_activity'] if hasattr(row, 'keys') else row[3]),
-                'break_start': str(row['break_start']) if (row['break_start'] if hasattr(row, 'keys') else row[5]) else None
-            })
+        
+        for row in rows:
+            if hasattr(row, 'keys'):
+                # PostgreSQL with RealDictCursor
+                sessions.append({
+                    'session_id': row['id'],
+                    'user_id': row['user_id'],
+                    'user_name': row['full_name'],
+                    'user_email': row['email'],
+                    'status': row['status'],
+                    'session_start': str(row['session_start']),
+                    'last_activity': str(row['last_activity']) if row['last_activity'] else None,
+                    'break_start': str(row['break_start']) if row['break_start'] else None
+                })
+            else:
+                # SQLite with Row
+                sessions.append({
+                    'session_id': row[0],
+                    'user_id': row[1],
+                    'user_name': row[2],
+                    'user_email': row[3],
+                    'status': row[4],
+                    'session_start': str(row[5]),
+                    'last_activity': str(row[6]) if row[6] else None,
+                    'break_start': str(row[7]) if row[7] else None
+                })
         
         conn.close()
         
@@ -4069,6 +4087,8 @@ async def get_active_sessions(token: str):
         
     except Exception as e:
         print(f"Error getting active sessions: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/admin/activity/recent")
@@ -4084,17 +4104,32 @@ async def get_recent_activity(token: str, hours: int = 24):
         
         if USE_POSTGRES:
             cursor.execute("""
-                SELECT a.*, u.full_name, u.email
+                SELECT 
+                    a.id,
+                    a.user_id,
+                    a.session_id,
+                    a.activity_type,
+                    a.activity_details,
+                    a.timestamp,
+                    u.full_name,
+                    u.email
                 FROM activity_log a
                 JOIN users u ON a.user_id = u.id
                 WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour')
                 ORDER BY a.timestamp DESC
                 LIMIT 100
-                """, (hours,))
-
+            """, (hours,))
         else:
             cursor.execute("""
-                SELECT a.*, full_name, email 
+                SELECT 
+                    a.id,
+                    a.user_id,
+                    a.session_id,
+                    a.activity_type,
+                    a.activity_details,
+                    a.timestamp,
+                    u.full_name,
+                    u.email
                 FROM activity_log a
                 JOIN users u ON a.user_id = u.id
                 WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
@@ -4102,17 +4137,34 @@ async def get_recent_activity(token: str, hours: int = 24):
                 LIMIT 100
             """, (hours,))
         
+        rows = cursor.fetchall()
         activities = []
-        for row in cursor.fetchall():
-            activities.append({
-                'id': row['id'] if hasattr(row, 'keys') else row[0],
-                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
-                'user_name': row['full_name'] if hasattr(row, 'keys') else row[-2],
-                'user_email': row['email'] if hasattr(row, 'keys') else row[-1],
-                'activity_type': row['activity_type'] if hasattr(row, 'keys') else row[3],
-                'activity_details': row['activity_details'] if hasattr(row, 'keys') else row[4],
-                'timestamp': str(row['timestamp'] if hasattr(row, 'keys') else row[5])
-            })
+        
+        for row in rows:
+            if hasattr(row, 'keys'):
+                # PostgreSQL with RealDictCursor
+                activities.append({
+                    'id': row['id'],
+                    'user_id': row['user_id'],
+                    'session_id': row['session_id'],
+                    'user_name': row['full_name'],
+                    'user_email': row['email'],
+                    'activity_type': row['activity_type'],
+                    'activity_details': row['activity_details'],
+                    'timestamp': str(row['timestamp'])
+                })
+            else:
+                # SQLite with Row
+                activities.append({
+                    'id': row[0],
+                    'user_id': row[1],
+                    'session_id': row[2],
+                    'activity_type': row[3],
+                    'activity_details': row[4],
+                    'timestamp': str(row[5]),
+                    'user_name': row[6],
+                    'user_email': row[7]
+                })
         
         conn.close()
         
@@ -4124,6 +4176,8 @@ async def get_recent_activity(token: str, hours: int = 24):
         
     except Exception as e:
         print(f"Error getting activity: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/admin/alerts/unread")
@@ -4244,7 +4298,364 @@ async def get_essays_needing_review(token: str, limit: int = 50):
             pass
         conn.close()
 
+# ============================================
+# ESSAY ALERTS & REVIEW ENDPOINTS
+# ============================================
 
+@app.get("/api/admin/alerts/unread")
+async def get_unread_alerts(token: str, limit: int = 50):
+    """Get unread admin alerts"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = FALSE
+                ORDER BY 
+                    CASE a.priority
+                        WHEN 'urgent' THEN 1
+                        WHEN 'high' THEN 2
+                        WHEN 'normal' THEN 3
+                        ELSE 4
+                    END,
+                    a.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    a.id AS alert_id,
+                    a.alert_type,
+                    a.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    a.essay_id,
+                    a.priority,
+                    a.message,
+                    a.details,
+                    a.created_at
+                FROM admin_alerts a
+                JOIN users u ON u.id = a.user_id
+                WHERE a.is_read = 0
+                ORDER BY 
+                    CASE a.priority
+                        WHEN 'urgent' THEN 1
+                        WHEN 'high' THEN 2
+                        WHEN 'normal' THEN 3
+                        ELSE 4
+                    END,
+                    a.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall()
+        alerts = []
+        
+        for row in rows:
+            alerts.append({
+                'alert_id': row['alert_id'] if hasattr(row, 'keys') else row[0],
+                'alert_type': row['alert_type'] if hasattr(row, 'keys') else row[1],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[2],
+                'user_name': row['user_name'] if hasattr(row, 'keys') else row[3],
+                'user_email': row['user_email'] if hasattr(row, 'keys') else row[4],
+                'essay_id': row['essay_id'] if hasattr(row, 'keys') else row[5],
+                'priority': row['priority'] if hasattr(row, 'keys') else row[6],
+                'message': row['message'] if hasattr(row, 'keys') else row[7],
+                'details': row['details'] if hasattr(row, 'keys') else row[8],
+                'created_at': str(row['created_at'] if hasattr(row, 'keys') else row[9])
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "count": len(alerts),
+            "alerts": alerts
+        }
+
+    except Exception as e:
+        conn.close()
+        print(f"Error getting unread alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/essays/needs-review")
+async def get_essays_needing_review(token: str, limit: int = 50):
+    """Get essays that need admin review"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.word_count,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = TRUE
+                  AND e.admin_reviewed = FALSE
+                ORDER BY e.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    e.id AS essay_id,
+                    e.user_id,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    e.essay_number,
+                    e.comprehension_score,
+                    e.comprehension_level,
+                    e.word_count,
+                    e.created_at
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.needs_admin_review = 1
+                  AND e.admin_reviewed = 0
+                ORDER BY e.created_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        rows = cursor.fetchall()
+        essays = []
+        
+        for row in rows:
+            essays.append({
+                'essay_id': row['essay_id'] if hasattr(row, 'keys') else row[0],
+                'user_id': row['user_id'] if hasattr(row, 'keys') else row[1],
+                'user_name': row['user_name'] if hasattr(row, 'keys') else row[2],
+                'user_email': row['user_email'] if hasattr(row, 'keys') else row[3],
+                'essay_number': row['essay_number'] if hasattr(row, 'keys') else row[4],
+                'comprehension_score': row['comprehension_score'] if hasattr(row, 'keys') else row[5],
+                'comprehension_level': row['comprehension_level'] if hasattr(row, 'keys') else row[6],
+                'word_count': row['word_count'] if hasattr(row, 'keys') else row[7],
+                'created_at': str(row['created_at'] if hasattr(row, 'keys') else row[8])
+            })
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "count": len(essays),
+            "essays": essays
+        }
+
+    except Exception as e:
+        conn.close()
+        print(f"Error getting essays needing review: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/essay/{essay_id}/details")
+async def get_essay_details(essay_id: int, token: str):
+    """Get full essay details including text, feedback, and student info"""
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT
+                    e.*,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    u.reading_level
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.id = %s
+            """, (essay_id,))
+        else:
+            cursor.execute("""
+                SELECT
+                    e.*,
+                    u.full_name AS user_name,
+                    u.email AS user_email,
+                    u.reading_level
+                FROM user_essays e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.id = ?
+            """, (essay_id,))
+
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Essay not found")
+        
+        # Convert row to dict properly
+        if hasattr(row, 'keys'):
+            # PostgreSQL RealDictCursor - already a dict-like object
+            essay = dict(row)
+        else:
+            # SQLite Row - convert using column names
+            essay = {}
+            for key in row.keys():
+                essay[key] = row[key]
+        
+        # Parse JSON fields
+        if essay.get('ai_feedback'):
+            try:
+                if isinstance(essay['ai_feedback'], str):
+                    essay['ai_feedback'] = json.loads(essay['ai_feedback'])
+            except:
+                pass
+        
+        if essay.get('lesson_topics'):
+            try:
+                if isinstance(essay['lesson_topics'], str):
+                    essay['lesson_topics'] = json.loads(essay['lesson_topics'])
+                elif not isinstance(essay['lesson_topics'], list):
+                    essay['lesson_topics'] = []
+            except:
+                essay['lesson_topics'] = []
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "essay": essay
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.close()
+        print(f"Error getting essay details: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/alert/{alert_id}/mark-resolved")
+async def mark_alert_resolved(alert_id: int, request: Request):
+    """Mark an alert as resolved"""
+    data = await request.json()
+    token = data.get('token')
+    admin_notes = data.get('notes', '')
+    
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE admin_alerts
+                SET is_read = TRUE,
+                    resolved_at = NOW(),
+                    resolved_by = %s,
+                    admin_notes = %s
+                WHERE id = %s
+            """, (user_data['user_id'], admin_notes, alert_id))
+        else:
+            cursor.execute("""
+                UPDATE admin_alerts
+                SET is_read = 1,
+                    resolved_at = datetime('now'),
+                    resolved_by = ?,
+                    admin_notes = ?
+                WHERE id = ?
+            """, (user_data['user_id'], admin_notes, alert_id))
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": "Alert marked as resolved"
+        }
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error marking alert resolved: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/essay/{essay_id}/mark-reviewed")
+async def mark_essay_reviewed(essay_id: int, request: Request):
+    """Mark an essay as reviewed by admin"""
+    data = await request.json()
+    token = data.get('token')
+    admin_notes = data.get('notes', '')
+    
+    user_data = verify_token(token)
+    if user_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE user_essays
+                SET admin_reviewed = TRUE,
+                    admin_reviewed_at = NOW(),
+                    admin_reviewed_by = %s,
+                    admin_notes = %s
+                WHERE id = %s
+            """, (user_data['user_id'], admin_notes, essay_id))
+        else:
+            cursor.execute("""
+                UPDATE user_essays
+                SET admin_reviewed = 1,
+                    admin_reviewed_at = datetime('now'),
+                    admin_reviewed_by = ?,
+                    admin_notes = ?
+                WHERE id = ?
+            """, (user_data['user_id'], admin_notes, essay_id))
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": "Essay marked as reviewed"
+        }
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error marking essay reviewed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     
 # ============================================================
 # GAMIFICATION SYSTEM
@@ -5192,7 +5603,7 @@ async def start_session(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Close any existing active sessions
         if USE_POSTGRES:
@@ -5267,7 +5678,7 @@ async def update_activity(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update last activity
         if USE_POSTGRES:
@@ -5320,7 +5731,7 @@ async def start_break(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update session to break status
         if USE_POSTGRES:
@@ -5373,7 +5784,7 @@ async def end_break(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Get break start time
         if USE_POSTGRES:
@@ -5455,7 +5866,7 @@ async def log_timeout_warning(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Create timeout event
         if USE_POSTGRES:
@@ -5512,7 +5923,7 @@ async def log_timeout_response(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update timeout event
         if USE_POSTGRES:
@@ -5637,7 +6048,7 @@ async def end_session(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
         # Update session
         if USE_POSTGRES:

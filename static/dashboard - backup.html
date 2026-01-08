@@ -1973,7 +1973,9 @@
         // AI TUTOR (Dashboard-integrated)
         // ============================================
         let tutorMuted = false;
+        let tutorHasGreeted = false;
         let speechUnlocked = false;
+        let tutorTimers = [];
 
         function unlockSpeechOnce() {
         if (speechUnlocked || !window.speechSynthesis) return;
@@ -2088,16 +2090,24 @@
         }
 
         // Call when a lesson is rendered on the dashboard
-        let tutorTimers = [];
+
         function startTutorForLesson() {
-        ensureVoicesLoaded();
-        tutorTimers.forEach(t => clearTimeout(t));
-        tutorTimers = [];
+            ensureVoicesLoaded();
+            unlockSpeechOnce(); // ✅ ADDED THIS LINE
 
-        tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
-        tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
+            tutorTimers.forEach(t => clearTimeout(t));
+            tutorTimers = [];
+
+            // Only greet on first lesson of the session
+            if (!tutorHasGreeted) {
+                tutorTimers.push(setTimeout(() => showTutor('greeting'), 900));
+                tutorTimers.push(setTimeout(() => showTutor('instruction'), 5900));
+                tutorHasGreeted = true;
+            } else {
+                // Subsequent lessons: just instruction
+                tutorTimers.push(setTimeout(() => showTutor('instruction'), 900));
+            }
         }
-
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
@@ -3031,7 +3041,7 @@
 
         // Session configuration
         const SESSION_CONFIG = {
-            WARNING_TIME: 37 * 60 * 1000,      // 7 minutes in milliseconds
+            WARNING_TIME: 7 * 60 * 1000,      // 7 minutes in milliseconds
             TIMEOUT_TIME: 10 * 60 * 1000,     // 10 minutes in milliseconds
             MAX_BREAK_TIME: 30 * 60 * 1000,   // 30 minutes in milliseconds
             ACTIVITY_CHECK_INTERVAL: 30 * 1000 // Check every 30 seconds

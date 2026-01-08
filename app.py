@@ -6110,7 +6110,7 @@ async def get_tutor_message(request: Request):
         
         return {
             "success": True,
-            "message": messages['text'],
+            "message": messages['text'] or "",
             "emotion": messages['emotion']  # happy, encouraging, celebrating, thoughtful
         }
         
@@ -6126,6 +6126,10 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
     
     # Get first name only for more natural speech
     first_name = student_name.split()[0] if student_name and student_name != 'there' else student_name
+    
+    if context == "greeting":
+        return {"text": "", "emotion": "neutral"}
+
     
     if context == 'greeting':
         messages = [
