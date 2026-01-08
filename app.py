@@ -3382,7 +3382,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Step 8: Save to database
         print("Step 8: Saving passage to database...")
         conn = get_db()
-        cursor = get_cursor()
+        cursor = get_cursor(conn)
         
         try:
             if USE_POSTGRES:
