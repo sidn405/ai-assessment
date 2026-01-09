@@ -3052,7 +3052,7 @@ def get_available_goal_types():
 def get_user_weekly_goals(user_id):
     """Get all weekly goals for user"""
     conn = get_db()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor()
     
     try:
         from datetime import datetime, timedelta
@@ -3102,7 +3102,7 @@ async def save_lesson_progress(request: Request):
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = get_cursor(conn)
+        cursor = conn.cursor()
         
         # Save session
         if USE_POSTGRES:
