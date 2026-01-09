@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Password - Achieve 365</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .reset-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 480px;
+            padding: 40px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: #667eea;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .logo p {
+            color: #757575;
+            font-size: 16px;
+        }
+
+        .icon-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .icon-container i {
+            font-size: 64px;
+            color: #667eea;
+        }
+
+        h2 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #757575;
+            margin-bottom: 30px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .password-field-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-field-wrapper input {
+            width: 100%;
+            padding: 14px 50px 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .password-field-wrapper input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .password-field-wrapper.error input {
+            border-color: #f44336;
+        }
+
+        .password-toggle-btn {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            color: #9e9e9e;
+            font-size: 18px;
+            transition: color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .password-toggle-btn:hover {
+            color: #667eea;
+        }
+
+        .password-toggle-btn:focus {
+            outline: none;
+            color: #667eea;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 6px;
+            color: #757575;
+            font-size: 13px;
+        }
+
+        .password-strength {
+            margin-top: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .password-strength.weak { color: #f44336; }
+        .password-strength.medium { color: #ff9800; }
+        .password-strength.strong { color: #4caf50; }
+
+        .error-message {
+            color: #f44336;
+            font-size: 13px;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+            border-left: 4px solid;
+        }
+
+        .alert.error {
+            background: #ffebee;
+            color: #c62828;
+            border-color: #c62828;
+        }
+
+        .alert.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-color: #2e7d32;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.3s;
+            margin-top: 24px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 24px;
+        }
+
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 15px;
+            transition: color 0.3s;
+        }
+
+        .back-link a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        .requirements {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+
+        .requirements h4 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .requirements ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .requirements li {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 6px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .requirements li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        @media (max-width: 480px) {
+            .reset-container {
+                padding: 30px 20px;
+            }
+
+            h2 {
+                font-size: 24px;
+            }
+
+            .logo h1 {
+                font-size: 28px;
+            }
+
+            .icon-container i {
+                font-size: 48px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="reset-container">
+        <div class="logo">
+            <h1>📚 ACHIEVE 365</h1>
+            <p>Every day, a step forward</p>
+        </div>
+
+        <div class="icon-container">
+            <i class="fas fa-lock"></i>
+        </div>
+
+        <h2>Reset Password</h2>
+        <p class="subtitle">Choose a strong new password for your account</p>
+
+        <div class="alert error" id="alert-message"></div>
+
+        <form id="resetPasswordForm" onsubmit="handleResetPassword(event)">
+            <div class="form-group">
+                <label for="newPassword">New Password</label>
+                <div class="password-field-wrapper">
+                    <input 
+                        type="password" 
+                        id="newPassword" 
+                        name="newPassword" 
+                        required 
+                        placeholder="Enter new password"
+                        autocomplete="new-password"
+                        minlength="8"
+                        oninput="checkPasswordStrength()"
+                    >
+                    <button 
+                        type="button" 
+                        class="password-toggle-btn" 
+                        onclick="togglePassword('newPassword')"
+                        aria-label="Toggle new password visibility"
+                        title="Show/Hide password"
+                    >
+                        <i class="fas fa-eye" id="newPassword-icon"></i>
+                    </button>
+                </div>
+                <div id="password-strength" class="password-strength"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="confirmPassword">Confirm New Password</label>
+                <div class="password-field-wrapper" id="confirmPassword-wrapper">
+                    <input 
+                        type="password" 
+                        id="confirmPassword" 
+                        name="confirmPassword" 
+                        required 
+                        placeholder="Re-enter new password"
+                        autocomplete="new-password"
+                        oninput="validatePasswordMatch()"
+                    >
+                    <button 
+                        type="button" 
+                        class="password-toggle-btn" 
+                        onclick="togglePassword('confirmPassword')"
+                        aria-label="Toggle confirm password visibility"
+                        title="Show/Hide password"
+                    >
+                        <i class="fas fa-eye" id="confirmPassword-icon"></i>
+                    </button>
+                </div>
+                <span class="error-message" id="confirmPassword-error">Passwords do not match</span>
+            </div>
+
+            <div class="requirements">
+                <h4>Password Requirements:</h4>
+                <ul>
+                    <li>At least 8 characters long</li>
+                    <li>Include uppercase letters (A-Z)</li>
+                    <li>Include lowercase letters (a-z)</li>
+                    <li>Include numbers (0-9)</li>
+                    <li>Consider using special characters</li>
+                </ul>
+            </div>
+
+            <button type="submit" class="btn" id="resetBtn">
+                Reset Password
+            </button>
+        </form>
+
+        <div class="back-link">
+            <a href="/login">
+                <i class="fas fa-arrow-left"></i> Back to Login
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(inputId + '-icon');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        function checkPasswordStrength() {
+            const password = document.getElementById('newPassword').value;
+            const strengthDiv = document.getElementById('password-strength');
+            
+            if (password.length === 0) {
+                strengthDiv.textContent = '';
+                return;
+            }
+            
+            let strength = 0;
+            
+            if (password.length >= 8) strength++;
+            if (password.length >= 12) strength++;
+            if (/[a-z]/.test(password)) strength++;
+            if (/[A-Z]/.test(password)) strength++;
+            if (/[0-9]/.test(password)) strength++;
+            if (/[^a-zA-Z0-9]/.test(password)) strength++;
+            
+            if (strength <= 2) {
+                strengthDiv.textContent = '❌ Weak password';
+                strengthDiv.className = 'password-strength weak';
+            } else if (strength <= 4) {
+                strengthDiv.textContent = '⚠️ Medium password';
+                strengthDiv.className = 'password-strength medium';
+            } else {
+                strengthDiv.textContent = '✅ Strong password';
+                strengthDiv.className = 'password-strength strong';
+            }
+        }
+
+        function validatePasswordMatch() {
+            const password = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const errorMessage = document.getElementById('confirmPassword-error');
+            const wrapper = document.getElementById('confirmPassword-wrapper');
+            
+            if (confirmPassword.length === 0) {
+                errorMessage.classList.remove('show');
+                wrapper.classList.remove('error');
+                return true;
+            }
+            
+            if (password !== confirmPassword) {
+                errorMessage.classList.add('show');
+                wrapper.classList.add('error');
+                return false;
+            } else {
+                errorMessage.classList.remove('show');
+                wrapper.classList.remove('error');
+                return true;
+            }
+        }
+
+        function showAlert(message, type = 'error') {
+            const alertDiv = document.getElementById('alert-message');
+            alertDiv.textContent = message;
+            alertDiv.className = `alert ${type} show`;
+            
+            if (type === 'error') {
+                setTimeout(() => {
+                    alertDiv.classList.remove('show');
+                }, 5000);
+            }
+        }
+
+        async function handleResetPassword(event) {
+            event.preventDefault();
+            
+            // Validate password match
+            if (!validatePasswordMatch()) {
+                showAlert('Passwords do not match', 'error');
+                return;
+            }
+            
+            // Get token from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (!token) {
+                showAlert('Invalid or missing reset token. Please request a new password reset link.', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('resetBtn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Resetting Password...';
+            
+            const newPassword = document.getElementById('newPassword').value;
+            
+            try {
+                const response = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, password: newPassword })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showAlert('Password reset successfully! Redirecting to login...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
+                } else {
+                    showAlert(data.detail || 'Failed to reset password. The link may be expired.', 'error');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            } catch (error) {
+                console.error('Password reset error:', error);
+                showAlert('Password reset failed. Please check your connection and try again.', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // Check if token exists on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (!token) {
+                showAlert('Invalid or missing reset token. Please request a new password reset link.', 'error');
+                document.getElementById('resetBtn').disabled = true;
+            }
+        });
+    </script>
+</body>
+</html>
