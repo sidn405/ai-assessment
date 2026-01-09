@@ -2546,7 +2546,7 @@ WEEKLY_GOAL_TYPES = {
     },
     'daily_streak': {
         'name': 'Daily Streak',
-        'description': 'Complete lessons on consecutive days',
+        'description': 'Complete lessons on X different days',
         'default_target': 5,
         'points_reward': 100,
         'icon': '🔥'
@@ -2960,7 +2960,8 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
                    AND completed_at >= ? AND completed_at < ?""",
                 (user_id, week_start, week_end)
             )
-        return cursor.fetchone()[0]
+        result = cursor.fetchone()
+        return result['count'] if hasattr(result, 'keys') else result[0]
     
     elif goal_type == 'reading_time':
         if USE_POSTGRES:
@@ -2979,7 +2980,8 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
                    AND completed_at >= ? AND completed_at < ?""",
                 (user_id, week_start, week_end)
             )
-        result = cursor.fetchone()[0]
+        row = cursor.fetchone()
+        result = row['sum'] if hasattr(row, 'keys') else row[0]
         return int(result) if result else 0
     
     elif goal_type == 'average_score':
@@ -2997,7 +2999,8 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
                    AND completed_at >= ? AND completed_at < ?""",
                 (user_id, week_start, week_end)
             )
-        result = cursor.fetchone()[0]
+        row = cursor.fetchone()
+        result = row['avg'] if hasattr(row, 'keys') else row[0]
         return int(result) if result else 0
     
     elif goal_type == 'perfect_scores':
@@ -3017,45 +3020,28 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
                    AND completed_at >= ? AND completed_at < ?""",
                 (user_id, week_start, week_end)
             )
-        return cursor.fetchone()[0]
+        result = cursor.fetchone()
+        return result['count'] if hasattr(result, 'keys') else result[0]
     
     elif goal_type == 'daily_streak':
+        # Count distinct days with completed lessons this week
         if USE_POSTGRES:
             cursor.execute(
-                """SELECT DISTINCT DATE(completed_at) FROM session_logs 
+                """SELECT COUNT(DISTINCT DATE(completed_at)) FROM session_logs 
                    WHERE user_id = %s AND completion_status = 'completed'
-                   AND completed_at >= %s AND completed_at < %s
-                   ORDER BY DATE(completed_at) DESC""",
+                   AND completed_at >= %s AND completed_at < %s""",
                 (user_id, week_start, week_end)
             )
         else:
             cursor.execute(
-                """SELECT DISTINCT DATE(completed_at) FROM session_logs 
+                """SELECT COUNT(DISTINCT DATE(completed_at)) FROM session_logs 
                    WHERE user_id = ? AND completion_status = 'completed'
-                   AND completed_at >= ? AND completed_at < ?
-                   ORDER BY DATE(completed_at) DESC""",
+                   AND completed_at >= ? AND completed_at < ?""",
                 (user_id, week_start, week_end)
             )
         
-        dates = [row[0] for row in cursor.fetchall()]
-        
-        # Calculate longest streak
-        if not dates:
-            return 0
-        
-        streak = 1
-        max_streak = 1
-        
-        for i in range(len(dates) - 1):
-            date1 = datetime.strptime(str(dates[i]), '%Y-%m-%d').date() if isinstance(dates[i], str) else dates[i]
-            date2 = datetime.strptime(str(dates[i+1]), '%Y-%m-%d').date() if isinstance(dates[i+1], str) else dates[i+1]
-            if (date1 - date2).days == 1:
-                streak += 1
-                max_streak = max(max_streak, streak)
-            else:
-                streak = 1
-        
-        return max_streak
+        result = cursor.fetchone()
+        return result['count'] if hasattr(result, 'keys') else result[0]
     
     return 0
 
