@@ -3052,7 +3052,7 @@ def get_available_goal_types():
 def get_user_weekly_goals(user_id):
     """Get all weekly goals for user"""
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         from datetime import datetime, timedelta
