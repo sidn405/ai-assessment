@@ -973,6 +973,15 @@
                 <div class="form-group">
                     <label for="loginPassword">Password</label>
                     <input type="password" id="loginPassword" required>
+                    <button
+                        type="button" 
+                        class="password-toggle-btn" 
+                        onclick="togglePassword('password')"
+                        aria-label="Toggle password visibility"
+                        title="Show/Hide password"
+                    >
+                        <i class="fas fa-eye" id="password-icon"></i>
+                    </button>
                 </div>
                 <!-- In login modal, update the forgot password link: -->
                 <div style="text-align: right; margin-bottom: 1rem;">
@@ -1054,7 +1063,6 @@
                     >
                         <i class="fas fa-eye" id="password-icon"></i>
                     </button>
-                    >
                 </div>
 
                 <!-- ✅ ADD AGE FIELD -->
