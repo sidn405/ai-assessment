@@ -5702,7 +5702,7 @@ def update_user_difficulty(user_id, new_level, essay_id, reason):
 def create_admin_alert(user_id, essay_id, alert_type, priority, message, details):
     """Create admin alert"""
     conn = get_db()
-    cursor = get_cursor()
+    cursor = get_cursor(conn)
     
     try:
         if USE_POSTGRES:
