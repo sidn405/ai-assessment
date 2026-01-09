@@ -318,275 +318,102 @@
             border: 1px solid #bee5eb;
         }
         
-        /* ========== TABLET RESPONSIVE (768px - 1024px) ========== */
-        @media (min-width: 769px) and (max-width: 1024px) {
-            /* Narrower sidebar for tablets */
-            .sidebar {
-                width: 220px;
-            }
-            
-            .main-content {
-                margin-left: 220px;
-                width: calc(100% - 220px);
-                padding: 1.5rem;
-            }
-            
-            /* Stats grid - 2 columns on tablet */
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
-            }
-            
-            /* Adjust font sizes for tablets */
-            .header h1 {
-                font-size: 1.5rem;
-            }
-            
-            .stat-card {
-                padding: 1.25rem;
-            }
-            
-            .stat-value {
-                font-size: 2rem;
-            }
-            
-            /* Navigation items */
-            .nav-item {
-                padding: 0.875rem 1.5rem;
-                font-size: 0.95rem;
-            }
-            
-            /* Badges grid - 3 columns */
-            .badges-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-            
-            /* Weekly goals - adjust spacing */
-            .goal-item {
-                padding: 0.875rem;
-            }
-            
-            /* Card spacing */
-            .card {
-                padding: 1.25rem;
-                margin-bottom: 1.25rem;
-            }
-            
-            /* Logo */
-            .logo {
-                padding: 0 1.5rem;
-                margin-bottom: 2rem;
-                font-size: 1.1rem;
-            }
-            
-            /* Profile section */
-            .profile {
-                padding: 0 1.5rem;
-                margin-bottom: 2rem;
-            }
-            
-            .profile h3 {
-                font-size: 1rem;
-            }
-            
-            .profile .level {
-                font-size: 0.85rem;
-            }
-        }
-        
-        /* ========== MOBILE RESPONSIVE (≤768px) ========== */
         @media (max-width: 768px) {
-
             .sidebar {
-
                 width: 100%;
-
                 height: auto;
-
                 position: relative;
-
             }
-
             
-
             .main-content {
-
                 margin-left: 0;
-
                 width: 100%;
-
             }
-
         }
-
-
 
         @keyframes fadeIn {
-
             from { opacity: 0; }
-
             to { opacity: 1; }
-
         }
-
-
 
         @keyframes fadeOut {
-
             from { opacity: 1; }
-
             to { opacity: 0; }
-
         }
-
-
 
         @keyframes scaleIn {
-
             from {
-
                 transform: scale(0.5);
-
                 opacity: 0;
-
             }
-
             to {
-
                 transform: scale(1);
-
                 opacity: 1;
-
             }
-
         }
-
-
 
         @keyframes bounce {
-
             0%, 100% {
-
                 transform: translateY(0);
-
             }
-
             50% {
-
                 transform: translateY(-20px);
-
             }
-
         }
-
-
 
         @keyframes shake {
-
             0%, 100% {
-
                 transform: rotate(0deg);
-
             }
-
             25% {
-
                 transform: rotate(-10deg);
-
             }
-
             75% {
-
                 transform: rotate(10deg);
-
             }
-
         }
-
-
 
         @keyframes confetti-fall {
-
             0% {
-
                 transform: translateY(0) rotate(0deg);
-
                 opacity: 1;
-
             }
-
             100% {
-
                 transform: translateY(100vh) rotate(720deg);
-
                 opacity: 0;
-
             }
-
         }
-
-
 
         @keyframes starBurst {
-
             0% {
-
                 transform: translateY(0) scale(0);
-
                 opacity: 1;
-
             }
-
             100% {
-
                 transform: translateY(-200px) scale(1.5);
-
                 opacity: 0;
-
             }
-
         }
-
-
 
         @keyframes slideDown {
-
             from {
-
                 opacity: 0;
-
                 transform: translateY(-10px);
-
             }
-
             to {
-
                 opacity: 1;
-
                 transform: translateY(0);
-
             }
-
         }
-
-
 
         @keyframes pulse {
-
             0%, 100% {
-
                 transform: scale(1);
-
             }
-
             50% {
-
                 transform: scale(1.05);
-
             }
-
         }
-
 
         /* ========== UTILITY CLASSES ========== */
 
@@ -2237,6 +2064,9 @@
                                 <div>🦉 <strong>Night Owl</strong> — Complete lesson after 9 PM</div>
                                 <div>👑 <strong>Consistency King</strong> — 7-day streak</div>
                                 <div>⚡ <strong>Speed Reader</strong> — 10 lessons in one week</div>
+                                <div>⭐ <strong>Intermediate Master</strong> — 10 intermediate lessons</div>
+                                <div>🏃 <strong>Reading Marathon</strong> — Read for 60 minutes in one day</div>
+                                <div>💯 <strong>Perfect Ten</strong> — Score 100% on 10 lessons</div>
                             </div>
                         </div>
 
@@ -2361,7 +2191,7 @@
                     <!-- Reading Level - Blue Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(79,172,254,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
-                        <div style="font-size: 2.2rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressReadingLevel" padding: 0 1rem;></div>
+                        <div style="font-size: 2.2rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); word-wrap: break-word; overflow-wrap: break-word; max-width: 100%;" id="progressReadingLevel"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Reading Level</div>
                     </div>
 

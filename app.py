@@ -3807,6 +3807,40 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         print(f"✓ Interests: {interests}")
         
         # ========== ADD OPTION B HERE ==========
+        
+        cursor.execute(
+            """
+            SELECT title, content
+            FROM passages
+            WHERE created_by = %s
+            ORDER BY created_at DESC
+            LIMIT 30
+            """ if USE_POSTGRES else
+            """
+            SELECT title, content
+            FROM passages
+            WHERE created_by = ?
+            ORDER BY created_at DESC
+            LIMIT 30
+            """,
+            (user_id,)
+        )
+        recent = cursor.fetchall() or []
+        recent_titles = set()
+        recent_fps = set()
+
+        import re, hashlib
+        def fp(text: str) -> str:
+            norm = re.sub(r"\s+", " ", (text or "").lower()).strip()
+            norm = re.sub(r"[^a-z0-9 ]+", "", norm)
+            return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+        for r in recent:
+            t = r["title"] if isinstance(r, dict) else r[0]
+            c = r["content"] if isinstance(r, dict) else r[1]
+            if t: recent_titles.add(t.strip().lower())
+            if c: recent_fps.add(fp(c))
+
         # Step 4b: Get recently used topics for variety
         print("Step 4b: Checking recently used topics...")
         recent_topics = []
@@ -3840,6 +3874,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                             recent_topics.extend(tags)
                     except:
                         pass
+
             
             # Also check exclude_topics from query param
             if exclude_topics:
@@ -3866,30 +3901,38 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         print("Step 5: Getting word count settings...")
         word_count_min = user.get('word_count_min')
         word_count_max = user.get('word_count_max')
-        level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
-        total_read = user.get('total_passages_read') or 0
-        
-        # Set defaults if not in database
+        level_estimate = (user.get('level_estimate') or user.get('reading_level') or 'intermediate').lower()
+
+        # Always define difficulty
+        difficulty = level_estimate
+
+        # Defaults if DB doesn't have them
         if not word_count_min or not word_count_max:
             defaults = {
                 'beginner': (150, 200),
                 'intermediate': (200, 250),
-                'advanced': (250, 300)
+                'advanced': (250, 300),
             }
             word_count_min, word_count_max = defaults.get(level_estimate, (200, 250))
-        
-        difficulty = level_estimate
-        
-        # First lesson should be easier
-        if total_read == 0:
+
+        # Count sessions to determine if it's truly a first-time user
+        cursor.execute(
+            "SELECT COUNT(*) AS c FROM session_logs WHERE user_id = %s" if USE_POSTGRES
+            else "SELECT COUNT(*) AS c FROM session_logs WHERE user_id = ?",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        sessions_count = (row["c"] if isinstance(row, dict) else row[0]) or 0
+
+        # First lesson only if no sessions exist
+        if sessions_count == 0:
             if level_estimate == "intermediate":
                 difficulty = "beginner"
-            word_count_min = 150
-            word_count_max = 200
-        
+            word_count_min, word_count_max = 150, 200
+
         print(f"✓ Difficulty: {difficulty}")
         print(f"✓ Word count range: {word_count_min}-{word_count_max} words")
-        
+       
         # Step 6: Select topic (MODIFIED - use available_interests)
         print("Step 6: Selecting topic...")
         import random
@@ -3897,32 +3940,123 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         print(f"✓ Selected topic: {topic}")
 
         conn.close()
+        
+        import random, re, hashlib
 
-        # Step 7: Generate passage
-        print("Step 7: Generating passage with OpenAI...")
-        print(f"   Topic: {topic}")
-        print(f"   Difficulty: {difficulty}")
-        print(f"   Word count range: {word_count_min}-{word_count_max}")
-        print(f"   Interests: {interests}")
+        def fp(text: str) -> str:
+            norm = re.sub(r"\s+", " ", (text or "").lower()).strip()
+            norm = re.sub(r"[^a-z0-9 ]+", "", norm)
+            return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
-        try:
-            passage_data = content_generator.generate_passage(
-                topic=topic,
+        MAX_TRIES = 6
+        passage_data = None
+        picked_topic = None
+
+        for attempt in range(1, MAX_TRIES + 1):
+            picked_topic = random.choice(available_interests)
+
+            print(f"Step 7: Generating passage (attempt {attempt}/{MAX_TRIES})...")
+            print(f"   Topic: {picked_topic}")
+            print(f"   Difficulty: {difficulty}")
+            print(f"   Word count range: {word_count_min}-{word_count_max}")
+
+            candidate = content_generator.generate_passage(
+                topic=picked_topic,
                 difficulty_level=difficulty,
                 word_count_min=word_count_min,
                 word_count_max=word_count_max,
                 user_interests=interests
             )
-            print("✓ Passage generated successfully")
-            print(f"   Title: {passage_data.get('title')}")
-            print(f"   Word count: {passage_data.get('word_count')}")
-            
-        except Exception as gen_error:
-            print(f"✗ ERROR generating passage: {gen_error}")
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(gen_error)}")
+
+            title_l = (candidate.get("title") or "").strip().lower()
+            content_fp = fp(candidate.get("content") or "")
+
+            # Prevent identical repeats
+            if title_l in recent_titles or content_fp in recent_fps:
+                print("⚠️ Duplicate detected (title/content). Retrying...")
+                continue
+
+            # Enforce word count even if the model ignores it
+            wc = int(candidate.get("word_count") or 0)
+            if wc < word_count_min or wc > word_count_max:
+                print(f"⚠️ Word count out of range ({wc}). Retrying...")
+                continue
+
+            passage_data = candidate
+            break
+
+        if not passage_data:
+            # last resort: accept whatever was generated last time
+            passage_data = candidate
+            print("⚠️ Could not find a non-duplicate in range after retries; using last candidate.")
+
+        topic = picked_topic
+
+        # Step 7: Generate passage (with duplicate + word-count enforcement)
+        print("Step 7: Generating passage with OpenAI...")
+
+        import random, re, hashlib
+
+        def fp(text: str) -> str:
+            norm = re.sub(r"\s+", " ", (text or "").lower()).strip()
+            norm = re.sub(r"[^a-z0-9 ]+", "", norm)
+            return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+        def count_words(text: str) -> int:
+            return len(re.findall(r"\b[\w']+\b", text or ""))
+
+        MAX_TRIES = 6
+        passage_data = None
+        picked_topic = None
+
+        for attempt in range(1, MAX_TRIES + 1):
+            picked_topic = random.choice(available_interests)
+
+            print(f"   Attempt {attempt}/{MAX_TRIES}")
+            print(f"   Topic: {picked_topic}")
+            print(f"   Difficulty: {difficulty}")
+            print(f"   Word count range: {word_count_min}-{word_count_max}")
+
+            try:
+                candidate = content_generator.generate_passage(
+                    topic=picked_topic,
+                    difficulty_level=difficulty,
+                    word_count_min=word_count_min,
+                    word_count_max=word_count_max,
+                    user_interests=interests
+                )
+            except Exception as gen_error:
+                print(f"⚠️ Generate error: {gen_error}")
+                if attempt == MAX_TRIES:
+                    raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(gen_error)}")
+                continue
+
+            # ✅ enforce word count using actual content
+            wc = count_words(candidate.get("content", ""))
+            candidate["word_count"] = wc
+
+            if wc < word_count_min or wc > word_count_max:
+                print(f"⚠️ Reject: word_count={wc} out of range")
+                continue
+
+            # ✅ reject duplicates (title OR content fingerprint)
+            title_l = (candidate.get("title") or "").strip().lower()
+            content_fp = fp(candidate.get("content") or "")
+
+            if title_l in recent_titles or content_fp in recent_fps:
+                print("⚠️ Reject: duplicate title/content")
+                continue
+
+            passage_data = candidate
+            topic = picked_topic
+            break
+
+        if not passage_data:
+            raise HTTPException(status_code=500, detail="Could not generate a unique lesson within word count range.")
         
+        if "topic_tags" not in passage_data or not passage_data["topic_tags"]:
+            passage_data["topic_tags"] = [topic]
+   
         # Step 8: Save to database
         print("Step 8: Saving passage to database...")
         conn = get_db()
