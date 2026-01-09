@@ -2707,7 +2707,8 @@ def check_and_award_badges(user_id):
                 (user_id,)
             )
         
-        lesson_count = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        lesson_count = result['count'] if hasattr(result, 'keys') else result[0]
         print(f"📊 User has completed {lesson_count} lessons")
         
         # First lesson badge
@@ -2777,7 +2778,8 @@ def check_and_award_badges(user_id):
                 (user_id, week_start)
             )
         
-        lessons_this_week = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        lessons_this_week = result['count'] if hasattr(result, 'keys') else result[0]
         
         if lessons_this_week >= 10 and not has_badge(user_id, 'speed_reader'):
             badge = BADGES['speed_reader']
@@ -2814,7 +2816,8 @@ def check_and_award_badges(user_id):
                 (user_id,)
             )
         
-        avg_score = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        avg_score = result['avg'] if hasattr(result, 'keys') else result[0]
         
         if avg_score and avg_score >= 90 and lesson_count >= 10 and not has_badge(user_id, 'accuracy_master'):
             badge = BADGES['accuracy_master']
@@ -2861,7 +2864,9 @@ def check_and_award_badges(user_id):
         
     except Exception as e:
         conn.close()
-        print(f"Error checking badges: {e}")
+        print(f"❌ Error checking badges: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def create_weekly_goal(user_id, goal_type, custom_target=None):
