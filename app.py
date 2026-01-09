@@ -2647,14 +2647,18 @@ def has_badge(user_id, badge_type):
 
 def award_badge(user_id, badge_type, badge_name, description, icon):
     """Award badge to user - Fixed version"""
+    print(f"🎖️ Attempting to award badge '{badge_type}' to user {user_id}")
+    
     # Check if already has badge first
     if has_badge(user_id, badge_type):
+        print(f"⚠️ User {user_id} already has badge '{badge_type}'")
         return False
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
+        print(f"💾 Inserting badge into database: {badge_type}, {badge_name}")
         if USE_POSTGRES:
             cursor.execute(
                 "INSERT INTO user_badges (user_id, badge_type, badge_name, description, icon) VALUES (%s, %s, %s, %s, %s)",
@@ -2668,20 +2672,24 @@ def award_badge(user_id, badge_type, badge_name, description, icon):
         
         conn.commit()
         conn.close()
+        print(f"✅ Badge '{badge_type}' inserted successfully")
         
         # Award points for badge (avoiding circular call)
         points = BADGES[badge_type]['points']
         result = award_points(user_id, points, f'Earned badge: {badge_name}', 'badge')
+        print(f"💰 Awarded {points} points for badge")
         
         return {'badge_awarded': True, 'points_awarded': points, 'level_up': result.get('level_up', False)}
     except Exception as e:
         conn.rollback()
         conn.close()
-        print(f"Error awarding badge: {e}")
+        print(f"❌ Error awarding badge: {e}")
+        traceback.print_exc()
         return False
 
 def check_and_award_badges(user_id):
     """Check and award new badges - Enhanced version"""
+    print(f"🎯 Checking badges for user {user_id}")
     conn = get_db()
     cursor = conn.cursor()
     new_badges = []
@@ -2700,13 +2708,23 @@ def check_and_award_badges(user_id):
             )
         
         lesson_count = cursor.fetchone()[0]
+        print(f"📊 User has completed {lesson_count} lessons")
         
         # First lesson badge
-        if lesson_count >= 1 and not has_badge(user_id, 'first_lesson'):
-            badge = BADGES['first_lesson']
-            result = award_badge(user_id, 'first_lesson', badge['name'], badge['description'], badge['icon'])
-            if result:
-                new_badges.append({'badge': badge, 'result': result})
+        if lesson_count >= 1:
+            has_first = has_badge(user_id, 'first_lesson')
+            print(f"🏅 First lesson badge check: lesson_count={lesson_count}, has_badge={has_first}")
+            if not has_first:
+                badge = BADGES['first_lesson']
+                print(f"🎁 Awarding first lesson badge: {badge}")
+                result = award_badge(user_id, 'first_lesson', badge['name'], badge['description'], badge['icon'])
+                print(f"✅ Award result: {result}")
+                if result:
+                    new_badges.append({'badge': badge, 'result': result})
+            else:
+                print(f"⚠️ User already has first_lesson badge")
+        else:
+            print(f"⚠️ User doesn't have enough lessons yet: {lesson_count} < 1")
         
         # Bookworm badge (50 lessons)
         if lesson_count >= 50 and not has_badge(user_id, 'bookworm'):
