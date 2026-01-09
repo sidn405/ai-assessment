@@ -3740,6 +3740,179 @@ def calculate_streak(user_id, conn):
     except Exception as e:
         print(f"Error calculating streak: {e}")
         return 0
+    
+# ============================================
+# PLACEMENT TEST
+# ============================================
+
+@app.get("/api/placement/next")
+async def get_next_placement(token: str):
+    user = verify_token(token)
+    user_id = user["user_id"]
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    # How many placement attempts already?
+    cursor.execute(
+        "SELECT COUNT(*) AS c FROM session_logs WHERE user_id=%s AND is_placement=true" if USE_POSTGRES
+        else "SELECT COUNT(*) AS c FROM session_logs WHERE user_id=? AND is_placement=1",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    attempts = (row["c"] if isinstance(row, dict) else row[0]) or 0
+
+    if attempts >= 3:
+        conn.close()
+        return {"done": True}
+
+    # Start at intermediate unless we already have a temp estimate
+    cursor.execute(
+        "SELECT level_estimate FROM users WHERE id=%s" if USE_POSTGRES else "SELECT level_estimate FROM users WHERE id=?",
+        (user_id,)
+    )
+    r = cursor.fetchone()
+    current_level = (r["level_estimate"] if isinstance(r, dict) else r[0]) or "intermediate"
+
+    # Pick a short passage at that level (you can tag placement passages)
+    cursor.execute(
+        """
+        SELECT id, title, content, word_count, difficulty_level
+        FROM passages
+        WHERE approved=true
+          AND difficulty_level=%s
+          AND word_count BETWEEN %s AND %s
+        ORDER BY RANDOM()
+        LIMIT 1
+        """ if USE_POSTGRES else
+        """
+        SELECT id, title, content, word_count, difficulty_level
+        FROM passages
+        WHERE approved=1
+          AND difficulty_level=?
+          AND word_count BETWEEN ? AND ?
+        ORDER BY RANDOM()
+        LIMIT 1
+        """,
+        (current_level, 120, 180) if USE_POSTGRES else (current_level, 120, 180)
+    )
+    p = cursor.fetchone()
+    if not p:
+        conn.close()
+        raise HTTPException(500, "No placement passages available")
+
+    passage_id = p["id"] if isinstance(p, dict) else p[0]
+    title = p["title"] if isinstance(p, dict) else p[1]
+    content = p["content"] if isinstance(p, dict) else p[2]
+    wc = p["word_count"] if isinstance(p, dict) else p[3]
+    diff = p["difficulty_level"] if isinstance(p, dict) else p[4]
+
+    # Questions
+    cursor.execute(
+        "SELECT question_text, correct_answer, options, explanation FROM passage_questions WHERE passage_id=%s" if USE_POSTGRES
+        else "SELECT question_text, correct_answer, options, explanation FROM passage_questions WHERE passage_id=?",
+        (passage_id,)
+    )
+    qs = cursor.fetchall() or []
+    conn.close()
+
+    questions = []
+    for q in qs[:3]:
+        questions.append({
+            "question": q["question_text"] if isinstance(q, dict) else q[0],
+            "correct_answer": q["correct_answer"] if isinstance(q, dict) else q[1],
+            "options": json.loads(q["options"] if isinstance(q, dict) else q[2] or "[]"),
+            "explanation": q["explanation"] if isinstance(q, dict) else q[3],
+        })
+
+    return {
+        "done": False,
+        "passage": {"id": passage_id, "title": title, "content": content, "word_count": wc, "difficulty_level": diff},
+        "questions": questions,
+        "attempt": attempts + 1,
+        "total_attempts": 3
+    }
+    
+@app.post("/api/placement/submit")
+async def submit_placement(request: Request):
+    data = await request.json()
+    token = data["token"]
+    passage_id = int(data["passage_id"])
+    answers = data.get("answers", [])
+    time_spent_seconds = int(data.get("time_spent_seconds") or 0)
+
+    user = verify_token(token)
+    user_id = user["user_id"]
+
+    # grade answers (simple example; match by correct_answer)
+    # You likely already have grading logic elsewhere — reuse it.
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    cursor.execute(
+        "SELECT word_count, difficulty_level FROM passages WHERE id=%s" if USE_POSTGRES else
+        "SELECT word_count, difficulty_level FROM passages WHERE id=?",
+        (passage_id,)
+    )
+    p = cursor.fetchone()
+    wc = (p["word_count"] if isinstance(p, dict) else p[0]) or 0
+    level_shown = (p["difficulty_level"] if isinstance(p, dict) else p[1]) or "intermediate"
+
+    cursor.execute(
+        "SELECT correct_answer FROM passage_questions WHERE passage_id=%s" if USE_POSTGRES else
+        "SELECT correct_answer FROM passage_questions WHERE passage_id=?",
+        (passage_id,)
+    )
+    corrects = [r["correct_answer"] if isinstance(r, dict) else r[0] for r in (cursor.fetchall() or [])][:len(answers)]
+    total = max(1, len(corrects))
+    correct_n = sum(1 for i, a in enumerate(answers[:total]) if str(a).strip() == str(corrects[i]).strip())
+    score = round((correct_n / total) * 100, 2)
+
+    minutes = max(1/60, time_spent_seconds / 60)  # avoid divide by zero
+    wpm = round((wc / minutes), 1) if wc else 0.0
+
+    # store as placement session
+    cursor.execute(
+        """
+        INSERT INTO session_logs (user_id, passage_id, comprehension_score, time_spent_seconds, completion_status, is_placement)
+        VALUES (%s, %s, %s, %s, 'completed', true)
+        """ if USE_POSTGRES else
+        """
+        INSERT INTO session_logs (user_id, passage_id, comprehension_score, time_spent_seconds, completion_status, is_placement)
+        VALUES (?, ?, ?, ?, 'completed', 1)
+        """,
+        (user_id, passage_id, score, time_spent_seconds)
+    )
+
+    # update estimate (simple step-up/down)
+    levels = ["beginner", "intermediate", "advanced"]
+    current = level_shown
+    idx = levels.index(current) if current in levels else 1
+
+    if score >= 80 and wpm >= 120 and idx < 2:
+        idx += 1
+    elif score <= 55 and idx > 0:
+        idx -= 1
+
+    new_level = levels[idx]
+
+    # after 3 attempts you can finalize; or update each time
+    # Here: update each time (fine)
+    defaults = {"beginner": (150, 200), "intermediate": (200, 250), "advanced": (250, 300)}
+    mn, mx = defaults[new_level]
+
+    cursor.execute(
+        "UPDATE users SET level_estimate=%s, word_count_min=%s, word_count_max=%s WHERE id=%s" if USE_POSTGRES else
+        "UPDATE users SET level_estimate=?, word_count_min=?, word_count_max=? WHERE id=?",
+        (new_level, mn, mx, user_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {"success": True, "score": score, "wpm": wpm, "new_level": new_level, "word_count_range": [mn, mx]}
+
+
 
 # ============================================
 # LESSONS ENDPOINTS (Phase 2 - AI Generated)
