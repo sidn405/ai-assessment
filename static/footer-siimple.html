@@ -1,0 +1,92 @@
+<!-- SIMPLE FOOTER OPTION - Minimal Version -->
+<!-- Insert after line 2462 -->
+
+<footer class="dashboard-footer-simple">
+    <div class="footer-simple-content">
+        <div class="footer-simple-left">
+            <img src="/static/graphics/logo.png" alt="Achieve 365" style="height: 30px; vertical-align: middle; margin-right: 10px;" onerror="this.style.display='none'">
+            <span style="font-weight: 600;">ACHIEVE 365</span>
+        </div>
+        <div class="footer-simple-center">
+            <p>&copy; 2025 Achieve 365. All rights reserved.</p>
+        </div>
+        <div class="footer-simple-right">
+            <a href="#" onclick="alert('Privacy Policy'); return false;">Privacy</a>
+            <span>•</span>
+            <a href="#" onclick="alert('Terms of Service'); return false;">Terms</a>
+            <span>•</span>
+            <a href="#" onclick="alert('Contact'); return false;">Contact</a>
+        </div>
+    </div>
+</footer>
+
+<!-- CSS FOR SIMPLE FOOTER -->
+<style>
+.dashboard-footer-simple {
+    background: var(--navy-primary);
+    color: white;
+    margin-left: 280px;
+    padding: 1.5rem 2rem;
+    margin-top: 3rem;
+    border-top: 2px solid rgba(255,255,255,0.1);
+}
+
+.footer-simple-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1400px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.footer-simple-left {
+    display: flex;
+    align-items: center;
+    font-size: 1rem;
+}
+
+.footer-simple-center p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.footer-simple-right {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.footer-simple-right a {
+    color: white;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: opacity 0.3s;
+}
+
+.footer-simple-right a:hover {
+    opacity: 0.7;
+}
+
+.footer-simple-right span {
+    opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+    .dashboard-footer-simple {
+        margin-left: 0;
+        padding: 1rem 1.5rem;
+    }
+    
+    .footer-simple-content {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .footer-simple-left {
+        justify-content: center;
+    }
+}
+</style>
