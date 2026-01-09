@@ -1269,6 +1269,14 @@
 
         // Login Form Handler
         document.addEventListener('DOMContentLoaded', function() {
+            // Check if there's a reset token in the URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const resetToken = urlParams.get('token');
+            if (resetToken) {
+                console.log('Reset token detected in URL, opening reset password modal');
+                setTimeout(() => openModal('resetPassword'), 300);
+            }
+            
             const loginForm = document.getElementById('loginForm');
             
             if (loginForm) {
@@ -1558,33 +1566,6 @@
             navIcon.textContent = '☰';
         }
     });
-
-        // AUTO-OPEN RESET PASSWORD MODAL WHEN TOKEN IN URL
-        window.addEventListener('load', function() {
-            console.log('🔄 Page fully loaded, checking for reset token...');
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const resetToken = urlParams.get('token');
-            
-            console.log('🔍 Token check:', resetToken ? `Token found: ${resetToken.substring(0, 10)}...` : 'No token in URL');
-            
-            if (resetToken) {
-                console.log('✅ Reset token detected! Opening reset password modal...');
-                
-                // Check if modal exists
-                const modal = document.getElementById('resetPasswordModal');
-                if (modal) {
-                    console.log('✅ Modal element found');
-                    openModal('resetPassword');
-                } else {
-                    console.error('❌ resetPasswordModal not found in DOM!');
-                    console.log('Available modals:', ['loginModal', 'registerModal', 'forgotPasswordModal', 'resetPasswordModal'].map(id => ({
-                        id: id,
-                        exists: !!document.getElementById(id)
-                    })));
-                }
-            }
-        });
     </script>
 </body>
 </html>

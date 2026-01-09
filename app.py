@@ -433,7 +433,7 @@ async def forgot_password(request: dict):
         }
         
         # Create reset link need to change to clients url
-        reset_link = f"https://ai-assessment-production-e027.up.railway.app/?token={reset_token}"
+        reset_link = f"https://ai-assessment-production-e027.up.railway.app/reset-password?token={reset_token}"
         
         # Send email via Resend
         try:
