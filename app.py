@@ -2872,6 +2872,7 @@ def check_and_award_badges(user_id):
 
 def update_weekly_goals(user_id, session_data=None):
     """Update progress on all active weekly goals"""
+    print(f"📈 Updating weekly goals for user {user_id}")
     conn = get_db()
     cursor = conn.cursor()
     goals_completed = []
@@ -2880,6 +2881,7 @@ def update_weekly_goals(user_id, session_data=None):
         from datetime import datetime, timedelta
         week_start = datetime.now() - timedelta(days=datetime.now().weekday())
         week_start = week_start.date()
+        print(f"📅 Week start: {week_start}")
         
         # Get all active goals for current week
         if USE_POSTGRES:
@@ -2894,6 +2896,7 @@ def update_weekly_goals(user_id, session_data=None):
             )
         
         goals = cursor.fetchall()
+        print(f"🎯 Found {len(goals)} active goals")
         
         for goal in goals:
             goal_id = goal['id'] if hasattr(goal, 'keys') else goal[0]
@@ -2901,8 +2904,11 @@ def update_weekly_goals(user_id, session_data=None):
             target = goal['target_value'] if hasattr(goal, 'keys') else goal[4]
             points_reward = goal['points_reward'] if hasattr(goal, 'keys') else goal[7]
             
+            print(f"   📊 Processing goal: {goal_type} (target: {target})")
+            
             # Calculate current progress based on goal type
             current_value = calculate_goal_progress(user_id, goal_type, week_start, cursor)
+            print(f"   ✅ Current progress: {current_value}/{target}")
             
             # Update goal progress
             if current_value >= target:
@@ -2941,6 +2947,7 @@ def update_weekly_goals(user_id, session_data=None):
 
 def calculate_goal_progress(user_id, goal_type, week_start, cursor):
     """Calculate current progress for a specific goal type"""
+    print(f"      🔍 Calculating progress for {goal_type}")
     from datetime import datetime, timedelta
     
     week_end = week_start + timedelta(days=7)
@@ -2961,7 +2968,9 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
                 (user_id, week_start, week_end)
             )
         result = cursor.fetchone()
-        return result['count'] if hasattr(result, 'keys') else result[0]
+        count = result['count'] if hasattr(result, 'keys') else result[0]
+        print(f"         → lessons_completed: {count}")
+        return count
     
     elif goal_type == 'reading_time':
         if USE_POSTGRES:
@@ -2982,7 +2991,9 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
             )
         row = cursor.fetchone()
         result = row['sum'] if hasattr(row, 'keys') else row[0]
-        return int(result) if result else 0
+        minutes = int(result) if result else 0
+        print(f"         → reading_time: {minutes} minutes")
+        return minutes
     
     elif goal_type == 'average_score':
         if USE_POSTGRES:
@@ -3001,7 +3012,9 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
             )
         row = cursor.fetchone()
         result = row['avg'] if hasattr(row, 'keys') else row[0]
-        return int(result) if result else 0
+        avg = int(result) if result else 0
+        print(f"         → average_score: {avg}")
+        return avg
     
     elif goal_type == 'perfect_scores':
         if USE_POSTGRES:
@@ -3021,7 +3034,9 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
                 (user_id, week_start, week_end)
             )
         result = cursor.fetchone()
-        return result['count'] if hasattr(result, 'keys') else result[0]
+        count = result['count'] if hasattr(result, 'keys') else result[0]
+        print(f"         → perfect_scores: {count}")
+        return count
     
     elif goal_type == 'daily_streak':
         # Count distinct days with completed lessons this week
@@ -3041,8 +3056,11 @@ def calculate_goal_progress(user_id, goal_type, week_start, cursor):
             )
         
         result = cursor.fetchone()
-        return result['count'] if hasattr(result, 'keys') else result[0]
+        days = result['count'] if hasattr(result, 'keys') else result[0]
+        print(f"         → daily_streak: {days} days")
+        return days
     
+    print(f"         → Unknown goal type: {goal_type}, returning 0")
     return 0
 
 def get_available_goal_types():
@@ -5184,7 +5202,6 @@ async def mark_essay_reviewed(essay_id: int, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
     
 # ============================================================
-
 @app.get("/api/student/gamification")
 async def get_gamification_data(token: str):
     """Get gamification data"""
@@ -5528,7 +5545,7 @@ def get_next_difficulty_level(current_level):
 def update_user_difficulty(user_id, new_level, essay_id, reason):
     """Update user's reading level and increase LESSON word count by 100"""
     conn = get_db()
-    cursor = get_cursor()
+    cursor = get_cursor(conn)
     
     try:
         # Get current level and word counts
