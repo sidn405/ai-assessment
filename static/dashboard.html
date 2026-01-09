@@ -2406,6 +2406,14 @@
         let tutorHasGreeted = false;
         let speechUnlocked = false;
         let tutorTimers = [];
+        let tutorAbort = null;
+        let tutorReqId = 0;
+
+        let tutorSpeaking = false;
+
+        let instructionInFlight = false;
+        let lastInstructionAt = 0;
+
 
         function unlockSpeechOnce() {
           if (speechUnlocked || !window.speechSynthesis) return;
@@ -2465,6 +2473,18 @@
         function tutorSpeak(text) {
           if (tutorMuted || !window.speechSynthesis) return;
 
+          const utterance = new SpeechSynthesisUtterance(text);
+       
+          tutorSpeaking = true;                // ✅ ADD (right after utterance is created)
+       
+          utterance.onend = () => {            // ✅ ADD
+              tutorSpeaking = false;
+          };
+       
+          utterance.onerror = () => {          // ✅ ADD
+              tutorSpeaking = false;
+          };
+
           window.speechSynthesis.cancel();
           const u = new SpeechSynthesisUtterance(text);
           u.rate = 0.9;
@@ -2495,38 +2515,68 @@
         async function showTutor(context, extra = {}) {
           const token = localStorage.getItem('token');
           if (!token) return;
-
-          const studentName = getStudentNameForTutor();
-
-          try {
-            const res = await fetch('/api/tutor/message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                token,
-                context,
-                student_name: studentName,
-                ...extra
-            })
-          });
-
-          const data = await res.json();  // ✅ parse first
-
-          // ✅ guard after parse
-          if (!data?.message || !data.message.trim()) return;
-
-          if (data?.success) {
-            displayTutorMessage(data.message, data.emotion);
+      
+          // ✅ Stop overlapping instructions (this fixes “cuts off after 2 words”)
+          if (context === 'instruction') {
+              const now = Date.now();
+      
+              // If we're already speaking an instruction OR one is currently fetching, ignore new triggers
+              if (tutorSpeaking || instructionInFlight) return;
+      
+              // If an instruction just ran a moment ago, ignore (double-trigger protection)
+              if (now - lastInstructionAt < 8000) return; // 8s window
           }
-        } catch (e) {
-            console.error('Tutor error:', e);
+      
+          // ✅ Abort any in-flight request so late responses don’t restart speech
+          if (tutorAbort) tutorAbort.abort();
+          tutorAbort = new AbortController();
+          const myId = ++tutorReqId;
+      
+          const studentName = getStudentNameForTutor();
+      
+          if (context === 'instruction') instructionInFlight = true;
+      
+          try {
+              const res = await fetch('/api/tutor/message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: tutorAbort.signal,
+              body: JSON.stringify({
+                  token,
+                  context,
+                  student_name: studentName,
+                  ...extra
+              })
+              });
+      
+              const data = await res.json();
+      
+              // Ignore stale responses
+              if (myId !== tutorReqId) return;
+      
+              // Greeting removed / empty message guard
+              if (!data?.message || !data.message.trim()) return;
+      
+              if (data?.success) {
+              if (context === 'instruction') lastInstructionAt = Date.now();
+              displayTutorMessage(data.message, data.emotion);
+              }
+          } catch (e) {
+              if (e.name !== 'AbortError') console.error('Tutor error:', e);
+          } finally {
+              if (context === 'instruction') instructionInFlight = false;
+          }
         }
-      }
 
+        let lastTutorStartAt = 0;
 
         // Call when a lesson is rendered on the dashboard
 
         function startTutorForLesson() {
+          const now = Date.now();
+          if (now - lastTutorStartAt < 1500) return; // prevent double trigger
+          lastTutorStartAt = now;
+
           ensureVoicesLoaded();
           unlockSpeechOnce();
 
