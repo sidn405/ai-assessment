@@ -318,102 +318,275 @@
             border: 1px solid #bee5eb;
         }
         
-        @media (max-width: 768px) {
+        /* ========== TABLET RESPONSIVE (768px - 1024px) ========== */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            /* Narrower sidebar for tablets */
             .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
+                width: 220px;
             }
             
             .main-content {
-                margin-left: 0;
-                width: 100%;
+                margin-left: 220px;
+                width: calc(100% - 220px);
+                padding: 1.5rem;
+            }
+            
+            /* Stats grid - 2 columns on tablet */
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+            
+            /* Adjust font sizes for tablets */
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .stat-card {
+                padding: 1.25rem;
+            }
+            
+            .stat-value {
+                font-size: 2rem;
+            }
+            
+            /* Navigation items */
+            .nav-item {
+                padding: 0.875rem 1.5rem;
+                font-size: 0.95rem;
+            }
+            
+            /* Badges grid - 3 columns */
+            .badges-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            /* Weekly goals - adjust spacing */
+            .goal-item {
+                padding: 0.875rem;
+            }
+            
+            /* Card spacing */
+            .card {
+                padding: 1.25rem;
+                margin-bottom: 1.25rem;
+            }
+            
+            /* Logo */
+            .logo {
+                padding: 0 1.5rem;
+                margin-bottom: 2rem;
+                font-size: 1.1rem;
+            }
+            
+            /* Profile section */
+            .profile {
+                padding: 0 1.5rem;
+                margin-bottom: 2rem;
+            }
+            
+            .profile h3 {
+                font-size: 1rem;
+            }
+            
+            .profile .level {
+                font-size: 0.85rem;
             }
         }
+        
+        /* ========== MOBILE RESPONSIVE (≤768px) ========== */
+        @media (max-width: 768px) {
+
+            .sidebar {
+
+                width: 100%;
+
+                height: auto;
+
+                position: relative;
+
+            }
+
+            
+
+            .main-content {
+
+                margin-left: 0;
+
+                width: 100%;
+
+            }
+
+        }
+
+
 
         @keyframes fadeIn {
+
             from { opacity: 0; }
+
             to { opacity: 1; }
+
         }
+
+
 
         @keyframes fadeOut {
+
             from { opacity: 1; }
+
             to { opacity: 0; }
+
         }
+
+
 
         @keyframes scaleIn {
+
             from {
+
                 transform: scale(0.5);
+
                 opacity: 0;
+
             }
+
             to {
+
                 transform: scale(1);
+
                 opacity: 1;
+
             }
+
         }
+
+
 
         @keyframes bounce {
+
             0%, 100% {
+
                 transform: translateY(0);
+
             }
+
             50% {
+
                 transform: translateY(-20px);
+
             }
+
         }
+
+
 
         @keyframes shake {
+
             0%, 100% {
+
                 transform: rotate(0deg);
+
             }
+
             25% {
+
                 transform: rotate(-10deg);
+
             }
+
             75% {
+
                 transform: rotate(10deg);
+
             }
+
         }
+
+
 
         @keyframes confetti-fall {
+
             0% {
+
                 transform: translateY(0) rotate(0deg);
+
                 opacity: 1;
+
             }
+
             100% {
+
                 transform: translateY(100vh) rotate(720deg);
+
                 opacity: 0;
+
             }
+
         }
+
+
 
         @keyframes starBurst {
+
             0% {
+
                 transform: translateY(0) scale(0);
+
                 opacity: 1;
+
             }
+
             100% {
+
                 transform: translateY(-200px) scale(1.5);
+
                 opacity: 0;
+
             }
+
         }
+
+
 
         @keyframes slideDown {
+
             from {
+
                 opacity: 0;
+
                 transform: translateY(-10px);
+
             }
+
             to {
+
                 opacity: 1;
+
                 transform: translateY(0);
+
             }
+
         }
 
+
+
         @keyframes pulse {
+
             0%, 100% {
+
                 transform: scale(1);
+
             }
+
             50% {
+
                 transform: scale(1.05);
+
             }
+
         }
+
 
         /* ========== UTILITY CLASSES ========== */
 
