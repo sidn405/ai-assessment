@@ -1272,9 +1272,27 @@
             // Check if there's a reset token in the URL
             const urlParams = new URLSearchParams(window.location.search);
             const resetToken = urlParams.get('token');
+            console.log('🔍 Token check:', resetToken ? `Token found: ${resetToken.substring(0, 10)}...` : 'No token');
+            
             if (resetToken) {
-                console.log('Reset token detected in URL, opening reset password modal');
-                setTimeout(() => openModal('resetPassword'), 300);
+                console.log('✅ Reset token detected in URL');
+                
+                // Function to try opening the modal
+                const tryOpenResetModal = (attempt = 1) => {
+                    const modal = document.getElementById('resetPasswordModal');
+                    if (modal) {
+                        console.log(`✅ Modal found (attempt ${attempt}), opening...`);
+                        openModal('resetPassword');
+                    } else if (attempt < 5) {
+                        console.log(`⏳ Modal not ready (attempt ${attempt}), retrying...`);
+                        setTimeout(() => tryOpenResetModal(attempt + 1), 200);
+                    } else {
+                        console.error('❌ resetPasswordModal element not found after 5 attempts!');
+                    }
+                };
+                
+                // Start trying after a short delay
+                setTimeout(() => tryOpenResetModal(), 300);
             }
             
             const loginForm = document.getElementById('loginForm');
