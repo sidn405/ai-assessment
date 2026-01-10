@@ -1380,30 +1380,8 @@
             const full_name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
-            const age = parseInt(document.getElementById('registerAge').value);
             const role = document.getElementById('registerRole').value;
             const errorDiv = document.getElementById('registerError');
-
-            // Validate age
-            if (age < 5 || age > 100) {
-                errorDiv.textContent = 'Please enter a valid age (5-100)';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            // Determine age band
-            let age_band;
-            if (age >= 5 && age <= 10) {
-                age_band = 'child';
-            } else if (age >= 11 && age <= 13) {
-                age_band = 'preteen';
-            } else if (age >= 14 && age <= 17) {
-                age_band = 'teen';
-            } else if (age >= 18 && age <= 25) {
-                age_band = 'young_adult';
-            } else {
-                age_band = 'adult';
-            }
             
             try {
                 const response = await fetch('/api/register', {
