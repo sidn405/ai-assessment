@@ -3433,10 +3433,6 @@
             console.log('=== INITIALIZATION COMPLETE ===');
         });
 
-        document.addEventListener('DOMContentLoaded', () => {
-            checkAssessmentStatusOnLoad();
-        });
-
         async function checkForNextLesson() {
             const token = localStorage.getItem('token');
 
@@ -3514,6 +3510,10 @@
                 }
             }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAssessmentStatusOnLoad();
+        });
 
 
         function showSection(sectionName, event) {
