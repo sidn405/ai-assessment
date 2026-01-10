@@ -1518,8 +1518,8 @@
             document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
 
-            const sectionId = sectionMap[section] || (section + 'Section');
-            const sectionEl = document.getElementById(sectionId);
+            const sectionName = sectionMap[section] || (section + 'Section');
+            const sectionEl = document.getElementById(sectionName);
 
             if (sectionEl) {
                 sectionEl.classList.remove('hidden');
