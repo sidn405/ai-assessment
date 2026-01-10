@@ -2762,6 +2762,16 @@
             return num.toString().padStart(2, '0');
         }
 
+        function showMessage(message, type = 'info') {
+            console.log(`[${type}] ${message}`);
+            const colors = {success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#3b82f6'};
+            const toast = document.createElement('div');
+            toast.textContent = message;
+            toast.style.cssText = `position: fixed; top: 20px; right: 20px; padding: 1rem 1.5rem; background: ${colors[type] || colors.info}; color: white; border-radius: 8px; z-index: 10000;`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
         // Start placement test
         async function startPlacementTest() {
             const welcomeEl = document.getElementById('placementWelcome');
