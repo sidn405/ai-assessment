@@ -3226,24 +3226,57 @@
         }
 
         // Check if assessment is completed (with fallbacks)
+        
         function hasCompletedAssessment(progressData = null) {
-            // Check if backend returned a reading_level
-            const rl = progressData?.user?.reading_level || progressData?.stats?.reading_level;
-            if (rl && String(rl).trim().length > 0) return true;
-
-            // Fallback: check cached user
+            // Method 1: Check localStorage flag FIRST (most reliable)
+            const localFlag = localStorage.getItem("assessmentCompleted") === "true";
+            if (localFlag) {
+                console.log('✅ Assessment completed (localStorage flag)');
+                return true;
+            }
+            
+            // Method 2: Check if user has actual interests selected
             try {
-                const u = JSON.parse(localStorage.getItem("user") || "{}");
-                if (u.reading_level && String(u.reading_level).trim()) return true;
-
+                const u = progressData?.user || JSON.parse(localStorage.getItem("user") || "{}");
+                
                 if (u.interests) {
                     const interests = typeof u.interests === "string" ? JSON.parse(u.interests) : u.interests;
-                    if (Array.isArray(interests) && interests.length > 0) return true;
+                    if (Array.isArray(interests) && interests.length > 0) {
+                        console.log('✅ Assessment completed (has interests)');
+                        // Set the flag for next time
+                        localStorage.setItem("assessmentCompleted", "true");
+                        return true;
+                    }
                 }
-            } catch (_) {}
-
-            // Check local flag
-            return localStorage.getItem("assessmentCompleted") === "true";
+                
+                // Method 3: Check if they have completed any lessons
+                // (If they have lessons, they must have completed assessment)
+                const lessonsCompleted = u.lessons_completed || 
+                                        progressData?.stats?.lessons || 
+                                        u.stats?.lessons_completed || 0;
+                
+                if (lessonsCompleted > 0) {
+                    console.log('✅ Assessment completed (has completed lessons)');
+                    localStorage.setItem("assessmentCompleted", "true");
+                    return true;
+                }
+                
+                // Method 4: Check backend assessment_completed flag
+                if (u.assessment_completed === true) {
+                    console.log('✅ Assessment completed (backend flag)');
+                    localStorage.setItem("assessmentCompleted", "true");
+                    return true;
+                }
+                
+            } catch (error) {
+                console.error('Error checking assessment:', error);
+            }
+            
+            // ❌ DO NOT check reading_level alone - it's just a default value!
+            // Default reading_level does NOT mean assessment is complete
+            
+            console.log('❌ Assessment not completed');
+            return false;
         }
 
         async function retakePlacementTest() {
@@ -3875,26 +3908,25 @@
                 
                 const result = await response.json();
                 console.log('Assessment submitted:', result);
+
+                // ⭐ CRITICAL - Set the flag
+                localStorage.setItem('assessmentCompleted', 'true');
                 
                 // Update user in localStorage
                 if (result.user) {
                     localStorage.setItem('user', JSON.stringify(result.user));
                 }
+                 // ⭐ ADD THIS - Mark assessment as completed in UI
+                updateAssessmentStatus(true);
                 
+                showMessage('Assessment completed successfully!', 'success');
+
                 // Show success message
                 alert('✓ Assessment completed! Your personalized lessons are ready.');
                 
                 // Navigate to lessons section
                 showSection('lessons')
-
-                // ⭐ ADD THIS - Mark assessment as completed in UI
-                updateAssessmentStatus(true);
-                
-                // ⭐ ADD THIS - Store in localStorage for persistence
-                localStorage.setItem('assessmentCompleted', 'true');
-                
-                showMessage('Assessment completed successfully!', 'success');
-                
+               
                 // Refresh dashboard to show updated state
                 loadDashboard();
                 
