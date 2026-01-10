@@ -3754,6 +3754,17 @@
                 
                 // Navigate to lessons section
                 showSection('lessons')
+
+                // ⭐ ADD THIS - Mark assessment as completed in UI
+                updateAssessmentStatus(true);
+                
+                // ⭐ ADD THIS - Store in localStorage for persistence
+                localStorage.setItem('assessmentCompleted', 'true');
+                
+                showMessage('Assessment completed successfully!', 'success');
+                
+                // Refresh dashboard to show updated state
+                loadDashboard();
                 
             } catch (error) {
                 console.error('Error submitting assessment:', error);
