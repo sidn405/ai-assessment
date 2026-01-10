@@ -2729,8 +2729,8 @@
         const originalLoadNextLesson = loadNextLesson;
 
         /* ============================================
-        PLACEMENT TEST JAVASCRIPT FUNCTIONS
-        Add these to your dashboard.html <script> section
+        COMPLETE ROBUST PLACEMENT TEST FUNCTIONS
+        Copy all of these functions to replace your existing ones
         ============================================ */
 
         let placementCurrentPassageId = null;
@@ -2739,25 +2739,58 @@
         let placementCurrentAttempt = 0;
         let placementTotalAttempts = 3;
 
+        // Helper: Show message (fallback if main showMessage doesn't exist)
+        function showPlacementMessage(message, type = 'info') {
+            if (typeof showMessage === 'function') {
+                showMessage(message, type);
+            } else {
+                console.log(`[${type}] ${message}`);
+                if (type === 'error' || type === 'warning') {
+                    alert(message);
+                }
+            }
+        }
+
+        // Helper: Capitalize first letter
+        function capitalizeFirst(str) {
+            if (!str) return '';
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Helper: Pad number with leading zero
+        function pad(num) {
+            return num.toString().padStart(2, '0');
+        }
+
         // Start placement test
         async function startPlacementTest() {
             document.getElementById('placementWelcome').classList.add('hidden');
             document.getElementById('placementLoading').classList.remove('hidden');
 
-            // ⭐ FIX: Get token from localStorage (same as other functions)
             const token = localStorage.getItem('token');
             if (!token) {
-                showMessage('Please log in to take the assessment', 'error');
-                window.location.href = '/';
+                showPlacementMessage('Please log in to take the assessment', 'error');
+                setTimeout(() => window.location.href = '/', 2000);
                 return;
             }
 
             try {
                 const response = await fetch(`/api/placement/next?token=${encodeURIComponent(token)}`);
+                
+                if (response.status === 401) {
+                    showPlacementMessage('Session expired. Please log in again.', 'error');
+                    setTimeout(() => window.location.href = '/', 2000);
+                    return;
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const data = await response.json();
 
                 if (data.done) {
-                    showMessage('All assessment attempts completed!', 'success');
+                    showPlacementMessage('All assessment attempts completed!', 'success');
                     setTimeout(() => showSection('overview', event), 2000);
                     return;
                 }
@@ -2787,16 +2820,21 @@
                 questions.forEach((q, index) => {
                     const questionCard = document.createElement('div');
                     questionCard.className = 'placement-question-card';
+                    
+                    const optionsHTML = q.options.map((opt, optIndex) => {
+                        return `
+                            <div class="placement-option" onclick="selectPlacementOption(this, ${index})">
+                                <input type="radio" name="placementQuestion${index}" value="${opt.replace(/"/g, '&quot;')}" id="placementQ${index}opt${optIndex}">
+                                <label for="placementQ${index}opt${optIndex}">${opt}</label>
+                            </div>
+                        `;
+                    }).join('');
+                    
                     questionCard.innerHTML = `
                         <span class="placement-question-number">Question ${index + 1}</span>
                         <div class="placement-question-text">${q.question}</div>
                         <div class="placement-options">
-                            ${q.options.map((opt, optIndex) => `
-                                <div class="placement-option" onclick="selectPlacementOption(this, ${index}, '${opt}')">
-                                    <input type="radio" name="placementQuestion${index}" value="${opt}" id="placementQ${index}opt${optIndex}">
-                                    <label for="placementQ${index}opt${optIndex}">${opt}</label>
-                                </div>
-                            `).join('')}
+                            ${optionsHTML}
                         </div>
                     `;
                     questionsContainer.appendChild(questionCard);
@@ -2811,7 +2849,7 @@
 
             } catch (error) {
                 console.error('Error loading placement test:', error);
-                showMessage('Error loading assessment. Please try again.', 'error');
+                showPlacementMessage('Error loading assessment. Please try again.', 'error');
                 document.getElementById('placementLoading').classList.add('hidden');
                 document.getElementById('placementWelcome').classList.remove('hidden');
             }
@@ -2827,8 +2865,7 @@
             const elapsed = Math.floor((Date.now() - placementStartTime) / 1000);
             const minutes = Math.floor(elapsed / 60);
             const seconds = elapsed % 60;
-            document.getElementById('placementTimer').textContent = 
-                `${pad(minutes)}:${pad(seconds)}`;
+            document.getElementById('placementTimer').textContent = `${pad(minutes)}:${pad(seconds)}`;
         }
 
         function stopPlacementTimer() {
@@ -2839,27 +2876,21 @@
         }
 
         // Option selection
-        function selectPlacementOption(element, questionIndex, value) {
-            // Remove selected class from all options in this question
+        function selectPlacementOption(element, questionIndex) {
             const questionCard = element.closest('.placement-question-card');
             questionCard.querySelectorAll('.placement-option').forEach(opt => {
                 opt.classList.remove('selected');
             });
-            
-            // Add selected class to clicked option
             element.classList.add('selected');
-            
-            // Check the radio button
             element.querySelector('input[type="radio"]').checked = true;
         }
 
         // Submit placement test
         async function submitPlacementTest() {
-            // ⭐ FIX: Get token from localStorage
             const token = localStorage.getItem('token');
             if (!token) {
-                showMessage('Session expired. Please log in again.', 'error');
-                window.location.href = '/';
+                showPlacementMessage('Session expired. Please log in again.', 'error');
+                setTimeout(() => window.location.href = '/', 2000);
                 return;
             }
 
@@ -2870,7 +2901,7 @@
             for (let i = 0; i < questionCards.length; i++) {
                 const selected = questionCards[i].querySelector('input[type="radio"]:checked');
                 if (!selected) {
-                    showMessage(`Please answer question ${i + 1}`, 'warning');
+                    showPlacementMessage(`Please answer question ${i + 1}`, 'warning');
                     return;
                 }
                 answers.push(selected.value);
@@ -2879,31 +2910,59 @@
             stopPlacementTimer();
             const timeSpent = Math.floor((Date.now() - placementStartTime) / 1000);
 
-            // Submit to backend
             const submitBtn = document.getElementById('placementSubmitBtn');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Submitting...';
 
             try {
+                console.log('Submitting placement test...');
+                console.log('Token:', token ? token.substring(0, 30) + '...' : 'MISSING');
+                console.log('Passage ID:', placementCurrentPassageId);
+                
                 const response = await fetch('/api/placement/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        token: currentUser.token,
+                        token: token,
                         passage_id: placementCurrentPassageId,
                         answers: answers,
                         time_spent_seconds: timeSpent
                     })
                 });
 
+                console.log('Response status:', response.status);
+
+                // Handle 401 authentication error
+                if (response.status === 401) {
+                    const errorText = await response.text();
+                    console.error('401 Error:', errorText);
+                    showPlacementMessage('Authentication failed. Your session may have expired. Please refresh the page and try again.', 'error');
+                    setTimeout(() => window.location.reload(), 3000);
+                    return;
+                }
+
+                // Handle other errors
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server error:', errorText);
+                    throw new Error(`Server returned ${response.status}: ${errorText}`);
+                }
+
                 const result = await response.json();
+                console.log('Placement result:', result);
+
+                // Validate result
+                if (!result || typeof result.score === 'undefined') {
+                    console.error('Invalid result format:', result);
+                    throw new Error('Invalid response from server');
+                }
 
                 // Show results
                 showPlacementResults(result);
 
             } catch (error) {
                 console.error('Error submitting placement test:', error);
-                showMessage('Error submitting answers. Please try again.', 'error');
+                showPlacementMessage(`Error submitting answers: ${error.message}. Please try again.`, 'error');
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Submit Answers →';
             }
@@ -2911,34 +2970,64 @@
 
         // Show placement results
         function showPlacementResults(result) {
+            if (!result) {
+                console.error('No result data provided');
+                showPlacementMessage('Error displaying results. Please try again.', 'error');
+                return;
+            }
+
             document.getElementById('placementTest').classList.add('hidden');
             document.getElementById('placementResults').classList.remove('hidden');
 
-            document.getElementById('placementResultScore').textContent = result.score.toFixed(0);
-            document.getElementById('placementResultWPM').textContent = result.wpm.toFixed(0);
+            // Use default values if properties are missing
+            const score = typeof result.score === 'number' ? result.score : 0;
+            const wpm = typeof result.wpm === 'number' ? result.wpm : 0;
+            const level = result.new_level || 'intermediate';
+
+            document.getElementById('placementResultScore').textContent = score.toFixed(0);
+            document.getElementById('placementResultWPM').textContent = wpm.toFixed(0);
             document.getElementById('placementResultAttempts').textContent = placementCurrentAttempt;
-            document.getElementById('placementResultLevel').textContent = capitalizeFirst(result.new_level);
+            document.getElementById('placementResultLevel').textContent = capitalizeFirst(level);
 
             // Hide continue button if all attempts done
-            if (placementCurrentAttempt >= placementTotalAttempts) {
-                document.getElementById('placementContinueBtn').style.display = 'none';
-            } else {
-                document.getElementById('placementContinueBtn').style.display = 'inline-block';
+            const continueBtn = document.getElementById('placementContinueBtn');
+            if (continueBtn) {
+                continueBtn.style.display = (placementCurrentAttempt >= placementTotalAttempts) ? 'none' : 'inline-block';
+            }
+            
+            // Update user's reading level in UI
+            updateUserReadingLevel(level);
+            
+            // Reload dashboard stats
+            if (typeof loadDashboardStats === 'function') {
+                setTimeout(() => loadDashboardStats(), 1000);
+            }
+        }
+
+        // Update user's reading level display
+        function updateUserReadingLevel(level) {
+            const readingLevelEl = document.getElementById('userReadingLevel');
+            if (readingLevelEl) {
+                readingLevelEl.textContent = capitalizeFirst(level);
+            }
+            
+            const progressReadingLevel = document.getElementById('progressReadingLevel');
+            if (progressReadingLevel) {
+                progressReadingLevel.textContent = capitalizeFirst(level);
             }
         }
 
         // Continue with more tests
         function continuePlacementTests() {
-            // Reset UI
             document.getElementById('placementResults').classList.add('hidden');
             document.getElementById('placementLoading').classList.remove('hidden');
             
-            // Reset submit button
             const submitBtn = document.getElementById('placementSubmitBtn');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit Answers →';
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Answers →';
+            }
             
-            // Load next test
             startPlacementTest();
         }
 
@@ -2954,31 +3043,65 @@
         function resetPlacementTest() {
             stopPlacementTimer();
             
-            // Hide all screens
             document.getElementById('placementWelcome').classList.remove('hidden');
             document.getElementById('placementLoading').classList.add('hidden');
             document.getElementById('placementTest').classList.add('hidden');
             document.getElementById('placementResults').classList.add('hidden');
             
-            // Reset variables
             placementCurrentPassageId = null;
             placementStartTime = null;
             placementCurrentAttempt = 0;
         }
 
-        // Add capitalizeFirst helper if it doesn't exist
-        if (typeof capitalizeFirst === 'undefined') {
-            function capitalizeFirst(str) {
-                if (!str) return '';
-                return str.charAt(0).toUpperCase() + str.slice(1);
-            }
+        // Updated placement required modal
+        function showPlacementRequiredModal() {
+            const modalHTML = `
+                <div id="placementRequiredModal" style="
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0, 0, 0, 0.7);
+                    display: flex; align-items: center; justify-content: center;
+                    z-index: 10000; padding: 1rem;
+                ">
+                    <div style="
+                        max-width: 600px; width: 100%; background: white;
+                        border-radius: 16px; padding: 3rem;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        text-align: center;
+                    ">
+                        <div style="font-size: 5rem; margin-bottom: 1rem;">📚</div>
+                        <h2 style="color: #2b4c7e; font-size: 1.8rem; margin-bottom: 1rem;">
+                            Reading Level Assessment Required
+                        </h2>
+                        <p style="font-size: 1.1rem; color: #666; line-height: 1.6; margin-bottom: 2rem;">
+                            Before we can generate personalized lessons, we need to understand your current reading level.
+                            <br><br>
+                            <strong>This quick 5-minute assessment will help us create lessons perfect for you!</strong>
+                        </p>
+                        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                            <button class="btn btn-primary" 
+                                onclick="closePlacementModal(); showSection('placement', event);"
+                                style="padding: 1rem 2.5rem; font-size: 1.1rem;">
+                                📊 Take Reading Level Test
+                            </button>
+                            <button class="btn btn-secondary" 
+                                onclick="closePlacementModal()"
+                                style="padding: 1rem 2rem; font-size: 1rem;">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const existingModal = document.getElementById('placementRequiredModal');
+            if (existingModal) existingModal.remove();
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
         }
 
-        // Add pad helper if it doesn't exist
-        if (typeof pad === 'undefined') {
-            function pad(num) {
-                return num.toString().padStart(2, '0');
-            }
+        function closePlacementModal() {
+            const modal = document.getElementById('placementRequiredModal');
+            if (modal) modal.remove();
         }
 
         function hasCompletedAssessment(progressData = null) {
