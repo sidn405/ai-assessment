@@ -1195,6 +1195,31 @@
             }
         }
 
+        const role = document.getElementById('registerRole').value;
+        let age = null;
+        let age_band = null;
+
+        if (role === 'student') {
+          age = parseInt(document.getElementById('registerAge').value);
+          if (Number.isNaN(age) || age < 5 || age > 100) {
+              errorDiv.textContent = 'Please enter a valid age (5-100)';
+              return;
+          }
+      
+          // Determine age band
+          if (age >= 5 && age <= 10) age_band = 'child';
+          else if (age <= 13) age_band = 'preteen';
+          else if (age <= 17) age_band = 'teen';
+          else if (age <= 25) age_band = 'young_adult';
+          else age_band = 'adult';
+        }
+
+        // send age/age_band only if student
+        payload.age = age;
+        payload.age_band = age_band;
+        payload.role = role;
+
+
         function openModal(type) {
             console.log('Opening modal:', type);
             

@@ -3969,6 +3969,72 @@ async def submit_placement(request: Request):
         "word_count_range": [mn, mx],
     }
 
+@app.post("/api/placement/retake")
+async def retake_placement(request: Request):
+    """
+    Allows a student to retake placement by clearing prior placement attempts
+    and resetting reading level fields that your lesson generator relies on.
+    """
+    try:
+        data = await request.json()
+        token = data.get("token")
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing token")
+
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        role = user_data.get("role")
+
+        # You can decide if admins can force-retake for a student later.
+        if role != "student":
+            raise HTTPException(status_code=403, detail="Student only")
+
+        conn = get_db()
+        cursor = get_cursor(conn)
+
+        # 1) Clear placement attempts
+        if USE_POSTGRES:
+            cursor.execute("DELETE FROM placement_attempts WHERE user_id = %s", (user_id,))
+        else:
+            cursor.execute("DELETE FROM placement_attempts WHERE user_id = ?", (user_id,))
+
+        # 2) Reset reading level + word count bounds (so placement is truly required again)
+        #    Adjust these field names if your users table uses different column names.
+        if USE_POSTGRES:
+            cursor.execute(
+                """
+                UPDATE users
+                SET level_estimate = NULL,
+                    word_count_min = NULL,
+                    word_count_max = NULL
+                WHERE id = %s
+                """,
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE users
+                SET level_estimate = NULL,
+                    word_count_min = NULL,
+                    word_count_max = NULL
+                WHERE id = ?
+                """,
+                (user_id,)
+            )
+
+        conn.commit()
+        conn.close()
+
+        return {"success": True, "message": "Placement reset. Student may retake placement now."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error retaking placement: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 # ============================================
 # LESSONS ENDPOINTS (Phase 2 - AI Generated)
