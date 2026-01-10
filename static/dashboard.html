@@ -2267,7 +2267,7 @@
             </div>
 
             <!-- Placement Test Section -->
-            <section id="placement" class="content-section hidden">
+            <section id="placementSection" class="content-section hidden">
                 <!-- Welcome Screen -->
                 <div class="placement-welcome" id="placementWelcome">
                     <div class="card" style="max-width: 800px; margin: 0 auto; padding: 3rem; text-align: center;">
@@ -3289,7 +3289,7 @@
             if (event) event.preventDefault();
 
             // Hide all sections
-            const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection', 'placementSection'];
+            const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
             sections.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
