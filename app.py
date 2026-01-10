@@ -3755,7 +3755,7 @@ PLACEMENT_WC_MIN, PLACEMENT_WC_MAX = 120, 180
 async def get_next_placement(token: str):
     user_data = verify_token(token)
     user_id = user_data["user_id"]
-
+    
     conn = get_db()
     cursor = get_cursor(conn)
 

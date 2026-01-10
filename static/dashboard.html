@@ -3236,6 +3236,13 @@
             return localStorage.getItem("assessmentCompleted") === "true";
         }
 
+        async function retakePlacementTest() {
+            if (!confirm('Retake test?')) return;
+            const token = localStorage.getItem('token');
+            await fetch(`/api/placement/next?token=${token}&retake=true`);
+            // Load test...
+        }
+
 
         // ============================================
         // AI TUTOR (Dashboard-integrated)
