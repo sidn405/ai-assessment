@@ -127,6 +127,7 @@ class UserCreate(BaseModel):
     role: str = "student"
     age_band: Optional[str] = None
     
+    
 class UserLogin(BaseModel):
     email: str
     password: str
@@ -807,7 +808,7 @@ async def analyze_assessment_results(answers: List[Dict]) -> Dict:
         topics = ['general reading', 'education']
     
     # Determine reading level based on answers
-    reading_level = 'intermediate'  # Default
+    reading_level = None  # Default
     
     # Check format preferences
     if 'format' in categories:
