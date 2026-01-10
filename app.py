@@ -305,7 +305,7 @@ async def reset_password_page():
 @app.post("/api/register")
 async def register(user: UserCreate):
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
     
