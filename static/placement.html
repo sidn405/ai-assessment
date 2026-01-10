@@ -1,831 +1,218 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reading Level Assessment - Achieve 365</title>
-    <style>
-        :root {
-            --navy-primary: #2b4c7e;
-            --navy-dark: #1e3a5f;
-            --purple: #667eea;
-            --purple-dark: #764ba2;
-            --success: #11998e;
-            --warning: #f5af19;
-            --danger: #f5576c;
-            --white: #ffffff;
-            --gray-light: #f8f9fa;
-            --text-gray: #666;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 2rem;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        /* Header */
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 2rem;
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-
-        /* Progress Bar */
-        .progress-container {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .attempt-info {
-            font-size: 1rem;
-            color: var(--navy-primary);
-            font-weight: 600;
-        }
-
-        .progress-bar {
-            height: 8px;
-            background: var(--gray-light);
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--success) 0%, var(--purple) 100%);
-            border-radius: 10px;
-            transition: width 0.3s ease;
-        }
-
-        /* Main Card */
-        .test-card {
-            background: white;
-            border-radius: 16px;
-            padding: 2.5rem;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-            margin-bottom: 2rem;
-        }
-
-        /* Timer */
-        .timer {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem 1.5rem;
-            background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
-            color: white;
-            border-radius: 12px;
-            margin-bottom: 2rem;
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .timer-icon {
-            font-size: 1.5rem;
-        }
-
-        /* Passage Section */
-        .passage-section {
-            margin-bottom: 2rem;
-        }
-
-        .passage-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid var(--gray-light);
-        }
-
-        .passage-title {
-            font-size: 1.5rem;
-            color: var(--navy-primary);
-            font-weight: 700;
-        }
-
-        .passage-meta {
-            display: flex;
-            gap: 1.5rem;
-            font-size: 0.9rem;
-            color: var(--text-gray);
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .passage-content {
-            line-height: 1.8;
-            font-size: 1.05rem;
-            color: #333;
-            padding: 1.5rem;
-            background: var(--gray-light);
-            border-radius: 12px;
-            border-left: 4px solid var(--purple);
-        }
-
-        /* Questions Section */
-        .questions-section {
-            margin-top: 2rem;
-        }
-
-        .section-title {
-            font-size: 1.3rem;
-            color: var(--navy-primary);
-            margin-bottom: 1.5rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .question-card {
-            background: var(--gray-light);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            border-left: 4px solid var(--purple);
-        }
-
-        .question-number {
-            display: inline-block;
-            background: var(--purple);
-            color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-        }
-
-        .question-text {
-            font-size: 1.1rem;
-            color: #333;
-            margin-bottom: 1rem;
-            font-weight: 500;
-        }
-
-        .options {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        .option {
-            display: flex;
-            align-items: center;
-            padding: 1rem 1.25rem;
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .option:hover {
-            border-color: var(--purple);
-            background: #f8f4ff;
-        }
-
-        .option input[type="radio"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 1rem;
-            cursor: pointer;
-            accent-color: var(--purple);
-        }
-
-        .option label {
-            cursor: pointer;
-            font-size: 1rem;
-            color: #333;
-            flex: 1;
-        }
-
-        .option.selected {
-            border-color: var(--purple);
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-        }
-
-        /* Buttons */
-        .button-container {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            margin-top: 2rem;
-        }
-
-        .btn {
-            padding: 1rem 2.5rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-        }
-
-        .btn-secondary {
-            background: white;
-            color: var(--navy-primary);
-            border: 2px solid var(--navy-primary);
-        }
-
-        .btn-secondary:hover {
-            background: var(--navy-primary);
-            color: white;
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Loading State */
-        .loading {
-            text-align: center;
-            padding: 3rem;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid var(--gray-light);
-            border-top-color: var(--purple);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Welcome Screen */
-        .welcome-screen {
-            background: white;
-            border-radius: 16px;
-            padding: 3rem;
-            text-align: center;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .welcome-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-
-        .welcome-screen h2 {
-            font-size: 2rem;
-            color: var(--navy-primary);
-            margin-bottom: 1rem;
-        }
-
-        .welcome-screen p {
-            font-size: 1.1rem;
-            color: var(--text-gray);
-            line-height: 1.6;
-            margin-bottom: 1.5rem;
-        }
-
-        .instructions {
-            background: var(--gray-light);
-            border-radius: 12px;
-            padding: 2rem;
-            margin: 2rem 0;
-            text-align: left;
-        }
-
-        .instructions h3 {
-            color: var(--navy-primary);
-            margin-bottom: 1rem;
-            font-size: 1.3rem;
-        }
-
-        .instructions ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        .instructions li {
-            padding: 0.75rem 0;
-            padding-left: 2rem;
-            position: relative;
-            color: #333;
-            font-size: 1rem;
-        }
-
-        .instructions li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: var(--success);
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
-
-        /* Results Screen */
-        .results-screen {
-            background: white;
-            border-radius: 16px;
-            padding: 3rem;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .results-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        .results-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-
-        .results-screen h2 {
-            font-size: 2rem;
-            color: var(--navy-primary);
-            margin-bottom: 0.5rem;
-        }
-
-        .results-subtitle {
-            font-size: 1.1rem;
-            color: var(--text-gray);
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin: 2rem 0;
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-
-        .level-badge {
-            display: inline-block;
-            padding: 1rem 2rem;
-            background: linear-gradient(135deg, var(--success) 0%, #38ef7d 100%);
-            color: white;
-            border-radius: 50px;
-            font-size: 1.3rem;
-            font-weight: bold;
-            margin: 2rem 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        /* Hidden State */
-        .hidden {
-            display: none !important;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            body {
-                padding: 1rem;
-            }
-
-            .header h1 {
-                font-size: 1.8rem;
-            }
-
-            .test-card {
-                padding: 1.5rem;
-            }
-
-            .passage-content {
-                font-size: 1rem;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .button-container {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📚 Reading Level Assessment</h1>
-            <p>Let's determine your perfect starting point!</p>
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="progress-container hidden" id="progressContainer">
-            <div class="progress-header">
-                <span class="attempt-info">Attempt <span id="currentAttempt">1</span> of <span id="totalAttempts">3</span></span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill" style="width: 33.33%"></div>
-            </div>
-        </div>
-
-        <!-- Welcome Screen -->
-        <div class="welcome-screen" id="welcomeScreen">
-            <div class="welcome-icon">🎯</div>
-            <h2>Welcome to Your Reading Assessment</h2>
-            <p>This quick test will help us personalize your learning experience by understanding your current reading level.</p>
+<!-- ============================================
+     ADD THIS TO YOUR DASHBOARD.HTML
+     After the "assessment" section
+     ============================================ -->
+
+<!-- Placement Test Section -->
+<section id="placement" class="content-section hidden">
+    <!-- Welcome Screen -->
+    <div class="placement-welcome" id="placementWelcome">
+        <div class="card" style="max-width: 800px; margin: 0 auto; padding: 3rem; text-align: center;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
+            <h2 style="color: var(--navy-primary); margin-bottom: 1rem;">Reading Level Assessment</h2>
+            <p style="font-size: 1.1rem; color: #666; line-height: 1.6; margin-bottom: 2rem;">
+                This quick test will help us personalize your learning experience by understanding your current reading level.
+            </p>
             
-            <div class="instructions">
-                <h3>How it works:</h3>
-                <ul>
-                    <li>Read a short passage carefully</li>
-                    <li>Answer 3 comprehension questions</li>
-                    <li>Complete up to 3 assessment rounds</li>
-                    <li>We'll calculate your reading speed and comprehension</li>
-                    <li>Get personalized lessons at your level</li>
+            <div style="background: var(--gray-light); border-radius: 12px; padding: 2rem; margin: 2rem 0; text-align: left;">
+                <h3 style="color: var(--navy-primary); margin-bottom: 1rem; font-size: 1.3rem;">How it works:</h3>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                        <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                        Read a short passage carefully
+                    </li>
+                    <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                        <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                        Answer 3 comprehension questions
+                    </li>
+                    <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                        <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                        Complete up to 3 assessment rounds
+                    </li>
+                    <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                        <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                        We'll calculate your reading speed and comprehension
+                    </li>
+                    <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                        <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                        Get personalized lessons at your level
+                    </li>
                 </ul>
             </div>
 
-            <button class="btn btn-primary" onclick="startTest()">
+            <button class="btn btn-primary" onclick="startPlacementTest()" style="font-size: 1.1rem; padding: 1rem 2rem;">
                 Begin Assessment
             </button>
         </div>
+    </div>
 
-        <!-- Loading State -->
-        <div class="loading hidden" id="loadingState">
-            <div class="spinner"></div>
+    <!-- Loading State -->
+    <div class="placement-loading hidden" id="placementLoading">
+        <div class="card" style="text-align: center; padding: 3rem;">
+            <div class="spinner" style="width: 50px; height: 50px; border: 4px solid var(--gray-light); border-top-color: var(--purple); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem;"></div>
             <p>Loading your assessment...</p>
         </div>
+    </div>
 
-        <!-- Test Screen -->
-        <div class="test-card hidden" id="testScreen">
-            <!-- Timer -->
-            <div class="timer">
-                <span class="timer-icon">⏱️</span>
-                <span>Time: <strong><span id="timerDisplay">00:00</span></strong></span>
-            </div>
-
-            <!-- Passage -->
-            <div class="passage-section">
-                <div class="passage-header">
-                    <h2 class="passage-title" id="passageTitle">Loading...</h2>
-                    <div class="passage-meta">
-                        <span class="meta-item">
-                            📖 <span id="wordCount">0</span> words
-                        </span>
-                        <span class="meta-item">
-                            📊 Level: <strong id="difficultyLevel">-</strong>
-                        </span>
-                    </div>
-                </div>
-                <div class="passage-content" id="passageContent">
-                    Loading passage...
+    <!-- Test Screen -->
+    <div class="placement-test hidden" id="placementTest">
+        <!-- Progress Bar -->
+        <div class="card" style="margin-bottom: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <span style="font-weight: 600; color: var(--navy-primary);">
+                    Attempt <span id="placementCurrentAttempt">1</span> of <span id="placementTotalAttempts">3</span>
+                </span>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <span>⏱️ Time: <strong><span id="placementTimer">00:00</span></strong></span>
                 </div>
             </div>
-
-            <!-- Questions -->
-            <div class="questions-section">
-                <h3 class="section-title">
-                    <span>✏️</span> Comprehension Questions
-                </h3>
-                <div id="questionsContainer">
-                    <!-- Questions will be inserted here -->
-                </div>
-            </div>
-
-            <!-- Submit Button -->
-            <div class="button-container">
-                <button class="btn btn-secondary" onclick="cancelTest()">Cancel</button>
-                <button class="btn btn-primary" onclick="submitTest()" id="submitBtn">
-                    Submit Answers →
-                </button>
+            <div style="height: 8px; background: var(--gray-light); border-radius: 10px; overflow: hidden;">
+                <div id="placementProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--success) 0%, var(--purple) 100%); border-radius: 10px; transition: width 0.3s ease; width: 33.33%;"></div>
             </div>
         </div>
 
-        <!-- Results Screen -->
-        <div class="results-screen hidden" id="resultsScreen">
-            <div class="results-header">
-                <div class="results-icon">🎉</div>
-                <h2>Assessment Complete!</h2>
-                <p class="results-subtitle">Here are your results</p>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value"><span id="resultScore">0</span>%</div>
-                    <div class="stat-label">Comprehension Score</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value"><span id="resultWPM">0</span></div>
-                    <div class="stat-label">Words Per Minute</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value"><span id="resultAttempts">0</span>/3</div>
-                    <div class="stat-label">Attempts Completed</div>
+        <!-- Passage Card -->
+        <div class="card" style="margin-bottom: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--gray-light);">
+                <h2 id="placementPassageTitle" style="color: var(--navy-primary); font-size: 1.5rem; font-weight: 700; margin: 0;">Loading...</h2>
+                <div style="display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--text-gray);">
+                    <span>📖 <span id="placementWordCount">0</span> words</span>
+                    <span>📊 Level: <strong id="placementDifficultyLevel">-</strong></span>
                 </div>
             </div>
-
-            <div style="text-align: center;">
-                <p style="font-size: 1.1rem; color: var(--text-gray); margin-bottom: 1rem;">Your Reading Level:</p>
-                <div class="level-badge" id="resultLevel">Intermediate</div>
+            <div id="placementPassageContent" style="line-height: 1.8; font-size: 1.05rem; color: #333; padding: 1.5rem; background: var(--gray-light); border-radius: 12px; border-left: 4px solid var(--purple);">
+                Loading passage...
             </div>
+        </div>
 
-            <div class="button-container">
-                <button class="btn btn-secondary" onclick="continueMoreTests()" id="continueBtn">
-                    Take Another Test
-                </button>
-                <button class="btn btn-primary" onclick="goToDashboard()">
-                    Go to Dashboard →
+        <!-- Questions Card -->
+        <div class="card">
+            <h3 style="font-size: 1.3rem; color: var(--navy-primary); margin-bottom: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                <span>✏️</span> Comprehension Questions
+            </h3>
+            <div id="placementQuestionsContainer">
+                <!-- Questions will be inserted here -->
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem; padding-top: 2rem; border-top: 2px solid var(--gray-light);">
+                <button class="btn btn-secondary" onclick="cancelPlacementTest()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitPlacementTest()" id="placementSubmitBtn">
+                    Submit Answers →
                 </button>
             </div>
         </div>
     </div>
 
-    <script>
-        let currentPassageId = null;
-        let startTime = null;
-        let timerInterval = null;
-        let currentAttempt = 0;
-        let totalAttempts = 3;
-        let userToken = localStorage.getItem('token') || '';
+    <!-- Results Screen -->
+    <div class="placement-results hidden" id="placementResults">
+        <div class="card" style="max-width: 900px; margin: 0 auto; padding: 3rem;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+                <h2 style="color: var(--navy-primary); font-size: 2rem; margin-bottom: 0.5rem;">Assessment Complete!</h2>
+                <p style="font-size: 1.1rem; color: var(--text-gray);">Here are your results</p>
+            </div>
 
-        // Start test
-        async function startTest() {
-            document.getElementById('welcomeScreen').classList.add('hidden');
-            document.getElementById('loadingState').classList.remove('hidden');
-            document.getElementById('progressContainer').classList.remove('hidden');
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin: 2rem 0;">
+                <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultScore">0</span>%</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Comprehension Score</div>
+                </div>
+                <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultWPM">0</span></div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Words Per Minute</div>
+                </div>
+                <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultAttempts">0</span>/3</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Attempts Completed</div>
+                </div>
+            </div>
 
-            try {
-                const response = await fetch(`/api/placement/next?token=${encodeURIComponent(userToken)}`);
-                const data = await response.json();
+            <div style="text-align: center;">
+                <p style="font-size: 1.1rem; color: var(--text-gray); margin-bottom: 1rem;">Your Reading Level:</p>
+                <div id="placementResultLevel" style="display: inline-block; padding: 1rem 2rem; background: linear-gradient(135deg, var(--success) 0%, #38ef7d 100%); color: white; border-radius: 50px; font-size: 1.3rem; font-weight: bold; margin: 2rem 0; text-transform: uppercase; letter-spacing: 1px;">
+                    Intermediate
+                </div>
+            </div>
 
-                if (data.done) {
-                    // All attempts completed
-                    showMessage('All assessment attempts completed!', 'success');
-                    setTimeout(() => goToDashboard(), 2000);
-                    return;
-                }
+            <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                <button class="btn btn-secondary" onclick="continuePlacementTests()" id="placementContinueBtn">
+                    Take Another Test
+                </button>
+                <button class="btn btn-primary" onclick="showSection('overview', event)">
+                    Go to Dashboard →
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
 
-                // Update progress
-                currentAttempt = data.attempt;
-                totalAttempts = data.total_attempts;
-                document.getElementById('currentAttempt').textContent = currentAttempt;
-                document.getElementById('totalAttempts').textContent = totalAttempts;
-                document.getElementById('progressFill').style.width = `${(currentAttempt / totalAttempts) * 100}%`;
+<style>
+/* Placement Test Spinner Animation */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
 
-                // Load passage and questions
-                const passage = data.passage;
-                const questions = data.questions;
+/* Placement Test Question Styles */
+.placement-question-card {
+    background: var(--gray-light);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid var(--purple);
+}
 
-                currentPassageId = passage.id;
+.placement-question-number {
+    display: inline-block;
+    background: var(--purple);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
 
-                document.getElementById('passageTitle').textContent = passage.title;
-                document.getElementById('wordCount').textContent = passage.word_count;
-                document.getElementById('difficultyLevel').textContent = capitalizeFirst(passage.difficulty_level);
-                document.getElementById('passageContent').textContent = passage.content;
+.placement-question-text {
+    font-size: 1.1rem;
+    color: #333;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
 
-                // Render questions
-                const questionsContainer = document.getElementById('questionsContainer');
-                questionsContainer.innerHTML = '';
+.placement-option {
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 0.75rem;
+}
 
-                questions.forEach((q, index) => {
-                    const questionCard = document.createElement('div');
-                    questionCard.className = 'question-card';
-                    questionCard.innerHTML = `
-                        <span class="question-number">Question ${index + 1}</span>
-                        <div class="question-text">${q.question}</div>
-                        <div class="options">
-                            ${q.options.map((opt, optIndex) => `
-                                <div class="option" onclick="selectOption(this, ${index}, '${opt}')">
-                                    <input type="radio" name="question${index}" value="${opt}" id="q${index}opt${optIndex}">
-                                    <label for="q${index}opt${optIndex}">${opt}</label>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                    questionsContainer.appendChild(questionCard);
-                });
+.placement-option:hover {
+    border-color: var(--purple);
+    background: #f8f4ff;
+}
 
-                // Show test screen
-                document.getElementById('loadingState').classList.add('hidden');
-                document.getElementById('testScreen').classList.remove('hidden');
+.placement-option.selected {
+    border-color: var(--purple);
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
 
-                // Start timer
-                startTimer();
+.placement-option input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    margin-right: 1rem;
+    cursor: pointer;
+    accent-color: var(--purple);
+}
 
-            } catch (error) {
-                console.error('Error loading test:', error);
-                showMessage('Error loading assessment. Please try again.', 'error');
-            }
-        }
-
-        // Timer functions
-        function startTimer() {
-            startTime = Date.now();
-            timerInterval = setInterval(updateTimer, 1000);
-        }
-
-        function updateTimer() {
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-            document.getElementById('timerDisplay').textContent = 
-                `${pad(minutes)}:${pad(seconds)}`;
-        }
-
-        function stopTimer() {
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
-        }
-
-        function pad(num) {
-            return num.toString().padStart(2, '0');
-        }
-
-        // Option selection
-        function selectOption(element, questionIndex, value) {
-            // Remove selected class from all options in this question
-            const questionCard = element.closest('.question-card');
-            questionCard.querySelectorAll('.option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-            
-            // Add selected class to clicked option
-            element.classList.add('selected');
-            
-            // Check the radio button
-            element.querySelector('input[type="radio"]').checked = true;
-        }
-
-        // Submit test
-        async function submitTest() {
-            // Collect answers
-            const answers = [];
-            const questions = document.querySelectorAll('.question-card');
-            
-            for (let i = 0; i < questions.length; i++) {
-                const selected = questions[i].querySelector('input[type="radio"]:checked');
-                if (!selected) {
-                    showMessage(`Please answer question ${i + 1}`, 'warning');
-                    return;
-                }
-                answers.push(selected.value);
-            }
-
-            stopTimer();
-            const timeSpent = Math.floor((Date.now() - startTime) / 1000);
-
-            // Submit to backend
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').textContent = 'Submitting...';
-
-            try {
-                const response = await fetch('/api/placement/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: userToken,
-                        passage_id: currentPassageId,
-                        answers: answers,
-                        time_spent_seconds: timeSpent
-                    })
-                });
-
-                const result = await response.json();
-
-                // Show results
-                showResults(result);
-
-            } catch (error) {
-                console.error('Error submitting test:', error);
-                showMessage('Error submitting answers. Please try again.', 'error');
-                document.getElementById('submitBtn').disabled = false;
-                document.getElementById('submitBtn').textContent = 'Submit Answers →';
-            }
-        }
-
-        // Show results
-        function showResults(result) {
-            document.getElementById('testScreen').classList.add('hidden');
-            document.getElementById('resultsScreen').classList.remove('hidden');
-
-            document.getElementById('resultScore').textContent = result.score.toFixed(0);
-            document.getElementById('resultWPM').textContent = result.wpm.toFixed(0);
-            document.getElementById('resultAttempts').textContent = currentAttempt;
-            document.getElementById('resultLevel').textContent = capitalizeFirst(result.new_level);
-
-            // Hide continue button if all attempts done
-            if (currentAttempt >= totalAttempts) {
-                document.getElementById('continueBtn').style.display = 'none';
-            }
-        }
-
-        // Continue with more tests
-        function continueMoreTests() {
-            document.getElementById('resultsScreen').classList.add('hidden');
-            document.getElementById('loadingState').classList.remove('hidden');
-            startTest();
-        }
-
-        // Cancel test
-        function cancelTest() {
-            if (confirm('Are you sure you want to cancel this assessment?')) {
-                goToDashboard();
-            }
-        }
-
-        // Go to dashboard
-        function goToDashboard() {
-            window.location.href = '/dashboard';
-        }
-
-        // Helper functions
-        function capitalizeFirst(str) {
-            return str.charAt(0).toUpperCase() + str.slice(1);
-        }
-
-        function showMessage(message, type) {
-            // Simple alert for now - you can enhance this with a toast notification
-            alert(message);
-        }
-
-        // Initialize
-        window.addEventListener('DOMContentLoaded', function() {
-            // Check if user is logged in
-            if (!userToken) {
-                showMessage('Please log in to take the assessment', 'error');
-                window.location.href = '/';
-            }
-        });
-    </script>
-</body>
-</html>
+.placement-option label {
+    cursor: pointer;
+    font-size: 1rem;
+    color: #333;
+    flex: 1;
+}
+</style>

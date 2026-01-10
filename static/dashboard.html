@@ -1929,7 +1929,76 @@
                 grid-template-columns: 1fr;
                 gap: 2rem;
             }
-        }    
+        }
+        
+        /* Placement Test Spinner Animation */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Placement Test Question Styles */
+        .placement-question-card {
+            background: var(--gray-light);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--purple);
+        }
+
+        .placement-question-number {
+            display: inline-block;
+            background: var(--purple);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .placement-question-text {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .placement-option {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 0.75rem;
+        }
+
+        .placement-option:hover {
+            border-color: var(--purple);
+            background: #f8f4ff;
+        }
+
+        .placement-option.selected {
+            border-color: var(--purple);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+        .placement-option input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 1rem;
+            cursor: pointer;
+            accent-color: var(--purple);
+        }
+
+        .placement-option label {
+            cursor: pointer;
+            font-size: 1rem;
+            color: #333;
+            flex: 1;
+        }
 
     </style>
 </head>
@@ -2033,6 +2102,10 @@
                     <a href="#" class="nav-link" onclick="showSection('assessment', event); return false;">
                         <span>📝</span> Take Assessment
                     </a>
+                    <!-- ADD THIS -->
+                    <a href="#" onclick="showSection('placement', event)" class="nav-item">
+                        <span>📚</span> Reading Level
+                    </a>
                 </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link" onclick="unlockSpeechOnce(); showSection('lessons', event); return false;">
@@ -2095,7 +2168,7 @@
                             <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
                                 📝 Take Assessment
                             </button>
-                            <button class="btn btn-secondary" onclick="window.location.href='/placement-test'">
+                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
                                 📊 Reading Level Test
                             </button>
                         </div>
@@ -2112,7 +2185,7 @@
                             <button class="btn btn-primary" onclick="showSection('lessons', event)">
                                 📚 Continue Learning
                             </button>
-                            <button class="btn btn-secondary" onclick="window.location.href='/placement-test'">
+                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
                                 🔄 Retake Reading Level Test
                             </button>
                         </div>
@@ -2192,6 +2265,149 @@
                     <div id="assessmentQuestions" class="hidden"></div>
                 </div>
             </div>
+
+            <!-- Placement Test Section -->
+            <section id="placement" class="content-section hidden">
+                <!-- Welcome Screen -->
+                <div class="placement-welcome" id="placementWelcome">
+                    <div class="card" style="max-width: 800px; margin: 0 auto; padding: 3rem; text-align: center;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
+                        <h2 style="color: var(--navy-primary); margin-bottom: 1rem;">Reading Level Assessment</h2>
+                        <p style="font-size: 1.1rem; color: #666; line-height: 1.6; margin-bottom: 2rem;">
+                            This quick test will help us personalize your learning experience by understanding your current reading level.
+                        </p>
+                        
+                        <div style="background: var(--gray-light); border-radius: 12px; padding: 2rem; margin: 2rem 0; text-align: left;">
+                            <h3 style="color: var(--navy-primary); margin-bottom: 1rem; font-size: 1.3rem;">How it works:</h3>
+                            <ul style="list-style: none; padding: 0;">
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Read a short passage carefully
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Answer 3 comprehension questions
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Complete up to 3 assessment rounds
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    We'll calculate your reading speed and comprehension
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Get personalized lessons at your level
+                                </li>
+                            </ul>
+                        </div>
+
+                        <button class="btn btn-primary" onclick="startPlacementTest()" style="font-size: 1.1rem; padding: 1rem 2rem;">
+                            Begin Assessment
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div class="placement-loading hidden" id="placementLoading">
+                    <div class="card" style="text-align: center; padding: 3rem;">
+                        <div class="spinner" style="width: 50px; height: 50px; border: 4px solid var(--gray-light); border-top-color: var(--purple); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem;"></div>
+                        <p>Loading your assessment...</p>
+                    </div>
+                </div>
+
+                <!-- Test Screen -->
+                <div class="placement-test hidden" id="placementTest">
+                    <!-- Progress Bar -->
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <span style="font-weight: 600; color: var(--navy-primary);">
+                                Attempt <span id="placementCurrentAttempt">1</span> of <span id="placementTotalAttempts">3</span>
+                            </span>
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <span>⏱️ Time: <strong><span id="placementTimer">00:00</span></strong></span>
+                            </div>
+                        </div>
+                        <div style="height: 8px; background: var(--gray-light); border-radius: 10px; overflow: hidden;">
+                            <div id="placementProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--success) 0%, var(--purple) 100%); border-radius: 10px; transition: width 0.3s ease; width: 33.33%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Passage Card -->
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--gray-light);">
+                            <h2 id="placementPassageTitle" style="color: var(--navy-primary); font-size: 1.5rem; font-weight: 700; margin: 0;">Loading...</h2>
+                            <div style="display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--text-gray);">
+                                <span>📖 <span id="placementWordCount">0</span> words</span>
+                                <span>📊 Level: <strong id="placementDifficultyLevel">-</strong></span>
+                            </div>
+                        </div>
+                        <div id="placementPassageContent" style="line-height: 1.8; font-size: 1.05rem; color: #333; padding: 1.5rem; background: var(--gray-light); border-radius: 12px; border-left: 4px solid var(--purple);">
+                            Loading passage...
+                        </div>
+                    </div>
+
+                    <!-- Questions Card -->
+                    <div class="card">
+                        <h3 style="font-size: 1.3rem; color: var(--navy-primary); margin-bottom: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>✏️</span> Comprehension Questions
+                        </h3>
+                        <div id="placementQuestionsContainer">
+                            <!-- Questions will be inserted here -->
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem; padding-top: 2rem; border-top: 2px solid var(--gray-light);">
+                            <button class="btn btn-secondary" onclick="cancelPlacementTest()">Cancel</button>
+                            <button class="btn btn-primary" onclick="submitPlacementTest()" id="placementSubmitBtn">
+                                Submit Answers →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Screen -->
+                <div class="placement-results hidden" id="placementResults">
+                    <div class="card" style="max-width: 900px; margin: 0 auto; padding: 3rem;">
+                        <div style="text-align: center; margin-bottom: 2rem;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+                            <h2 style="color: var(--navy-primary); font-size: 2rem; margin-bottom: 0.5rem;">Assessment Complete!</h2>
+                            <p style="font-size: 1.1rem; color: var(--text-gray);">Here are your results</p>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin: 2rem 0;">
+                            <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultScore">0</span>%</div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Comprehension Score</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultWPM">0</span></div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Words Per Minute</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultAttempts">0</span>/3</div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Attempts Completed</div>
+                            </div>
+                        </div>
+
+                        <div style="text-align: center;">
+                            <p style="font-size: 1.1rem; color: var(--text-gray); margin-bottom: 1rem;">Your Reading Level:</p>
+                            <div id="placementResultLevel" style="display: inline-block; padding: 1rem 2rem; background: linear-gradient(135deg, var(--success) 0%, #38ef7d 100%); color: white; border-radius: 50px; font-size: 1.3rem; font-weight: bold; margin: 2rem 0; text-transform: uppercase; letter-spacing: 1px;">
+                                Intermediate
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                            <button class="btn btn-secondary" onclick="continuePlacementTests()" id="placementContinueBtn">
+                                Take Another Test
+                            </button>
+                            <button class="btn btn-primary" onclick="showSection('overview', event)">
+                                Go to Dashboard →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
             
             <!-- Lessons Section (NEW SECTION STARTS) -->
             <div id="lessonsSection" class="hidden">
@@ -2511,6 +2727,228 @@
         // Debug: Track loadNextLesson calls
         let lessonCallCount = 0;
         const originalLoadNextLesson = loadNextLesson;
+
+        /* ============================================
+        PLACEMENT TEST JAVASCRIPT FUNCTIONS
+        Add these to your dashboard.html <script> section
+        ============================================ */
+
+        let placementCurrentPassageId = null;
+        let placementStartTime = null;
+        let placementTimerInterval = null;
+        let placementCurrentAttempt = 0;
+        let placementTotalAttempts = 3;
+
+        // Start placement test
+        async function startPlacementTest() {
+            document.getElementById('placementWelcome').classList.add('hidden');
+            document.getElementById('placementLoading').classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/api/placement/next?token=${encodeURIComponent(currentUser.token)}`);
+                const data = await response.json();
+
+                if (data.done) {
+                    showMessage('All assessment attempts completed!', 'success');
+                    setTimeout(() => showSection('overview', event), 2000);
+                    return;
+                }
+
+                // Update progress
+                placementCurrentAttempt = data.attempt;
+                placementTotalAttempts = data.total_attempts;
+                document.getElementById('placementCurrentAttempt').textContent = placementCurrentAttempt;
+                document.getElementById('placementTotalAttempts').textContent = placementTotalAttempts;
+                document.getElementById('placementProgressBar').style.width = `${(placementCurrentAttempt / placementTotalAttempts) * 100}%`;
+
+                // Load passage and questions
+                const passage = data.passage;
+                const questions = data.questions;
+
+                placementCurrentPassageId = passage.id;
+
+                document.getElementById('placementPassageTitle').textContent = passage.title;
+                document.getElementById('placementWordCount').textContent = passage.word_count;
+                document.getElementById('placementDifficultyLevel').textContent = capitalizeFirst(passage.difficulty_level);
+                document.getElementById('placementPassageContent').textContent = passage.content;
+
+                // Render questions
+                const questionsContainer = document.getElementById('placementQuestionsContainer');
+                questionsContainer.innerHTML = '';
+
+                questions.forEach((q, index) => {
+                    const questionCard = document.createElement('div');
+                    questionCard.className = 'placement-question-card';
+                    questionCard.innerHTML = `
+                        <span class="placement-question-number">Question ${index + 1}</span>
+                        <div class="placement-question-text">${q.question}</div>
+                        <div class="placement-options">
+                            ${q.options.map((opt, optIndex) => `
+                                <div class="placement-option" onclick="selectPlacementOption(this, ${index}, '${opt}')">
+                                    <input type="radio" name="placementQuestion${index}" value="${opt}" id="placementQ${index}opt${optIndex}">
+                                    <label for="placementQ${index}opt${optIndex}">${opt}</label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    questionsContainer.appendChild(questionCard);
+                });
+
+                // Show test screen
+                document.getElementById('placementLoading').classList.add('hidden');
+                document.getElementById('placementTest').classList.remove('hidden');
+
+                // Start timer
+                startPlacementTimer();
+
+            } catch (error) {
+                console.error('Error loading placement test:', error);
+                showMessage('Error loading assessment. Please try again.', 'error');
+                document.getElementById('placementLoading').classList.add('hidden');
+                document.getElementById('placementWelcome').classList.remove('hidden');
+            }
+        }
+
+        // Timer functions
+        function startPlacementTimer() {
+            placementStartTime = Date.now();
+            placementTimerInterval = setInterval(updatePlacementTimer, 1000);
+        }
+
+        function updatePlacementTimer() {
+            const elapsed = Math.floor((Date.now() - placementStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('placementTimer').textContent = 
+                `${pad(minutes)}:${pad(seconds)}`;
+        }
+
+        function stopPlacementTimer() {
+            if (placementTimerInterval) {
+                clearInterval(placementTimerInterval);
+                placementTimerInterval = null;
+            }
+        }
+
+        // Option selection
+        function selectPlacementOption(element, questionIndex, value) {
+            // Remove selected class from all options in this question
+            const questionCard = element.closest('.placement-question-card');
+            questionCard.querySelectorAll('.placement-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked option
+            element.classList.add('selected');
+            
+            // Check the radio button
+            element.querySelector('input[type="radio"]').checked = true;
+        }
+
+        // Submit placement test
+        async function submitPlacementTest() {
+            // Collect answers
+            const answers = [];
+            const questionCards = document.querySelectorAll('.placement-question-card');
+            
+            for (let i = 0; i < questionCards.length; i++) {
+                const selected = questionCards[i].querySelector('input[type="radio"]:checked');
+                if (!selected) {
+                    showMessage(`Please answer question ${i + 1}`, 'warning');
+                    return;
+                }
+                answers.push(selected.value);
+            }
+
+            stopPlacementTimer();
+            const timeSpent = Math.floor((Date.now() - placementStartTime) / 1000);
+
+            // Submit to backend
+            const submitBtn = document.getElementById('placementSubmitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+
+            try {
+                const response = await fetch('/api/placement/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: currentUser.token,
+                        passage_id: placementCurrentPassageId,
+                        answers: answers,
+                        time_spent_seconds: timeSpent
+                    })
+                });
+
+                const result = await response.json();
+
+                // Show results
+                showPlacementResults(result);
+
+            } catch (error) {
+                console.error('Error submitting placement test:', error);
+                showMessage('Error submitting answers. Please try again.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Answers →';
+            }
+        }
+
+        // Show placement results
+        function showPlacementResults(result) {
+            document.getElementById('placementTest').classList.add('hidden');
+            document.getElementById('placementResults').classList.remove('hidden');
+
+            document.getElementById('placementResultScore').textContent = result.score.toFixed(0);
+            document.getElementById('placementResultWPM').textContent = result.wpm.toFixed(0);
+            document.getElementById('placementResultAttempts').textContent = placementCurrentAttempt;
+            document.getElementById('placementResultLevel').textContent = capitalizeFirst(result.new_level);
+
+            // Hide continue button if all attempts done
+            if (placementCurrentAttempt >= placementTotalAttempts) {
+                document.getElementById('placementContinueBtn').style.display = 'none';
+            } else {
+                document.getElementById('placementContinueBtn').style.display = 'inline-block';
+            }
+        }
+
+        // Continue with more tests
+        function continuePlacementTests() {
+            // Reset UI
+            document.getElementById('placementResults').classList.add('hidden');
+            document.getElementById('placementLoading').classList.remove('hidden');
+            
+            // Reset submit button
+            const submitBtn = document.getElementById('placementSubmitBtn');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Answers →';
+            
+            // Load next test
+            startPlacementTest();
+        }
+
+        // Cancel placement test
+        function cancelPlacementTest() {
+            if (confirm('Are you sure you want to cancel this assessment?')) {
+                stopPlacementTimer();
+                showSection('overview', event);
+            }
+        }
+
+        // Reset placement test state
+        function resetPlacementTest() {
+            stopPlacementTimer();
+            
+            // Hide all screens
+            document.getElementById('placementWelcome').classList.remove('hidden');
+            document.getElementById('placementLoading').classList.add('hidden');
+            document.getElementById('placementTest').classList.add('hidden');
+            document.getElementById('placementResults').classList.add('hidden');
+            
+            // Reset variables
+            placementCurrentPassageId = null;
+            placementStartTime = null;
+            placementCurrentAttempt = 0;
+        }
 
         function hasCompletedAssessment(progressData = null) {
             // If backend already returned a reading_level, assessment is effectively complete
@@ -2889,6 +3327,8 @@
                 checkForNextLesson();
             } else if (sectionName === 'assessment') {
                 loadAssessment();
+            } else if (sectionName === 'placement') {
+                resetPlacementTest();
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4896,7 +5336,7 @@
                         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
                             <button 
                                 class="btn btn-primary" 
-                                onclick="window.location.href='/placement-test'"
+                                onclick="closePlacementModal(); showSection('placement', event);"
                                 style="padding: 1rem 2.5rem; font-size: 1.1rem;">
                                 📊 Take Reading Level Test
                             </button>
@@ -4915,16 +5355,6 @@
                     @keyframes slideIn {
                         from { opacity: 0; transform: translateY(-20px); }
                         to { opacity: 1; transform: translateY(0); }
-                    }
-                    
-                    @media (max-width: 768px) {
-                        #placementRequiredModal > div {
-                            padding: 2rem 1.5rem;
-                            margin: 1rem;
-                        }
-                        #placementRequiredModal h2 { font-size: 1.5rem; }
-                        #placementRequiredModal p { font-size: 1rem; }
-                        #placementRequiredModal button { width: 100%; }
                     }
                 </style>
             `;
