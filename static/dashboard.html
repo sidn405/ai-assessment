@@ -3598,6 +3598,11 @@
                 if (link) link.classList.add('active');
             }
 
+            // ⭐⭐⭐ ADD THESE 3 LINES ⭐⭐⭐
+            if (sectionId === 'overview' || sectionId === 'progress') {
+                updateAssessmentStatus();
+            }
+
             // Load data for the section
             if (sectionName === 'overview' || sectionName === 'progress') {
                 loadAllStats();
