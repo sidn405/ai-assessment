@@ -2744,8 +2744,16 @@
             document.getElementById('placementWelcome').classList.add('hidden');
             document.getElementById('placementLoading').classList.remove('hidden');
 
+            // ⭐ FIX: Get token from localStorage (same as other functions)
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showMessage('Please log in to take the assessment', 'error');
+                window.location.href = '/';
+                return;
+            }
+
             try {
-                const response = await fetch(`/api/placement/next?token=${encodeURIComponent(currentUser.token)}`);
+                const response = await fetch(`/api/placement/next?token=${encodeURIComponent(token)}`);
                 const data = await response.json();
 
                 if (data.done) {
@@ -2847,6 +2855,14 @@
 
         // Submit placement test
         async function submitPlacementTest() {
+            // ⭐ FIX: Get token from localStorage
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showMessage('Session expired. Please log in again.', 'error');
+                window.location.href = '/';
+                return;
+            }
+
             // Collect answers
             const answers = [];
             const questionCards = document.querySelectorAll('.placement-question-card');
@@ -2948,6 +2964,21 @@
             placementCurrentPassageId = null;
             placementStartTime = null;
             placementCurrentAttempt = 0;
+        }
+
+        // Add capitalizeFirst helper if it doesn't exist
+        if (typeof capitalizeFirst === 'undefined') {
+            function capitalizeFirst(str) {
+                if (!str) return '';
+                return str.charAt(0).toUpperCase() + str.slice(1);
+            }
+        }
+
+        // Add pad helper if it doesn't exist
+        if (typeof pad === 'undefined') {
+            function pad(num) {
+                return num.toString().padStart(2, '0');
+            }
         }
 
         function hasCompletedAssessment(progressData = null) {
