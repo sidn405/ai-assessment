@@ -3972,7 +3972,7 @@
             }
         }
 
-        async function loadNextLesson() {
+        async function loadNextLesson() {            
             console.log('=== loadNextLesson START ===');
             
             const token = localStorage.getItem('token');
@@ -3981,7 +3981,7 @@
                 return;
             }
             
-            // Hide everything
+            // Hide everything initially
             const elements = ['noLessons', 'lessonContentCard', 'questionsCard', 'lessonResultsCard'];
             elements.forEach(id => {
                 const el = document.getElementById(id);
@@ -3994,22 +3994,28 @@
             
             lessonStartTime = Date.now();
             startTutorForLesson();
-
             
             try {
                 console.log('Fetching lesson from API...');
-        
-                // ========== ADD THIS ==========
-                // Pass recent topics to avoid duplicates
-                let url = `/api/lessons/next?token=${token}`;
-                if (recentTopics.length > 0) {
+                
+                // Build URL with recent topics to avoid duplicates
+                let url = `/api/lessons/next?token=${encodeURIComponent(token)}`;
+                if (recentTopics && recentTopics.length > 0) {
                     url += `&exclude_topics=${recentTopics.join(',')}`;
                 }
-                // =============================
                 
                 const response = await fetch(url);
-                
                 console.log('Response status:', response.status);
+                
+                // ⭐ Handle placement required (409 error)
+                if (response.status === 409) {
+                    if (loading) loading.classList.add('hidden');
+                    const errorData = await response.json();
+                    if (errorData.detail === "Placement required") {
+                        showPlacementRequiredModal();
+                        return;
+                    }
+                }
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -4026,16 +4032,15 @@
                 
                 currentLesson = lesson;
                 lessonAnswers = [];
-        
-                // ========== ADD THIS ==========
-                // Track this topic
+                
+                // Track this topic to avoid duplicates
                 const topicTags = lesson.topic_tags || [lesson.title.split(' ')[0]];
+                if (!recentTopics) recentTopics = [];
                 recentTopics.push(...topicTags);
                 // Keep only last 5 topics
                 if (recentTopics.length > 5) {
                     recentTopics = recentTopics.slice(-5);
                 }
-                // =============================
                 
                 displayLesson(lesson);
                 requestAnimationFrame(() => startTutorForLesson());
@@ -4048,7 +4053,7 @@
                 
                 // Show friendly error message
                 const errorDiv = document.createElement('div');
-                errorDiv.className = 'card';
+                errorDiv.className = 'card error-card';
                 errorDiv.innerHTML = `
                     <div style="background: #f8d7da; padding: 1.5rem; border-radius: 6px; margin-bottom: 1rem;">
                         <strong>⚠️ Unable to load lesson</strong>
@@ -4064,7 +4069,6 @@
                     const existingError = section.querySelector('.error-card');
                     if (existingError) existingError.remove();
                     
-                    errorDiv.classList.add('error-card');
                     section.appendChild(errorDiv);
                 }
             }
@@ -4850,6 +4854,90 @@
                 submitBtn.style.opacity = '1';
                 submitBtn.style.cursor = 'pointer';
             }
+        }
+
+        function showPlacementRequiredModal() {
+            const modalHTML = `
+                <div id="placementRequiredModal" style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.7);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10000;
+                    padding: 1rem;
+                ">
+                    <div style="
+                        max-width: 600px;
+                        width: 100%;
+                        background: white;
+                        border-radius: 16px;
+                        padding: 3rem;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        text-align: center;
+                        animation: slideIn 0.3s ease;
+                    ">
+                        <div style="font-size: 5rem; margin-bottom: 1rem;">📚</div>
+                        
+                        <h2 style="color: #2b4c7e; font-size: 1.8rem; margin-bottom: 1rem;">
+                            Reading Level Assessment Required
+                        </h2>
+                        
+                        <p style="font-size: 1.1rem; color: #666; line-height: 1.6; margin-bottom: 2rem;">
+                            Before we can generate personalized lessons, we need to understand your current reading level.
+                            <br><br>
+                            <strong>This quick 5-minute assessment will help us create lessons perfect for you!</strong>
+                        </p>
+                        
+                        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                            <button 
+                                class="btn btn-primary" 
+                                onclick="window.location.href='/placement-test'"
+                                style="padding: 1rem 2.5rem; font-size: 1.1rem;">
+                                📊 Take Reading Level Test
+                            </button>
+                            
+                            <button 
+                                class="btn btn-secondary" 
+                                onclick="closePlacementModal()"
+                                style="padding: 1rem 2rem; font-size: 1rem;">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <style>
+                    @keyframes slideIn {
+                        from { opacity: 0; transform: translateY(-20px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                    
+                    @media (max-width: 768px) {
+                        #placementRequiredModal > div {
+                            padding: 2rem 1.5rem;
+                            margin: 1rem;
+                        }
+                        #placementRequiredModal h2 { font-size: 1.5rem; }
+                        #placementRequiredModal p { font-size: 1rem; }
+                        #placementRequiredModal button { width: 100%; }
+                    }
+                </style>
+            `;
+            
+            const existingModal = document.getElementById('placementRequiredModal');
+            if (existingModal) existingModal.remove();
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function closePlacementModal() {
+            const modal = document.getElementById('placementRequiredModal');
+            if (modal) modal.remove();
         }
 
         // ========== MOBILE MODAL SCROLL FIX ==========
