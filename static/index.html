@@ -1195,25 +1195,6 @@
             }
         }
 
-        // Add after your form setup
-        document.getElementById('registerRole').addEventListener('change', function() {
-            const ageInput = document.getElementById('registerAge');
-            if (this.value === 'student') {
-                ageInput.setAttribute('required', 'required');
-                ageInput.placeholder = 'Age *';
-            } else {
-                ageInput.removeAttribute('required');
-                ageInput.placeholder = 'Age (optional)';
-            }
-        });
-
-        // Also add validation in handleRegistration:
-        if (role === 'student' && !age) {
-            alert('Age is required for students');
-            ageEl.focus();
-            return;
-        }
-
         function openModal(type) {
             console.log('Opening modal:', type);
             
