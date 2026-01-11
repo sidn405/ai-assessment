@@ -3775,7 +3775,7 @@ async def get_next_placement(token: str):
     
     # ⭐ FIX: Get passages from ALL levels for placement
     # Pick one from each level progressively
-    levels = ["beginner", "intermediate", "advanced"]
+    levels = ["beginner", "intermediate"]
     target_level = levels[attempts % 3]  # Rotate through levels
     
     if USE_POSTGRES:
@@ -3809,7 +3809,6 @@ async def get_next_placement(token: str):
     if not p:
         conn.close()
         raise HTTPException(status_code=500, detail=f"No placement passages available for {target_level} level.")
-
 
     passage_id = p["id"] if hasattr(p, "keys") else p[0]
     title = p["title"] if hasattr(p, "keys") else p[1]
