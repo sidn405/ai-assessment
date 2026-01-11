@@ -5695,7 +5695,7 @@ async def mark_alert_resolved(alert_id: int, request: Request):
         else:
             cursor.execute("""
                 UPDATE admin_alerts
-                SET is_read = 1,
+                SET is_read = TRUE,
                     resolved_at = datetime('now'),
                     resolved_by = ?,
                     admin_notes = ?
@@ -5744,7 +5744,7 @@ async def mark_essay_reviewed(essay_id: int, request: Request):
         else:
             cursor.execute("""
                 UPDATE user_essays
-                SET admin_reviewed = 1,
+                SET admin_reviewed = TRUE,
                     reviewed_at = datetime('now'),
                     admin_reviewed = ?,
                     admin_notes = ?
