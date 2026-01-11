@@ -5736,8 +5736,8 @@ async def mark_essay_reviewed(essay_id: int, request: Request):
             cursor.execute("""
                 UPDATE user_essays
                 SET admin_reviewed = TRUE,
-                    admin_reviewed_at = NOW(),
-                    admin_reviewed_by = %s,
+                    reviewed_at = NOW(),
+                    reviewed_by = %s,
                     admin_notes = %s
                 WHERE id = %s
             """, (user_data['user_id'], admin_notes, essay_id))
@@ -5745,8 +5745,8 @@ async def mark_essay_reviewed(essay_id: int, request: Request):
             cursor.execute("""
                 UPDATE user_essays
                 SET admin_reviewed = 1,
-                    admin_reviewed_at = datetime('now'),
-                    admin_reviewed_by = ?,
+                    reviewed_at = datetime('now'),
+                    reviewed_by = ?,
                     admin_notes = ?
                 WHERE id = ?
             """, (user_data['user_id'], admin_notes, essay_id))
