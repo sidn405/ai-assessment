@@ -5671,47 +5671,59 @@ async def get_essay_details(essay_id: int, token: str):
 @app.post("/api/admin/alert/{alert_id}/mark-resolved")
 async def mark_alert_resolved(alert_id: int, request: Request):
     """Mark alert as resolved"""
-    body = await request.json()
-    token = body.get("token")
-    admin_notes = body.get("notes", "")
-    
-    user_data = verify_token(token)
-    if user_data.get("role") != "admin":
-        raise HTTPException(403, "Admin only")
-    
-    conn = get_db()
-    cursor = get_cursor(conn)
-    
     try:
-        if USE_POSTGRES:
-            cursor.execute("""
-                UPDATE admin_alerts
-                SET is_read = TRUE,
-                    resolved_at = NOW(),
-                    resolved_by = %s,
-                    admin_notes = %s
-                WHERE id = %s
-            """, (user_data['user_id'], admin_notes, alert_id))
-        else:
-            cursor.execute("""
-                UPDATE admin_alerts
-                SET is_read = 1,
-                    resolved_at = datetime('now'),
-                    resolved_by = ?,
-                    admin_notes = ?
-                WHERE id = ?
-            """, (user_data['user_id'], admin_notes, alert_id))
+        body = await request.json()
+        token = body.get("token")
+        admin_notes = body.get("notes", "")
         
-        conn.commit()
-        conn.close()
+        user_data = verify_token(token)
         
-        print(f"✅ Alert {alert_id} marked as resolved")
+        if user_data.get("role") != "admin":
+            raise HTTPException(403, "Admin only")
         
-        return {"success": True}
+        conn = get_db()
+        cursor = get_cursor(conn)
         
+        try:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    UPDATE admin_alerts
+                    SET is_read = TRUE,
+                        is_resolved = TRUE,
+                        resolved_at = NOW(),
+                        resolved_by = %s,
+                        resolution_notes = %s
+                    WHERE id = %s
+                """, (user_data['user_id'], admin_notes, alert_id))
+            else:
+                cursor.execute("""
+                    UPDATE admin_alerts
+                    SET is_read = 1,
+                        is_resolved = 1,
+                        resolved_at = datetime('now'),
+                        resolved_by = ?,
+                        resolution_notes = ?
+                    WHERE id = ?
+                """, (user_data['user_id'], admin_notes, alert_id))
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"✅ Alert {alert_id} marked as resolved by admin {user_data['user_id']}")
+            
+            return {"success": True, "message": "Alert marked as resolved"}
+            
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            raise
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        conn.rollback()
-        conn.close()
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(500, str(e))
 
 
