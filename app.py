@@ -4899,6 +4899,9 @@ async def get_student_progress(student_id: int, token: str):
 @app.delete("/api/admin/student/{student_id}")
 async def delete_student(student_id: int, token: str):
     """Delete a student and all their data"""
+    print(f"\n{'='*60}")
+    print(f"DELETE CALLED FOR STUDENT ID: {student_id}")
+    print(f"{'='*60}\n")
     user_data = verify_token(token)
     
     # Check admin
