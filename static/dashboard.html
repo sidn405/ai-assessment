@@ -3575,12 +3575,12 @@
                 }
 
                 // ✅ NEW: If assessment is done (new user after assessment), load FIRST lesson even if completed=0
-                if (hasCompletedAssessment() || data?.stats?.reading_level) {
-                console.log('Assessment complete but no completed lessons yet - loading first lesson');
-                noLessons.classList.add('hidden');
-                loadNextLesson();
-                return;
+                if (hasCompletedAssessment(data)) {
+                    noLessons.classList.add('hidden');
+                    loadNextLesson();
+                    return;
                 }
+
 
                 // Otherwise, they truly haven't completed assessment yet
                 console.log('Assessment not complete - showing assessment prompt');
@@ -3603,7 +3603,7 @@
             if (event) event.preventDefault();
 
             // Hide all sections
-            const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
+            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'progressSection'];
             sections.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -3922,10 +3922,10 @@
                 showMessage('Assessment completed successfully!', 'success');
 
                 // Show success message
-                alert('✓ Assessment completed! Your personalized lessons are ready.');
-                
-                // Navigate to lessons section
-                showSection('lessons')
+                alert('✓ Assessment completed! Next: complete the Reading Level Assessment.');
+
+                // Navigate to placement section
+                showSection('placement')
                
                 // Refresh dashboard to show updated state
                 loadDashboard();
@@ -3960,7 +3960,7 @@
                         </ul>
                     ` : ''}
                 </div>
-                <button class="btn btn-primary" onclick="showSection('lessons', event)">Start Learning</button>
+                <button class="btn btn-primary" onclick="showSection('placement', event)">Continue to Reading Level Test</button>
             `;
             
             // Update UI
@@ -5988,9 +5988,9 @@
 
             const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
             const assessmentDone =
-                totalCompleted > 0 ||
-                !!progressData?.stats?.reading_level ||
-                hasCompletedAssessment?.(); // if you already have this helper
+            totalCompleted > 0 ||
+            hasCompletedAssessment(progressData); // reading_level is a default; don't use it
+
 
             // If assessment is done, hide the big CTA card on Overview.
             if (assessmentDone) {

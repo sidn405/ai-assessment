@@ -21,7 +21,6 @@ import psycopg2
 
 # Get your DATABASE_URL from Railway
 # Railway → PostgreSQL → Variables tab → Copy DATABASE_URL value
-DATABASE_URL = ""  # e.g. postgresql://postgres:ABC123@xyz.railway.app:5432/railway
 
 # Prefer env var if present (lets you avoid hardcoding secrets)
 DATABASE_URL = "postgresql://postgres:YOUR_PASSWORD@YOUR_HOST:YOUR_PORT/railway"
