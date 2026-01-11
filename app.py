@@ -4928,6 +4928,7 @@ async def delete_student(student_id: int, token: str):
         
         # Delete related data (order matters!)
         tables_to_clean = [
+            "activity_log",
             "user_sessions",
             "lesson_completions",
             "placement_attempts", 
