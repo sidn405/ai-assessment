@@ -5695,7 +5695,7 @@ async def mark_alert_resolved(alert_id: int, request: Request):
         else:
             cursor.execute("""
                 UPDATE admin_alerts
-                SET is_read = TRUE,
+                SET is_read = 1,
                     resolved_at = datetime('now'),
                     resolved_by = ?,
                     admin_notes = ?
@@ -5704,6 +5704,8 @@ async def mark_alert_resolved(alert_id: int, request: Request):
 
         conn.commit()
         conn.close()
+        
+        print(f"✅ Alert {alert_id} marked as reviewed by admin {user_data['alert_id']}")
 
         return {
             "success": True,
