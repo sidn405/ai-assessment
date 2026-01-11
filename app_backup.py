@@ -127,6 +127,7 @@ class UserCreate(BaseModel):
     role: str = "student"
     age_band: Optional[str] = None
     
+    
 class UserLogin(BaseModel):
     email: str
     password: str
@@ -807,7 +808,7 @@ async def analyze_assessment_results(answers: List[Dict]) -> Dict:
         topics = ['general reading', 'education']
     
     # Determine reading level based on answers
-    reading_level = 'intermediate'  # Default
+    reading_level = None  # Default
     
     # Check format preferences
     if 'format' in categories:
@@ -3758,8 +3759,8 @@ async def get_next_placement(token: str):
     
     conn = get_db()
     cursor = get_cursor(conn)
-
-    # how many attempts already?
+    
+    # Check attempts
     cursor.execute(
         "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=%s" if USE_POSTGRES
         else "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=?",
@@ -3767,20 +3768,16 @@ async def get_next_placement(token: str):
     )
     row = cursor.fetchone()
     attempts = (row["c"] if hasattr(row, "keys") else row[0]) or 0
-
+    
     if attempts >= PLACEMENT_MAX_ATTEMPTS:
         conn.close()
         return {"done": True, "attempt": attempts, "total_attempts": PLACEMENT_MAX_ATTEMPTS}
-
-    # current provisional level (default intermediate)
-    cursor.execute(
-        "SELECT level_estimate FROM users WHERE id=%s" if USE_POSTGRES else "SELECT level_estimate FROM users WHERE id=?",
-        (user_id,)
-    )
-    r = cursor.fetchone()
-    current_level = (r["level_estimate"] if hasattr(r, "keys") else r[0]) or "intermediate"
-
-    # pick a short passage at that level
+    
+    # ⭐ FIX: Get passages from ALL levels for placement
+    # Pick one from each level progressively
+    levels = ["beginner", "intermediate", "advanced"]
+    target_level = levels[attempts % 3]  # Rotate through levels
+    
     if USE_POSTGRES:
         cursor.execute(
             """
@@ -3792,7 +3789,7 @@ async def get_next_placement(token: str):
             ORDER BY RANDOM()
             LIMIT 1
             """,
-            (current_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            (target_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
         )
     else:
         cursor.execute(
@@ -3805,13 +3802,46 @@ async def get_next_placement(token: str):
             ORDER BY RANDOM()
             LIMIT 1
             """,
-            (current_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            (target_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
         )
-
+    
     p = cursor.fetchone()
+
+    # ⭐ FALLBACK: If no passage at target level, try ANY level
+    if not p:
+        print(f"⚠️ No {target_level} passages, trying any level...")
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                """
+                SELECT id, title, content, word_count, difficulty_level
+                FROM passages
+                WHERE approved=true AND word_count BETWEEN %s AND %s
+                ORDER BY RANDOM() LIMIT 1
+                """,
+                (PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT id, title, content, word_count, difficulty_level
+                FROM passages
+                WHERE approved=1 AND word_count BETWEEN ? AND ?
+                ORDER BY RANDOM() LIMIT 1
+                """,
+                (PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            )
+        
+        p = cursor.fetchone()
+        
+        if p:
+            actual_level = p["difficulty_level"] if hasattr(p, "keys") else p[4]
+            print(f"✅ Using {actual_level} level as fallback")
+
+    # Only error if STILL no passages
     if not p:
         conn.close()
-        raise HTTPException(status_code=500, detail="No placement passages available for this level.")
+        raise HTTPException(500, "No passages in database!")
 
     passage_id = p["id"] if hasattr(p, "keys") else p[0]
     title = p["title"] if hasattr(p, "keys") else p[1]

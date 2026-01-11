@@ -4895,6 +4895,29 @@ async def get_student_progress(student_id: int, token: str):
         "student": student,
         "progress": progress_rows,   # ✅ THIS is what your UI expects
     }
+    
+@app.delete("/api/admin/student/{student_id}")
+async def delete_student(student_id: int, token: str):
+    user_data = verify_token(token)
+    
+    if user_data.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+    
+    conn = get_db()
+    cursor = get_cursor(conn)
+    
+    # Delete related data
+    cursor.execute("DELETE FROM lesson_completions WHERE user_id=%s", (student_id,))
+    cursor.execute("DELETE FROM placement_attempts WHERE user_id=%s", (student_id,))
+    cursor.execute("DELETE FROM assessment_responses WHERE user_id=%s", (student_id,))
+    cursor.execute("DELETE FROM admin_notes WHERE student_id=%s", (student_id,))
+    cursor.execute("DELETE FROM weekly_goals WHERE user_id=%s", (student_id,))
+    cursor.execute("DELETE FROM users WHERE id=%s", (student_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True}
 
 @app.get("/api/admin/analytics")
 async def get_analytics(token: str):

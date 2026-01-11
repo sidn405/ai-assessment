@@ -2338,6 +2338,48 @@
             // You can navigate to student details or show a modal
         }
 
+        let studentToDelete = null;
+
+        function confirmDeleteStudent(studentId, studentName) {
+            studentToDelete = { id: studentId, name: studentName };
+            document.getElementById('deleteStudentMessage').textContent = `Delete ${studentName}?`;
+            document.getElementById('deleteStudentModal').classList.add('active');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteStudentModal').classList.remove('active');
+            studentToDelete = null;
+        }
+
+        async function deleteStudent() {
+            if (!studentToDelete) return;
+            
+            const { id, name } = studentToDelete;
+            const btn = document.getElementById('confirmDeleteBtn');
+            
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Deleting...';
+                
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/admin/student/${id}?token=${token}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Delete failed');
+                
+                closeDeleteModal();
+                alert(`Student ${name} deleted successfully`);
+                await loadStudents();
+                loadDashboardStats();
+                
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                btn.disabled = false;
+                btn.textContent = 'Delete';
+            }
+        }
+
         function markAlertResolved(alertId) {
             // TODO: Implement mark as resolved
             alert(`Mark alert ${alertId} as resolved - implement API call`);
@@ -2555,9 +2597,12 @@
                     <td>${levelBadge}</td>
                     <td>${joinDate}</td>
                     <td><span class="badge badge-success">Active</span></td>
-                    <td>
+                    <td style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name}')">
                             View Progress
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="confirmDeleteStudent(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
+                            Delete
                         </button>
                     </td>
                 `;
@@ -2689,6 +2734,20 @@
         if (menuIcon) menuIcon.textContent = icon;
         if (menuIconMain) menuIconMain.textContent = icon;
     }
+
+    <div id="deleteStudentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2>⚠️ Delete Student</h2>
+            <p id="deleteStudentMessage" style="margin: 1.5rem 0; font-size: 1.1rem;"></p>
+            <p style="color: var(--danger); margin-bottom: 1.5rem;">
+                <strong>Warning:</strong> This cannot be undone.
+            </p>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteStudent()">Delete</button>
+            </div>
+        </div>
+    </div>
     </script>
 </body>
 </html>
