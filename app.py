@@ -4928,15 +4928,27 @@ async def delete_student(student_id: int, token: str):
         
         # Delete related data (order matters!)
         tables_to_clean = [
-            "timeout_events",    # ⭐ ADD FIRST - child of user_sessions
-            "session_logs",      # ⭐ ADD SECOND - child of users
-            "activity_log",
-            "user_sessions",
-            "lesson_completions",
-            "placement_attempts", 
-            "assessment_responses",
-            "admin_notes",
-            "weekly_goals"
+            # Tables referencing user_sessions
+            "timeout_events",       # session_id → user_sessions
+            "activity_log",         # session_id → user_sessions
+            
+            # Tables directly referencing users
+            "session_logs",         # user_id → users
+            "user_sessions",        # user_id → users
+            "placement_attempts",   # user_id → users
+            "weekly_goals",         # user_id → users
+            "user_badges",          # user_id → users (probably)
+            "user_essays",          # user_id → users
+            "user_points",          # user_id → users
+            "user_streaks",         # user_id → users
+            "points_history",       # user_id → users
+            "progress",             # user_id → users
+            "vocabulary_tracker",   # user_id → users
+            "writing_exercises",    # user_id → users (maybe)
+            "difficulty_adjustments", # user_id → users (maybe)
+            "assessments",          # user_id → users (maybe)
+            "discussions",          # user_id → users (maybe)
+            "admin_alerts"          # student_id → users (maybe)
         ]
         
         for table in tables_to_clean:
