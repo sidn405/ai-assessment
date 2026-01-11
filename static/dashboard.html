@@ -3528,41 +3528,73 @@
                 return;
             }
 
+            // Helper: assessment is considered "done" if the user has interests and/or a reading level/estimate
+            const hasCompletedAssessment = () => {
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+
+                // interests might be an array OR a JSON string (your logs show it as a string)
+                let interestsCount = 0;
+                if (Array.isArray(u.interests)) {
+                interestsCount = u.interests.length;
+                } else if (typeof u.interests === 'string') {
+                try {
+                    const parsed = JSON.parse(u.interests);
+                    if (Array.isArray(parsed)) interestsCount = parsed.length;
+                } catch (_) {}
+                }
+
+                return (
+                interestsCount > 0 ||
+                !!u.reading_level ||
+                !!u.level_estimate
+                );
+            };
+
             try {
                 console.log('Checking for next lesson...');
 
                 const response = await fetch(`/api/student/progress?token=${token}`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
-                window._lastProgressData = data;
+                console.log('Progress check:', data.stats);
 
                 const noLessons = document.getElementById('noLessons');
-
-                // Gate 1: Interest assessment
-                if (!hasCompletedAssessment(data)) {
-                    console.log('Assessment not complete → routing to assessment');
-                    if (noLessons) noLessons.classList.remove('hidden');
-                    showSection('assessment');
-                    return;
+                if (!noLessons) {
+                console.error('noLessons element not found!');
+                return;
                 }
 
-                // Gate 2: Reading level (placement)
-                if (!hasCompletedPlacement(data)) {
-                    console.log('Placement not complete → routing to placement');
-                    if (noLessons) noLessons.classList.remove('hidden');
-                    showSection('placement');
-                    return;
-                }
+                const totalCompleted = Number(data?.stats?.total_lessons || 0);
 
-                // Ready to learn
-                console.log('Assessment + placement complete → loading lesson');
-                if (noLessons) noLessons.classList.add('hidden');
-                showSection('lessons');
+                // ✅ If they have completed ANY lessons, load next as before
+                if (totalCompleted > 0) {
+                console.log(`User has ${totalCompleted} completed lessons - loading lesson interface`);
+                noLessons.classList.add('hidden');
                 loadNextLesson();
+                return;
+                }
+
+                // ✅ NEW: If assessment is done (new user after assessment), load FIRST lesson even if completed=0
+                if (hasCompletedAssessment(data)) {
+                  noLessons.classList.add('hidden');
+                  loadNextLesson();
+                  return;
+                }
+
+
+                // Otherwise, they truly haven't completed assessment yet
+                console.log('Assessment not complete - showing assessment prompt');
+                noLessons.classList.remove('hidden');
 
             } catch (error) {
-                console.error('Error checking for next lesson:', error);
+                console.error('Error checking for lessons:', error);
+
+                // Fallback: if assessment looks complete, attempt to load the lesson anyway
+                const noLessons = document.getElementById('noLessons');
+                if (noLessons && hasCompletedAssessment()) {
+                noLessons.classList.add('hidden');
+                loadNextLesson();
+                }
             }
         }
 
@@ -3894,6 +3926,7 @@
 
                 // Navigate to placement section
                 showSection('placement')
+
                
                 // Refresh dashboard to show updated state
                 loadDashboard();
@@ -5956,8 +5989,8 @@
 
             const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
             const assessmentDone =
-            totalCompleted > 0 ||
-            hasCompletedAssessment(progressData); // reading_level is a default; don't use it
+              totalCompleted > 0 ||
+              hasCompletedAssessment(progressData); // reading_level is a default; don't use it
 
 
             // If assessment is done, hide the big CTA card on Overview.
