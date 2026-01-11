@@ -5743,13 +5743,12 @@ async def mark_essay_reviewed(essay_id: int, request: Request):
             """, (user_data['user_id'], admin_notes, essay_id))
         else:
             cursor.execute("""
-                UPDATE user_essays
-                SET admin_reviewed = TRUE,
-                    reviewed_at = datetime('now'),
-                    admin_reviewed = ?,
-                    admin_notes = ?
-                WHERE id = ?
-            """, (user_data['user_id'], admin_notes, essay_id))
+                UPDATE user_essays 
+                SET admin_reviewed = true, 
+                    admin_reviewed_at = NOW(), 
+                    admin_notes = %s 
+                WHERE id = %s
+            """, (admin_notes, essay_id))
 
         conn.commit()
         conn.close()
