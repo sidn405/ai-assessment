@@ -3775,7 +3775,7 @@ async def get_next_placement(token: str):
     
     # ⭐ FIX: Get passages from ALL levels for placement
     # Pick one from each level progressively
-    levels = ["beginner", "intermediate"]
+    levels = ["beginner", "intermediate", "advanced"]
     target_level = levels[attempts % 3]  # Rotate through levels
     
     if USE_POSTGRES:
@@ -3806,9 +3806,42 @@ async def get_next_placement(token: str):
         )
     
     p = cursor.fetchone()
+
+    # ⭐ FALLBACK: If no passage at target level, try ANY level
+    if not p:
+        print(f"⚠️ No {target_level} passages, trying any level...")
+        
+        if USE_POSTGRES:
+            cursor.execute(
+                """
+                SELECT id, title, content, word_count, difficulty_level
+                FROM passages
+                WHERE approved=true AND word_count BETWEEN %s AND %s
+                ORDER BY RANDOM() LIMIT 1
+                """,
+                (PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT id, title, content, word_count, difficulty_level
+                FROM passages
+                WHERE approved=1 AND word_count BETWEEN ? AND ?
+                ORDER BY RANDOM() LIMIT 1
+                """,
+                (PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            )
+        
+        p = cursor.fetchone()
+        
+        if p:
+            actual_level = p["difficulty_level"] if hasattr(p, "keys") else p[4]
+            print(f"✅ Using {actual_level} level as fallback")
+
+    # Only error if STILL no passages
     if not p:
         conn.close()
-        raise HTTPException(status_code=500, detail=f"No placement passages available for {target_level} level.")
+        raise HTTPException(500, "No passages in database!")
 
     passage_id = p["id"] if hasattr(p, "keys") else p[0]
     title = p["title"] if hasattr(p, "keys") else p[1]
