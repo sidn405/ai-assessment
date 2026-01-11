@@ -4898,26 +4898,74 @@ async def get_student_progress(student_id: int, token: str):
     
 @app.delete("/api/admin/student/{student_id}")
 async def delete_student(student_id: int, token: str):
+    """Delete a student and all their data"""
     user_data = verify_token(token)
     
+    # Check admin
     if user_data.get("role") != "admin":
         raise HTTPException(403, "Admin only")
     
     conn = get_db()
     cursor = get_cursor(conn)
     
-    # Delete related data
-    cursor.execute("DELETE FROM lesson_completions WHERE user_id=%s", (student_id,))
-    cursor.execute("DELETE FROM placement_attempts WHERE user_id=%s", (student_id,))
-    cursor.execute("DELETE FROM assessment_responses WHERE user_id=%s", (student_id,))
-    cursor.execute("DELETE FROM admin_notes WHERE student_id=%s", (student_id,))
-    cursor.execute("DELETE FROM weekly_goals WHERE user_id=%s", (student_id,))
-    cursor.execute("DELETE FROM users WHERE id=%s", (student_id,))
-    
-    conn.commit()
-    conn.close()
-    
-    return {"success": True}
+    try:
+        # Check student exists
+        cursor.execute(
+            "SELECT full_name FROM users WHERE id=%s AND role='student'" if USE_POSTGRES
+            else "SELECT full_name FROM users WHERE id=? AND role='student'",
+            (student_id,)
+        )
+        
+        student = cursor.fetchone()
+        if not student:
+            conn.close()
+            raise HTTPException(404, "Student not found")
+        
+        name = student["full_name"] if hasattr(student, "keys") else student[0]
+        
+        # Delete related data (order matters!)
+        tables_to_clean = [
+            "lesson_completions",
+            "placement_attempts", 
+            "assessment_responses",
+            "admin_notes",
+            "weekly_goals"
+        ]
+        
+        for table in tables_to_clean:
+            try:
+                cursor.execute(
+                    f"DELETE FROM {table} WHERE user_id=%s" if USE_POSTGRES
+                    else f"DELETE FROM {table} WHERE user_id=?",
+                    (student_id,)
+                )
+                print(f"✓ Deleted from {table}")
+            except Exception as e:
+                print(f"⚠️ Skipping {table}: {e}")
+        
+        # Delete user
+        cursor.execute(
+            "DELETE FROM users WHERE id=%s" if USE_POSTGRES
+            else "DELETE FROM users WHERE id=?",
+            (student_id,)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Deleted student: {name}")
+        
+        return {"success": True, "message": f"Deleted {name}"}
+        
+    except HTTPException:
+        conn.rollback()
+        conn.close()
+        raise
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"❌ Error: {e}")
+        raise HTTPException(500, str(e))
 
 @app.get("/api/admin/analytics")
 async def get_analytics(token: str):
