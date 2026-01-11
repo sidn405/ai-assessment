@@ -3159,7 +3159,7 @@
             }
 
             try {
-                const response = await fetch(`/api/dashboard?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/student/progress?token=${encodeURIComponent(token)}`);
                 const data = await response.json();
 
                 if (data.user) {
@@ -3172,7 +3172,7 @@
                     
                     const userLevelEl = document.getElementById('userLevel');
                     if (userLevelEl) {
-                        userLevelEl.textContent = capitalizeFirst(data.user.reading_level || 'intermediate');
+                        userLevelEl.textContent = data.user.reading_level ? capitalizeFirst(data.user.reading_level) : 'Not Set';
                     }
                 }
 
@@ -3180,7 +3180,7 @@
                     const statsMap = {
                         lessonsCompleted: data.stats.lessons || 0,
                         avgScore: data.stats.avgScore || '-',
-                        readingLevel: capitalizeFirst(data.stats.level || 'intermediate'),
+                        readingLevel: data.stats.level ? capitalizeFirst(data.stats.level) : 'Not Set',
                         dayStreak: data.stats.streak || 0
                     };
                     
