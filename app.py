@@ -5513,7 +5513,7 @@ async def get_essays_needing_review(token: str, limit: int = 50):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
 
     try:
         if USE_POSTGRES:
@@ -5680,7 +5680,7 @@ async def mark_alert_resolved(alert_id: int, request: Request):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
 
     try:
         if USE_POSTGRES:
@@ -5729,7 +5729,7 @@ async def mark_essay_reviewed(essay_id: int, request: Request):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
 
     try:
         if USE_POSTGRES:
