@@ -5670,18 +5670,18 @@ async def get_essay_details(essay_id: int, token: str):
 
 @app.post("/api/admin/alert/{alert_id}/mark-resolved")
 async def mark_alert_resolved(alert_id: int, request: Request):
-    """Mark an alert as resolved"""
-    data = await request.json()
-    token = data.get('token')
-    admin_notes = data.get('notes', '')
+    """Mark alert as resolved"""
+    body = await request.json()
+    token = body.get("token")
+    admin_notes = body.get("notes", "")
     
     user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+    if user_data.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+    
     conn = get_db()
     cursor = get_cursor(conn)
-
+    
     try:
         if USE_POSTGRES:
             cursor.execute("""
@@ -5701,22 +5701,18 @@ async def mark_alert_resolved(alert_id: int, request: Request):
                     admin_notes = ?
                 WHERE id = ?
             """, (user_data['user_id'], admin_notes, alert_id))
-
+        
         conn.commit()
         conn.close()
         
-        print(f"✅ Alert {alert_id} marked as reviewed by admin {user_data['alert_id']}")
-
-        return {
-            "success": True,
-            "message": "Alert marked as resolved"
-        }
-
+        print(f"✅ Alert {alert_id} marked as resolved")
+        
+        return {"success": True}
+        
     except Exception as e:
         conn.rollback()
         conn.close()
-        print(f"Error marking alert resolved: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/admin/essay/{essay_id}/mark-reviewed")
