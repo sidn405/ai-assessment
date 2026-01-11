@@ -1284,6 +1284,20 @@
     ===============================================================================
     -->
 
+     <div id="deleteStudentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2>⚠️ Delete Student</h2>
+            <p id="deleteStudentMessage" style="margin: 1.5rem 0; font-size: 1.1rem;"></p>
+            <p style="color: var(--danger); margin-bottom: 1.5rem;">
+                <strong>Warning:</strong> This cannot be undone.
+            </p>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteStudent()">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentUser = null;
         let allStudents = [];
@@ -2735,19 +2749,6 @@
         if (menuIconMain) menuIconMain.textContent = icon;
     }
 
-    <div id="deleteStudentModal" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
-            <h2>⚠️ Delete Student</h2>
-            <p id="deleteStudentMessage" style="margin: 1.5rem 0; font-size: 1.1rem;"></p>
-            <p style="color: var(--danger); margin-bottom: 1.5rem;">
-                <strong>Warning:</strong> This cannot be undone.
-            </p>
-            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
-                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteStudent()">Delete</button>
-            </div>
-        </div>
-    </div>
     </script>
 </body>
 </html>
