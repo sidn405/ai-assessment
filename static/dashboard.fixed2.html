@@ -3350,7 +3350,7 @@
             
             console.log('❌ Assessment not completed');
             return false;
-        }
+        
 
         async function retakePlacementTest() {
             if (!confirm('Retake test?')) return;
@@ -6058,8 +6058,8 @@
             gettingStarted.classList.add('hidden');
             if (continueToPlacement) continueToPlacement.classList.add('hidden');
             if (continueLearning) continueLearning.classList.remove('hidden');
-        }
- else {
+
+            else {
                 gettingStarted.classList.remove('hidden');
                 const continueLearning = document.getElementById('continueLearning');
                 if (continueLearning) continueLearning.classList.add('hidden');
