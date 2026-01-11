@@ -210,7 +210,7 @@
         }
         
         .progress-value {
-            font-size: 2.5rem;
+            font-size: 1.5rem;
             font-weight: 700;
             display: block;
             margin-bottom: 0.5rem;
@@ -262,7 +262,7 @@
         }
         
         .btn {
-            padding: 0.75rem 2rem;
+            padding: 12px 24px;
             border: none;
             border-radius: 4px;
             font-weight: 600;
@@ -476,9 +476,9 @@
         }
 
         .goal-item.completed {
-            opacity: 0.7;
+            opacity: 0.3;
             border: 2px solid #28A745;
-            background: #f0fff4;
+            background: #ce640d;
         }
 
         .progress-bar-container {
@@ -595,6 +595,17 @@
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
+        .stat-card.red { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .stat-card.purple { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .stat-card.green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .stat-card.blue { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .stat-card.pink { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
+
+        .stat-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
         .stat-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 4px 16px rgba(0,0,0,0.15);
@@ -612,6 +623,401 @@
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+
+        .achievements-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 30px;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .achievements-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .achievements-header h2 {
+            font-size: 24px;
+        }
+
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .achievement-card {
+            background: white;
+            color: #333;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .achievement-icon {
+            font-size: 48px;
+            margin-bottom: 8px;
+        }
+
+        .achievement-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .achievement-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 24px;
+            color: #333;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .goals-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .goal-card {
+            background: linear-gradient(135deg, #ea66df 0%, #B40200 100%);
+            border-radius: 12px;
+            padding: 24px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .goal-card.completed {
+            background: linear-gradient(135deg, #29814e 0%, #11998e 100%);
+        }
+
+        .goal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .goal-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .goal-icon {
+            font-size: 24px;
+        }
+
+        .goal-progress {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            background: rgba(255,255,255,0.3);
+            border-radius: 20px;
+            height: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            background: white;
+            height: 100%;
+            border-radius: 20px;
+            transition: width 0.5s ease;
+        }
+
+        .goal-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .badges-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .badge-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s;
+        }
+
+        .badge-card.earned {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border-color: #f39c12;
+            transform: scale(1.02);
+        }
+
+        .badge-card.locked {
+            opacity: 0.5;
+        }
+
+        .badge-icon {
+            font-size: 56px;
+            margin-bottom: 12px;
+            filter: grayscale(100%);
+        }
+
+        .badge-card.earned .badge-icon {
+            filter: none;
+            animation: bounce 0.5s;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .badge-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .badge-description {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .badge-points {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .activity-list {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .activity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .activity-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .activity-info h4 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .activity-meta {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .activity-score {
+            font-size: 20px;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 8px;
+        }
+
+        .score-perfect {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .score-high {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .score-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            margin-bottom: 24px;
+        }
+
+        .modal-header h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .modal-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .goal-options {
+            display: grid;
+            gap: 16px;
+        }
+
+        .goal-option {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .goal-option:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .goal-option.selected {
+            border-color: #667eea;
+            background: #e8eaf6;
+        }
+
+        .goal-option-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .goal-option-icon {
+            font-size: 32px;
+        }
+
+        .goal-option-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .goal-option-desc {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .goal-option-default {
+            color: #667eea;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .input-group {
+            margin-top: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
         }
 
         /* ========== RESPONSIVE ADJUSTMENTS ========== */
@@ -1355,35 +1761,31 @@
             transform: translateY(140%);
             opacity: 0;
             transition: transform 0.45s ease, opacity 0.45s ease;
-            }
+        }
 
-            .ai-tutor.show {
+        .ai-tutor.show {
             transform: translateY(0);
             opacity: 1;
-            }
+        }
 
-            .ai-tutor.hidden { display: none; }
-
-            /* Avatar Face */
-            .tutor-avatar {
-                width: 120px;
-                height: 120px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-                border: 4px solid white;
-                animation: bounce 2s infinite;
-            }
-
-            .avatar-face { width: 64px; height: 64px; position: relative; }
-
-            .eyes { display: flex; justify-content: space-between; padding: 18px 10px 0 10px; }
-            .eye { width: 10px; height: 10px; border-radius: 50%; background: #1f2a44; }
-
-            .mouth {
+        .ai-tutor.hidden { display: none; }    
+        /* Avatar Face */
+        .tutor-avatar {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+            border: 4px solid white;
+            animation: bounce 2s infinite;
+        }    
+        .avatar-face { width: 64px; height: 64px; position: relative; }    
+        .eyes { display: flex; justify-content: space-between; padding: 18px 10px 0 10px; }
+        .eye { width: 10px; height: 10px; border-radius: 50%; background: #1f2a44; }    
+        .mouth {
             position: absolute;
             left: 50%;
             top: 42px;
@@ -1393,14 +1795,12 @@
             border-bottom: 4px solid #1f2a44;
             border-radius: 0 0 20px 20px;
             transition: all 0.25s ease;
-            }
-
-            /* emotion mouths */
-            .mouth.happy { border-bottom-width: 5px; }
-            .mouth.encouraging { border-bottom-width: 4px; width: 26px; }
-            .mouth.celebrating { border-bottom-width: 6px; width: 30px; }
-
-            .tutor-speech-bubble{
+        }    
+        /* emotion mouths */
+        .mouth.happy { border-bottom-width: 5px; }
+        .mouth.encouraging { border-bottom-width: 4px; width: 26px; }
+        .mouth.celebrating { border-bottom-width: 6px; width: 30px; }    
+        .tutor-speech-bubble{
             background: #fff;
             border-radius: 14px;
             padding: 12px 14px;
@@ -1408,9 +1808,8 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.18);
             border: 1px solid rgba(0,0,0,0.06);
             position: relative;
-            }
-
-            .tutor-speech-bubble::before{
+        }    
+        .tutor-speech-bubble::before{
             content: "";
             position: absolute;
             right: -12px;
@@ -1418,20 +1817,17 @@
             border-left: 12px solid #fff;
             border-top: 10px solid transparent;
             border-bottom: 10px solid transparent;
-            }
-
-            .speech-text { font-weight: 600; line-height: 1.35; }
-
-            .speech-continue{
+        }    
+        .speech-text { font-weight: 600; line-height: 1.35; }    
+        .speech-continue{
             margin-top: 10px;
             border: none;
             border-radius: 10px;
             padding: 8px 10px;
             cursor: pointer;
             font-weight: 700;
-            }
-
-            .tutor-close, .tutor-mute{
+        }    
+        .tutor-close, .tutor-mute{
             position: absolute;
             top: -10px;
             width: 32px;
@@ -1441,11 +1837,168 @@
             background: #fff;
             cursor: pointer;
             box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+        }    
+        .tutor-close { 
+            right: -10px; color: #e74c3c;
+        }    
+        .tutor-mute {
+            left: -10px;
+        }    
+        /* ========== FOOTER STYLES ========== */    
+        .dashboard-footer {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: 280px; /* Match sidebar width */
+            padding: 3rem 2rem 1.5rem;
+            margin-top: 4rem;
+            border-top: 3px solid #8b5cf6;
+        }    
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto 2rem;
+        }    
+        .footer-section h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: white;
+        }    
+        .footer-section h4 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }    
+        .footer-section p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            line-height: 1.6;
+        }    
+        .footer-logo {
+            margin-bottom: 1rem;
+        }    
+        .footer-tagline {
+            margin-top: 0.5rem;
+            font-style: italic;
+        }    
+        .footer-links {
+            list-style: none;
+            padding: 0;
+        }    
+        .footer-links li {
+            margin-bottom: 0.75rem;
+        }    
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            display: inline-block;
+        }    
+        .footer-links a:hover {
+            color: c0#84fc;
+            transform: translateX(5px);
+        }    
+        .footer-bottom {
+            text-align: center;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }    
+        .footer-bottom p {
+            margin: 0.5rem 0;
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }    
+        /* Responsive Footer */
+        @media (max-width: 1024px) {
+            .footer-content {
+                grid-template-columns: repeat(2, 1fr);
             }
+        }    
+        @media (max-width: 768px) {
+            .dashboard-footer {
+                margin-left: 0; /* No sidebar offset on mobile */
+                padding: 2rem 1.5rem 1rem;
+            }
+            
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+        }
+        
+        /* Placement Test Spinner Animation */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
 
-            .tutor-close { right: -10px; color: #e74c3c; }
-            .tutor-mute { left: -10px; }
+        /* Placement Test Question Styles */
+        .placement-question-card {
+            background: var(--gray-light);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--purple);
+        }
 
+        .placement-question-number {
+            display: inline-block;
+            background: var(--purple);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .placement-question-text {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .placement-option {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 0.75rem;
+        }
+
+        .placement-option:hover {
+            border-color: var(--purple);
+            background: #f8f4ff;
+        }
+
+        .placement-option.selected {
+            border-color: var(--purple);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+        .placement-option input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 1rem;
+            cursor: pointer;
+            accent-color: var(--purple);
+        }
+
+        .placement-option label {
+            cursor: pointer;
+            font-size: 1rem;
+            color: #333;
+            flex: 1;
+        }
 
     </style>
 </head>
@@ -1549,6 +2102,10 @@
                     <a href="#" class="nav-link" onclick="showSection('assessment', event); return false;">
                         <span>📝</span> Take Assessment
                     </a>
+                    <!-- ADD THIS -->
+                    <a href="#" class="nav-link" onclick="showSection('placement', event); return false;">
+                        <span>📚</span> Reading Level
+                    </a>
                 </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link" onclick="unlockSpeechOnce(); showSection('lessons', event); return false;">
@@ -1597,7 +2154,9 @@
                 </div>
 
                 <div class="card">
-                    <h2>Getting Started</h2>
+                    <h2 style="color: var(--navy-primary); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🚀</span> Getting Started
+                    </h2>
 
                     <!-- shown only BEFORE assessment -->
                     <div id="gettingStarted">
@@ -1605,19 +2164,31 @@
                             <strong>Welcome to your literacy journey!</strong>
                             Start by taking our assessment to help us understand your interests and reading level.
                         </div>
-                        <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
-                            Take Assessment
-                        </button>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
+                                📝 Take Assessment
+                            </button>
+                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
+                                📊 Reading Level Test
+                            </button>
+                        </div>
                     </div>
 
                     <!-- shown only AFTER assessment -->
                     <div id="continueLearning" class="hidden">
                         <div class="alert alert-success">
-                            ✅ Assessment complete! Your lessons are now personalized to your interests and reading level.
+                            <strong>✅ Assessment complete!</strong><br>
+                            Your lessons are now personalized to your interests and reading level.<br>
+                            <span style="opacity: 0.9; font-size: 0.95em;">Ready to start your learning journey? Click below to explore your customized lessons!</span>
                         </div>
-                        <button class="btn btn-primary" onclick="showSection('lessons', event)">
-                            Continue Learning
-                        </button>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="showSection('lessons', event)">
+                                📚 Continue Learning
+                            </button>
+                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
+                                🔄 Retake Reading Level Test
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -1658,6 +2229,9 @@
                                 <div>🦉 <strong>Night Owl</strong> — Complete lesson after 9 PM</div>
                                 <div>👑 <strong>Consistency King</strong> — 7-day streak</div>
                                 <div>⚡ <strong>Speed Reader</strong> — 10 lessons in one week</div>
+                                <div>⭐ <strong>Intermediate Master</strong> — 10 intermediate lessons</div>
+                                <div>🏃 <strong>Reading Marathon</strong> — Read for 60 minutes in one day</div>
+                                <div>💯 <strong>Perfect Ten</strong> — Score 100% on 10 lessons</div>
                             </div>
                         </div>
 
@@ -1691,6 +2265,149 @@
                     <div id="assessmentQuestions" class="hidden"></div>
                 </div>
             </div>
+
+            <!-- Placement Test Section -->
+            <section id="placementSection" class="content-section hidden">
+                <!-- Welcome Screen -->
+                <div class="placement-welcome" id="placementWelcome">
+                    <div class="card" style="max-width: 800px; margin: 0 auto; padding: 3rem; text-align: center;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
+                        <h2 style="color: var(--navy-primary); margin-bottom: 1rem;">Reading Level Assessment</h2>
+                        <p style="font-size: 1.1rem; color: #666; line-height: 1.6; margin-bottom: 2rem;">
+                            This quick test will help us personalize your learning experience by understanding your current reading level.
+                        </p>
+                        
+                        <div style="background: var(--gray-light); border-radius: 12px; padding: 2rem; margin: 2rem 0; text-align: left;">
+                            <h3 style="color: var(--navy-primary); margin-bottom: 1rem; font-size: 1.3rem;">How it works:</h3>
+                            <ul style="list-style: none; padding: 0;">
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Read a short passage carefully
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Answer 3 comprehension questions
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Complete up to 3 assessment rounds
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    We'll calculate your reading speed and comprehension
+                                </li>
+                                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
+                                    Get personalized lessons at your level
+                                </li>
+                            </ul>
+                        </div>
+
+                        <button class="btn btn-primary" onclick="startPlacementTest()" style="font-size: 1.1rem; padding: 1rem 2rem;">
+                            Begin Assessment
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div class="placement-loading hidden" id="placementLoading">
+                    <div class="card" style="text-align: center; padding: 3rem;">
+                        <div class="spinner" style="width: 50px; height: 50px; border: 4px solid var(--gray-light); border-top-color: var(--purple); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem;"></div>
+                        <p>Loading your assessment...</p>
+                    </div>
+                </div>
+
+                <!-- Test Screen -->
+                <div class="placement-test hidden" id="placementTest">
+                    <!-- Progress Bar -->
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <span style="font-weight: 600; color: var(--navy-primary);">
+                                Attempt <span id="placementCurrentAttempt">1</span> of <span id="placementTotalAttempts">3</span>
+                            </span>
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <span>⏱️ Time: <strong><span id="placementTimer">00:00</span></strong></span>
+                            </div>
+                        </div>
+                        <div style="height: 8px; background: var(--gray-light); border-radius: 10px; overflow: hidden;">
+                            <div id="placementProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--success) 0%, var(--purple) 100%); border-radius: 10px; transition: width 0.3s ease; width: 33.33%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Passage Card -->
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--gray-light);">
+                            <h2 id="placementPassageTitle" style="color: var(--navy-primary); font-size: 1.5rem; font-weight: 700; margin: 0;">Loading...</h2>
+                            <div style="display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--text-gray);">
+                                <span>📖 <span id="placementWordCount">0</span> words</span>
+                                <span>📊 Level: <strong id="placementDifficultyLevel">-</strong></span>
+                            </div>
+                        </div>
+                        <div id="placementPassageContent" style="line-height: 1.8; font-size: 1.05rem; color: #333; padding: 1.5rem; background: var(--gray-light); border-radius: 12px; border-left: 4px solid var(--purple);">
+                            Loading passage...
+                        </div>
+                    </div>
+
+                    <!-- Questions Card -->
+                    <div class="card">
+                        <h3 style="font-size: 1.3rem; color: var(--navy-primary); margin-bottom: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>✏️</span> Comprehension Questions
+                        </h3>
+                        <div id="placementQuestionsContainer">
+                            <!-- Questions will be inserted here -->
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem; padding-top: 2rem; border-top: 2px solid var(--gray-light);">
+                            <button class="btn btn-secondary" onclick="cancelPlacementTest()">Cancel</button>
+                            <button class="btn btn-primary" onclick="submitPlacementTest()" id="placementSubmitBtn">
+                                Submit Answers →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Screen -->
+                <div class="placement-results hidden" id="placementResults">
+                    <div class="card" style="max-width: 900px; margin: 0 auto; padding: 3rem;">
+                        <div style="text-align: center; margin-bottom: 2rem;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+                            <h2 style="color: var(--navy-primary); font-size: 2rem; margin-bottom: 0.5rem;">Assessment Complete!</h2>
+                            <p style="font-size: 1.1rem; color: var(--text-gray);">Here are your results</p>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin: 2rem 0;">
+                            <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultScore">0</span>%</div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Comprehension Score</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultWPM">0</span></div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Words Per Minute</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 0.5rem;"><span id="placementResultAttempts">0</span>/3</div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Attempts Completed</div>
+                            </div>
+                        </div>
+
+                        <div style="text-align: center;">
+                            <p style="font-size: 1.1rem; color: var(--text-gray); margin-bottom: 1rem;">Your Reading Level:</p>
+                            <div id="placementResultLevel" style="display: inline-block; padding: 1rem 2rem; background: linear-gradient(135deg, var(--success) 0%, #38ef7d 100%); color: white; border-radius: 50px; font-size: 1.3rem; font-weight: bold; margin: 2rem 0; text-transform: uppercase; letter-spacing: 1px;">
+                                Intermediate
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                            <button class="btn btn-secondary" onclick="continuePlacementTests()" id="placementContinueBtn">
+                                Take Another Test
+                            </button>
+                            <button class="btn btn-primary" onclick="showSection('overview', event)">
+                                Go to Dashboard →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
             
             <!-- Lessons Section (NEW SECTION STARTS) -->
             <div id="lessonsSection" class="hidden">
@@ -1782,7 +2499,7 @@
                     <!-- Reading Level - Blue Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(79,172,254,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
-                        <div style="font-size: 2.2rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressReadingLevel" padding: 0 1rem;></div>
+                        <div style="font-size: 2.2rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); word-wrap: break-word; overflow-wrap: break-word; max-width: 100%;" id="progressReadingLevel"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Reading Level</div>
                     </div>
 
@@ -1836,33 +2553,57 @@
                     </div>
                 </div>
 
-                <!-- WEEKLY GOALS - COLORFUL -->
-                <div style="margin-top: 2rem; background: white; border-radius: 20px; padding: 2.5rem; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-                    <h2 style="color: #1e3a5f; margin-bottom: 1.5rem; font-size: 2rem;">
-                        📅 Weekly Goals
-                    </h2>
-                    <div style="margin-bottom: 1rem; padding: 1rem; background: #f8fafc; border: 1px solid #e6eaf2; border-radius: 14px;">
-                        <div style="font-weight: 800; color: #1e3a5f;">Set a Weekly Goal</div>
-                        <div style="color:#555;margin-top:.35rem;">
-                            Choose how many lessons you want to complete this week — we’ll track progress automatically.
+                <!-- Weekly Goals Section -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <span>📋</span>
+                            <span>Weekly Goals</span>
                         </div>
-
-                        <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-top:.9rem;">
-                            <input id="weeklyLessonsTarget" type="number" min="1" max="50" value="5"
-                                style="width:140px;padding:.75rem;border:1px solid #d9dfea;border-radius:10px;font-weight:700;">
-                            <button class="btn btn-primary" onclick="saveWeeklyGoal()">Save Goal</button>
-                            <span id="weeklyGoalStatus" style="color:#2A398A;font-weight:700;"></span>
-                        </div>
-                        </div>
-
-                        <div id="weeklyGoalsContainer">
-                        <p style="color:#666;font-size:1.1rem;">Loading your goals...</p>
-                        </div>
-
-                    <div id="weeklyGoalsContainer">
-                        <p style="color: #666; font-size: 1.1rem;">Loading your goals...</p>
+                        <button class="btn btn-primary"style="padding: 0.75rem 1.5rem;" onclick="openGoalModal()">+ Add Goal</button>
+                    </div>
+                    <div class="goals-grid" id="goals-container">
+                        <!-- Weekly goals will be loaded dynamically here -->
+                        <p style="color: #666; padding: 1rem;">Loading goals...</p>
                     </div>
                 </div>
+
+                <!-- Badges Section -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <span>🎖️</span>
+                            <span>Badges</span>
+                        </div>
+                    </div>
+                    <div class="badges-grid" id="badges-container">
+                        <!-- Badges will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Add Goal Modal -->
+                <div class="modal" id="goal-modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2>Set a Weekly Goal</h2>
+                            <p>Choose a goal to work towards this week</p>
+                        </div>
+                        <div class="goal-options" id="goal-options">
+                            <!-- Goal options will be loaded here -->
+                        </div>
+                        <div class="input-group" id="custom-target-group" style="display: none;">
+                            <label>Custom Target</label>
+                            <input type="number" id="custom-target" min="1" placeholder="Enter your target">
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn btn-secondary" onclick="closeGoalModal()">Cancel</button>
+                            <button class="btn btn-primary" onclick="createGoal()">Create Goal</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notification -->
+                
 
                 <div class="card" id="rewardsExplainerCard" style="margin-top: 1.5rem;">
                     <h2 style="display:flex;align-items:center;gap:.6rem;color:#1e3a5f;">
@@ -1932,7 +2673,48 @@
             </div>
         </main>
     </div>
-
+    <footer class="dashboard-footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>ACHIEVE 365</h3>
+                <p style="font-size: 0.85rem;">Standing for a Better Future</p>
+                <p style="margin-top: 0.5rem; font-style: italic;">Empowering literacy through personalized learning</p>
+            </div>
+            
+            <div class="footer-section">
+                <h4>Quick Links</h4>
+                <ul class="footer-links">
+                    <li><a href="#" onclick="showSection('overview', event); return false;">Dashboard</a></li>
+                    <li><a href="#" onclick="showSection('lessons', event); return false;">My Lessons</a></li>
+                    <li><a href="#" onclick="showSection('progress', event); return false;">Progress</a></li>
+                    <li><a href="#" onclick="showSection('assessment', event); return false;">Assessment</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-section">
+                <h4>Resources</h4>
+                <ul class="footer-links">
+                    <li><a href="#" onclick="alert('Help Center coming soon!'); return false;">Help Center</a></li>
+                    <li><a href="#" onclick="alert('FAQs coming soon!'); return false;">FAQs</a></li>
+                    <li><a href="#" onclick="alert('Contact Support coming soon!'); return false;">Contact Support</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-section">
+                <h4>Legal</h4>
+                <ul class="footer-links">
+                    <li><a href="#" onclick="alert('Privacy Policy coming soon!'); return false;">Privacy Policy</a></li>
+                    <li><a href="#" onclick="alert('Terms of Service coming soon!'); return false;">Terms of Service</a></li>
+                    <li><a href="#" onclick="alert('Accessibility coming soon!'); return false;">Accessibility</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            <p>&copy; 2025 Achieve 365. All rights reserved.</p>
+            <p>Made with ❤️ for learners everywhere</p>
+        </div>
+    </footer>
     <script>
         let currentUser = null;
         let currentAssessment = [];
@@ -1946,28 +2728,564 @@
         let lessonCallCount = 0;
         const originalLoadNextLesson = loadNextLesson;
 
-        function hasCompletedAssessment(progressData = null) {
-            // If backend already returned a reading_level, assessment is effectively complete
-            const rl =
-            progressData?.user?.reading_level ||
-            progressData?.stats?.reading_level;
+        /* ============================================
+        CORRECTED PLACEMENT TEST FUNCTIONS
+        All errors fixed - Ready to use
+        ============================================ */
 
-            if (rl && String(rl).trim().length > 0) return true;
+        let placementCurrentPassageId = null;
+        let placementStartTime = null;
+        let placementTimerInterval = null;
+        let placementCurrentAttempt = 0;
+        let placementTotalAttempts = 3;
 
-            // Fallback: check cached user
-            try {
-            const u = JSON.parse(localStorage.getItem("user") || "{}");
-            if (u.reading_level && String(u.reading_level).trim()) return true;
-
-            if (u.interests) {
-                const interests = typeof u.interests === "string" ? JSON.parse(u.interests) : u.interests;
-                if (Array.isArray(interests) && interests.length > 0) return true;
+        // Helper: Show message (fallback if main showMessage doesn't exist)
+        function showPlacementMessage(message, type = 'info') {
+            if (typeof showMessage === 'function') {
+                showMessage(message, type);
+            } else {
+                console.log(`[${type}] ${message}`);
+                if (type === 'error' || type === 'warning') {
+                    alert(message);
+                }
             }
-            } catch (_) {}
-
-            // Optional: local flag if you set it after onboarding
-            return localStorage.getItem("assessmentCompleted") === "true";
         }
+
+        // Helper: Capitalize first letter
+        function capitalizeFirst(str) {
+            if (!str) return '';
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Helper: Pad number with leading zero
+        function pad(num) {
+            return num.toString().padStart(2, '0');
+        }
+
+        function showMessage(message, type = 'info') {
+            console.log(`[${type}] ${message}`);
+            const colors = {success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#3b82f6'};
+            const toast = document.createElement('div');
+            toast.textContent = message;
+            toast.style.cssText = `position: fixed; top: 20px; right: 20px; padding: 1rem 1.5rem; background: ${colors[type] || colors.info}; color: white; border-radius: 8px; z-index: 10000;`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Start placement test
+        async function startPlacementTest() {
+            const welcomeEl = document.getElementById('placementWelcome');
+            const loadingEl = document.getElementById('placementLoading');
+            
+            if (welcomeEl) welcomeEl.classList.add('hidden');
+            if (loadingEl) loadingEl.classList.remove('hidden');
+
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showPlacementMessage('Please log in to take the assessment', 'error');
+                setTimeout(() => window.location.href = '/', 2000);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/placement/next?token=${encodeURIComponent(token)}`);
+                
+                if (response.status === 401) {
+                    showPlacementMessage('Session expired. Please log in again.', 'error');
+                    setTimeout(() => window.location.href = '/', 2000);
+                    return;
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+
+                if (data.done) {
+                    showPlacementMessage('All assessment attempts completed!', 'success');
+                    // ⭐ FIX: Pass null instead of undefined event
+                    setTimeout(() => showSection('overview', null), 2000);
+                    return;
+                }
+
+                // Update progress
+                placementCurrentAttempt = data.attempt;
+                placementTotalAttempts = data.total_attempts;
+                
+                const attemptEl = document.getElementById('placementCurrentAttempt');
+                const totalEl = document.getElementById('placementTotalAttempts');
+                const progressBar = document.getElementById('placementProgressBar');
+                
+                if (attemptEl) attemptEl.textContent = placementCurrentAttempt;
+                if (totalEl) totalEl.textContent = placementTotalAttempts;
+                if (progressBar) {
+                    progressBar.style.width = `${(placementCurrentAttempt / placementTotalAttempts) * 100}%`;
+                }
+
+                // Load passage and questions
+                const passage = data.passage;
+                const questions = data.questions;
+
+                placementCurrentPassageId = passage.id;
+
+                const titleEl = document.getElementById('placementPassageTitle');
+                const wordCountEl = document.getElementById('placementWordCount');
+                const difficultyEl = document.getElementById('placementDifficultyLevel');
+                const contentEl = document.getElementById('placementPassageContent');
+                
+                if (titleEl) titleEl.textContent = passage.title;
+                if (wordCountEl) wordCountEl.textContent = passage.word_count;
+                if (difficultyEl) difficultyEl.textContent = capitalizeFirst(passage.difficulty_level);
+                if (contentEl) contentEl.textContent = passage.content;
+
+                // Render questions
+                const questionsContainer = document.getElementById('placementQuestionsContainer');
+                if (questionsContainer) {
+                    questionsContainer.innerHTML = '';
+
+                    questions.forEach((q, index) => {
+                        const questionCard = document.createElement('div');
+                        questionCard.className = 'placement-question-card';
+                        
+                        const optionsHTML = q.options.map((opt, optIndex) => {
+                            return `
+                                <div class="placement-option" onclick="selectPlacementOption(this, ${index})">
+                                    <input type="radio" name="placementQuestion${index}" value="${opt.replace(/"/g, '&quot;')}" id="placementQ${index}opt${optIndex}">
+                                    <label for="placementQ${index}opt${optIndex}">${opt}</label>
+                                </div>
+                            `;
+                        }).join('');
+                        
+                        questionCard.innerHTML = `
+                            <span class="placement-question-number">Question ${index + 1}</span>
+                            <div class="placement-question-text">${q.question}</div>
+                            <div class="placement-options">
+                                ${optionsHTML}
+                            </div>
+                        `;
+                        questionsContainer.appendChild(questionCard);
+                    });
+                }
+
+                // Show test screen
+                if (loadingEl) loadingEl.classList.add('hidden');
+                const testEl = document.getElementById('placementTest');
+                if (testEl) testEl.classList.remove('hidden');
+
+                // Start timer
+                startPlacementTimer();
+
+            } catch (error) {
+                console.error('Error loading placement test:', error);
+                showPlacementMessage('Error loading assessment. Please try again.', 'error');
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (welcomeEl) welcomeEl.classList.remove('hidden');
+            }
+        }
+
+        // Timer functions
+        function startPlacementTimer() {
+            placementStartTime = Date.now();
+            placementTimerInterval = setInterval(updatePlacementTimer, 1000);
+        }
+
+        function updatePlacementTimer() {
+            const elapsed = Math.floor((Date.now() - placementStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            const timerEl = document.getElementById('placementTimer');
+            if (timerEl) {
+                timerEl.textContent = `${pad(minutes)}:${pad(seconds)}`;
+            }
+        }
+
+        function stopPlacementTimer() {
+            if (placementTimerInterval) {
+                clearInterval(placementTimerInterval);
+                placementTimerInterval = null;
+            }
+        }
+
+        // Option selection
+        function selectPlacementOption(element, questionIndex) {
+            const questionCard = element.closest('.placement-question-card');
+            if (questionCard) {
+                questionCard.querySelectorAll('.placement-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+            }
+            element.classList.add('selected');
+            const radio = element.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+        }
+
+        // Submit placement test
+        async function submitPlacementTest() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showPlacementMessage('Session expired. Please log in again.', 'error');
+                setTimeout(() => window.location.href = '/', 2000);
+                return;
+            }
+
+            // Collect answers
+            const answers = [];
+            const questionCards = document.querySelectorAll('.placement-question-card');
+            
+            for (let i = 0; i < questionCards.length; i++) {
+                const selected = questionCards[i].querySelector('input[type="radio"]:checked');
+                if (!selected) {
+                    showPlacementMessage(`Please answer question ${i + 1}`, 'warning');
+                    return;
+                }
+                answers.push(selected.value);
+            }
+
+            stopPlacementTimer();
+            const timeSpent = Math.floor((Date.now() - placementStartTime) / 1000);
+
+            const submitBtn = document.getElementById('placementSubmitBtn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitting...';
+            }
+
+            try {
+                console.log('Submitting placement test...');
+                
+                const response = await fetch('/api/placement/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: token,
+                        passage_id: placementCurrentPassageId,
+                        answers: answers,
+                        time_spent_seconds: timeSpent
+                    })
+                });
+
+                console.log('Response status:', response.status);
+
+                if (response.status === 401) {
+                    const errorText = await response.text();
+                    console.error('401 Error:', errorText);
+                    showPlacementMessage('Authentication failed. Please refresh and try again.', 'error');
+                    setTimeout(() => window.location.reload(), 3000);
+                    return;
+                }
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server error:', errorText);
+                    throw new Error(`Server returned ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('Placement result:', result);
+
+                if (!result || typeof result.score === 'undefined') {
+                    console.error('Invalid result format:', result);
+                    throw new Error('Invalid response from server');
+                }
+
+                showPlacementResults(result);
+
+            } catch (error) {
+                console.error('Error submitting placement test:', error);
+                showPlacementMessage(`Error: ${error.message}. Please try again.`, 'error');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Submit Answers →';
+                }
+            }
+        }
+
+        // Show placement results
+        function showPlacementResults(result) {
+            if (!result) {
+                console.error('No result data provided');
+                showPlacementMessage('Error displaying results.', 'error');
+                return;
+            }
+
+            const testEl = document.getElementById('placementTest');
+            const resultsEl = document.getElementById('placementResults');
+            
+            if (testEl) testEl.classList.add('hidden');
+            if (resultsEl) resultsEl.classList.remove('hidden');
+
+            const score = typeof result.score === 'number' ? result.score : 0;
+            const wpm = typeof result.wpm === 'number' ? result.wpm : 0;
+            const level = result.new_level || 'intermediate';
+
+            const scoreEl = document.getElementById('placementResultScore');
+            const wpmEl = document.getElementById('placementResultWPM');
+            const attemptsEl = document.getElementById('placementResultAttempts');
+            const levelEl = document.getElementById('placementResultLevel');
+            
+            if (scoreEl) scoreEl.textContent = score.toFixed(0);
+            if (wpmEl) wpmEl.textContent = wpm.toFixed(0);
+            if (attemptsEl) attemptsEl.textContent = placementCurrentAttempt;
+            if (levelEl) levelEl.textContent = capitalizeFirst(level);
+
+            const continueBtn = document.getElementById('placementContinueBtn');
+            if (continueBtn) {
+                continueBtn.style.display = (placementCurrentAttempt >= placementTotalAttempts) ? 'none' : 'inline-block';
+            }
+            
+            updateUserReadingLevel(level);
+            
+            if (typeof loadDashboardStats === 'function') {
+                setTimeout(() => loadDashboardStats(), 1000);
+            }
+        }
+
+        // Update user's reading level display
+        function updateUserReadingLevel(level) {
+            const readingLevelEl = document.getElementById('userReadingLevel');
+            if (readingLevelEl) {
+                readingLevelEl.textContent = capitalizeFirst(level);
+            }
+            
+            const progressReadingLevel = document.getElementById('progressReadingLevel');
+            if (progressReadingLevel) {
+                progressReadingLevel.textContent = capitalizeFirst(level);
+            }
+        }
+
+        // Continue with more tests
+        function continuePlacementTests() {
+            const resultsEl = document.getElementById('placementResults');
+            const loadingEl = document.getElementById('placementLoading');
+            
+            if (resultsEl) resultsEl.classList.add('hidden');
+            if (loadingEl) loadingEl.classList.remove('hidden');
+            
+            const submitBtn = document.getElementById('placementSubmitBtn');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Answers →';
+            }
+            
+            startPlacementTest();
+        }
+
+        // Cancel placement test
+        function cancelPlacementTest() {
+            if (confirm('Are you sure you want to cancel this assessment?')) {
+                stopPlacementTimer();
+                // ⭐ FIX: Pass null instead of undefined event
+                showSection('overview', null);
+            }
+        }
+
+        // Reset placement test state
+        function resetPlacementTest() {
+            stopPlacementTimer();
+            
+            const welcomeEl = document.getElementById('placementWelcome');
+            const loadingEl = document.getElementById('placementLoading');
+            const testEl = document.getElementById('placementTest');
+            const resultsEl = document.getElementById('placementResults');
+            
+            if (welcomeEl) welcomeEl.classList.remove('hidden');
+            if (loadingEl) loadingEl.classList.add('hidden');
+            if (testEl) testEl.classList.add('hidden');
+            if (resultsEl) resultsEl.classList.add('hidden');
+            
+            placementCurrentPassageId = null;
+            placementStartTime = null;
+            placementCurrentAttempt = 0;
+        }
+
+        // Updated placement required modal
+        function showPlacementRequiredModal() {
+            const modalHTML = `
+                <div id="placementRequiredModal" style="
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0, 0, 0, 0.7);
+                    display: flex; align-items: center; justify-content: center;
+                    z-index: 10000; padding: 1rem;
+                ">
+                    <div style="
+                        max-width: 600px; width: 100%; background: white;
+                        border-radius: 16px; padding: 3rem;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        text-align: center;
+                    ">
+                        <div style="font-size: 5rem; margin-bottom: 1rem;">📚</div>
+                        <h2 style="color: #2b4c7e; font-size: 1.8rem; margin-bottom: 1rem;">
+                            Reading Level Assessment Required
+                        </h2>
+                        <p style="font-size: 1.1rem; color: #666; line-height: 1.6; margin-bottom: 2rem;">
+                            Before we can generate personalized lessons, we need to understand your current reading level.
+                            <br><br>
+                            <strong>This quick 5-minute assessment will help us create lessons perfect for you!</strong>
+                        </p>
+                        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                            <button class="btn btn-primary" 
+                                onclick="closePlacementModal(); showSection('placement', null);"
+                                style="padding: 1rem 2.5rem; font-size: 1.1rem;">
+                                📊 Take Reading Level Test
+                            </button>
+                            <button class="btn btn-secondary" 
+                                onclick="closePlacementModal()"
+                                style="padding: 1rem 2rem; font-size: 1rem;">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const existingModal = document.getElementById('placementRequiredModal');
+            if (existingModal) existingModal.remove();
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function closePlacementModal() {
+            const modal = document.getElementById('placementRequiredModal');
+            if (modal) modal.remove();
+        }
+
+        // Load dashboard
+        async function loadDashboard() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/student/progress?token=${encodeURIComponent(token)}`);
+                const data = await response.json();
+
+                if (data.user) {
+                    currentUser = data.user;  // ⭐ FIX: currentUser now declared
+                    
+                    const userNameEl = document.getElementById('userName');
+                    if (userNameEl) {
+                        userNameEl.textContent = data.user.name || data.user.email;
+                    }
+                    
+                    const userLevelEl = document.getElementById('userLevel');
+                    if (userLevelEl) {
+                        userLevelEl.textContent = data.user.reading_level ? capitalizeFirst(data.user.reading_level) : 'Not Set';
+                    }
+                }
+
+                if (data.stats) {
+                    const statsMap = {
+                        lessonsCompleted: data.stats.lessons || 0,
+                        avgScore: data.stats.avgScore || '-',
+                        readingLevel: data.stats.level ? capitalizeFirst(data.stats.level) : 'Not Set',
+                        dayStreak: data.stats.streak || 0
+                    };
+                    
+                    Object.keys(statsMap).forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = statsMap[id];
+                    });
+                }
+
+                // ⭐ FIX: Use hasCompletedAssessment instead of simple check
+                const hasAssessment = hasCompletedAssessment(data);
+                updateAssessmentStatus(hasAssessment);
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        // Update assessment UI state
+        function updateAssessmentStatus(isCompleted) {
+            const gettingStarted = document.getElementById('gettingStarted');
+            const continueLearning = document.getElementById('continueLearning');
+            
+            if (!gettingStarted || !continueLearning) {
+                console.warn('Assessment status elements not found');
+                return;
+            }
+            
+            // ⭐ FIX: Handle undefined isCompleted
+            if (typeof isCompleted === 'undefined') {
+                isCompleted = hasCompletedAssessment();
+            }
+            
+            if (isCompleted) {
+                gettingStarted.classList.add('hidden');
+                continueLearning.classList.remove('hidden');
+                console.log('✅ Assessment marked as completed');
+            } else {
+                gettingStarted.classList.remove('hidden');
+                continueLearning.classList.add('hidden');
+                console.log('📝 Assessment not yet completed');
+            }
+        }
+
+        // Check if assessment is completed (with fallbacks)
+        
+        function hasCompletedAssessment(progressData = null) {
+            // Method 1: Check localStorage flag FIRST (most reliable)
+            const localFlag = localStorage.getItem("assessmentCompleted") === "true";
+            if (localFlag) {
+                console.log('✅ Assessment completed (localStorage flag)');
+                return true;
+            }
+            
+            // Method 2: Check if user has actual interests selected
+            try {
+                const u = progressData?.user || JSON.parse(localStorage.getItem("user") || "{}");
+                
+                if (u.interests) {
+                    const interests = typeof u.interests === "string" ? JSON.parse(u.interests) : u.interests;
+                    if (Array.isArray(interests) && interests.length > 0) {
+                        console.log('✅ Assessment completed (has interests)');
+                        // Set the flag for next time
+                        localStorage.setItem("assessmentCompleted", "true");
+                        return true;
+                    }
+                }
+                
+                // Method 3: Check if they have completed any lessons
+                // (If they have lessons, they must have completed assessment)
+                const lessonsCompleted = u.lessons_completed || 
+                                        progressData?.stats?.lessons || 
+                                        u.stats?.lessons_completed || 0;
+                
+                if (lessonsCompleted > 0) {
+                    console.log('✅ Assessment completed (has completed lessons)');
+                    localStorage.setItem("assessmentCompleted", "true");
+                    return true;
+                }
+                
+                // Method 4: Check backend assessment_completed flag
+                if (u.assessment_completed === true) {
+                    console.log('✅ Assessment completed (backend flag)');
+                    localStorage.setItem("assessmentCompleted", "true");
+                    return true;
+                }
+                
+            } catch (error) {
+                console.error('Error checking assessment:', error);
+            }
+            
+            // ❌ DO NOT check reading_level alone - it's just a default value!
+            // Default reading_level does NOT mean assessment is complete
+            
+            console.log('❌ Assessment not completed');
+            return false;
+        }
+
+        async function retakePlacementTest() {
+            if (!confirm('Retake test?')) return;
+            const token = localStorage.getItem('token');
+            await fetch(`/api/placement/next?token=${token}&retake=true`);
+            // Load test...
+        }
+
 
         // ============================================
         // AI TUTOR (Dashboard-integrated)
@@ -1976,6 +3294,14 @@
         let tutorHasGreeted = false;
         let speechUnlocked = false;
         let tutorTimers = [];
+        let tutorAbort = null;
+        let tutorReqId = 0;
+
+        let tutorSpeaking = false;
+
+        let instructionInFlight = false;
+        let lastInstructionAt = 0;
+
 
         function unlockSpeechOnce() {
           if (speechUnlocked || !window.speechSynthesis) return;
@@ -2035,6 +3361,18 @@
         function tutorSpeak(text) {
           if (tutorMuted || !window.speechSynthesis) return;
 
+          const utterance = new SpeechSynthesisUtterance(text);
+       
+          tutorSpeaking = true;                // ✅ ADD (right after utterance is created)
+       
+          utterance.onend = () => {            // ✅ ADD
+              tutorSpeaking = false;
+          };
+       
+          utterance.onerror = () => {          // ✅ ADD
+              tutorSpeaking = false;
+          };
+
           window.speechSynthesis.cancel();
           const u = new SpeechSynthesisUtterance(text);
           u.rate = 0.9;
@@ -2065,38 +3403,68 @@
         async function showTutor(context, extra = {}) {
           const token = localStorage.getItem('token');
           if (!token) return;
-
-          const studentName = getStudentNameForTutor();
-
-          try {
-            const res = await fetch('/api/tutor/message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                token,
-                context,
-                student_name: studentName,
-                ...extra
-            })
-          });
-
-          const data = await res.json();  // ✅ parse first
-
-          // ✅ guard after parse
-          if (!data?.message || !data.message.trim()) return;
-
-          if (data?.success) {
-            displayTutorMessage(data.message, data.emotion);
+      
+          // ✅ Stop overlapping instructions (this fixes “cuts off after 2 words”)
+          if (context === 'instruction') {
+              const now = Date.now();
+      
+              // If we're already speaking an instruction OR one is currently fetching, ignore new triggers
+              if (tutorSpeaking || instructionInFlight) return;
+      
+              // If an instruction just ran a moment ago, ignore (double-trigger protection)
+              if (now - lastInstructionAt < 8000) return; // 8s window
           }
-        } catch (e) {
-            console.error('Tutor error:', e);
+      
+          // ✅ Abort any in-flight request so late responses don’t restart speech
+          if (tutorAbort) tutorAbort.abort();
+          tutorAbort = new AbortController();
+          const myId = ++tutorReqId;
+      
+          const studentName = getStudentNameForTutor();
+      
+          if (context === 'instruction') instructionInFlight = true;
+      
+          try {
+              const res = await fetch('/api/tutor/message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: tutorAbort.signal,
+              body: JSON.stringify({
+                  token,
+                  context,
+                  student_name: studentName,
+                  ...extra
+              })
+              });
+      
+              const data = await res.json();
+      
+              // Ignore stale responses
+              if (myId !== tutorReqId) return;
+      
+              // Greeting removed / empty message guard
+              if (!data?.message || !data.message.trim()) return;
+      
+              if (data?.success) {
+              if (context === 'instruction') lastInstructionAt = Date.now();
+              displayTutorMessage(data.message, data.emotion);
+              }
+          } catch (e) {
+              if (e.name !== 'AbortError') console.error('Tutor error:', e);
+          } finally {
+              if (context === 'instruction') instructionInFlight = false;
+          }
         }
-      }
 
+        let lastTutorStartAt = 0;
 
         // Call when a lesson is rendered on the dashboard
 
         function startTutorForLesson() {
+          const now = Date.now();
+          if (now - lastTutorStartAt < 1500) return; // prevent double trigger
+          lastTutorStartAt = now;
+
           ensureVoicesLoaded();
           unlockSpeechOnce();
 
@@ -2160,28 +3528,6 @@
                 return;
             }
 
-            // Helper: assessment is considered "done" if the user has interests and/or a reading level/estimate
-            const hasCompletedAssessment = () => {
-                const u = JSON.parse(localStorage.getItem('user') || '{}');
-
-                // interests might be an array OR a JSON string (your logs show it as a string)
-                let interestsCount = 0;
-                if (Array.isArray(u.interests)) {
-                interestsCount = u.interests.length;
-                } else if (typeof u.interests === 'string') {
-                try {
-                    const parsed = JSON.parse(u.interests);
-                    if (Array.isArray(parsed)) interestsCount = parsed.length;
-                } catch (_) {}
-                }
-
-                return (
-                interestsCount > 0 ||
-                !!u.reading_level ||
-                !!u.level_estimate
-                );
-            };
-
             try {
                 console.log('Checking for next lesson...');
 
@@ -2207,12 +3553,12 @@
                 }
 
                 // ✅ NEW: If assessment is done (new user after assessment), load FIRST lesson even if completed=0
-                if (hasCompletedAssessment() || data?.stats?.reading_level) {
-                console.log('Assessment complete but no completed lessons yet - loading first lesson');
-                noLessons.classList.add('hidden');
-                loadNextLesson();
-                return;
+                if (hasCompletedAssessment(data)) {
+                  noLessons.classList.add('hidden');
+                  loadNextLesson();
+                  return;
                 }
+
 
                 // Otherwise, they truly haven't completed assessment yet
                 console.log('Assessment not complete - showing assessment prompt');
@@ -2235,7 +3581,7 @@
             if (event) event.preventDefault();
 
             // Hide all sections
-            const sections = ['overviewSection', 'assessmentSection', 'lessonsSection', 'progressSection'];
+            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'progressSection'];
             sections.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -2263,6 +3609,11 @@
                 if (link) link.classList.add('active');
             }
 
+            // ⭐⭐⭐ ADD THESE 3 LINES ⭐⭐⭐
+            if (sectionName === 'overview' || sectionName === 'progress') {
+                updateAssessmentStatus();
+            }
+
             // Load data for the section
             if (sectionName === 'overview' || sectionName === 'progress') {
                 loadAllStats();
@@ -2273,6 +3624,8 @@
                 checkForNextLesson();
             } else if (sectionName === 'assessment') {
                 loadAssessment();
+            } else if (sectionName === 'placement') {
+                resetPlacementTest();
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2533,17 +3886,28 @@
                 
                 const result = await response.json();
                 console.log('Assessment submitted:', result);
+
+                // ⭐ CRITICAL - Set the flag
+                localStorage.setItem('assessmentCompleted', 'true');
                 
                 // Update user in localStorage
                 if (result.user) {
                     localStorage.setItem('user', JSON.stringify(result.user));
                 }
+                 // ⭐ ADD THIS - Mark assessment as completed in UI
+                updateAssessmentStatus(true);
                 
+                showMessage('Assessment completed successfully!', 'success');
+
                 // Show success message
-                alert('✓ Assessment completed! Your personalized lessons are ready.');
-                
-                // Navigate to lessons section
-                showSection('lessons')
+                alert('✓ Assessment completed! Next: complete the Reading Level Assessment.');
+
+                // Navigate to placement section
+                showSection('placement')
+
+               
+                // Refresh dashboard to show updated state
+                loadDashboard();
                 
             } catch (error) {
                 console.error('Error submitting assessment:', error);
@@ -2575,7 +3939,7 @@
                         </ul>
                     ` : ''}
                 </div>
-                <button class="btn btn-primary" onclick="showSection('lessons', event)">Start Learning</button>
+                <button class="btn btn-primary" onclick="showSection('placement', event)">Continue to Reading Level Test</button>
             `;
             
             // Update UI
@@ -2827,6 +4191,290 @@
             }, 600);
         }
 
+        // ============================================================
+        // GAMIFICATION FUNCTIONS - REAL API INTEGRATION
+        // ============================================================
+
+        // Sample data for badges definition (matches backend)
+        const BADGES = {
+            'first_lesson': { name: 'Getting Started', description: 'Complete your first lesson', icon: '🎯', points: 20 },
+            'perfect_streak_3': { name: 'Triple Perfect', description: '3 perfect scores in a row', icon: '🔥', points: 50 },
+            'speed_reader': { name: 'Speed Reader', description: '10 lessons in one week', icon: '⚡', points: 100 },
+            'bookworm': { name: 'Bookworm', description: 'Complete 50 lessons total', icon: '📚', points: 200 },
+            'perfect_week': { name: 'Perfect Week', description: 'Achieve all weekly goals', icon: '🏆', points: 150 },
+            'early_bird': { name: 'Early Bird', description: 'Complete lesson before 9 AM', icon: '🌅', points: 30 },
+            'night_owl': { name: 'Night Owl', description: 'Complete lesson after 9 PM', icon: '🦉', points: 30 },
+            'consistency_king': { name: 'Consistency King', description: '7-day streak', icon: '👑', points: 100 },
+            'intermediate_master': { name: 'Intermediate Master', description: '10 intermediate lessons', icon: '⭐', points: 75 },
+            'reading_marathon': { name: 'Reading Marathon', description: 'Read for 60 minutes in one day', icon: '🏃', points: 80 },
+            'perfect_ten': { name: 'Perfect Ten', description: 'Score 100% on 10 lessons', icon: '💯', points: 150 }
+        };
+
+        const WEEKLY_GOAL_TYPES = {
+            'lessons_completed': { name: 'Complete Lessons', description: 'Complete a certain number of lessons', default_target: 5, points_reward: 100, icon: '📖' },
+            'reading_time': { name: 'Reading Time', description: 'Read for a total number of minutes', default_target: 60, points_reward: 80, icon: '⏱️' },
+            'perfect_scores': { name: 'Perfect Scores', description: 'Achieve perfect scores (100%)', default_target: 3, points_reward: 120, icon: '💯' },
+            'daily_streak': { name: 'Daily Streak', description: 'Read on consecutive days', default_target: 5, points_reward: 90, icon: '🔥' },
+            'average_score': { name: 'Average Score', description: 'Maintain an average score', default_target: 80, points_reward: 110, icon: '⭐' }
+        };
+
+        let selectedGoalType = null;
+        let availableGoalTypes = [];
+
+        // Load gamification data from backend
+        // ===== GAMIFICATION DATA LOADING =====
+        // Note: Using /api/student/gamification which returns properly formatted data
+        async function loadGamificationData() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                console.log('Loading gamification data...');
+                const response = await fetch(`/api/student/gamification?token=${token}`);
+                if (!response.ok) throw new Error('Failed to load gamification data');
+                
+                const data = await response.json();
+                console.log('Gamification data:', data);
+                
+                // Update points display
+                if (document.getElementById('userPoints')) {
+                    document.getElementById('userPoints').textContent = data.points.current_points;
+                }
+                if (document.getElementById('userLevel')) {
+                    document.getElementById('userLevel').textContent = data.points.level;
+                }
+                
+                // Update badge count
+                if (document.getElementById('badgeCount')) {
+                    document.getElementById('badgeCount').textContent = data.badges.length;
+                }
+                
+                // Display badges in both containers (overview and progress sections)
+                displayBadges(data.badges);  // For overview section (badgesContainer)
+                loadBadges(data.badges || []);  // For progress section (badges-container)
+                
+                // Display weekly goals - always call even if empty to clear "Loading..." text
+                console.log('Weekly goals from API:', data.weekly_goals);
+                loadWeeklyGoals(data.weekly_goals || []);
+                
+                // Load available goal types
+                availableGoalTypes = data.available_goal_types || Object.keys(WEEKLY_GOAL_TYPES).map(type => ({
+                    type,
+                    ...WEEKLY_GOAL_TYPES[type]
+                }));
+                
+                return data;
+                
+            } catch (error) {
+                console.error('Error loading gamification:', error);
+                // Show empty state even on error
+                loadWeeklyGoals([]);
+            }
+        }
+
+        // Load badges from backend
+        function loadBadges(userBadges) {
+            const container = document.getElementById('badges-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            // Show all badges (earned and locked)
+            Object.keys(BADGES).forEach(badgeType => {
+                const badge = BADGES[badgeType];
+                const earned = userBadges.some(ub => ub.badge_type === badgeType);
+                
+                const badgeCard = document.createElement('div');
+                badgeCard.className = `badge-card ${earned ? 'earned' : 'locked'}`;
+                badgeCard.innerHTML = `
+                    <div class="badge-icon">${badge.icon}</div>
+                    <div class="badge-name">${badge.name}</div>
+                    <div class="badge-description">${badge.description}</div>
+                    <div class="badge-points">${earned ? 'Earned!' : badge.points + ' points'}</div>
+                `;
+                container.appendChild(badgeCard);
+            });
+        }
+
+        // Load weekly goals
+        function loadWeeklyGoals(goals) {
+            console.log('loadWeeklyGoals called with:', goals);
+            const container = document.getElementById('goals-container');
+            if (!container) {
+                console.error('goals-container not found!');
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            if (!goals || goals.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No goals set yet. Click "Add Goal" to create one!</p>';
+                console.log('No goals to display');
+                return;
+            }
+            
+            console.log('Rendering', goals.length, 'goals');
+            goals.forEach(goal => {
+                const progress = Math.min((goal.current_value / goal.target_value) * 100, 100);
+                const isComplete = goal.completed;
+                
+                const goalCard = document.createElement('div');
+                goalCard.className = `goal-card ${isComplete ? 'completed' : ''}`;
+                goalCard.innerHTML = `
+                    <div class="goal-header">
+                        <div class="goal-title">
+                            <span class="goal-icon">${goal.icon || '🎯'}</span>
+                            <span>${goal.goal_name || goal.goal_type}</span>
+                        </div>
+                        <div class="goal-progress">${goal.current_value}/${goal.target_value}</div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%;"></div>
+                    </div>
+                    <div class="goal-status">
+                        <span>${isComplete ? '👏' : '🎯'}</span>
+                        <span>${isComplete ? 'Completed! Amazing work!' : `${goal.points_reward} points when complete`}</span>
+                    </div>
+                `;
+                container.appendChild(goalCard);
+            });
+            console.log('Goals rendered successfully');
+        }
+
+        // Open goal modal
+        function openGoalModal() {
+            const modal = document.getElementById('goal-modal');
+            const optionsContainer = document.getElementById('goal-options');
+            
+            if (!modal || !optionsContainer) return;
+            
+            optionsContainer.innerHTML = '';
+            
+            // Use available goal types from backend
+            const goalTypesToShow = availableGoalTypes.length > 0 ? availableGoalTypes : 
+                Object.keys(WEEKLY_GOAL_TYPES).map(type => ({ type, ...WEEKLY_GOAL_TYPES[type] }));
+            
+            goalTypesToShow.forEach(goal => {
+                const option = document.createElement('div');
+                option.className = 'goal-option';
+                option.onclick = () => selectGoal(goal.type);
+                option.innerHTML = `
+                    <div class="goal-option-header">
+                        <div class="goal-option-icon">${goal.icon}</div>
+                        <div class="goal-option-title">${goal.name}</div>
+                    </div>
+                    <div class="goal-option-desc">${goal.description}</div>
+                    <div class="goal-option-default">Default: ${goal.default_target} • ${goal.points_reward} points</div>
+                `;
+                option.dataset.goalType = goal.type;
+                optionsContainer.appendChild(option);
+            });
+            
+            modal.classList.add('show');
+        }
+
+        // Close goal modal
+        function closeGoalModal() {
+            const modal = document.getElementById('goal-modal');
+            if (modal) modal.classList.remove('show');
+            selectedGoalType = null;
+            document.getElementById('custom-target-group').style.display = 'none';
+            document.getElementById('custom-target').value = '';
+        }
+
+        // Select goal type
+        function selectGoal(goalType) {
+            selectedGoalType = goalType;
+            
+            // Remove selected class from all options
+            document.querySelectorAll('.goal-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked option
+            const selectedOption = document.querySelector(`[data-goal-type="${goalType}"]`);
+            if (selectedOption) {
+                selectedOption.classList.add('selected');
+            }
+            
+            // Show custom target input
+            document.getElementById('custom-target-group').style.display = 'block';
+        }
+
+        // Create weekly goal
+        async function createGoal() {
+            if (!selectedGoalType) {
+                showNotification('⚠️ Please select a goal type', 'error');
+                return;
+            }
+            
+            const token = localStorage.getItem('token');
+            const customTarget = document.getElementById('custom-target').value;
+            
+            try {
+                const response = await fetch('/api/gamification/goals/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        goal_type: selectedGoalType,
+                        custom_target: customTarget ? parseInt(customTarget) : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Check for HTTP errors (400, 500, etc.)
+                if (!response.ok) {
+                    // FastAPI returns errors in 'detail' field
+                    const errorMessage = data.detail || data.error || 'Failed to create goal';
+                    showNotification('❌ ' + errorMessage, 'error');
+                    return;
+                }
+                
+                // Success case
+                if (data.success) {
+                    showNotification('✅ Goal Created!', 'success');
+                    closeGoalModal();
+                    loadGamificationData(); // Reload to show new goal
+                } else {
+                    showNotification('❌ ' + (data.error || 'Failed to create goal'), 'error');
+                }
+            } catch (error) {
+                console.error('Error creating goal:', error);
+                showNotification('❌ Error creating goal', 'error');
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = 'notification show';
+            notification.innerHTML = `
+                <div class="notification-icon">${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</div>
+                <div class="notification-content">
+                    <h4>${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info'}</h4>
+                    <p>${message}</p>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Initialize gamification on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load gamification when on progress section
+            const currentSection = document.querySelector('.main-content > div:not(.hidden)');
+            if (currentSection && currentSection.id === 'progressSection') {
+                loadGamificationData();
+            }
+        });
+
         // ========== FEATURE 1: "OTHER" OPTION HANDLING ==========
 
         // Global to track custom "Other" responses
@@ -2897,49 +4545,6 @@
         }
 
         // ========== FEATURE 4: GAMIFICATION FUNCTIONS ==========
-
-        async function loadGamificationData() {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-            
-            try {
-                console.log('Loading gamification data...');
-                const response = await fetch(`/api/student/gamification?token=${token}`);
-                if (!response.ok) throw new Error('Failed to load gamification data');
-                
-                const data = await response.json();
-                const gamification = data;
-
-                console.log('Gamification data:', data);
-                
-                // Update points display
-                if (document.getElementById('userPoints')) {
-                    document.getElementById('userPoints').textContent = data.points.current_points;
-                }
-                if (document.getElementById('userLevel')) {
-                    document.getElementById('userLevel').textContent = data.points.level;
-                }
-                
-                // Update badge count
-                if (document.getElementById('badgeCount')) {
-                    document.getElementById('badgeCount').textContent = data.badges.length;
-                }
-                
-                // Display badges
-                displayBadges(data.badges);
-                renderWeeklyGoals(gamification.weekly_goals);
-                
-                // Display weekly goals
-                if (data.weekly_goals) {
-                    displayWeeklyGoals(data.weekly_goals);
-                }
-                
-                return data;
-                
-            } catch (error) {
-                console.error('Error loading gamification:', error);
-            }
-        }
 
         function displayBadges(badges) {
             const badgesContainer = document.getElementById('badgesContainer');
@@ -3115,7 +4720,7 @@
             }
         }
 
-        async function loadNextLesson() {
+        async function loadNextLesson() {            
             console.log('=== loadNextLesson START ===');
             
             const token = localStorage.getItem('token');
@@ -3124,7 +4729,7 @@
                 return;
             }
             
-            // Hide everything
+            // Hide everything initially
             const elements = ['noLessons', 'lessonContentCard', 'questionsCard', 'lessonResultsCard'];
             elements.forEach(id => {
                 const el = document.getElementById(id);
@@ -3137,22 +4742,28 @@
             
             lessonStartTime = Date.now();
             startTutorForLesson();
-
             
             try {
                 console.log('Fetching lesson from API...');
-        
-                // ========== ADD THIS ==========
-                // Pass recent topics to avoid duplicates
-                let url = `/api/lessons/next?token=${token}`;
-                if (recentTopics.length > 0) {
+                
+                // Build URL with recent topics to avoid duplicates
+                let url = `/api/lessons/next?token=${encodeURIComponent(token)}`;
+                if (recentTopics && recentTopics.length > 0) {
                     url += `&exclude_topics=${recentTopics.join(',')}`;
                 }
-                // =============================
                 
                 const response = await fetch(url);
-                
                 console.log('Response status:', response.status);
+                
+                // ⭐ Handle placement required (409 error)
+                if (response.status === 409) {
+                    if (loading) loading.classList.add('hidden');
+                    const errorData = await response.json();
+                    if (errorData.detail === "Placement required") {
+                        showPlacementRequiredModal();
+                        return;
+                    }
+                }
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -3169,16 +4780,15 @@
                 
                 currentLesson = lesson;
                 lessonAnswers = [];
-        
-                // ========== ADD THIS ==========
-                // Track this topic
+                
+                // Track this topic to avoid duplicates
                 const topicTags = lesson.topic_tags || [lesson.title.split(' ')[0]];
+                if (!recentTopics) recentTopics = [];
                 recentTopics.push(...topicTags);
                 // Keep only last 5 topics
                 if (recentTopics.length > 5) {
                     recentTopics = recentTopics.slice(-5);
                 }
-                // =============================
                 
                 displayLesson(lesson);
                 requestAnimationFrame(() => startTutorForLesson());
@@ -3191,7 +4801,7 @@
                 
                 // Show friendly error message
                 const errorDiv = document.createElement('div');
-                errorDiv.className = 'card';
+                errorDiv.className = 'card error-card';
                 errorDiv.innerHTML = `
                     <div style="background: #f8d7da; padding: 1.5rem; border-radius: 6px; margin-bottom: 1rem;">
                         <strong>⚠️ Unable to load lesson</strong>
@@ -3207,7 +4817,6 @@
                     const existingError = section.querySelector('.error-card');
                     if (existingError) existingError.remove();
                     
-                    errorDiv.classList.add('error-card');
                     section.appendChild(errorDiv);
                 }
             }
@@ -4358,9 +5967,9 @@
 
             const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
             const assessmentDone =
-                totalCompleted > 0 ||
-                !!progressData?.stats?.reading_level ||
-                hasCompletedAssessment?.(); // if you already have this helper
+              totalCompleted > 0 ||
+              hasCompletedAssessment(progressData); // reading_level is a default; don't use it
+
 
             // If assessment is done, hide the big CTA card on Overview.
             if (assessmentDone) {
@@ -4429,62 +6038,6 @@
             }
 
 
-        async function loadWeeklyGoals() {
-            const token = localStorage.getItem('token');
-            
-            try {
-                const response = await fetch(`/api/student/weekly-goals?token=${token}`);
-                const data = await response.json();
-                
-                const goalsContainer = document.querySelector('.weekly-goals-container');
-                if (!goalsContainer) {
-                    console.warn('Weekly goals container not found');
-                    return;
-                }
-                
-                if (data.success && data.goals && data.goals.length > 0) {
-                    goalsContainer.innerHTML = data.goals.map(goal => `
-                        <div class="card">
-                            <h2>📅 Weekly Goals</h2>
-
-                            <div class="alert alert-info" style="margin-bottom:1rem;">
-                                Set a simple weekly target. When you hit it, you earn a bonus and build consistency.
-                            </div>
-
-                            <form id="weeklyGoalsForm" onsubmit="saveWeeklyGoal(event)" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
-                                <div style="display:flex; flex-direction:column; gap:.35rem;">
-                                <label style="font-weight:600; color: var(--navy-primary);">Lessons per week</label>
-                                <input id="weeklyLessonsTarget" type="number" min="1" max="25" value="5"
-                                        style="padding:.7rem .9rem; border:1px solid #e5e7eb; border-radius:10px; width:180px;" />
-                                </div>
-
-                                <button class="btn btn-primary" type="submit">Save Goal</button>
-
-                                <div id="weeklyGoalSaved" class="hidden" style="color:#155724; font-weight:600;">
-                                ✅ Saved!
-                                </div>
-                            </form>
-
-                            <div style="margin-top:1rem;">
-                                <div style="font-weight:700; color: var(--navy-primary); margin-bottom:.35rem;">This week’s progress</div>
-                                <div id="weeklyGoalsContainer">Loading your goals...</div>
-                            </div>
-                            </div>
-
-                    `).join('');
-                    
-                    console.log('✓ Weekly goals loaded');
-                } else {
-                    goalsContainer.innerHTML = '<p style="color: #666; padding: 1rem;">No active goals this week. Keep learning!</p>';
-                }
-            } catch (error) {
-                console.error('Error loading weekly goals:', error);
-                const goalsContainer = document.getElementById('weeklyGoalsContainer');
-                if (goalsContainer) {
-                    goalsContainer.innerHTML = '<p style="color: #999; padding: 1rem;">Unable to load weekly goals.</p>';
-                }
-            }
-        }
 
         // Add notification function
         function showNotification(message, type = 'info') {

@@ -2774,6 +2774,9 @@
 
         // Start placement test
         async function startPlacementTest() {
+            isPlacementTestActive = true;  // ⭐ ADD THIS
+            hideTutor(); 
+
             const welcomeEl = document.getElementById('placementWelcome');
             const loadingEl = document.getElementById('placementLoading');
             
@@ -2803,6 +2806,7 @@
                 const data = await response.json();
 
                 if (data.done) {
+                    isPlacementTestActive = false;
                     showPlacementMessage('All assessment attempts completed!', 'success');
                     // ⭐ FIX: Pass null instead of undefined event
                     setTimeout(() => showSection('overview', null), 2000);
@@ -3292,6 +3296,7 @@
         // ============================================
         let tutorMuted = false;
         let tutorHasGreeted = false;
+        let isPlacementTestActive = false;
         let speechUnlocked = false;
         let tutorTimers = [];
         let tutorAbort = null;
@@ -3461,6 +3466,9 @@
         // Call when a lesson is rendered on the dashboard
 
         function startTutorForLesson() {
+            if (isPlacementTestActive) return;  // ⭐ ADD THIS
+  
+                const tutor = document.getElementById('aiTutor');
           const now = Date.now();
           if (now - lastTutorStartAt < 1500) return; // prevent double trigger
           lastTutorStartAt = now;
@@ -3578,6 +3586,10 @@
 
 
         function showSection(sectionName, event) {
+            if (sectionName !== 'placement' && isPlacementTestActive) {
+                isPlacementTestActive = false;  // ⭐ ADD THIS
+            }
+            
             if (event) event.preventDefault();
 
             // Hide all sections
