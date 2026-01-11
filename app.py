@@ -3810,6 +3810,7 @@ async def get_next_placement(token: str):
         conn.close()
         raise HTTPException(status_code=500, detail=f"No placement passages available for {target_level} level.")
 
+
     passage_id = p["id"] if hasattr(p, "keys") else p[0]
     title = p["title"] if hasattr(p, "keys") else p[1]
     content = p["content"] if hasattr(p, "keys") else p[2]

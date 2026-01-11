@@ -2789,8 +2789,6 @@
 
             try {
                 const response = await fetch(`/api/placement/next?token=${encodeURIComponent(token)}`);
-                console.log('📥 Response status:', response.status);
-
                 
                 if (response.status === 401) {
                     showPlacementMessage('Session expired. Please log in again.', 'error');
@@ -2798,32 +2796,11 @@
                     return;
                 }
                 
-                // ⭐ READ THE RESPONSE BODY FIRST
-                const responseText = await response.text();
-                console.log('📥 Response body:', responseText);
-
-                // Parse as JSON
-                let data;
-                try {
-                    data = JSON.parse(responseText);
-                } catch (e) {
-                    console.error('❌ Not JSON:', responseText);
-                    throw new Error(`Backend error: ${responseText.substring(0, 100)}`);
-                }
-
-                // Log detailed error
                 if (!response.ok) {
-                    console.error('❌ Backend error details:', {
-                        status: response.status,
-                        detail: data.detail,
-                        message: data.message,
-                        error: data.error,
-                        full: data
-                    });
-                    
-                    const errorMsg = data.detail || data.message || data.error || 'Unknown error';
-                    throw new Error(errorMsg);
-}
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
 
                 if (data.done) {
                     showPlacementMessage('All assessment attempts completed!', 'success');
@@ -4797,10 +4774,7 @@
                 }
                 
                 const response = await fetch(url);
-                const responseText = await response.text();
-                console.log('📥 Response body:', responseText);
-
-                const data = JSON.parse(responseText);
+                console.log('Response status:', response.status);
                 
                 // ⭐ Handle placement required (409 error)
                 if (response.status === 409) {
@@ -4812,11 +4786,9 @@
                     }
                 }
                 
-                // Log the error details
                 if (!response.ok) {
-                    console.error('❌ Backend error:', data);
-                    console.error('❌ Error message:', data.detail || data.message || data.error);
-                    throw new Error(data.detail || data.message || `HTTP ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
                 
                 const lesson = await response.json();
