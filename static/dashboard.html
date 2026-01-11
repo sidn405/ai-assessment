@@ -3528,28 +3528,6 @@
                 return;
             }
 
-            // Helper: assessment is considered "done" if the user has interests and/or a reading level/estimate
-            const hasCompletedAssessment = () => {
-                const u = JSON.parse(localStorage.getItem('user') || '{}');
-
-                // interests might be an array OR a JSON string (your logs show it as a string)
-                let interestsCount = 0;
-                if (Array.isArray(u.interests)) {
-                interestsCount = u.interests.length;
-                } else if (typeof u.interests === 'string') {
-                try {
-                    const parsed = JSON.parse(u.interests);
-                    if (Array.isArray(parsed)) interestsCount = parsed.length;
-                } catch (_) {}
-                }
-
-                return (
-                interestsCount > 0 ||
-                !!u.reading_level ||
-                !!u.level_estimate
-                );
-            };
-
             try {
                 console.log('Checking for next lesson...');
 
