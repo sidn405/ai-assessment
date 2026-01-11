@@ -5732,27 +5732,30 @@ async def mark_essay_reviewed(essay_id: int, request: Request):
     cursor = get_cursor(conn)
 
     try:
+        
+        
         if USE_POSTGRES:
             cursor.execute("""
                 UPDATE user_essays
                 SET admin_reviewed = TRUE,
                     reviewed_at = NOW(),
-                    admin_reviewed = %s,
                     admin_notes = %s
                 WHERE id = %s
-            """, (user_data['user_id'], admin_notes, essay_id))
+            """, (admin_notes, essay_id))
         else:
             cursor.execute("""
-                UPDATE user_essays 
-                SET admin_reviewed = true, 
-                    admin_reviewed_at = NOW(), 
-                    admin_notes = %s 
-                WHERE id = %s
+                UPDATE user_essays
+                SET admin_reviewed = 1,
+                    reviewed_at = datetime('now'),
+                    admin_notes = ?
+                WHERE id = ?
             """, (admin_notes, essay_id))
-
+        
         conn.commit()
         conn.close()
-
+        
+        print(f"✅ Essay {essay_id} marked as reviewed by admin {user_data['user_id']}")
+        
         return {
             "success": True,
             "message": "Essay marked as reviewed"
