@@ -3759,8 +3759,8 @@ async def get_next_placement(token: str):
     
     conn = get_db()
     cursor = get_cursor(conn)
-
-    # how many attempts already?
+    
+    # Check attempts
     cursor.execute(
         "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=%s" if USE_POSTGRES
         else "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=?",
@@ -3768,20 +3768,16 @@ async def get_next_placement(token: str):
     )
     row = cursor.fetchone()
     attempts = (row["c"] if hasattr(row, "keys") else row[0]) or 0
-
+    
     if attempts >= PLACEMENT_MAX_ATTEMPTS:
         conn.close()
         return {"done": True, "attempt": attempts, "total_attempts": PLACEMENT_MAX_ATTEMPTS}
-
-    # current provisional level (default intermediate)
-    cursor.execute(
-        "SELECT level_estimate FROM users WHERE id=%s" if USE_POSTGRES else "SELECT level_estimate FROM users WHERE id=?",
-        (user_id,)
-    )
-    r = cursor.fetchone()
-    current_level = (r["level_estimate"] if hasattr(r, "keys") else r[0]) or "intermediate"
-
-    # pick a short passage at that level
+    
+    # ⭐ FIX: Get passages from ALL levels for placement
+    # Pick one from each level progressively
+    levels = ["beginner", "intermediate", "advanced"]
+    target_level = levels[attempts % 3]  # Rotate through levels
+    
     if USE_POSTGRES:
         cursor.execute(
             """
@@ -3793,7 +3789,7 @@ async def get_next_placement(token: str):
             ORDER BY RANDOM()
             LIMIT 1
             """,
-            (current_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            (target_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
         )
     else:
         cursor.execute(
@@ -3806,13 +3802,13 @@ async def get_next_placement(token: str):
             ORDER BY RANDOM()
             LIMIT 1
             """,
-            (current_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
+            (target_level, PLACEMENT_WC_MIN, PLACEMENT_WC_MAX)
         )
-
+    
     p = cursor.fetchone()
     if not p:
         conn.close()
-        raise HTTPException(status_code=500, detail="No placement passages available for this level.")
+        raise HTTPException(status_code=500, detail=f"No placement passages available for {target_level} level.")
 
     passage_id = p["id"] if hasattr(p, "keys") else p[0]
     title = p["title"] if hasattr(p, "keys") else p[1]

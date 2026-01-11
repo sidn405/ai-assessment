@@ -69,6 +69,24 @@ PASSAGE TO REWRITE:
         prompt = f"""Write a SHORT STORY (narrative) about {topic}.
     Difficulty Level: {difficulty_level}
     Word Count: Between {word_count_min} and {word_count_max} words (aim for approximately {target_words} words)
+    
+    DIFFICULTY GUIDELINES:
+    - elementary: 4th-6th grade level, simple sentences, common words
+    - intermediate: 7th-9th grade level, moderate complexity
+    - high_school: 10th-12th grade level, complex sentences, academic vocabulary
+    - adult: College+ level, sophisticated vocabulary, abstract concepts, nuanced ideas
+
+    {'''For HIGH_SCHOOL and ADULT levels:
+    - Use complex sentence structures (20-30 words)
+    - Include sophisticated, academic vocabulary
+    - Discuss abstract or multi-layered concepts
+    - Use literary devices (metaphors, analogies)
+    - Assume strong reading comprehension
+    ''' if difficulty_level in ['high_school', 'adult'] else ''}
+
+    Topic: {topic}
+    Make this story interesting for someone who likes {topic}.
+    Use {topic}-related scenarios, settings, and examples.
 
     IMPORTANT: 
     - Focus ONLY on {topic}

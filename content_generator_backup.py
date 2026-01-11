@@ -17,6 +17,46 @@ class ContentGenerator:
         
         # NEW API - Create client
         self.client = OpenAI(api_key=self.api_key)
+        
+    def _rewrite_passage_to_word_range(self, title, content, topic, difficulty_level, word_count_min, word_count_max, target_words):
+        prompt = f"""
+Rewrite the passage below into a NEW VERSION that is BETWEEN {word_count_min} and {word_count_max} words
+(aim for about {target_words} words).
+
+Hard rules:
+- Keep it a STORY (narrative), not an explanation/definition.
+- Keep the same topic focus: {topic}
+- Keep difficulty level: {difficulty_level}
+- Same main character(s) and setting, but you may add 1-2 new details to reach the word count naturally.
+- No headings, no bullet points.
+
+Return ONLY valid JSON with:
+{{
+  "title": "{title}",
+  "content": "...",
+  "key_concepts": ["...", "...", "..."],
+  "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
+}}
+
+PASSAGE TO REWRITE:
+{content}
+"""
+        resp = self.client.chat.completions.create(
+            model="gpt-4-turbo-preview",
+            messages=[
+                {"role": "system", "content": "You rewrite reading passages to match an exact word range while keeping a narrative story style."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.5,
+            max_tokens=2500,
+            timeout=60
+        )
+        txt = resp.choices[0].message.content
+        if "```json" in txt:
+            txt = txt.split("```json")[1].split("```")[0].strip()
+        elif "```" in txt:
+            txt = txt.split("```")[1].split("```")[0].strip()
+        return json.loads(txt)
     
     def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests):
         """Generate educational passage using GPT-4 with dynamic word count"""
@@ -26,7 +66,7 @@ class ContentGenerator:
         target_words = random.randint(word_count_min, word_count_max)
         
         # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
-        prompt = f"""Create an educational reading passage about {topic}.
+        prompt = f"""Write a SHORT STORY (narrative) about {topic}.
     Difficulty Level: {difficulty_level}
     Word Count: Between {word_count_min} and {word_count_max} words (aim for approximately {target_words} words)
 
@@ -43,6 +83,13 @@ class ContentGenerator:
     - Include at least 5-8 vocabulary words (more for longer passages)
     - Look for: academic terms, technical words, advanced vocabulary, subject-specific jargon
     - Examples: "phenomenon", "transformation", "immersive", "gratification", "tangible", "palpable", etc.
+    
+    Hard rules:
+    - This MUST be a story with a character, setting, and a small plot (beginning → problem → resolution)
+    - Do NOT write an article, definition, or history lesson
+    - Do NOT explain the topic directly; SHOW the topic through what happens in the story
+    - Include at least one line of dialogue
+    - Keep it realistic/relatable and age-appropriate
 
     Generate a passage that explores {topic} in an interesting way.
 
@@ -138,6 +185,53 @@ class ContentGenerator:
             # Analyze readability
             from readability import analyze_readability
             readability = analyze_readability(passage_data['content'])
+            
+            def _rewrite_passage_to_word_range(self, title, content, topic, difficulty_level, word_count_min, word_count_max, target_words):
+                prompt = f"""
+            Rewrite the passage below into a NEW VERSION that is BETWEEN {word_count_min} and {word_count_max} words
+            (aim for about {target_words} words).
+
+            Return ONLY valid JSON with:
+            {{
+            "title": "{title}",
+            "content": "...",
+            "key_concepts": ["...", "...", "..."],
+            "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
+            }}
+
+            PASSAGE TO REWRITE:
+            {content}
+            """
+                resp = self.client.chat.completions.create(
+                    model="gpt-4-turbo-preview",
+                    messages=[
+                        {"role": "system", "content": "You rewrite reading passages to match an exact word range while keeping a narrative story style."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.5,
+                    max_tokens=2500,
+                    timeout=60
+                )
+                txt = resp.choices[0].message.content
+                if "```json" in txt:
+                    txt = txt.split("```json")[1].split("```")[0].strip()
+                elif "```" in txt:
+                    txt = txt.split("```")[1].split("```")[0].strip()
+                return json.loads(txt)   
+            
+            wc = readability['word_count']
+            if wc < word_count_min or wc > word_count_max:
+                passage_data = self._rewrite_passage_to_word_range(
+                    title=passage_data.get("title", f"{topic}"),
+                    content=passage_data["content"],
+                    topic=topic,
+                    difficulty_level=difficulty_level,
+                    word_count_min=word_count_min,
+                    word_count_max=word_count_max,
+                    target_words=target_words
+                )
+                readability = analyze_readability(passage_data['content'])
+                
             
             # Add metadata
             passage_data.update({
@@ -360,19 +454,6 @@ Return your response as a JSON array with this exact structure:
             "key_concepts": [topic],
             "vocabulary_words": []
         }
-    
-    def _get_fallback_questions(self):
-        """Return basic fallback questions"""
-        return [
-            {
-                "question": "What is the main topic of this passage?",
-                "type": "main_idea",
-                "options": ["The topic discussed", "Something else", "Another topic", "Different subject"],
-                "correct_answer": "The topic discussed",
-                "explanation": "The passage focuses on this main topic.",
-                "difficulty": 1
-            }
-        ]
 
 # Example usage
 if __name__ == "__main__":
