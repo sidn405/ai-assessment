@@ -4935,12 +4935,15 @@ async def delete_student(student_id: int, token: str):
         for table in tables_to_clean:
             try:
                 cursor.execute(
+                    
                     f"DELETE FROM {table} WHERE user_id=%s" if USE_POSTGRES
                     else f"DELETE FROM {table} WHERE user_id=?",
                     (student_id,)
                 )
+                conn.commit()
                 print(f"✓ Deleted from {table}")
             except Exception as e:
+                conn.rollback()
                 print(f"⚠️ Skipping {table}: {e}")
         
         # Delete user
