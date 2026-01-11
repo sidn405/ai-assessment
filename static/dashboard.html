@@ -3547,7 +3547,13 @@
                     return;
                 }
 
-                
+                // Gate 2: Reading level (placement)
+                if (!hasCompletedPlacement(data)) {
+                    console.log('Placement not complete → routing to placement');
+                    if (noLessons) noLessons.classList.remove('hidden');
+                    showSection('placement');
+                    return;
+                }
 
                 // Ready to learn
                 console.log('Assessment + placement complete → loading lesson');
@@ -5950,9 +5956,8 @@
 
             const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
             const assessmentDone =
-              totalCompleted > 0 ||
-              hasCompletedAssessment(progressData);
-              // reading_level is a default; don't use it
+            totalCompleted > 0 ||
+            hasCompletedAssessment(progressData); // reading_level is a default; don't use it
 
 
             // If assessment is done, hide the big CTA card on Overview.
