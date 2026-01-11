@@ -2103,12 +2103,12 @@
                         <span>📝</span> Take Assessment
                     </a>
                     <!-- ADD THIS -->
-                    <a href="#" class="nav-link" onclick="showSection('goToPlacement', event); return false;">
+                    <a href="#" class="nav-link" onclick="showSection('placement', event); return false;">
                         <span>📚</span> Reading Level
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="unlockSpeechOnce(); showSection('goToLessons', event); return false;">
+                    <a href="#" class="nav-link" onclick="unlockSpeechOnce(); showSection('lessons', event); return false;">
                         <span>📚</span> My Lessons
                     </a>
                 </li>
@@ -2182,10 +2182,10 @@
                             <span style="opacity: 0.9; font-size: 0.95em;">Ready to start your learning journey? Click below to explore your customized lessons!</span>
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                            <button class="btn btn-primary" onclick="showSection('goToLessons', event)">
+                            <button class="btn btn-primary" onclick="showSection('lessons', event)">
                                 📚 Continue Learning
                             </button>
-                            <button class="btn btn-secondary" onclick="showSection('goToPlacement', event)">
+                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
                                 🔄 Retake Reading Level Test
                             </button>
                         </div>
@@ -3035,11 +3035,6 @@
             }
             
             updateUserReadingLevel(level);
-            clearLegacyFlags();
-            // Mark placement complete only after the final required attempt
-            if (placementCurrentAttempt >= placementTotalAttempts) {
-                setUserFlag('placementCompleted', true);
-            }
             
             if (typeof loadDashboardStats === 'function') {
                 setTimeout(() => loadDashboardStats(), 1000);
@@ -3231,30 +3226,6 @@
         }
 
         // Check if assessment is completed (with fallbacks)
-
-        // ---- Per-user local flags (prevents one user's flags leaking into another) ----
-        function _getUserId(progressData = null) {
-            try {
-                const u = progressData?.user || JSON.parse(localStorage.getItem("user") || "{}");
-                return u.id || u.user_id || u.email || "anon";
-            } catch {
-                return "anon";
-            }
-        }
-        function _flagKey(base, progressData = null) {
-            return `${base}:${_getUserId(progressData)}`;
-        }
-        function getUserFlag(base, progressData = null) {
-            return localStorage.getItem(_flagKey(base, progressData)) === "true";
-        }
-        function setUserFlag(base, value, progressData = null) {
-            localStorage.setItem(_flagKey(base, progressData), value ? "true" : "false");
-        }
-        function clearLegacyFlags() {
-            // Older builds used global keys; clear them once so they don't poison new accounts.
-            localStorage.removeItem("assessmentCompleted");
-            localStorage.removeItem("placementCompleted");
-        }
         
         function hasCompletedAssessment(progressData = null) {
             // Method 1: Check localStorage flag FIRST (most reliable)
@@ -3307,69 +3278,6 @@
             console.log('❌ Assessment not completed');
             return false;
         }
-
-        function hasCompletedPlacement(progressData = null) {
-            try {
-                const u = progressData?.user || JSON.parse(localStorage.getItem("user") || "{}");
-
-                // Preferred: backend flag(s) if you have them
-                if (u.placement_completed === true || u.reading_level_completed === true) return true;
-
-                // If your backend returns an explicit placement status under stats, honor it
-                if (progressData?.stats?.placement_completed === true || progressData?.stats?.reading_level_completed === true) return true;
-
-                // IMPORTANT: reading_level itself is often a default (e.g., "intermediate") so don't use it alone.
-                // Fallback: per-user local flag (set when placement submit finishes the final attempt)
-                return getUserFlag("placementCompleted", progressData);
-            } catch (error) {
-                console.error("Error checking placement:", error);
-                return getUserFlag("placementCompleted", progressData);
-            }
-        }
-
-            
-            // Method 2: Check if user has actual interests selected
-            try {
-                const u = progressData?.user || JSON.parse(localStorage.getItem("user") || "{}");
-                
-                if (u.interests) {
-                    const interests = typeof u.interests === "string" ? JSON.parse(u.interests) : u.interests;
-                    if (Array.isArray(interests) && interests.length > 0) {
-                        console.log('✅ Assessment completed (has interests)');
-                        // Set the flag for next time
-                        localStorage.setItem("assessmentCompleted", "true");
-                        return true;
-                    }
-                }
-                
-                // Method 3: Check if they have completed any lessons
-                // (If they have lessons, they must have completed assessment)
-                const lessonsCompleted = u.lessons_completed || 
-                                        progressData?.stats?.lessons || 
-                                        u.stats?.lessons_completed || 0;
-                
-                if (lessonsCompleted > 0) {
-                    console.log('✅ Assessment completed (has completed lessons)');
-                    localStorage.setItem("assessmentCompleted", "true");
-                    return true;
-                }
-                
-                // Method 4: Check backend assessment_completed flag
-                if (u.assessment_completed === true) {
-                    console.log('✅ Assessment completed (backend flag)');
-                    localStorage.setItem("assessmentCompleted", "true");
-                    return true;
-                }
-                
-            } catch (error) {
-                console.error('Error checking assessment:', error);
-            }
-            
-            // ❌ DO NOT check reading_level alone - it's just a default value!
-            // Default reading_level does NOT mean assessment is complete
-            
-            console.log('❌ Assessment not completed');
-            return false;
 
         async function retakePlacementTest() {
             if (!confirm('Retake test?')) return;
@@ -3970,9 +3878,7 @@
                 console.log('Assessment submitted:', result);
 
                 // ⭐ CRITICAL - Set the flag
-                clearLegacyFlags();
-                // Per-user flag (prevents leakage between accounts)
-                setUserFlag('assessmentCompleted', true, { user: result.user || JSON.parse(localStorage.getItem('user')||'{}') });
+                localStorage.setItem('assessmentCompleted', 'true');
                 
                 // Update user in localStorage
                 if (result.user) {
@@ -6046,39 +5952,21 @@
 
         function toggleAssessmentCTA(progressData) {
             const gettingStarted = document.getElementById('gettingStarted');
-            const continueToPlacement = document.getElementById('continueToPlacement');
-            const continueLearning = document.getElementById('continueLearning');
-
             if (!gettingStarted) return;
 
             const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
-            const assessmentDone = totalCompleted > 0 || hasCompletedAssessment(progressData);
-            const placementDone = totalCompleted > 0 || hasCompletedPlacement(progressData);
-            
+            const assessmentDone =
+            totalCompleted > 0 ||
+            hasCompletedAssessment(progressData); // reading_level is a default; don't use it
 
 
-          // State 1: Nothing done → show Take Assessment
-            if (!assessmentDone) {
-                gettingStarted.classList.remove('hidden');
-                if (continueToPlacement) continueToPlacement.classList.add('hidden');
-                if (continueLearning) continueLearning.classList.add('hidden');
-                return;
-            }
-
-            // State 2: Assessment done, placement not done → show Continue to Reading Level Test
-            if (assessmentDone && !placementDone) {
+            // If assessment is done, hide the big CTA card on Overview.
+            if (assessmentDone) {
                 gettingStarted.classList.add('hidden');
-                if (continueToPlacement) continueToPlacement.classList.remove('hidden');
-                if (continueLearning) continueLearning.classList.add('hidden');
-                return;
-            }
-
-            // State 3: Both done → show Continue Learning
-            gettingStarted.classList.add('hidden');
-            if (continueToPlacement) continueToPlacement.classList.add('hidden');
-            if (continueLearning) continueLearning.classList.remove('hidden');
-            
-             else {
+                // (optional) show a “Continue Learning” card if you have one:
+                const continueLearning = document.getElementById('continueLearning');
+                if (continueLearning) continueLearning.classList.remove('hidden');
+            } else {
                 gettingStarted.classList.remove('hidden');
                 const continueLearning = document.getElementById('continueLearning');
                 if (continueLearning) continueLearning.classList.add('hidden');
