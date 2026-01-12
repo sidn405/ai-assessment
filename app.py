@@ -5972,10 +5972,15 @@ def send_admin_invite_email(to_email: str, invite_url: str):
 
     if r.status_code >= 300:
         raise HTTPException(status_code=500, detail=f"Resend error: {r.text}")
+    
+from collections.abc import Mapping
 
 @app.post("/api/admin/invites")
 async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)):
-    email = body.email.strip().lower()
+    email = (body.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
     raw_token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     expires_at = datetime.utcnow() + timedelta(hours=24)
@@ -5983,36 +5988,73 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
     conn = get_db()
     cur = get_cursor(conn)
 
-    # store invite
-    if USE_POSTGRES:
-        cur.execute("""
-          INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
-          VALUES (%s, %s, %s, %s)
-          RETURNING id
-        """, (email, token_hash, expires_at, admin["user_id"]))
-        invite_id = cur.fetchone()["id"] if isinstance(cur.fetchone(), dict) else cur.fetchone()[0]
-    else:
-        cur.execute("""
-          INSERT INTO admin_invites (email, token_hash, created_at, expires_at, invited_by)
-          VALUES (?, ?, ?, ?, ?)
-        """, (email, token_hash, datetime.utcnow().isoformat(), expires_at.isoformat(), admin["user_id"]))
-        invite_id = cur.lastrowid
+    try:
+        # Optional: prevent multiple active invites to same email
+        if USE_POSTGRES:
+            cur.execute("""
+                SELECT id
+                FROM admin_invites
+                WHERE email = %s
+                  AND used_at IS NULL
+                  AND revoked_at IS NULL
+                  AND expires_at > NOW()
+                ORDER BY id DESC
+                LIMIT 1
+            """, (email,))
+            existing = cur.fetchone()
+            if existing:
+                existing_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
+                return {"success": True, "invite_id": existing_id, "already_invited": True}
 
-    conn.commit()
-    conn.close()
+            cur.execute("""
+                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (email, token_hash, expires_at, admin["user_id"]))
+
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=500, detail="Invite insert returned no id")
+            invite_id = row["id"] if isinstance(row, Mapping) else row[0]
+
+        else:
+            # SQLite path
+            cur.execute("""
+                INSERT INTO admin_invites (email, token_hash, created_at, expires_at, invited_by)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                email,
+                token_hash,
+                datetime.utcnow().isoformat(),
+                expires_at.isoformat(),
+                admin["user_id"],
+            ))
+            invite_id = cur.lastrowid
+
+        conn.commit()
+
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
 
-    resend.Emails.send({
-      "from": FROM_EMAIL,
-      "to": [email],
-      "subject": "You’ve been invited as an administrator",
-      "html": f"""
-        <p>You’ve been invited to become an administrator.</p>
-        <p>This link expires in 24 hours:</p>
-        <p><a href="{invite_link}">Accept Admin Invite</a></p>
-      """
-    })
+    try:
+        resend.Emails.send({
+            "from": FROM_EMAIL,
+            "to": [email],
+            "subject": "You’ve been invited as an administrator",
+            "html": f"""
+              <p>You’ve been invited to become an administrator.</p>
+              <p>This link expires in 24 hours:</p>
+              <p><a href="{invite_link}">Accept Admin Invite</a></p>
+            """
+        })
+    except Exception as e:
+        # Invite is created; email send failed
+        raise HTTPException(status_code=500, detail=f"Invite created (id={invite_id}) but email failed: {e}")
 
     return {"success": True, "invite_id": invite_id}
 
