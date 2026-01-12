@@ -5876,7 +5876,7 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
             invite_id = cur.lastrowid
 
         # 2) Build invite link
-        invite_link = f"{APP_BASE_URL}/admin-invite.html?token={raw_token}"
+        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
 
         # 3) Send email via Resend (same verified sender style as forgot-password)
         try:
@@ -6063,7 +6063,7 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
         except Exception:
             pass
 
-    invite_link = f"{APP_BASE_URL}/admin-invite.html?token={raw_token}"
+    invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
 
     try:
         resend.Emails.send({
@@ -6176,6 +6176,37 @@ async def accept_admin_invite(body: AcceptInviteReq):
 def sha256(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
+@app.get("/api/admin/invites")
+async def list_admin_invites(admin=Depends(require_admin)):
+    conn = get_db()
+    cur = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cur.execute("""
+              SELECT id, email, invited_by, created_at, expires_at, accepted_at, revoked_at
+              FROM admin_invites
+              ORDER BY id DESC
+              LIMIT 200
+            """)
+        else:
+            cur.execute("""
+              SELECT id, email, invited_by, created_at, expires_at, accepted_at, revoked_at
+              FROM admin_invites
+              ORDER BY id DESC
+              LIMIT 200
+            """)
+
+        rows = cur.fetchall() or []
+        # normalize sqlite tuples if needed
+        if rows and not isinstance(rows[0], dict):
+            cols = ["id","email","invited_by","created_at","expires_at","accepted_at","revoked_at"]
+            rows = [dict(zip(cols, r)) for r in rows]
+
+        return {"success": True, "invites": rows}
+    finally:
+        conn.close()
+
+
 @app.post("/api/admin/invites/{invite_id}/resend")
 async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
     conn = get_db()
@@ -6237,7 +6268,7 @@ async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
 
         conn.commit()
 
-        invite_link = f"{APP_BASE_URL}/admin-invite.html?token={raw_token}"
+        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
         send_resend_email(
             to_email=email,
             subject="Administrator invite link (new)",
