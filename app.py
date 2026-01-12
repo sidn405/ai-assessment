@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks, H
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 import sqlite3
 import psycopg2
@@ -163,9 +163,9 @@ class InviteAdminReq(BaseModel):
     email: EmailStr
     
 class AcceptInviteReq(BaseModel):
-    token: str
+    token: str = Field(..., min_length=10)
     full_name: str
-    password: str
+    password: str = Field(..., min_length=6)
     
 class AdminInviteActionRequest(BaseModel):
     # optional note for auditing/logging if you want
@@ -6086,42 +6086,93 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
 
 @app.post("/api/admin/invites/accept")
 async def accept_admin_invite(body: AcceptInviteReq):
-    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    raw_token = (body.token or "").strip()
+    password = body.password or ""
+
+    if not raw_token or not password:
+        raise HTTPException(status_code=400, detail="Token and password are required")
+
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
     conn = get_db()
     cur = get_cursor(conn)
 
-    # find pending invite
-    if USE_POSTGRES:
-        cur.execute("""
-          SELECT * FROM admin_invites
-          WHERE token_hash=%s AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
-        """, (token_hash,))
-    else:
-        cur.execute("""
-          SELECT * FROM admin_invites
-          WHERE token_hash=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
-        """, (token_hash, datetime.utcnow().isoformat()))
-    invite = cur.fetchone()
-    if not invite:
+    try:
+        # find pending invite
+        if USE_POSTGRES:
+            cur.execute("""
+              SELECT * FROM admin_invites
+              WHERE token_hash=%s
+                AND accepted_at IS NULL
+                AND revoked_at IS NULL
+                AND expires_at > NOW()
+              LIMIT 1
+            """, (token_hash,))
+        else:
+            cur.execute("""
+              SELECT * FROM admin_invites
+              WHERE token_hash=?
+                AND accepted_at IS NULL
+                AND revoked_at IS NULL
+                AND expires_at > ?
+              LIMIT 1
+            """, (token_hash, datetime.utcnow().isoformat()))
+
+        invite = cur.fetchone()
+        if not invite:
+            raise HTTPException(status_code=400, detail="Invalid or expired invite")
+
+        # normalize email
+        email = (invite["email"] if isinstance(invite, Mapping) else invite[1]).lower().strip()
+        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+        # upsert user as admin
+        if USE_POSTGRES:
+            cur.execute("SELECT id FROM users WHERE email=%s LIMIT 1", (email,))
+        else:
+            cur.execute("SELECT id FROM users WHERE email=? LIMIT 1", (email,))
+
+        existing = cur.fetchone()
+        if existing:
+            user_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
+            if USE_POSTGRES:
+                cur.execute("UPDATE users SET role='admin', password_hash=%s WHERE id=%s", (password_hash, user_id))
+            else:
+                cur.execute("UPDATE users SET role='admin', password_hash=? WHERE id=?", (password_hash, user_id))
+        else:
+            # Adjust full_name/created_at fields to your actual schema
+            if USE_POSTGRES:
+                cur.execute("""
+                  INSERT INTO users (email, full_name, password_hash, role, created_at)
+                  VALUES (%s, %s, %s, 'admin', NOW())
+                  RETURNING id
+                """, (email, "Administrator", password_hash))
+                user_id = cur.fetchone()[0]
+            else:
+                cur.execute("""
+                  INSERT INTO users (email, full_name, password_hash, role, created_at)
+                  VALUES (?, ?, ?, 'admin', ?)
+                """, (email, "Administrator", password_hash, datetime.utcnow().isoformat()))
+                user_id = cur.lastrowid
+
+        # mark invite accepted
+        if USE_POSTGRES:
+            cur.execute("UPDATE admin_invites SET accepted_at=NOW() WHERE token_hash=%s", (token_hash,))
+        else:
+            cur.execute("UPDATE admin_invites SET accepted_at=? WHERE token_hash=?", (datetime.utcnow().isoformat(), token_hash))
+
+        conn.commit()
+        return {"success": True}
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        print("accept_admin_invite error:", e)
+        raise HTTPException(status_code=500, detail="Failed to accept invite")
+    finally:
         conn.close()
-        raise HTTPException(status_code=400, detail="Invalid or expired invite")
-
-    email = (invite["email"] if isinstance(invite, dict) else invite[1]).lower().strip()
-
-    # upsert user as admin
-    password_hash = bcrypt.hashpw(body.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-    # (Pseudo) implement: if user exists -> update role; else insert user with role=admin
-    # Make sure token uses role="admin".
-    # Finally: mark invite accepted_at.
-
-    conn.commit()
-    conn.close()
-
-    # return token so they’re logged in immediately
-    # token = create_token(user_id, "admin")
-    return {"success": True}
 
 def sha256(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()

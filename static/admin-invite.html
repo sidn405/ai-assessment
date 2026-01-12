@@ -200,6 +200,14 @@
       }
     }
 
+    function extractError(data) {
+      if (!data) return "Failed to accept invite";
+      if (typeof data === "string") return data;
+      if (Array.isArray(data.detail)) return data.detail.map(x => x.msg).join(", ");
+      return data.detail || data.message || "Failed to accept invite";
+    }
+
+
     // Get token from URL
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
@@ -241,17 +249,17 @@
           })
         });
 
-        const data = await response.json();
+        
+
+        const data = await response.json().catch(() => ({}));
 
         if (response.ok && data.success) {
           successDiv.textContent = '✅ Admin account activated! Redirecting to login...';
           successDiv.style.display = 'block';
-
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 2000);
+          setTimeout(() => window.location.href = '/', 2000);
+          return;
         } else {
-          errorDiv.textContent = data.detail || 'Failed to accept invite';
+          errorDiv.textContent = extractError(data);
           errorDiv.style.display = 'block';
           submitBtn.disabled = false;
           submitBtn.textContent = 'Activate Admin Account';
