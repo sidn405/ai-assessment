@@ -1080,49 +1080,55 @@
         <div class="modal-content">
             <button class="close-modal" onclick="closeModal('register')">&times;</button>
             <h2 style="color: var(--navy-primary); margin-bottom: 2rem;">Create Your Account</h2>
-
             <form id="registerForm">
-            <div class="form-group">
-                <label for="registerName">Full Name</label>
-                <input type="text" id="registerName" required>
-            </div>
-
-            <div class="form-group">
-                <label for="registerEmail">Email</label>
-                <input type="email" id="registerEmail" required>
-            </div>
-
-            <div class="form-group">
-                <label for="registerPassword">Password</label>
-                <input type="password" id="registerPassword" required minlength="6">
-                <button type="button" class="password-toggle-btn"
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email</label>
+                    <input type="email" id="registerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input
+                        type="password"
+                        id="registerPassword"
+                        required minlength="6"
+                    >
+                    <button
+                        type="button" 
+                        class="password-toggle-btn" 
                         onclick="togglePassword('registerPassword')"
                         aria-label="Toggle password visibility"
-                        title="Show/Hide password">
-                <i class="fas fa-eye" id="registerPassword-icon"></i>
-                </button>
-            </div>
+                        title="Show/Hide password"
+                    >
+                        <i class="fas fa-eye" id="registerPassword-icon"></i>
+                    </button>
+                </div>
 
-            <div class="form-group" id="ageFieldWrapper">
+                <!-- ✅ ADD AGE FIELD -->
+            <div class="form-group">
                 <label for="registerAge">Age</label>
-                <input type="number" id="registerAge" max="100"
-                    placeholder="Enter your age" style="width: 100%;">
-            </div>
+                <input 
+                    type="number" 
+                    id="registerAge" 
+                    required 
+                    min="5" 
+                    max="100"
+                    placeholder="Enter your age"
+                    style="width: 100%;"
+                >
 
-            <!-- role forced to student -->
-            <input type="hidden" id="registerRole" value="student">
-
-            <div class="form-error" id="registerError"></div>
-
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
-                Create Account
-            </button>
+                <div class="form-group">
+                    <label for="registerRole">I am a...</label>                    
+                        <input value="student">Student</input>
+                </div>
+                <div class="form-error" id="registerError"></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Create Account</button>
             </form>
-
             <p style="text-align: center; margin-top: 1.5rem;">
-            Already have an account?
-            <a href="#" onclick="closeModal('register'); openModal('login')"
-                style="color: var(--navy-primary); font-weight: 600;">Login here</a>
+                Already have an account? <a href="#" onclick="closeModal('register'); openModal('login')" style="color: var(--navy-primary); font-weight: 600;">Login here</a>
             </p>
         </div>
     </div>
