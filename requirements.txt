@@ -8,7 +8,7 @@ openai==1.54.0
 python-dotenv==1.0.0
 psycopg2-binary==2.9.9
 httpx==0.25.1
-
+email-validator>=2.0.0
 # Email
 resend==2.19.0
 flask
