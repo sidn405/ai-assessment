@@ -6255,8 +6255,7 @@ async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
 
         # 3) create new invite + email it
         raw_token = secrets.token_urlsafe(32)
-        token_hash = sha256(raw_token)
-
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
         if USE_POSTGRES:
@@ -6265,7 +6264,9 @@ async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
             """, (email.lower().strip(), token_hash, expires_at, admin["user_id"]))
-            new_id = cursor.fetchone()["id"]
+            row2 = cursor.fetchone()
+            new_id = row2["id"] if isinstance(row2, dict) else row2[0]
+
         else:
             cursor.execute("""
                 INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
@@ -6282,6 +6283,7 @@ async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
             html=f"""
               <p>You have a new administrator invite link (expires in 24 hours).</p>
               <p><a href="{invite_link}">Accept Admin Invite</a></p>
+              <p style="word-break:break-all;">{invite_link}</p>
             """
         )
 
@@ -6295,6 +6297,16 @@ async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+        
+from fastapi.responses import RedirectResponse
+
+@app.get("/admin-invite.html", include_in_schema=False)
+def admin_invite_html_redirect(token: str | None = None):
+    url = "/admin-invite"
+    if token:
+        url += f"?token={token}"
+    return RedirectResponse(url=url, status_code=307)
+
         
 @app.post("/api/admin/invites/{invite_id}/revoke")
 async def revoke_admin_invite(invite_id: int, admin=Depends(require_admin)):
@@ -6330,6 +6342,30 @@ async def revoke_admin_invite(invite_id: int, admin=Depends(require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+        
+@app.delete("/api/admin/invites/{invite_id}")
+async def revoke_admin_invite(invite_id: int, admin=Depends(require_admin)):
+    conn = get_db()
+    cur = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cur.execute("""
+              UPDATE admin_invites
+              SET revoked_at = NOW()
+              WHERE id = %s AND used_at IS NULL
+            """, (invite_id,))
+        else:
+            cur.execute("""
+              UPDATE admin_invites
+              SET revoked_at = ?
+              WHERE id = ? AND used_at IS NULL
+            """, (datetime.utcnow().isoformat(), invite_id))
+
+        conn.commit()
+        return {"success": True}
+    finally:
+        conn.close()
+
 
 # ============================================================
 @app.get("/api/student/gamification")
