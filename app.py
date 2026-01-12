@@ -6100,36 +6100,41 @@ async def accept_admin_invite(body: AcceptInviteReq):
         # find pending invite
         if USE_POSTGRES:
             cur.execute("""
-              SELECT * FROM admin_invites
-              WHERE token_hash=%s
-                AND admin_invites.created_at IS NULL
+            SELECT *
+            FROM admin_invites
+            WHERE token_hash=%s
+                AND used_at IS NULL
                 AND revoked_at IS NULL
                 AND expires_at > NOW()
-              LIMIT 1
+            LIMIT 1
             """, (token_hash,))
         else:
             cur.execute("""
-              SELECT * FROM admin_invites
-              WHERE token_hash=?
-                AND admin_invites.created_at IS NULL
+            SELECT *
+            FROM admin_invites
+            WHERE token_hash=?
+                AND used_at IS NULL
                 AND revoked_at IS NULL
                 AND expires_at > ?
-              LIMIT 1
+            LIMIT 1
             """, (token_hash, datetime.utcnow().isoformat()))
+
 
         invite = cur.fetchone()
         if not invite:
             raise HTTPException(status_code=400, detail="Invalid or expired invite")
-
-        # normalize email
+        
+        invite_id = invite["id"] if isinstance(invite, Mapping) else invite[0]
         email = (invite["email"] if isinstance(invite, Mapping) else invite[1]).lower().strip()
+    
         password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
         # upsert user as admin
         if USE_POSTGRES:
-            cur.execute("SELECT id FROM users WHERE email=%s LIMIT 1", (email,))
+            cur.execute("UPDATE admin_invites SET used_at = NOW() WHERE id = %s", (invite_id,))
         else:
-            cur.execute("SELECT id FROM users WHERE email=? LIMIT 1", (email,))
+            cur.execute("UPDATE admin_invites SET used_at = ? WHERE id = ?", (datetime.utcnow().isoformat(), invite_id))
+
 
         existing = cur.fetchone()
         if existing:
@@ -6176,6 +6181,8 @@ async def accept_admin_invite(body: AcceptInviteReq):
 def sha256(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
+from collections.abc import Mapping
+
 @app.get("/api/admin/invites")
 async def list_admin_invites(admin=Depends(require_admin)):
     conn = get_db()
@@ -6183,29 +6190,29 @@ async def list_admin_invites(admin=Depends(require_admin)):
     try:
         if USE_POSTGRES:
             cur.execute("""
-              SELECT id, email, invited_by, created_at, expires_at, accepted_at, revoked_at
+              SELECT id, email, invited_by, created_at, expires_at, used_at, revoked_at
               FROM admin_invites
               ORDER BY id DESC
               LIMIT 200
             """)
         else:
             cur.execute("""
-              SELECT id, email, invited_by, created_at, expires_at, accepted_at, revoked_at
+              SELECT id, email, invited_by, created_at, expires_at, used_at, revoked_at
               FROM admin_invites
               ORDER BY id DESC
               LIMIT 200
             """)
 
         rows = cur.fetchall() or []
-        # normalize sqlite tuples if needed
-        if rows and not isinstance(rows[0], dict):
-            cols = ["id","email","invited_by","created_at","expires_at","accepted_at","revoked_at"]
+
+        # normalize sqlite tuples -> dicts if needed
+        if rows and not isinstance(rows[0], Mapping):
+            cols = ["id","email","invited_by","created_at","expires_at","used_at","revoked_at"]
             rows = [dict(zip(cols, r)) for r in rows]
 
         return {"success": True, "invites": rows}
     finally:
         conn.close()
-
 
 @app.post("/api/admin/invites/{invite_id}/resend")
 async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
