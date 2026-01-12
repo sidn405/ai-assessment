@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
@@ -424,6 +425,17 @@
         .form-error.active {
             display: block;
         }
+        .form-success {
+            color: var(--success);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+        
+        .form-success.active {
+            display: block;
+        }
+
         
         
         /* Footer */
@@ -838,6 +850,36 @@
             .btn {
                 border: 2px solid currentColor;
             }
+        /* Password Toggle Button */
+        .form-group {
+            position: relative;
+        }
+
+        .password-toggle-btn {
+            position: absolute;
+            right: 12px;
+            top: 38px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            color: #666;
+            font-size: 18px;
+            transition: color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .password-toggle-btn:hover {
+            color: var(--navy-primary);
+        }
+
+        .password-toggle-btn:focus {
+            outline: none;
+            color: var(--navy-primary);
+        }
+
         }
     </style>
 </head>
@@ -976,17 +1018,17 @@
                     <button
                         type="button" 
                         class="password-toggle-btn" 
-                        onclick="togglePassword('password')"
+                        onclick="togglePassword('loginPassword')"
                         aria-label="Toggle password visibility"
                         title="Show/Hide password"
                     >
-                        <i class="fas fa-eye" id="password-icon"></i>
+                        <i class="fas fa-eye" id="loginPassword-icon"></i>
                     </button>
                 </div>
                 <!-- In login modal, update the forgot password link: -->
                 <div style="text-align: right; margin-bottom: 1rem;">
                     <a href="#" 
-                    onclick="event.preventDefault(); closeModal('login'); setTimeout(() => openModal('forgotPassword'), 100); return false;" 
+                    onclick="event.preventDefault(); closeModal('login'); setTimeout(() => openModal('resetPassword'), 100); return false;" 
                     style="color: var(--navy-primary); font-size: 0.9rem; text-decoration: none;">
                         Forgot Password?
                     </a>
@@ -1057,11 +1099,11 @@
                     <button
                         type="button" 
                         class="password-toggle-btn" 
-                        onclick="togglePassword('password')"
+                        onclick="togglePassword('registerPassword')"
                         aria-label="Toggle password visibility"
                         title="Show/Hide password"
                     >
-                        <i class="fas fa-eye" id="password-icon"></i>
+                        <i class="fas fa-eye" id="registerPassword-icon"></i>
                     </button>
                 </div>
 
@@ -1094,6 +1136,49 @@
         </div>
     </div>
 
+
+    <!-- Reset Password Modal -->
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('resetPassword')">&times;</button>
+            <h2 style="color: var(--navy-primary); margin-bottom: 2rem;">Reset Your Password</h2>
+            <p style="color: #666; margin-bottom: 2rem;">Enter your new password below.</p>
+            <form id="resetPasswordForm">
+                <div class="form-group">
+                    <label for="resetNewPassword">New Password</label>
+                    <input type="password" id="resetNewPassword" required minlength="6" placeholder="At least 6 characters">
+                    <button
+                        type="button" 
+                        class="password-toggle-btn" 
+                        onclick="togglePassword('resetNewPassword')"
+                        aria-label="Toggle password visibility"
+                        title="Show/Hide password"
+                    >
+                        <i class="fas fa-eye" id="resetNewPassword-icon"></i>
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label for="resetConfirmPassword">Confirm Password</label>
+                    <input type="password" id="resetConfirmPassword" required minlength="6" placeholder="Re-enter password">
+                    <button
+                        type="button" 
+                        class="password-toggle-btn" 
+                        onclick="togglePassword('resetConfirmPassword')"
+                        aria-label="Toggle password visibility"
+                        title="Show/Hide password"
+                    >
+                        <i class="fas fa-eye" id="resetConfirmPassword-icon"></i>
+                    </button>
+                </div>
+                <div class="form-error" id="resetError"></div>
+                <div class="form-success" id="resetSuccess"></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Reset Password</button>
+            </form>
+            <p style="text-align: center; margin-top: 1.5rem;">
+                <a href="#" onclick="closeModal('resetPassword'); openModal('login')" style="color: var(--navy-primary); font-weight: 600;">Back to Login</a>
+            </p>
+        </div>
+    </div>
     <script>
         function togglePassword(inputId) {
             const input = document.getElementById(inputId);
@@ -1120,7 +1205,8 @@
             const modalMap = {
                 'login': 'loginModal',
                 'register': 'registerModal',
-                'forgotPassword': 'forgotPasswordModal'
+                'forgotPassword': 'forgotPasswordModal',
+                'resetPassword': 'resetPasswordModal'
             };
             
             const modalId = modalMap[type];
@@ -1144,7 +1230,8 @@
             const modalMap = {
                 'login': 'loginModal',
                 'register': 'registerModal',
-                'forgotPassword': 'forgotPasswordModal'
+                'forgotPassword': 'forgotPasswordModal',
+                'resetPassword': 'resetPasswordModal'
             };
             
             const modalId = modalMap[type];
@@ -1163,7 +1250,7 @@
         }
 
         function closeAllModals() {
-            const modals = ['loginModal', 'registerModal', 'forgotPasswordModal'];
+            const modals = ['loginModal', 'registerModal', 'forgotPasswordModal', 'resetPasswordModal'];
             modals.forEach(id => {
                 const modal = document.getElementById(id);
                 if (modal) {
@@ -1300,12 +1387,11 @@
             const full_name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
-            const age = parseInt(document.getElementById('registerAge').value);
-            const role = document.getElementById('registerRole').value;
-            const errorDiv = document.getElementById('registerError');
+            const ageInput = document.getElementById('registerAge');
+            const age = ageInput.value ? parseInt(ageInput.value) : null;
 
-            // Validate age
-            if (age < 5 || age > 100) {
+            // Validate age for students
+            if (role === 'student' && (!age || age < 5 || age > 100)) {
                 errorDiv.textContent = 'Please enter a valid age (5-100)';
                 errorDiv.style.display = 'block';
                 return;
@@ -1360,6 +1446,78 @@
             }
         });
 
+
+        // Reset Password Form Handler
+        document.getElementById('resetPasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const newPassword = document.getElementById('resetNewPassword').value;
+            const confirmPassword = document.getElementById('resetConfirmPassword').value;
+            const errorDiv = document.getElementById('resetError');
+            const successDiv = document.getElementById('resetSuccess');
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            
+            // Clear previous messages
+            errorDiv.classList.remove('active');
+            successDiv.classList.remove('active');
+            
+            // Validate passwords match
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.classList.add('active');
+                return;
+            }
+            
+            // Get token from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (!token) {
+                errorDiv.textContent = 'Invalid or missing reset token. Please request a new password reset link.';
+                errorDiv.classList.add('active');
+                return;
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Resetting...';
+            
+            try {
+                const response = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: token,
+                        password: newPassword
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    successDiv.textContent = '✅ Password reset successful! Redirecting to login...';
+                    successDiv.classList.add('active');
+                    
+                    setTimeout(() => {
+                        closeModal('resetPassword');
+                        openModal('login');
+                        // Clear the form
+                        document.getElementById('resetPasswordForm').reset();
+                        successDiv.classList.remove('active');
+                    }, 2000);
+                } else {
+                    errorDiv.textContent = data.detail || 'Failed to reset password. The link may be expired.';
+                    errorDiv.classList.add('active');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Reset Password';
+                }
+            } catch (error) {
+                console.error('Reset password error:', error);
+                errorDiv.textContent = 'An error occurred. Please try again.';
+                errorDiv.classList.add('active');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Reset Password';
+            }
+        });
     // Mobile Navigation Toggle
     function toggleMobileNav() {
         const navLinks = document.getElementById('navLinks');
