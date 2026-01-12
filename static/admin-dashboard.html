@@ -815,6 +815,11 @@
                         <span>📝</span> Essay Alerts
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('invite admin', event); return false;">
+                        <span>✉️</span> Invite Admin
+                    </a>
+                </li>
             </ul>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
@@ -1023,6 +1028,63 @@
                 </div>
             </div>
           
+
+            <!-- Invite Admin Section -->
+            <div id="inviteAdminSection" class="hidden">
+                <div class="header">
+                    <h1>✉️ Invite Administrators</h1>
+                    <p>Send an email invite to grant admin access. Invites expire after 24 hours.</p>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">Send Invite</h3>
+                    <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                        <input id="inviteAdminEmail" type="email" placeholder="admin@example.com"
+                               style="flex:1; min-width: 260px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
+                        <button class="btn btn-primary" type="button" onclick="sendAdminInvite()">Send Invite</button>
+                    </div>
+                    <div id="inviteAdminMsg" class="form-error" style="margin-top: 0.75rem;"></div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">Current Admins</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="students-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminsTableBody">
+                                <tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-top: 0;">Pending Invites</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="students-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Invited</th>
+                                    <th>Expires</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminInvitesTableBody">
+                                <tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
         <!-- Add this as a new section in your admin dashboard -->
 
         <div id="sessionTrackingSection" class="section hidden">
@@ -1532,7 +1594,9 @@
                 'session tracking': 'sessionTrackingSection',
                 'sessionTracking': 'sessionTrackingSection',
                 'essay alerts': 'essayAlertsSection',
-                'essayAlerts': 'essayAlertsSection'
+                'essayAlerts': 'essayAlertsSection',
+                'invite admin': 'inviteAdminSection',
+                'inviteAdmin': 'inviteAdminSection'
             };
 
             document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
@@ -1557,6 +1621,10 @@
 
             if (section === 'essay alerts' || section === 'essayAlerts') {
                 loadEssayAlerts();
+            }
+
+            if (section === 'invite admin' || section === 'inviteAdmin') {
+                loadAdminsAndInvites();
             }
 
             if (section === 'session tracking' || section === 'sessionTracking') {
@@ -2782,6 +2850,142 @@
         if (menuIconMain) menuIconMain.textContent = icon;
     }
 
-    </script>
+    
+
+        // ========== INVITE ADMIN (EMAIL VIA BACKEND) ==========
+
+        async function loadAdminsAndInvites() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const adminsBody = document.getElementById('adminsTableBody');
+            const invitesBody = document.getElementById('adminInvitesTableBody');
+
+            if (adminsBody) adminsBody.innerHTML = '<tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>';
+            if (invitesBody) invitesBody.innerHTML = '<tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>';
+
+            try {
+                // Current admins
+                const adminsRes = await fetch('/api/admin/admins', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const adminsData = await adminsRes.json();
+
+                if (adminsBody) {
+                    if (!adminsRes.ok) {
+                        adminsBody.innerHTML = `<tr><td colspan="3">Failed to load admins: ${adminsData.detail || adminsRes.status}</td></tr>`;
+                    } else {
+                        const rows = (adminsData.admins || []).map(a => `
+                            <tr>
+                                <td>${a.email || ''}</td>
+                                <td>${a.full_name || ''}</td>
+                                <td>${a.created_at || ''}</td>
+                            </tr>
+                        `).join('');
+                        adminsBody.innerHTML = rows || '<tr><td colspan="3" style="opacity:0.7;">No admins found.</td></tr>';
+                    }
+                }
+
+                // Pending invites
+                const invitesRes = await fetch('/api/admin/invites', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const invitesData = await invitesRes.json();
+
+                if (invitesBody) {
+                    if (!invitesRes.ok) {
+                        invitesBody.innerHTML = `<tr><td colspan="5">Failed to load invites: ${invitesData.detail || invitesRes.status}</td></tr>`;
+                    } else {
+                        const rows = (invitesData.invites || []).map(inv => `
+                            <tr>
+                                <td>${inv.email || ''}</td>
+                                <td>${inv.created_at || ''}</td>
+                                <td>${inv.expires_at || ''}</td>
+                                <td>${inv.status || 'pending'}</td>
+                                <td style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                    <button class="btn btn-secondary" type="button" onclick="resendAdminInvite(${inv.id})">Resend</button>
+                                    <button class="btn btn-danger" type="button" onclick="revokeAdminInvite(${inv.id})">Revoke</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                        invitesBody.innerHTML = rows || '<tr><td colspan="5" style="opacity:0.7;">No pending invites.</td></tr>';
+                    }
+                }
+
+            } catch (err) {
+                if (adminsBody) adminsBody.innerHTML = `<tr><td colspan="3">Error: ${err}</td></tr>`;
+                if (invitesBody) invitesBody.innerHTML = `<tr><td colspan="5">Error: ${err}</td></tr>`;
+            }
+        }
+
+        async function sendAdminInvite() {
+            const token = localStorage.getItem('token');
+            const email = (document.getElementById('inviteAdminEmail')?.value || '').trim();
+            const msg = document.getElementById('inviteAdminMsg');
+
+            if (msg) { msg.textContent = ''; msg.classList.remove('active'); }
+
+            if (!email) {
+                if (msg) { msg.textContent = 'Enter an email address.'; msg.classList.add('active'); }
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/invites', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    if (msg) { msg.textContent = data.detail || 'Failed to send invite.'; msg.classList.add('active'); }
+                    return;
+                }
+
+                if (msg) { msg.textContent = 'Invite sent!'; msg.classList.remove('active'); }
+                document.getElementById('inviteAdminEmail').value = '';
+                await loadAdminsAndInvites();
+
+            } catch (err) {
+                if (msg) { msg.textContent = 'Error sending invite.'; msg.classList.add('active'); }
+            }
+        }
+
+        async function resendAdminInvite(inviteId) {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`/api/admin/invites/${inviteId}/resend`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.detail || 'Failed to resend invite.');
+                await loadAdminsAndInvites();
+            } catch (e) {
+                alert('Error resending invite.');
+            }
+        }
+
+        async function revokeAdminInvite(inviteId) {
+            const token = localStorage.getItem('token');
+            if (!confirm('Revoke this invite?')) return;
+            try {
+                const res = await fetch(`/api/admin/invites/${inviteId}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.detail || 'Failed to revoke invite.');
+                await loadAdminsAndInvites();
+            } catch (e) {
+                alert('Error revoking invite.');
+            }
+        }
+</script>
 </body>
 </html>
