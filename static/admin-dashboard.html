@@ -2197,10 +2197,13 @@
             if (!currentEssayId) return;
             
             try {
-                const response = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token, notes })
+                const res = await fetch(`/api/admin/essay/${essayId}/mark-reviewed`, {
+                    method: "POST",
+                    headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ notes }), // ✅ token removed from body
                 });
                 
                 const data = await response.json();
