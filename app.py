@@ -6102,7 +6102,7 @@ async def accept_admin_invite(body: AcceptInviteReq):
             cur.execute("""
               SELECT * FROM admin_invites
               WHERE token_hash=%s
-                AND accepted_at IS NULL
+                AND admin_invites.created_at IS NULL
                 AND revoked_at IS NULL
                 AND expires_at > NOW()
               LIMIT 1
@@ -6111,7 +6111,7 @@ async def accept_admin_invite(body: AcceptInviteReq):
             cur.execute("""
               SELECT * FROM admin_invites
               WHERE token_hash=?
-                AND accepted_at IS NULL
+                AND admin_invites.created_at IS NULL
                 AND revoked_at IS NULL
                 AND expires_at > ?
               LIMIT 1
@@ -6156,9 +6156,9 @@ async def accept_admin_invite(body: AcceptInviteReq):
 
         # mark invite accepted
         if USE_POSTGRES:
-            cur.execute("UPDATE admin_invites SET accepted_at=NOW() WHERE token_hash=%s", (token_hash,))
+            cur.execute("UPDATE admin_invites SET admin_invites.created_at=NOW() WHERE token_hash=%s", (token_hash,))
         else:
-            cur.execute("UPDATE admin_invites SET accepted_at=? WHERE token_hash=?", (datetime.utcnow().isoformat(), token_hash))
+            cur.execute("UPDATE admin_invites SET admin_invites.created_at=? WHERE token_hash=?", (datetime.utcnow().isoformat(), token_hash))
 
         conn.commit()
         return {"success": True}
