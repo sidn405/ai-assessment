@@ -2191,33 +2191,35 @@
         }
 
         async function markEssayReviewed() {
-            const token = localStorage.getItem('token');
-            const notes = document.getElementById('adminNotesInput').value;
-            
-            if (!currentEssayId) return;
-            
-            try {
-                const res = await fetch(`/api/admin/essay/${essayId}/mark-reviewed`, {
-                    method: "POST",
-                    headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({ notes }), // ✅ token removed from body
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Essay marked as reviewed!');
-                    closeEssayModal();
-                    loadEssayAlerts(); // Reload essays
-                }
-            } catch (error) {
-                console.error('Error marking essay reviewed:', error);
-                alert('Failed to mark essay as reviewed');
-            }
+          try {
+              const token = localStorage.getItem("token");
+              const notes = document.getElementById("adminNotes").value || "";
+        
+              if (!currentEssayId) {
+              console.error("No currentEssayId set");
+              return;
+              }
+        
+              const res = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`,
+              },
+              body: JSON.stringify({ notes }),
+              });
+        
+              if (!res.ok) {
+              console.log("mark-reviewed failed:", res.status, await res.text());
+              return;
+              }
+        
+              console.log("✅ Marked reviewed");
+          } catch (e) {
+              console.error("Error marking essay reviewed:", e);
+          }
         }
+
 
         function closeEssayModal() {
             document.getElementById('essayDetailsModal').classList.remove('active');
