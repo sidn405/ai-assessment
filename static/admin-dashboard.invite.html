@@ -1,0 +1,2991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Achieve 365 Reading Rewards</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="description" content="Achieve 365 - Personalized reading assessment and learning platform">
+    <meta name="theme-color" content="#1e3a5f">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/graphics/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/graphics/favicon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/graphics/logo.png">
+    <link rel="shortcut icon" href="/static/graphics/favicon.png">
+    
+    <!-- iOS Web App Capable -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="white-translucent">
+    <meta name="apple-mobile-web-app-title" content="Achieve 365">
+    
+    <!-- Android -->
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <title>Achieve 365 - Admin Dashboard</title>
+    
+    
+    <!-- Custom Styles for this page -->
+    <style>
+        /* Page-specific styles go here */
+    </style>
+</head>
+    <style>
+        :root {
+            --navy-primary: #2A398A;
+            --navy-dark: #191f4e;
+            --navy-light: #4a56af;
+            --gold-accent: #D4AF37;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --medium-gray: #E0E0E0;
+            --text-gray: #333333;
+            --success: #28A745;
+            --danger: #DC3545;
+            --warning: #FFC107;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: var(--light-gray);
+            color: var(--text-gray);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+            color: var(--navy-primary);
+        }
+        
+        /* Dashboard Layout */
+        .dashboard {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* ⭐ FIXED Z-INDEX - Sidebar above content */
+        .sidebar {
+            width: 280px;
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 2rem 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .logo {
+            padding: 0 2rem;
+            margin-bottom: 3rem;
+            font-size: 1.3rem;
+            font-weight: 700;
+            font-family: 'Merriweather', serif;
+        }
+        
+        .admin-badge {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: 0.5rem;
+        }
+        
+        .user-info {
+            padding: 0 2rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 1.5rem;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-menu {
+            list-style: none;
+        }
+        
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: var(--white);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255,255,255,0.1);
+            border-left-color: var(--gold-accent);
+        }
+        
+        .logout-btn {
+            margin: 2rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid var(--white);
+            color: var(--white);
+            border-radius: 4px;
+            cursor: pointer;
+            width: calc(100% - 4rem);
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: var(--white);
+            color: var(--navy-primary);
+        }
+        
+        /* ⭐ FIXED Z-INDEX - Content below sidebar */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 2rem;
+            width: calc(100% - 280px);
+            position: relative;
+            z-index: 1;
+            overflow-x: hidden; /* ADD THIS */
+        }
+
+        .main-content h2 {
+            display: block;
+            width: 100%;
+            clear: both;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--navy-primary) 0%, var(--navy-dark) 100%);
+            color: var(--white);
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            color: var(--white);
+        }
+        
+        .header p {
+            opacity: 0.9;
+        }
+
+        #sessionTrackingSection > h2,
+        #essayAlertsSection > h2,
+        .main-content > div > h2 {
+            margin-left: 0;
+            padding-left: 0;
+            clear: both;
+        }
+        
+        /* ⭐ FIXED Z-INDEX - Cards stay below sidebar */
+        .card {
+            background: var(--white);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: relative;
+            z-index: 10;
+        }
+        
+        .card h2 {
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, var(--navy-light) 0%, var(--navy-primary) 100%);
+            color: var(--white);
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--gold-accent);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .stat-change {
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+        
+        .stat-change.positive {
+            color: var(--success);
+        }
+        
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: var(--light-gray);
+        }
+        
+        th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--navy-primary);
+            border-bottom: 2px solid var(--medium-gray);
+        }
+        
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--medium-gray);
+        }
+        
+        tbody tr:hover {
+            background: var(--light-gray);
+        }
+        
+        .badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .hidden { display: none; }
+        
+        /* Action Buttons */
+        .btn {
+            padding: 0.5rem 1.2rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .btn-primary:hover {
+            background: var(--navy-dark);
+        }
+        
+        .btn-small {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+        
+        /* Charts placeholder */
+        .chart-container {
+            background: var(--light-gray);
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .chart-placeholder {
+            color: var(--text-gray);
+            opacity: 0.6;
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+        
+        .spinner {
+            border: 4px solid var(--light-gray);
+            border-top: 4px solid var(--navy-primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close-modal {
+            float: right;
+            font-size: 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ============================================================
+        RESPONSIVE DESIGN - MOBILE & TABLET SUPPORT
+        Add this CSS file to all pages: dashboard, admin-dashboard, login
+        ============================================================ */
+
+        /* ========== LOGO & HEADER ========== */
+        .logo-container {
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 2px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            justify-content: flex-start;
+        }
+
+        .logo-container img {
+            max-height: 60px;
+            width: auto;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1e3a5f;
+        }
+
+        .admin-badge {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: auto; /* ADD THIS - pushes badge to right */
+            flex-shrink: 0; /* ADD THIS - prevents stretching */
+        }
+
+        /* ========== MOBILE MENU TOGGLE ========== */
+        .mobile-menu-toggle {
+            display: none;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+         /* ========== MOBILE MENU TOGGLE ========== */
+        .mobile-menu-btn {
+            display: none; /* Hidden on desktop */
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8f 100%);
+            border: none;
+            color: white;
+            font-size: 1rem;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-weight: bold;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mobile-menu-btn:active {
+            transform: scale(0.95);
+        }
+
+        
+
+        /* ========== RESPONSIVE BREAKPOINTS ========== */
+
+        /* Tablets (768px and below) */
+        @media (max-width: 768px) {
+            /* Show mobile menu toggle */
+            .mobile-menu-btn {
+                display: flex !important;
+            }
+            
+            /* Show mobile menu toggle */
+            .mobile-menu-toggle {
+                display: block;
+            }
+            
+            /* Sidebar adjustments */
+            .sidebar {
+                position: fixed !important;
+                left: -100% !important;
+                top: 0 !important;
+                height: 100vh !important;
+                width: 280px !important;
+                z-index: 1000 !important;
+                transition: left 0.3s ease !important;
+                overflow-y: auto !important;
+            }
+            
+            .sidebar.active {
+                left: 0 !important;
+            }
+            
+            /* Main content full width on mobile */
+            .main-content {
+                margin-left: 0 !important;
+                padding: 1rem !important;
+                width: 100% !important;
+            }
+            
+            /* Cards stack vertically */
+            .stats-grid,
+            .card-grid {
+                grid-template-columns: 1fr !important;
+                gap: 1rem !important;
+            }
+            
+            /* Reduce padding on cards */
+            .card {
+                padding: 1rem !important;
+            }
+            
+            /* Logo smaller on mobile */
+            .logo-container {
+                padding: 0.75rem 1rem;
+                margin-bottom: 1rem;
+            }
+            
+            .logo-container img {
+                max-height: 40px;
+            }
+            
+            .logo-text {
+                font-size: 1.2rem;
+            }
+            
+            /* Tables scroll horizontally */
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            
+            /* Buttons stack */
+            .button-group {
+                flex-direction: column !important;
+                gap: 0.5rem !important;
+            }
+            
+            .button-group button,
+            .button-group .btn {
+                width: 100% !important;
+            }
+            
+            /* Modals take full screen on mobile */
+            .modal-content,
+            div[id$='-modal'] > div {
+                width: 95% !important;
+                max-width: 95% !important;
+                margin: 1rem auto !important;
+            }
+            
+            /* Font size adjustments */
+            h1 {
+                font-size: 1.5rem !important;
+            }
+            
+            h2 {
+                font-size: 1.3rem !important;
+            }
+            
+            h3 {
+                font-size: 1.1rem !important;
+            }
+            
+            /* Navigation items */
+            .nav-item {
+                font-size: 1rem;
+                padding: 0.75rem 1rem;
+            }
+        }
+
+        /* Mobile phones (480px and below) */
+        @media (max-width: 480px) {
+            /* Even smaller logo */
+            .logo-container {
+                padding: 0.5rem 0.75rem;
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .logo-container img {
+                max-height: 35px;
+            }
+            
+            .logo-text {
+                font-size: 1rem;
+            }
+            
+            /* Smaller fonts */
+            body {
+                font-size: 14px;
+            }
+            
+            h1 {
+                font-size: 1.3rem !important;
+            }
+            
+            h2 {
+                font-size: 1.1rem !important;
+            }
+            
+            /* Tighter spacing */
+            .card {
+                padding: 0.75rem !important;
+                margin-bottom: 0.75rem !important;
+            }
+            
+            /* Stats cards */
+            .stat-card {
+                padding: 0.75rem !important;
+            }
+            
+            .stat-card h3 {
+                font-size: 1.5rem !important;
+            }
+            
+            /* Buttons */
+            .btn {
+                padding: 0.6rem 1rem !important;
+                font-size: 0.9rem !important;
+            }
+        }
+
+        /* Landscape mobile (small height) */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .sidebar {
+                padding: 0.5rem;
+            }
+            
+            .nav-item {
+                padding: 0.5rem;
+                font-size: 0.9rem;
+            }
+            
+            .logo-container {
+                padding: 0.5rem;
+                margin-bottom: 0.5rem;
+            }
+        }
+
+        /* ========== OVERLAY FOR MOBILE MENU ========== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* ========== TOUCH-FRIENDLY IMPROVEMENTS ========== */
+        @media (hover: none) and (pointer: coarse) {
+            /* Larger tap targets for touch devices */
+            button,
+            .btn,
+            .nav-item,
+            a {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            /* Remove hover effects on touch devices */
+            *:hover {
+                transform: none !important;
+            }
+        }
+
+        /* ========== PRINT STYLES ========== */
+        @media print {
+            .sidebar,
+            .mobile-menu-toggle,
+            .sidebar-overlay {
+                display: none !important;
+            }
+            
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+        }
+
+        /* ========== ACCESSIBILITY ========== */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* ========== HIGH CONTRAST MODE ========== */
+        @media (prefers-contrast: high) {
+            .card,
+            .nav-item,
+            .btn {
+                border: 2px solid currentColor;
+            }
+        }
+
+        .activity-list { display: flex; flex-direction: column; gap: 10px; }
+        .activity-item { padding: 10px 12px; border: 1px solid rgba(0,0,0,0.06); border-radius: 10px; background: #fff; }
+        .activity-title { font-size: 14px; }
+        .activity-meta { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+        .activity-details { font-size: 13px; margin-top: 6px; opacity: 0.9; }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+
+        <!-- Mobile Menu Overlay -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
+        
+         <!-- ADD THIS NEW FLOATING BUTTON -->
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">
+            <span id="menuIconMain">☰</span> Menu
+        </button>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
+                <div class="logo-text"></div>
+                <span class="admin-badge">ADMIN</span>
+            </div>
+
+            <!-- Mobile Menu Toggle (Hidden on desktop) -->
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" style="display: none;">
+                <span id="menuIcon">☰</span> Menu
+            </button>
+
+            <div class="user-info">
+                <div class="user-name" id="adminName">Administrator</div>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" onclick="showSection('overview')">
+                        <span>📊</span> Overview
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('students')">
+                        <span>👥</span> Students
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('analytics')">
+                        <span>📈</span> Analytics
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('session tracking')">
+                        <span>⏱️</span> Session Tracking
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('essay alerts', event); return false;">
+                        <span>📝</span> Essay Alerts
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('invite admin', event); return false;">
+                        <span>✉️</span> Invite Admin
+                    </a>
+                </li>
+            </ul>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Section -->
+            <div id="overviewSection">
+                <div class="header">
+                    <h1>Welcome, Administrator</h1>
+                    <p>Monitor student progress and platform performance</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value" id="totalStudents">0</span>
+                        <span class="stat-label">Total Students</span>
+                        <div class="stat-change positive" id="studentChange"></div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="activeStudents">0</span>
+                        <span class="stat-label">Active This Week</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="totalLessons">0</span>
+                        <span class="stat-label">Lessons Completed</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="avgScore">0%</span>
+                        <span class="stat-label">Average Score</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Platform Activity</h2>
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="platformActivityChart" aria-label="Student engagement and completion rate visualization" role="img"></canvas>
+                        <div id="platformActivityFallback" class="chart-placeholder" style="display:none;">
+                            📊 Student engagement and completion rate visualization<br>
+                            <small>Chart visualization would go here</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Recent Student Activity</h2>
+                    <div id="recentActivity">
+                        <p>Loading recent activity...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Students Section -->
+            <div id="studentsSection" class="hidden">
+                <div class="header">
+                    <h1>Student Management</h1>
+                    <p>View and manage all enrolled students</p>
+                </div>
+
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2 style="margin: 0;">All Students</h2>
+                        <input type="text" id="searchStudents" placeholder="Search students..." 
+                            style="padding: 0.5rem 1rem; border: 2px solid var(--medium-gray); border-radius: 4px; width: 300px;">
+                    </div>
+                    
+                    <div id="studentsLoading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading students...</p>
+                    </div>
+                    
+                    <div id="studentsTable" class="hidden">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Reading Level</th>
+                                    <th>Joined</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Essay Alerts Section -->
+            <div id="essayAlertsSection" class="hidden">
+                <div class="header">
+                    <h1>📝 Essay Reviews & Student Alerts</h1>
+                    <p>Monitor student comprehension and provide assistance when needed</p>
+                </div>
+                
+                <!-- Stats Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <div style="
+                        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+                        color: white;
+                        padding: 2rem;
+                        border-radius: 16px;
+                        box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+                        text-align: center;
+                    ">
+                        <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="unreadAlertsCount">0</div>
+                        <div style="font-size: 1.1rem; opacity: 0.95;">🚨 Unread Alerts</div>
+                    </div>
+                    
+                    <div style="
+                        background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+                        color: white;
+                        padding: 2rem;
+                        border-radius: 16px;
+                        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                        text-align: center;
+                    ">
+                        <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="essaysNeedingReviewCount">0</div>
+                        <div style="font-size: 1.1rem; opacity: 0.95;">📝 Essays to Review</div>
+                    </div>
+                    
+                    <div style="
+                        background: linear-gradient(135deg, #11998E 0%, #38EF7D 100%);
+                        color: white;
+                        padding: 2rem;
+                        border-radius: 16px;
+                        box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+                        text-align: center;
+                    ">
+                        <div style="font-size: 3.5rem; font-weight: bold; margin-bottom: 0.5rem;" id="totalEssaysToday">0</div>
+                        <div style="font-size: 1.1rem; opacity: 0.95;">✅ Essays Today</div>
+                    </div>
+                </div>
+                
+                <!-- Student Alerts -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2 style="margin: 0;">🚨 Student Alerts - Need Help</h2>
+                        <button onclick="loadEssayAlerts()" class="btn btn-primary">🔄 Refresh</button>
+                    </div>
+                    <div id="studentAlertsTable">
+                        <p style="text-align: center; padding: 2rem; color: #666;">Loading alerts...</p>
+                    </div>
+                </div>
+                
+                <!-- Essays Needing Review -->
+                <div class="card">
+                    <h2 style="margin-bottom: 1.5rem;">📝 Essays Needing Review</h2>
+                    <div id="essaysReviewTable">
+                        <p style="text-align: center; padding: 2rem; color: #666;">Loading essays...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Section -->
+            <div id="analyticsSection" class="hidden">
+                <div class="header">
+                    <h1>Platform Analytics</h1>
+                    <p>Detailed insights into program effectiveness</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value">87%</span>
+                        <span class="stat-label">Completion Rate</span>
+                        <div class="stat-change positive">↑ 5% from last month</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">4.2</span>
+                        <span class="stat-label">Avg Lessons/Student</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">23min</span>
+                        <span class="stat-label">Avg Session Time</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">92%</span>
+                        <span class="stat-label">Satisfaction Score</span>
+                    </div>
+                </div>
+
+                <!-- Reading Level Distribution -->
+                <div class="card">
+                    <h2>Reading Level Distribution</h2>
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="readingLevelChart" aria-label="Reading level distribution visualization" role="img"></canvas>
+                        <div id="readingLevelFallback" class="chart-placeholder" style="display:none;">
+                            📊 Distribution of students across reading levels<br>
+                            <small>Chart data unavailable</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interest Topics Breakdown -->
+                <div class="card">
+                    <h2>Interest Topics Breakdown</h2>
+                    <div class="chart-container" style="min-height: 320px;">
+                        <canvas id="interestTopicsChart" aria-label="Interest topics visualization" role="img"></canvas>
+                        <div id="interestTopicsFallback" class="chart-placeholder" style="display:none;">
+                            📊 Most popular interest areas among students<br>
+                            <small>Chart data unavailable</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+          
+
+            <!-- Invite Admin Section -->
+            <div id="inviteAdminSection" class="hidden">
+                <div class="header">
+                    <h1>✉️ Invite Administrators</h1>
+                    <p>Send an email invite to grant admin access. Invites expire after 24 hours.</p>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">Send Invite</h3>
+                    <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                        <input id="inviteAdminEmail" type="email" placeholder="admin@example.com"
+                               style="flex:1; min-width: 260px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
+                        <button class="btn btn-primary" type="button" onclick="sendAdminInvite()">Send Invite</button>
+                    </div>
+                    <div id="inviteAdminMsg" class="form-error" style="margin-top: 0.75rem;"></div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">Current Admins</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="students-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminsTableBody">
+                                <tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-top: 0;">Pending Invites</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="students-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Invited</th>
+                                    <th>Expires</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminInvitesTableBody">
+                                <tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Add this as a new section in your admin dashboard -->
+
+        <div id="sessionTrackingSection" class="section hidden">
+            <div class="header">
+                <h1>Session Tracking &amp; Activity</h1>
+                <p>Monitor live sessions, breaks, timeouts, and activity logs</p>
+            </div>
+            
+            <!-- Real-time Stats -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="activeUsersCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Active Users</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="usersOnBreakCount">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">On Break</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="timeoutsToday">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Timeouts Today</div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, #3F4D95 0%, #31418f 100%); color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="font-size: 3rem; font-weight: bold;" id="totalSessions">0</div>
+                    <div style="font-size: 1.1rem; opacity: 0.9;">Total Sessions Today</div>
+                </div>
+            </div>
+            
+            <!-- Active Sessions Table -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Active Sessions</h2>
+                    <button onclick="loadActiveSessions()" class="btn btn-primary">🔄 Refresh</button>
+                </div>
+                <div id="activeSessionsTable"></div>
+            </div>
+            
+            <!-- Recent Activity Log -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Recent Activity</h2>
+                    <select id="activityTimeFilter" onchange="loadRecentActivity()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
+                        <option value="1">Last 1 Hour</option>
+                        <option value="6">Last 6 Hours</option>
+                        <option value="24" selected>Last 24 Hours</option>
+                        <option value="168">Last 7 Days</option>
+                    </select>
+                </div>
+                <div id="recentActivityTable"></div>
+            </div>
+        </div>
+            
+        <!-- Essay Details Modal -->
+        <div id="essayDetailsModal" class="modal">
+            <div class="modal-content" style="max-width: 900px;">
+                <button class="close-modal" onclick="closeEssayModal()">&times;</button>
+                <h2 id="essayModalTitle"></h2>
+                
+                <div id="essayDetailsContent"></div>
+                
+                <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid #dee2e6;">
+                    <h3>Admin Actions</h3>
+                    <textarea 
+                        id="adminNotesInput" 
+                        placeholder="Add your notes for this student..."
+                        style="width: 100%; padding: 1rem; border: 2px solid #dee2e6; border-radius: 8px; min-height: 100px; font-family: inherit; margin: 1rem 0;"
+                    ></textarea>
+                    <div style="display: flex; gap: 1rem;">
+                        <button onclick="markEssayReviewed()" class="btn btn-primary">
+                            ✅ Mark as Reviewed
+                        </button>
+                        <button onclick="closeEssayModal()" style="
+                            padding: 0.75rem 1.5rem;
+                            background: #6c757d;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                        ">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </main>
+            </div>
+
+    <!-- Student Detail Modal -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeStudentModal()">&times;</button>
+            <h2 id="studentModalName" style="margin-bottom: 2rem;"></h2>
+            
+            <div id="studentProgressLoading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading student progress...</p>
+            </div>
+            
+            <div id="studentProgressContent" class="hidden">
+                <h3>Progress Overview</h3>
+                <div id="studentProgressData"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+    ===============================================================================
+    COPY EVERYTHING BELOW AND PASTE AFTER LINE 2462 (after </div>, before <script>)
+    ===============================================================================
+    -->
+
+    <!-- Footer with Inline CSS -->
+    <style>
+    /* Footer Styles */
+    .dashboard-footer {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        margin-left: 280px;
+        padding: 3rem 2rem 1.5rem;
+        margin-top: 4rem;
+        border-top: 3px solid #8b5cf6;
+    }
+
+    .footer-content {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 2rem;
+        max-width: 1400px;
+        margin: 0 auto 2rem;
+    }
+
+    .footer-section h3 {
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+        color: white;
+    }
+
+    .footer-section h4 {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        color: white;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .footer-section p {
+        font-size: 0.9rem;
+        opacity: 0.8;
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    .footer-links {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .footer-links li {
+        margin-bottom: 0.75rem;
+    }
+
+    .footer-links a {
+        color: rgba(255, 255, 255, 0.8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: all 0.3s;
+        display: inline-block;
+    }
+
+    .footer-links a:hover {
+        color: #c084fc;
+        transform: translateX(5px);
+    }
+
+    .footer-bottom {
+        text-align: center;
+        padding-top: 2rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .footer-bottom p {
+        margin: 0.5rem 0;
+        font-size: 0.85rem;
+        opacity: 0.7;
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+        .dashboard-footer {
+            margin-left: 220px;
+        }
+        .footer-content {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .dashboard-footer {
+            margin-left: 0;
+            padding: 2rem 1.5rem 1rem;
+        }
+        .footer-content {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+
+    <footer class="dashboard-footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>ACHIEVE 365</h3>
+                <p style="font-size: 0.85rem;">Standing for a Better Future</p>
+                <p style="margin-top: 0.5rem; font-style: italic;">Empowering literacy through personalized learning</p>
+            </div>
+            
+        </div>
+        
+        <div class="footer-bottom">
+            <p>&copy; 2025 Achieve 365. Admin-dashboard All rights reserved.</p>
+            <p>Made with ❤️ for learners everywhere</p>
+        </div>
+    </footer>
+
+    <!-- 
+    ===============================================================================
+    END OF FOOTER CODE - Paste this entire block after line 2462
+    ===============================================================================
+    -->
+
+     <div id="deleteStudentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2>⚠️ Delete Student</h2>
+            <p id="deleteStudentMessage" style="margin: 1.5rem 0; font-size: 1.1rem;"></p>
+            <p style="color: var(--danger); margin-bottom: 1.5rem;">
+                <strong>Warning:</strong> This cannot be undone.
+            </p>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteStudent()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let allStudents = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            if (!token || !user.id) {
+                window.location.href = '/';
+                return;
+            }
+            
+            if (user.role !== 'admin') {
+                window.location.href = '/dashboard';
+                return;
+            }
+            
+            currentUser = user;
+            document.getElementById('adminName').textContent = user.full_name;
+            
+            loadAnalytics();
+            loadPlatformActivityChart();
+            loadOverviewRecentActivity(168); // last 7 days
+        });
+
+        async function guardAdminPage() {
+          const token = localStorage.getItem("token");
+          if (!token) {
+              window.location.href = "/";
+              return;
+          }
+        
+          // if you have a /api/me endpoint, use it; otherwise decode role from token on backend
+          const res = await fetch("/api/me", {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+        
+          if (!res.ok) {
+              window.location.href = "/";
+              return;
+          }
+        
+          const me = await res.json();
+          if (me.role !== "admin") {
+              window.location.href = "/dashboard";
+          }
+        }
+
+        guardAdminPage();
+
+
+        async function loadAnalytics() {
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/admin/analytics`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                document.getElementById('totalStudents').textContent = data.total_students;
+                document.getElementById('activeStudents').textContent = data.active_students;
+                document.getElementById('totalLessons').textContent = data.total_lessons_completed;
+                document.getElementById('avgScore').textContent = data.average_score + '%';
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        let platformActivityChart = null;
+
+        async function loadPlatformActivityChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('platformActivityChart');
+            const fallback = document.getElementById('platformActivityFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                
+                const resp = await fetch(`/api/admin/platform-activity`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+
+                    const labels = data.labels || data.days || [];
+                    const engagement = data.engagement || data.active_users || [];
+                    const completion = data.completion_rate || data.completion || [];
+
+                    if (Array.isArray(labels) && labels.length && Array.isArray(engagement) && Array.isArray(completion)) {
+                        renderPlatformActivityChart(labels, engagement, completion);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Platform activity chart: endpoint unavailable or failed.', e);
+            }
+
+            // Fallback: render a 7-day empty chart (so the UI is no longer a placeholder)
+            const labels = Array.from({ length: 7 }).map((_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - (6 - i));
+                return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            });
+
+            renderPlatformActivityChart(labels, new Array(7).fill(0), new Array(7).fill(0), { noData: true });
+        }
+
+        function renderPlatformActivityChart(labels, engagementCounts, completionRates, opts = {}) {
+            const canvas = document.getElementById('platformActivityChart');
+            if (!canvas) return;
+
+            if (platformActivityChart) {
+                platformActivityChart.destroy();
+                platformActivityChart = null;
+            }
+
+            // Small helper label when no real data exists yet
+            const subtitleElId = 'platformActivityNoDataNote';
+            let note = document.getElementById(subtitleElId);
+            if (!note) {
+                note = document.createElement('div');
+                note.id = subtitleElId;
+                note.style.marginTop = '0.75rem';
+                note.style.fontSize = '0.85rem';
+                note.style.opacity = '0.7';
+                canvas.parentElement.appendChild(note);
+            }
+            note.textContent = opts.noData
+                ? 'No activity series found yet. Add /api/admin/platform-activity to populate this chart.'
+                : '';
+
+            platformActivityChart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Engagement (active students)',
+                            data: engagementCounts,
+                            tension: 0.35,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Completion rate (%)',
+                            data: completionRates,
+                            tension: 0.35,
+                            yAxisID: 'y1',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const label = ctx.dataset.label || '';
+                                    const value = ctx.parsed.y;
+                                    if (ctx.dataset.yAxisID === 'y1') return `${label}: ${value}%`;
+                                    return `${label}: ${value}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Students' }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            suggestedMax: 100,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Completion %' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Overview: Recent Student Activity (uses the same activity_log feed)
+        async function loadOverviewRecentActivity(hours = 168) {
+            const token = localStorage.getItem('token');
+            const container = document.getElementById('recentActivity');
+            if (!token || !container) return;
+
+            container.innerHTML = '<p style="color:#666;">Loading recent activity.</p>';
+
+            try {
+                const response = await fetch(`/api/admin/activity/recent?hours=${hours}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (!data.success || !Array.isArray(data.activities)) {
+                container.innerHTML = '<p style="color:#666;">No recent activity</p>';
+                return;
+                }
+
+                // Prefer lesson events, but FALL BACK to any activity if none exist
+                const lessonItems = data.activities.filter(a => (a.activity_type || '').startsWith('lesson')).slice(0, 8);
+                const items = lessonItems.length ? lessonItems : data.activities.slice(0, 8);
+
+                if (!items.length) {
+                container.innerHTML = '<p style="color:#666;">No recent activity</p>';
+                return;
+                }
+
+                container.innerHTML = items.map(a => `
+                <div style="display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid #eee;">
+                    <div>
+                    <div style="font-weight:600;">${a.user_name || 'Student'}</div>
+                    <div style="font-size:0.9rem; color:#666;">
+                        ${(a.activity_type || '').replaceAll('_',' ')}${a.activity_details ? ' • ' + a.activity_details : ''}
+                    </div>
+                    </div>
+                    <div style="font-size:0.85rem; color:#666; white-space:nowrap;">
+                    ${formatDateTime(a.timestamp)}
+                    </div>
+                </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading overview recent activity:', error);
+                container.innerHTML = '<p style="color:#666;">Unable to load activity</p>';
+            }
+        }
+
+            // tiny helper to avoid HTML injection
+            function escapeHtml(str) {
+            return String(str)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+            }
+
+
+        function showSection(section, event) {
+            event = event || window.event || null;
+
+            const sectionMap = {
+                'overview': 'overviewSection',
+                'students': 'studentsSection',
+                'analytics': 'analyticsSection',
+                'session tracking': 'sessionTrackingSection',
+                'sessionTracking': 'sessionTrackingSection',
+                'essay alerts': 'essayAlertsSection',
+                'essayAlerts': 'essayAlertsSection',
+                'invite admin': 'inviteAdminSection',
+                'inviteAdmin': 'inviteAdminSection'
+            };
+
+            document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+
+            const sectionName = sectionMap[section] || (section + 'Section');
+            const sectionEl = document.getElementById(sectionName);
+
+            if (sectionEl) {
+                sectionEl.classList.remove('hidden');
+            }
+
+            if (section === 'students') {
+                loadStudents();
+            }
+
+            // ✅ ADD THIS - Load charts when Analytics section is shown
+            if (section === 'analytics') {
+                loadReadingLevelChart();
+                loadInterestTopicsChart();
+            }
+
+            if (section === 'essay alerts' || section === 'essayAlerts') {
+                loadEssayAlerts();
+            }
+
+            if (section === 'invite admin' || section === 'inviteAdmin') {
+                loadAdminsAndInvites();
+            }
+
+            if (section === 'session tracking' || section === 'sessionTracking') {
+                loadActiveSessions();
+                loadRecentActivity();
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+
+            // Update active nav link
+            if (event && event.target) {
+                const navLink = event.target.closest('.nav-link');
+                if (navLink) {
+                    navLink.classList.add('active');
+                }
+            }
+
+        }
+
+        // ========== READING LEVEL DISTRIBUTION CHART ==========
+
+        let readingLevelChart = null;
+
+        async function loadReadingLevelChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('readingLevelChart');
+            const fallback = document.getElementById('readingLevelFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/reading-level-distribution?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (data.success && data.distribution && data.distribution.length > 0) {
+                    renderReadingLevelChart(data.distribution);
+                } else {
+                    // Show fallback if no data
+                    canvas.style.display = 'none';
+                    if (fallback) fallback.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading reading level chart:', error);
+                canvas.style.display = 'none';
+                if (fallback) fallback.style.display = 'block';
+            }
+        }
+
+        function renderReadingLevelChart(distribution) {
+            const canvas = document.getElementById('readingLevelChart');
+            if (!canvas) return;
+
+            if (readingLevelChart) {
+                readingLevelChart.destroy();
+                readingLevelChart = null;
+            }
+
+            const labels = distribution.map(d => d.level);
+            const counts = distribution.map(d => d.count);
+
+            // Color scheme matching your UI
+            const colors = [
+                '#2A398A',  // Navy primary (Beginner)
+                '#4a56af',  // Navy light (Intermediate)
+                '#D4AF37',  // Gold accent (Advanced)
+                '#6c757d'   // Gray (Not Assessed)
+            ];
+
+            readingLevelChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: colors,
+                        borderColor: '#ffffff',
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: {
+                                    size: 14,
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} students (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ========== INTEREST TOPICS CHART ==========
+
+        let interestTopicsChart = null;
+
+        async function loadInterestTopicsChart() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const canvas = document.getElementById('interestTopicsChart');
+            const fallback = document.getElementById('interestTopicsFallback');
+
+            if (!canvas || typeof Chart === 'undefined') {
+                if (fallback) fallback.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/interest-topics?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (data.success && data.topics && data.topics.length > 0) {
+                    renderInterestTopicsChart(data.topics);
+                } else {
+                    canvas.style.display = 'none';
+                    if (fallback) fallback.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading interest topics chart:', error);
+                canvas.style.display = 'none';
+                if (fallback) fallback.style.display = 'block';
+            }
+        }
+
+        function renderInterestTopicsChart(topics) {
+            const canvas = document.getElementById('interestTopicsChart');
+            if (!canvas) return;
+
+            if (interestTopicsChart) {
+                interestTopicsChart.destroy();
+                interestTopicsChart = null;
+            }
+
+            const labels = topics.map(t => t.topic);
+            const counts = topics.map(t => t.count);
+
+            interestTopicsChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Number of Students',
+                        data: counts,
+                        backgroundColor: '#4a56af',
+                        borderColor: '#2A398A',
+                        borderWidth: 2,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',  // Horizontal bars
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.x} students interested`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                font: {
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            },
+                            grid: {
+                                color: '#E0E0E0'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                font: {
+                                    size: 13,
+                                    family: "'Open Sans', sans-serif"
+                                }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ========== ESSAY ALERTS & REVIEWS - COMPLETE ==========
+
+        let currentEssayId = null;
+        let currentAlertId = null;
+
+        async function loadEssayAlerts() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                console.log('Loading essay alerts...');
+                
+                // Get unread alerts
+                const alertsResp = await fetch(`/api/admin/alerts/unread?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const alertsData = await alertsResp.json();
+                
+                // Get essays needing review
+                const essaysResp = await fetch(`/api/admin/essays/needs-review?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const essaysData = await essaysResp.json();
+                
+                console.log('Alerts:', alertsData);
+                console.log('Essays:', essaysData);
+                
+                // Update counts
+                document.getElementById('unreadAlertsCount').textContent = alertsData.count || 0;
+                document.getElementById('essaysNeedingReviewCount').textContent = essaysData.count || 0;
+                
+                // Get today's essay count
+                const todayEssays = essaysData.essays ? essaysData.essays.filter(e => {
+                    const created = new Date(e.created_at);
+                    const today = new Date();
+                    return created.toDateString() === today.toDateString();
+                }).length : 0;
+                document.getElementById('totalEssaysToday').textContent = todayEssays;
+                
+                // Display alerts
+                displayStudentAlerts(alertsData.alerts || []);
+                
+                // Display essays
+                displayEssaysForReview(essaysData.essays || []);
+                
+            } catch (error) {
+                console.error('Error loading essay alerts:', error);
+                alert('Failed to load essay data. Check console for details.');
+            }
+        }
+
+        function displayStudentAlerts(alerts) {
+            const container = document.getElementById('studentAlertsTable');
+            
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div style="
+                        text-align: center;
+                        padding: 3rem;
+                        color: #28A745;
+                    ">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                        <div style="font-size: 1.2rem; font-weight: bold;">All Clear!</div>
+                        <div style="color: #666; margin-top: 0.5rem;">No students currently need assistance</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const priorityColors = {
+                urgent: { bg: '#dc3545', icon: '🚨' },
+                high: { bg: '#ff6b6b', icon: '⚠️' },
+                normal: { bg: '#ffc107', icon: '📌' }
+            };
+            
+            container.innerHTML = `
+                <div style="overflow-x: auto;">
+                    ${alerts.map(alert => {
+                        const priority = priorityColors[alert.priority] || priorityColors.normal;
+                        
+                        return `
+                            <div style="
+                                padding: 1.5rem;
+                                border-left: 5px solid ${priority.bg};
+                                background: #f8f9fa;
+                                margin-bottom: 1rem;
+                                border-radius: 4px;
+                                transition: transform 0.2s;
+                            " onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='translateX(0)'">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: bold; font-size: 1.1rem; color: #1e3a5f; margin-bottom: 0.5rem;">
+                                            ${priority.icon} ${escapeHtml(alert.message)}
+                                        </div>
+                                        <div style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                                            <strong>Student:</strong> ${escapeHtml(alert.user_name)} (${escapeHtml(alert.user_email)})
+                                        </div>
+                                        <div style="color: #666; font-size: 0.85rem;">
+                                            <strong>Time:</strong> ${formatDateTime(alert.created_at)}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style="
+                                            background: ${priority.bg};
+                                            color: white;
+                                            padding: 0.5rem 1rem;
+                                            border-radius: 20px;
+                                            font-size: 0.85rem;
+                                            font-weight: bold;
+                                            text-transform: uppercase;
+                                        ">
+                                            ${alert.priority}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                ${alert.details ? `
+                                    <details style="margin-top: 1rem; cursor: pointer;">
+                                        <summary style="font-weight: bold; color: #667eea;">View Details</summary>
+                                        <div style="
+                                            margin-top: 0.75rem;
+                                            padding: 1rem;
+                                            background: white;
+                                            border-radius: 8px;
+                                            font-size: 0.9rem;
+                                        ">
+                                            <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">${escapeHtml(JSON.stringify(JSON.parse(alert.details), null, 2))}</pre>
+                                        </div>
+                                    </details>
+                                ` : ''}
+                                
+                                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                    ${alert.essay_id ? `
+                                        <button 
+                                            onclick="viewEssayDetails(${alert.essay_id})"
+                                            style="
+                                                padding: 0.5rem 1rem;
+                                                background: #667eea;
+                                                color: white;
+                                                border: none;
+                                                border-radius: 6px;
+                                                cursor: pointer;
+                                                font-size: 0.9rem;
+                                            ">
+                                            View Essay
+                                        </button>
+                                    ` : ''}
+                                    <button 
+                                        onclick="markAlertResolved(${alert.alert_id})"
+                                        style="
+                                            padding: 0.5rem 1rem;
+                                            background: #28A745;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 6px;
+                                            cursor: pointer;
+                                            font-size: 0.9rem;
+                                        ">
+                                        Mark Resolved ✓
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function displayEssaysForReview(essays) {
+            const container = document.getElementById('essaysReviewTable');
+            
+            if (essays.length === 0) {
+                container.innerHTML = `
+                    <div style="
+                        text-align: center;
+                        padding: 3rem;
+                        color: #666;
+                    ">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+                        <div style="font-size: 1.2rem; font-weight: bold;">No essays to review</div>
+                        <div style="margin-top: 0.5rem;">All essays have been reviewed!</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                            <th style="padding: 1rem; text-align: left;">Student</th>
+                            <th style="padding: 1rem; text-align: left;">Essay #</th>
+                            <th style="padding: 1rem; text-align: left;">Score</th>
+                            <th style="padding: 1rem; text-align: left;">Level</th>
+                            <th style="padding: 1rem; text-align: left;">Date</th>
+                            <th style="padding: 1rem; text-align: left;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${essays.map(essay => {
+                            const scoreColor = essay.comprehension_score >= 75 ? '#28A745' : 
+                                            essay.comprehension_score >= 60 ? '#ffc107' : '#dc3545';
+                            
+                            return `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 1rem;">
+                                        <div style="font-weight: bold;">${escapeHtml(essay.user_name)}</div>
+                                        <div style="font-size: 0.85rem; color: #666;">${escapeHtml(essay.user_email)}</div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <strong>#${essay.essay_number}</strong>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            background: ${scoreColor};
+                                            color: white;
+                                            padding: 0.25rem 0.75rem;
+                                            border-radius: 12px;
+                                            font-weight: bold;
+                                        ">
+                                            ${essay.comprehension_score}/100
+                                        </span>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="text-transform: capitalize;">${essay.comprehension_level}</span>
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.9rem;">
+                                        ${formatDateTime(essay.created_at)}
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <button 
+                                            onclick="viewEssayDetails(${essay.essay_id})"
+                                            style="
+                                                padding: 0.5rem 1rem;
+                                                background: #667eea;
+                                                color: white;
+                                                border: none;
+                                                border-radius: 6px;
+                                                cursor: pointer;
+                                                font-size: 0.9rem;
+                                            ">
+                                            View Essay
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function viewEssayDetails(essayId) {
+            const token = localStorage.getItem('token');
+            currentEssayId = essayId;
+            
+            document.getElementById('essayDetailsModal').classList.add('active');
+            document.getElementById('essayModalTitle').textContent = 'Loading essay...';
+            document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/admin/essay/${essayId}/details?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayEssayDetails(data.essay);
+                }
+            } catch (error) {
+                console.error('Error loading essay:', error);
+                document.getElementById('essayDetailsContent').innerHTML = '<p style="color: #dc3545;">Failed to load essay details.</p>';
+            }
+        }
+
+        function displayEssayDetails(essay) {
+            document.getElementById('essayModalTitle').textContent = `Essay #${essay.essay_number} - ${essay.user_name}`;
+            
+            const aiFeedbackParsed = safeJsonParse(essay.ai_feedback, null);
+
+            // Always give the UI an object to work with:
+            const aiFeedback =
+            (aiFeedbackParsed && typeof aiFeedbackParsed === 'object')
+                ? aiFeedbackParsed
+                : { raw: (typeof essay.ai_feedback === 'string' ? essay.ai_feedback : '') };
+
+            // Always give the UI an array:
+            const lessonTopics = normalizeStringArray(essay.lesson_topics);
+
+            
+            document.getElementById('essayDetailsContent').innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Student</div>
+                        <div style="font-weight: bold;">${escapeHtml(essay.user_name)}</div>
+                        <div style="font-size: 0.85rem; color: #666;">${escapeHtml(essay.user_email)}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Score</div>
+                        <div style="font-size: 2rem; font-weight: bold; color: ${essay.comprehension_score >= 75 ? '#28A745' : essay.comprehension_score >= 60 ? '#ffc107' : '#dc3545'};">
+                            ${essay.comprehension_score}/100
+                        </div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Level</div>
+                        <div style="font-weight: bold;">${essay.word_count} words</div>
+                    </div>
+                </div>
+                
+                ${lessonTopics.length > 0 ? `
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;">Recent Lessons Covered</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${lessonTopics.map(topic => `
+                                <span style="
+                                    background: #667eea;
+                                    color: white;
+                                    padding: 0.5rem 1rem;
+                                    border-radius: 20px;
+                                    font-size: 0.9rem;
+                                ">
+                                    ${escapeHtml(topic)}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">Essay Text</h3>
+                    <div style="
+                        background: #f8f9fa;
+                        padding: 1.5rem;
+                        border-radius: 8px;
+                        border-left: 4px solid #2A398A;
+                        line-height: 1.8;
+                        max-height: 400px;
+                        overflow-y: auto;
+                    ">
+                        ${escapeHtml(essay.essay_text).replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+                
+                ${aiFeedback ? `
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;">AI Feedback</h3>
+                        <div style="background: #e8f5e9; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #28A745;">
+                            <p style="margin-bottom: 1rem;">${escapeHtml(aiFeedback.ai_feedback || aiFeedback.feedback || 'No feedback provided')}</p>
+                            
+                            ${aiFeedback.strengths && aiFeedback.strengths.length > 0 ? `
+                                <div style="margin-top: 1rem;">
+                                    <strong>Strengths:</strong>
+                                    <ul style="margin: 0.5rem 0 0 1.5rem;">
+                                        ${aiFeedback.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            
+                            ${aiFeedback.areas_for_improvement && aiFeedback.areas_for_improvement.length > 0 ? `
+                                <div style="margin-top: 1rem;">
+                                    <strong>Areas for Improvement:</strong>
+                                    <ul style="margin: 0.5rem 0 0 1.5rem;">
+                                        ${aiFeedback.areas_for_improvement.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${essay.difficulty_recommendation ? `
+                    <div style="
+                        padding: 1rem;
+                        background: ${essay.difficulty_recommendation === 'advance' ? '#d4edda' : essay.difficulty_recommendation === 'support_needed' ? '#f8d7da' : '#fff3cd'};
+                        border-radius: 8px;
+                        margin-bottom: 2rem;
+                    ">
+                        <strong>Recommendation:</strong> 
+                        ${essay.difficulty_recommendation === 'advance' ? '✅ Ready to advance' : 
+                        essay.difficulty_recommendation === 'support_needed' ? '⚠️ Needs additional support' : 
+                        'Continue at current level'}
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        async function markAlertResolved(alertId) {
+            const token = localStorage.getItem('token');
+            const notes = prompt('Add any notes about this alert (optional):');
+            
+            if (notes === null) return; // User cancelled
+            
+            try {
+                const response = await fetch(`/api/admin/alert/${alertId}/mark-resolved`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, notes })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Alert marked as resolved!');
+                    loadEssayAlerts(); // Reload alerts
+                }
+            } catch (error) {
+                console.error('Error marking alert resolved:', error);
+                alert('Failed to mark alert as resolved');
+            }
+        }
+
+        async function markEssayReviewed() {
+          try {
+              const token = localStorage.getItem("token");
+              const notes = document.getElementById("adminNotes").value || "";
+        
+              if (!currentEssayId) {
+              console.error("No currentEssayId set");
+              return;
+              }
+        
+              const res = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`,
+              },
+              body: JSON.stringify({ notes }),
+              });
+        
+              if (!res.ok) {
+              console.log("mark-reviewed failed:", res.status, await res.text());
+              return;
+              }
+        
+              console.log("✅ Marked reviewed");
+          } catch (e) {
+              console.error("Error marking essay reviewed:", e);
+          }
+        }
+
+
+        function closeEssayModal() {
+            document.getElementById('essayDetailsModal').classList.remove('active');
+            document.getElementById('adminNotesInput').value = '';
+            currentEssayId = null;
+        }
+
+        // Helper function to escape HTML (prevents XSS)
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function loadStudents() {
+            const token = localStorage.getItem('token');
+            const loading = document.getElementById('studentsLoading');
+            const table = document.getElementById('studentsTable');
+            
+            loading.classList.remove('hidden');
+            table.classList.add('hidden');
+            
+            try {
+                const response = await fetch(`/api/admin/students?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                allStudents = data.students;
+                renderStudentsTable(allStudents);
+                
+                loading.classList.add('hidden');
+                table.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading students:', error);
+                loading.innerHTML = '<p>Error loading students. Please try again.</p>';
+            }
+        }
+       
+        console.log('✓ Session tracking admin panel loaded');
+
+        // ========== LOAD ACTIVE SESSIONS ==========
+
+        async function loadActiveSessions() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                const token = localStorage.getItem("token");
+                const response = await fetch(`/api/admin/sessions/active`,{
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayActiveSessions(data.sessions);
+                    
+                    // Update stats
+                    const activeCount = data.sessions.filter(s => s.status === 'active').length;
+                    const onBreakCount = data.sessions.filter(s => s.status === 'on_break').length;
+                    
+                    document.getElementById('activeUsersCount').textContent = activeCount;
+                    document.getElementById('usersOnBreakCount').textContent = onBreakCount;
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+            }
+        }
+
+        function displayActiveSessions(sessions) {
+            const container = document.getElementById('activeSessionsTable');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<p style="color: #666; padding: 2rem; text-align: center;">No active sessions</p>';
+                return;
+            }
+            
+            const tableHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                            <th style="padding: 1rem; text-align: left;">User</th>
+                            <th style="padding: 1rem; text-align: left;">Status</th>
+                            <th style="padding: 1rem; text-align: left;">Session Start</th>
+                            <th style="padding: 1rem; text-align: left;">Last Activity</th>
+                            <th style="padding: 1rem; text-align: left;">Idle Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sessions.map(session => {
+                            const lastActivity = new Date(session.last_activity);
+                            const idleMinutes = Math.floor((Date.now() - lastActivity.getTime()) / 60000);
+                            const idleStatus = idleMinutes > 5 ? 'warning' : 'good';
+                            
+                            return `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 1rem;">
+                                        <div style="font-weight: bold;">${session.user_name}</div>
+                                        <div style="font-size: 0.85rem; color: #666;">${session.user_email}</div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            padding: 0.25rem 0.75rem;
+                                            border-radius: 12px;
+                                            font-size: 0.85rem;
+                                            font-weight: bold;
+                                            background: ${session.status === 'active' ? '#28A745' : '#667eea'};
+                                            color: white;
+                                        ">
+                                            ${session.status === 'active' ? '✓ Active' : '☕ On Break'}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.9rem;">
+                                        ${formatDateTime(session.session_start)}
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.9rem;">
+                                        ${formatDateTime(session.last_activity)}
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            color: ${idleStatus === 'warning' ? '#dc3545' : '#28A745'};
+                                            font-weight: bold;
+                                        ">
+                                            ${idleMinutes}m
+                                        </span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+
+        // ========== HELPER FUNCTIONS ==========
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+            
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        function viewStudentDashboard(userId) {
+            // TODO: Implement student dashboard view
+            alert(`View dashboard for user ID: ${userId}`);
+            // You can navigate to student details or show a modal
+        }
+
+        let studentToDelete = null;
+
+        function confirmDeleteStudent(studentId, studentName) {
+            studentToDelete = { id: studentId, name: studentName };
+            document.getElementById('deleteStudentMessage').textContent = `Delete ${studentName}?`;
+            document.getElementById('deleteStudentModal').classList.add('active');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteStudentModal').classList.remove('active');
+            studentToDelete = null;
+        }
+
+        async function deleteStudent() {
+            if (!studentToDelete) return;
+            
+            const { id, name } = studentToDelete;
+            const btn = document.getElementById('confirmDeleteBtn');
+            
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Deleting...';
+                
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/admin/student/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Delete failed');
+                
+                closeDeleteModal();
+                alert(`Student ${name} deleted successfully`);
+                await loadStudents();
+                loadDashboardStats();
+                
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                btn.disabled = false;
+                btn.textContent = 'Delete';
+            }
+        }
+
+        async function viewEssayDetails(essayId) {
+            const token = localStorage.getItem('token');
+            currentEssayId = essayId;
+            
+            document.getElementById('essayDetailsModal').classList.add('active');
+            document.getElementById('essayModalTitle').textContent = 'Loading essay...';
+            document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/admin/essay/${essayId}/details?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayEssayDetails(data.essay);
+                }
+            } catch (error) {
+                console.error('Error loading essay:', error);
+                document.getElementById('essayDetailsContent').innerHTML = '<p style="color: #dc3545;">Failed to load essay details.</p>';
+            }
+        }
+
+        function safeJsonParse(val, fallback) {
+            if (val === null || val === undefined) return fallback;
+            if (typeof val !== 'string') return val; // already object/array
+            const s = val.trim();
+            if (!s || s === 'None' || s === 'NULL') return fallback;
+            try {
+                return JSON.parse(s);
+            } catch (e) {
+                return fallback;
+            }
+            }
+
+            function normalizeStringArray(val) {
+            // Accept: array, JSON string array, or "a, b, c" / "a\nb\nc"
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string') {
+                const parsed = safeJsonParse(val, null);
+                if (Array.isArray(parsed)) return parsed;
+
+                // fallback: split by commas/newlines/semicolons
+                return val
+                .split(/[,;\n]/)
+                .map(x => x.trim())
+                .filter(Boolean);
+            }
+            return [];
+            }
+
+
+        // ========== LOAD RECENT ACTIVITY ==========
+
+        async function loadRecentActivity() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            const hours = document.getElementById('activityTimeFilter').value;
+            
+            try {
+                const token = localStorage.getItem("token");
+
+                const response = await fetch(`/api/admin/activity/recent?hours=${hours}`, {
+                headers: { Authorization: `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayRecentActivity(data.activities);
+                    
+                    // Calculate timeout count for today
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    const timeoutsToday = data.activities.filter(a => 
+                        a.activity_type === 'timeout' && 
+                        new Date(a.timestamp) >= today
+                    ).length;
+                    
+                    document.getElementById('timeoutsToday').textContent = timeoutsToday;
+                }
+            } catch (error) {
+                console.error('Error loading activity:', error);
+            }
+        }
+
+        function displayRecentActivity(activities) {
+            const container = document.getElementById('recentActivityTable');
+            
+            if (activities.length === 0) {
+                container.innerHTML = '<p style="color: #666; padding: 2rem; text-align: center;">No recent activity</p>';
+                return;
+            }
+            
+            const activityIcons = {
+                'login': '🔓',
+                'logout': '🔒',
+                'lesson_start': '📖',
+                'lesson_complete': '✅',
+                'break_start': '☕',
+                'break_end': '🔙',
+                'timeout_warning': '⚠️',
+                'timeout': '⏰',
+                'page_view': '👁️'
+            };
+            
+            const activityColors = {
+                'login': '#28A745',
+                'logout': '#6c757d',
+                'lesson_start': '#667eea',
+                'lesson_complete': '#28A745',
+                'break_start': '#667eea',
+                'break_end': '#28A745',
+                'timeout_warning': '#ffc107',
+                'timeout': '#dc3545',
+                'page_view': '#6c757d'
+            };
+            
+            const tableHTML = `
+                <div style="max-height: 600px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="position: sticky; top: 0; background: white; z-index: 1;">
+                            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                                <th style="padding: 1rem; text-align: left;">Time</th>
+                                <th style="padding: 1rem; text-align: left;">User</th>
+                                <th style="padding: 1rem; text-align: left;">Activity</th>
+                                <th style="padding: 1rem; text-align: left;">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${activities.map(activity => `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 1rem; font-size: 0.9rem; white-space: nowrap;">
+                                        ${formatDateTime(activity.timestamp)}
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <div style="font-weight: bold; font-size: 0.9rem;">${activity.user_name}</div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span style="
+                                            padding: 0.25rem 0.75rem;
+                                            border-radius: 12px;
+                                            font-size: 0.85rem;
+                                            background: ${activityColors[activity.activity_type] || '#6c757d'};
+                                            color: white;
+                                            white-space: nowrap;
+                                        ">
+                                            ${activityIcons[activity.activity_type] || '•'} ${activity.activity_type.replace('_', ' ')}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 1rem; font-size: 0.85rem; color: #666;">
+                                        ${activity.activity_details || '-'}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+
+        // ========== HELPER FUNCTIONS ==========
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+            
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        // ========== AUTO-REFRESH ==========
+
+        let refreshInterval;
+
+        function startAutoRefresh() {
+            // Refresh every 30 seconds
+            refreshInterval = setInterval(() => {
+                loadActiveSessions();
+                loadRecentActivity();
+            }, 30000);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+
+
+        function renderStudentsTable(students) {
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '';
+            
+            students.forEach(student => {
+                const tr = document.createElement('tr');
+                const level = student.reading_level || 'Not assessed';
+                const levelBadge = student.reading_level ? 
+                    `<span class="badge badge-info">${formatReadingLevel(student.reading_level)}</span>` :
+                    `<span class="badge badge-warning">Pending</span>`;
+                
+                const joinDate = new Date(student.created_at).toLocaleDateString();
+                
+                tr.innerHTML = `
+                    <td><strong>${student.full_name}</strong></td>
+                    <td>${student.email}</td>
+                    <td>${levelBadge}</td>
+                    <td>${joinDate}</td>
+                    <td><span class="badge badge-success">Active</span></td>
+                    <td style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name}')">
+                            View Progress
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="confirmDeleteStudent(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
+                            Delete
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function formatReadingLevel(level) {
+            const levels = {
+                'elementary': 'Elementary',
+                'middle': 'Middle School',
+                'high_school': 'High School',
+                'adult': 'Adult'
+            };
+            return levels[level] || level;
+        }
+
+        // Search functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('searchStudents');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase();
+                    const filtered = allStudents.filter(s => 
+                        s.full_name.toLowerCase().includes(query) ||
+                        s.email.toLowerCase().includes(query)
+                    );
+                    renderStudentsTable(filtered);
+                });
+            }
+        });
+
+        async function viewStudentProgress(studentId, studentName) {
+            document.getElementById('studentModal').classList.add('active');
+            document.getElementById('studentModalName').textContent = studentName + "'s Progress";
+            document.getElementById('studentProgressLoading').classList.remove('hidden');
+            document.getElementById('studentProgressContent').classList.add('hidden');
+            
+            const token = localStorage.getItem('token');
+            
+            try {
+                const token = localStorage.getItem("token");
+
+                const response = await fetch(`/api/admin/student/${studentId}/progress?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                // Always pass an array
+                renderStudentProgress(Array.isArray(data.progress) ? data.progress : []);
+
+                
+                document.getElementById('studentProgressLoading').classList.add('hidden');
+                document.getElementById('studentProgressContent').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading student progress:', error);
+            }
+        }
+
+        function renderStudentProgress(progress) {
+            progress = Array.isArray(progress) ? progress : [];   // ✅ add this
+            const container = document.getElementById('studentProgressData');
+            
+            if (!progress.length) {
+                container.innerHTML = `<p style="color:#666;">No progress records yet.</p>`;
+                return;
+            }
+            
+            const completed = progress.filter(p => p.completed).length;
+            const avgScore = progress.filter(p => p.score).reduce((sum, p) => sum + p.score, 0) / progress.filter(p => p.score).length || 0;
+            
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 2rem 0;">
+                    <div style="background: var(--light-gray); padding: 1.5rem; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--navy-primary);">${completed}</div>
+                        <div style="font-size: 0.9rem; color: var(--text-gray);">Completed</div>
+                    </div>
+                    <div style="background: var(--light-gray); padding: 1.5rem; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--navy-primary);">${avgScore.toFixed(1)}%</div>
+                        <div style="font-size: 0.9rem; color: var(--text-gray);">Avg Score</div>
+                    </div>
+                </div>
+                
+                <h4 style="margin: 2rem 0 1rem;">Recent Lessons</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Lesson</th>
+                            <th>Topic</th>
+                            <th>Score</th>
+                            <th>Completed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${progress.slice(0, 10).map(p => `
+                            <tr>
+                                <td>${p.title || (p.lesson_id ? `Lesson #${p.lesson_id}` : (p.passage_id ? `Passage #${p.passage_id}` : 'Untitled'))}</td>
+                                <td>${p.topic || p.activity_details || 'General'}</td>
+                                <td>${p.score ? p.score + '%' : 'N/A'}</td>
+                                <td>${p.completed_at ? new Date(p.completed_at).toLocaleDateString() : 'In Progress'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function closeStudentModal() {
+            document.getElementById('studentModal').classList.remove('active');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+
+    // ========== Add this JavaScript for mobile menu toggle ==========
+    
+    function toggleMobileMenu() {
+        const sidebar = document.querySelector('.sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        const menuIcon = document.getElementById('menuIcon');
+        const menuIconMain = document.getElementById('menuIconMain');
+        
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+        
+        // Update both icons
+        const isActive = sidebar.classList.contains('active');
+        const icon = isActive ? '✕' : '☰';
+        
+        if (menuIcon) menuIcon.textContent = icon;
+        if (menuIconMain) menuIconMain.textContent = icon;
+    }
+
+    
+
+        // ========== INVITE ADMIN (EMAIL VIA BACKEND) ==========
+
+        async function loadAdminsAndInvites() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const adminsBody = document.getElementById('adminsTableBody');
+            const invitesBody = document.getElementById('adminInvitesTableBody');
+
+            if (adminsBody) adminsBody.innerHTML = '<tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>';
+            if (invitesBody) invitesBody.innerHTML = '<tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>';
+
+            try {
+                // Current admins
+                const adminsRes = await fetch('/api/admin/admins', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const adminsData = await adminsRes.json();
+
+                if (adminsBody) {
+                    if (!adminsRes.ok) {
+                        adminsBody.innerHTML = `<tr><td colspan="3">Failed to load admins: ${adminsData.detail || adminsRes.status}</td></tr>`;
+                    } else {
+                        const rows = (adminsData.admins || []).map(a => `
+                            <tr>
+                                <td>${a.email || ''}</td>
+                                <td>${a.full_name || ''}</td>
+                                <td>${a.created_at || ''}</td>
+                            </tr>
+                        `).join('');
+                        adminsBody.innerHTML = rows || '<tr><td colspan="3" style="opacity:0.7;">No admins found.</td></tr>';
+                    }
+                }
+
+                // Pending invites
+                const invitesRes = await fetch('/api/admin/invites', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const invitesData = await invitesRes.json();
+
+                if (invitesBody) {
+                    if (!invitesRes.ok) {
+                        invitesBody.innerHTML = `<tr><td colspan="5">Failed to load invites: ${invitesData.detail || invitesRes.status}</td></tr>`;
+                    } else {
+                        const rows = (invitesData.invites || []).map(inv => `
+                            <tr>
+                                <td>${inv.email || ''}</td>
+                                <td>${inv.created_at || ''}</td>
+                                <td>${inv.expires_at || ''}</td>
+                                <td>${inv.status || 'pending'}</td>
+                                <td style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                    <button class="btn btn-secondary" type="button" onclick="resendAdminInvite(${inv.id})">Resend</button>
+                                    <button class="btn btn-danger" type="button" onclick="revokeAdminInvite(${inv.id})">Revoke</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                        invitesBody.innerHTML = rows || '<tr><td colspan="5" style="opacity:0.7;">No pending invites.</td></tr>';
+                    }
+                }
+
+            } catch (err) {
+                if (adminsBody) adminsBody.innerHTML = `<tr><td colspan="3">Error: ${err}</td></tr>`;
+                if (invitesBody) invitesBody.innerHTML = `<tr><td colspan="5">Error: ${err}</td></tr>`;
+            }
+        }
+
+        async function sendAdminInvite() {
+            const token = localStorage.getItem('token');
+            const email = (document.getElementById('inviteAdminEmail')?.value || '').trim();
+            const msg = document.getElementById('inviteAdminMsg');
+
+            if (msg) { msg.textContent = ''; msg.classList.remove('active'); }
+
+            if (!email) {
+                if (msg) { msg.textContent = 'Enter an email address.'; msg.classList.add('active'); }
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/invites', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    if (msg) { msg.textContent = data.detail || 'Failed to send invite.'; msg.classList.add('active'); }
+                    return;
+                }
+
+                if (msg) { msg.textContent = 'Invite sent!'; msg.classList.remove('active'); }
+                document.getElementById('inviteAdminEmail').value = '';
+                await loadAdminsAndInvites();
+
+            } catch (err) {
+                if (msg) { msg.textContent = 'Error sending invite.'; msg.classList.add('active'); }
+            }
+        }
+
+        async function resendAdminInvite(inviteId) {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`/api/admin/invites/${inviteId}/resend`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.detail || 'Failed to resend invite.');
+                await loadAdminsAndInvites();
+            } catch (e) {
+                alert('Error resending invite.');
+            }
+        }
+
+        async function revokeAdminInvite(inviteId) {
+            const token = localStorage.getItem('token');
+            if (!confirm('Revoke this invite?')) return;
+            try {
+                const res = await fetch(`/api/admin/invites/${inviteId}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.detail || 'Failed to revoke invite.');
+                await loadAdminsAndInvites();
+            } catch (e) {
+                alert('Error revoking invite.');
+            }
+        }
+</script>
+</body>
+</html>

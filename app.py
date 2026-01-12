@@ -5,14 +5,14 @@ from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks, H
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Dict, Any
 import sqlite3
 import psycopg2
 import psycopg2.extras
 import bcrypt
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import openai
 import os
 import json
@@ -21,15 +21,12 @@ import random
 import traceback
 from openai import OpenAI
 import resend
-import secrets
+import secrets, hashlib
+import requests
 
 # Import our new utilities
 from readability import analyze_readability, get_difficulty_for_user
 from content_generator import ContentGenerator
-
-# Use word count range from database
-import random
-
 
 # Initialize FastAPI
 app = FastAPI(title="Achieve 365 - Phase 2")
@@ -61,6 +58,8 @@ content_generator = ContentGenerator(OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Configure Resend
 resend.api_key = os.getenv("RESEND_API_KEY")  # Add this to your .env file
+FROM_EMAIL = os.getenv("FROM_EMAIL", "no-reply@4dgaming.games")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://ai-assessment-production-e027.up.railway.app")
 
 # Store password reset tokens (in production, use database)
 password_reset_tokens = {}
@@ -159,6 +158,18 @@ class WritingSubmission(BaseModel):
 class WritingRevision(BaseModel):
     exercise_id: int
     revised_response: str
+    
+class InviteAdminReq(BaseModel):
+    email: EmailStr
+    
+class AcceptInviteReq(BaseModel):
+    token: str
+    full_name: str
+    password: str
+    
+class AdminInviteActionRequest(BaseModel):
+    # optional note for auditing/logging if you want
+    note: Optional[str] = None
 
 # Database initialization
 def init_db():
@@ -884,6 +895,10 @@ def get_interest_assessment():  # ← Remove 'async'
 @app.get("/api/me")
 async def me(user=Depends(get_current_user)):
     return {"user_id": user["user_id"], "role": user["role"]}
+
+# ============================================
+# ADMIN ENDPOINTS
+# ============================================
     
 @app.get("/api/admin/reading-level-distribution")
 async def get_reading_level_distribution(admin=Depends(require_admin)):
@@ -5782,6 +5797,385 @@ async def mark_essay_reviewed(
     finally:
         conn.close()
     
+# ============================================================
+
+@app.get("/api/admin/admins")
+async def list_admins(admin=Depends(require_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT id, email, full_name, role
+                FROM users
+                WHERE role = 'admin'
+                ORDER BY id DESC
+            """)
+            rows = cursor.fetchall() or []
+            admins = [{
+                "id": r["id"] if isinstance(r, dict) else r[0],
+                "email": r["email"] if isinstance(r, dict) else r[1],
+                "full_name": r["full_name"] if isinstance(r, dict) else r[2],
+                "role": r["role"] if isinstance(r, dict) else r[3],
+            } for r in rows]
+        else:
+            cursor.execute("""
+                SELECT id, email, full_name, role
+                FROM users
+                WHERE role = 'admin'
+                ORDER BY id DESC
+            """)
+            rows = cursor.fetchall() or []
+            admins = [{"id": r[0], "email": r[1], "full_name": r[2], "role": r[3]} for r in rows]
+
+        return {"success": True, "count": len(admins), "admins": admins}
+    finally:
+        conn.close()
+        
+@app.get("/api/admin/invites")
+async def list_admin_invites(admin=Depends(require_admin), limit: int = 100):
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT id, email, created_at, expires_at, used_at, revoked_at, invited_by
+                FROM admin_invites
+                ORDER BY id DESC
+                LIMIT %s
+            """, (limit,))
+            rows = cursor.fetchall() or []
+            invites = []
+            now = datetime.now(timezone.utc)
+
+            for r in rows:
+                created_at = r["created_at"]
+                expires_at = r["expires_at"]
+                used_at = r["used_at"]
+                revoked_at = r["revoked_at"]
+
+                status = "pending"
+                if revoked_at is not None:
+                    status = "revoked"
+                elif used_at is not None:
+                    status = "used"
+                elif expires_at is not None and expires_at < now:
+                    status = "expired"
+
+                invites.append({
+                    "id": r["id"],
+                    "email": r["email"],
+                    "status": status,
+                    "created_at": created_at.isoformat() if created_at else None,
+                    "expires_at": expires_at.isoformat() if expires_at else None,
+                    "used_at": used_at.isoformat() if used_at else None,
+                    "revoked_at": revoked_at.isoformat() if revoked_at else None,
+                    "invited_by": r["invited_by"],
+                })
+        else:
+            cursor.execute("""
+                SELECT id, email, created_at, expires_at, used_at, revoked_at, invited_by
+                FROM admin_invites
+                ORDER BY id DESC
+                LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall() or []
+            invites = []
+            now = datetime.now(timezone.utc)
+
+            for r in rows:
+                invite_id, email, created_at, expires_at, used_at, revoked_at, invited_by = r
+
+                # SQLite stores ISO/TEXT; compare by parsing
+                expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00")) if expires_at else None
+
+                status = "pending"
+                if revoked_at:
+                    status = "revoked"
+                elif used_at:
+                    status = "used"
+                elif expires_dt and expires_dt < now:
+                    status = "expired"
+
+                invites.append({
+                    "id": invite_id,
+                    "email": email,
+                    "status": status,
+                    "created_at": created_at,
+                    "expires_at": expires_at,
+                    "used_at": used_at,
+                    "revoked_at": revoked_at,
+                    "invited_by": invited_by,
+                })
+
+        return {"success": True, "count": len(invites), "invites": invites}
+    finally:
+        conn.close()
+
+def get_bearer_token(authorization: Optional[str] = Header(None)) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    return parts[1].strip()
+
+def require_admin(token: str = Depends(get_bearer_token)) -> dict:
+    payload = verify_token(token)
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return payload
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")    
+
+def _sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+def send_resend_email(to_email: str, subject: str, html: str):
+    if not RESEND_API_KEY or not FROM_EMAIL or not APP_BASE_URL:
+        raise HTTPException(status_code=500, detail="Resend not configured (RESEND_API_KEY/FROM_EMAIL/APP_BASE_URL)")
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+        json={"from": FROM_EMAIL, "to": [to_email], "subject": subject, "html": html},
+        timeout=15
+    )
+    if r.status_code >= 300:
+        raise HTTPException(status_code=500, detail=f"Resend error: {r.text}")
+
+def send_admin_invite_email(to_email: str, invite_url: str):
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured")
+
+    payload = {
+        "from": FROM_EMAIL,
+        "to": [to_email],
+        "subject": "You’ve been invited as an Achieve 365 Administrator",
+        "html": f"""
+          <p>You’ve been invited to be an <b>Administrator</b> on Achieve 365.</p>
+          <p>Click to set your password (link expires in 24 hours):</p>
+          <p><a href="{invite_url}">Set Admin Password</a></p>
+          <p>If you didn’t expect this email, you can ignore it.</p>
+        """
+    }
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=15,
+    )
+
+    if r.status_code >= 300:
+        raise HTTPException(status_code=500, detail=f"Resend error: {r.text}")
+
+@app.post("/api/admin/invites")
+async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)):
+    email = body.email.strip().lower()
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+
+    conn = get_db()
+    cur = get_cursor(conn)
+
+    # store invite
+    if USE_POSTGRES:
+        cur.execute("""
+          INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+          VALUES (%s, %s, %s, %s)
+          RETURNING id
+        """, (email, token_hash, expires_at, admin["user_id"]))
+        invite_id = cur.fetchone()["id"] if isinstance(cur.fetchone(), dict) else cur.fetchone()[0]
+    else:
+        cur.execute("""
+          INSERT INTO admin_invites (email, token_hash, created_at, expires_at, invited_by)
+          VALUES (?, ?, ?, ?, ?)
+        """, (email, token_hash, datetime.utcnow().isoformat(), expires_at.isoformat(), admin["user_id"]))
+        invite_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+
+    resend.Emails.send({
+      "from": FROM_EMAIL,
+      "to": [email],
+      "subject": "You’ve been invited as an administrator",
+      "html": f"""
+        <p>You’ve been invited to become an administrator.</p>
+        <p>This link expires in 24 hours:</p>
+        <p><a href="{invite_link}">Accept Admin Invite</a></p>
+      """
+    })
+
+    return {"success": True, "invite_id": invite_id}
+
+
+@app.post("/api/admin/invites/accept")
+async def accept_admin_invite(body: AcceptInviteReq):
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+
+    conn = get_db()
+    cur = get_cursor(conn)
+
+    # find pending invite
+    if USE_POSTGRES:
+        cur.execute("""
+          SELECT * FROM admin_invites
+          WHERE token_hash=%s AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
+        """, (token_hash,))
+    else:
+        cur.execute("""
+          SELECT * FROM admin_invites
+          WHERE token_hash=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+        """, (token_hash, datetime.utcnow().isoformat()))
+    invite = cur.fetchone()
+    if not invite:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid or expired invite")
+
+    email = (invite["email"] if isinstance(invite, dict) else invite[1]).lower().strip()
+
+    # upsert user as admin
+    password_hash = bcrypt.hashpw(body.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    # (Pseudo) implement: if user exists -> update role; else insert user with role=admin
+    # Make sure token uses role="admin".
+    # Finally: mark invite accepted_at.
+
+    conn.commit()
+    conn.close()
+
+    # return token so they’re logged in immediately
+    # token = create_token(user_id, "admin")
+    return {"success": True}
+
+def sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+@app.post("/api/admin/invites/{invite_id}/resend")
+async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        # 1) load invite
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT id, email, used_at, revoked_at
+                FROM admin_invites
+                WHERE id = %s
+            """, (invite_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invite not found")
+            email = row["email"]
+            used_at = row["used_at"]
+            revoked_at = row["revoked_at"]
+        else:
+            cursor.execute("""
+                SELECT id, email, used_at, revoked_at
+                FROM admin_invites
+                WHERE id = ?
+            """, (invite_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invite not found")
+            _, email, used_at, revoked_at = row
+
+        if used_at or revoked_at:
+            raise HTTPException(status_code=400, detail="Invite is not pending")
+
+        # 2) revoke old invite
+        if USE_POSTGRES:
+            cursor.execute("UPDATE admin_invites SET revoked_at = NOW() WHERE id = %s", (invite_id,))
+        else:
+            cursor.execute("UPDATE admin_invites SET revoked_at = datetime('now') WHERE id = ?", (invite_id,))
+
+        # 3) create new invite + email it
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = sha256(raw_token)
+
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (email.lower().strip(), token_hash, expires_at, admin["user_id"]))
+            new_id = cursor.fetchone()["id"]
+        else:
+            cursor.execute("""
+                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+                VALUES (?, ?, ?, ?)
+            """, (email.lower().strip(), token_hash, expires_at.isoformat(), admin["user_id"]))
+            new_id = cursor.lastrowid
+
+        conn.commit()
+
+        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+        send_resend_email(
+            to_email=email,
+            subject="Administrator invite link (new)",
+            html=f"""
+              <p>You have a new administrator invite link (expires in 24 hours).</p>
+              <p><a href="{invite_link}">Accept Admin Invite</a></p>
+            """
+        )
+
+        return {"success": True, "new_invite_id": new_id}
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+        
+@app.post("/api/admin/invites/{invite_id}/revoke")
+async def revoke_admin_invite(invite_id: int, admin=Depends(require_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE admin_invites
+                SET revoked_at = NOW()
+                WHERE id = %s AND used_at IS NULL AND revoked_at IS NULL
+            """, (invite_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=400, detail="Invite not pending or not found")
+        else:
+            cursor.execute("""
+                UPDATE admin_invites
+                SET revoked_at = datetime('now')
+                WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL
+            """, (invite_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=400, detail="Invite not pending or not found")
+
+        conn.commit()
+        return {"success": True}
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
 # ============================================================
 @app.get("/api/student/gamification")
 async def get_gamification_data(token: str):
