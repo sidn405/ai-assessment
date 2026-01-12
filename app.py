@@ -314,6 +314,10 @@ async def reset_password_page():
     """Serve the password reset page"""
     return FileResponse('static/reset-password.html')
 
+@app.get("/admin-invite", include_in_schema=False)
+def admin_invite_page():
+    return FileResponse("static/admin-invite.html")
+
 # ============================================
 # AUTHENTICATION (Original)
 # ============================================
@@ -435,14 +439,6 @@ async def login(credentials: UserLogin):
 # ============================================
 # PASSWORD RESET
 # ============================================
-
-@app.get("/admin-invite", include_in_schema=False)
-def admin_invite_page():
-    return FileResponse("static/index.html")  # adjust path to wherever your index.html lives
-
-@app.get("/reset-password", include_in_schema=False)
-def reset_password_page():
-    return FileResponse("static/index.html")
     
 @app.post("/api/auth/forgot-password")
 async def forgot_password(request: dict):
@@ -5881,7 +5877,7 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
             invite_id = cur.lastrowid
 
         # 2) Build invite link
-        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+        invite_link = f"{APP_BASE_URL}/admin-invite.html?token={raw_token}"
 
         # 3) Send email via Resend (same verified sender style as forgot-password)
         try:
@@ -6068,7 +6064,7 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
         except Exception:
             pass
 
-    invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+    invite_link = f"{APP_BASE_URL}/admin-invite.html?token={raw_token}"
 
     try:
         resend.Emails.send({
@@ -6191,7 +6187,7 @@ async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
 
         conn.commit()
 
-        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+        invite_link = f"{APP_BASE_URL}/admin-invite.html?token={raw_token}"
         send_resend_email(
             to_email=email,
             subject="Administrator invite link (new)",
