@@ -164,7 +164,6 @@ class InviteAdminReq(BaseModel):
     
 class AcceptInviteReq(BaseModel):
     token: str = Field(..., min_length=10)
-    full_name: str
     password: str = Field(..., min_length=6)
     
 class AdminInviteActionRequest(BaseModel):
