@@ -5832,83 +5832,104 @@ async def list_admins(admin=Depends(require_admin)):
     finally:
         conn.close()
         
-@app.get("/api/admin/invites")
-async def list_admin_invites(admin=Depends(require_admin), limit: int = 100):
+@app.post("/api/admin/invites")
+async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)):
+    email = (body.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+
     conn = get_db()
-    cursor = get_cursor(conn)
+    cur = get_cursor(conn)
+
     try:
+        # 1) Store invite (NOT committed yet)
         if USE_POSTGRES:
-            cursor.execute("""
-                SELECT id, email, created_at, expires_at, used_at, revoked_at, invited_by
-                FROM admin_invites
-                ORDER BY id DESC
-                LIMIT %s
-            """, (limit,))
-            rows = cursor.fetchall() or []
-            invites = []
-            now = datetime.now(timezone.utc)
+            cur.execute("""
+                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (email, token_hash, expires_at, admin["user_id"]))
 
-            for r in rows:
-                created_at = r["created_at"]
-                expires_at = r["expires_at"]
-                used_at = r["used_at"]
-                revoked_at = r["revoked_at"]
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=500, detail="Failed to create invite (no id returned)")
+            invite_id = row["id"] if isinstance(row, Mapping) else row[0]
 
-                status = "pending"
-                if revoked_at is not None:
-                    status = "revoked"
-                elif used_at is not None:
-                    status = "used"
-                elif expires_at is not None and expires_at < now:
-                    status = "expired"
-
-                invites.append({
-                    "id": r["id"],
-                    "email": r["email"],
-                    "status": status,
-                    "created_at": created_at.isoformat() if created_at else None,
-                    "expires_at": expires_at.isoformat() if expires_at else None,
-                    "used_at": used_at.isoformat() if used_at else None,
-                    "revoked_at": revoked_at.isoformat() if revoked_at else None,
-                    "invited_by": r["invited_by"],
-                })
         else:
-            cursor.execute("""
-                SELECT id, email, created_at, expires_at, used_at, revoked_at, invited_by
-                FROM admin_invites
-                ORDER BY id DESC
-                LIMIT ?
-            """, (limit,))
-            rows = cursor.fetchall() or []
-            invites = []
-            now = datetime.now(timezone.utc)
+            cur.execute("""
+                INSERT INTO admin_invites (email, token_hash, created_at, expires_at, invited_by)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                email,
+                token_hash,
+                datetime.utcnow().isoformat(),
+                expires_at.isoformat(),
+                admin["user_id"],
+            ))
+            invite_id = cur.lastrowid
 
-            for r in rows:
-                invite_id, email, created_at, expires_at, used_at, revoked_at, invited_by = r
+        # 2) Build invite link
+        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
 
-                # SQLite stores ISO/TEXT; compare by parsing
-                expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00")) if expires_at else None
+        # 3) Send email via Resend (same verified sender style as forgot-password)
+        try:
+            resend.Emails.send({
+                "from": "Achieve 365 <noreply@4dgaming.games>",  # must be verified in Resend
+                "to": email,
+                "subject": "You’ve been invited as an administrator",
+                "html": f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2A398A;">Admin Invitation</h2>
+                        <p>You’ve been invited to become an administrator.</p>
+                        <p>This link expires in 24 hours.</p>
 
-                status = "pending"
-                if revoked_at:
-                    status = "revoked"
-                elif used_at:
-                    status = "used"
-                elif expires_dt and expires_dt < now:
-                    status = "expired"
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{invite_link}"
+                               style="background: #2A398A;
+                                      color: white;
+                                      padding: 12px 30px;
+                                      text-decoration: none;
+                                      border-radius: 5px;
+                                      display: inline-block;">
+                                Accept Admin Invite
+                            </a>
+                        </div>
 
-                invites.append({
-                    "id": invite_id,
-                    "email": email,
-                    "status": status,
-                    "created_at": created_at,
-                    "expires_at": expires_at,
-                    "used_at": used_at,
-                    "revoked_at": revoked_at,
-                    "invited_by": invited_by,
-                })
+                        <p>Or copy and paste this link into your browser:</p>
+                        <p style="word-break: break-all; color: #666;">{invite_link}</p>
 
-        return {"success": True, "count": len(invites), "invites": invites}
+                        <p style="color: #999; font-size: 14px;">
+                            If you weren’t expecting this invite, you can ignore this email.
+                        </p>
+
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                        <p style="color: #999; font-size: 12px;">
+                            Achieve 365 - Empowering Adult Literacy
+                        </p>
+                    </div>
+                """
+            })
+            print(f"✅ Admin invite email sent to {email}")
+
+        except Exception as email_error:
+            print(f"❌ Invite email error: {email_error}")
+            conn.rollback()  # prevents “invite created but email failed”
+            raise HTTPException(status_code=500, detail="Failed to send invite email")
+
+        # 4) Only commit if email succeeded
+        conn.commit()
+        return {"success": True, "invite_id": invite_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Create admin invite error: {e}")
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create admin invite")
     finally:
         conn.close()
 
