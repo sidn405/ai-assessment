@@ -1298,11 +1298,39 @@
             loadOverviewRecentActivity(168); // last 7 days
         });
 
+        async function guardAdminPage() {
+          const token = localStorage.getItem("token");
+          if (!token) {
+              window.location.href = "/";
+              return;
+          }
+        
+          // if you have a /api/me endpoint, use it; otherwise decode role from token on backend
+          const res = await fetch("/api/me", {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+        
+          if (!res.ok) {
+              window.location.href = "/";
+              return;
+          }
+        
+          const me = await res.json();
+          if (me.role !== "admin") {
+              window.location.href = "/dashboard";
+          }
+        }
+
+        guardAdminPage();
+
+
         async function loadAnalytics() {
             const token = localStorage.getItem('token');
             
             try {
-                const response = await fetch(`/api/admin/analytics?token=${token}`);
+                const response = await fetch(`/api/admin/analytics`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
                 
                 document.getElementById('totalStudents').textContent = data.total_students;
@@ -1329,7 +1357,10 @@
             }
 
             try {
-                const resp = await fetch(`/api/admin/platform-activity?token=${token}`);
+                
+                const resp = await fetch(`/api/admin/platform-activity`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 if (resp.ok) {
                     const data = await resp.json();
 
@@ -1442,7 +1473,9 @@
             container.innerHTML = '<p style="color:#666;">Loading recent activity.</p>';
 
             try {
-                const response = await fetch(`/api/admin/activity/recent?token=${encodeURIComponent(token)}&hours=${hours}`);
+                const response = await fetch(`/api/admin/activity/recent?hours=${hours}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 if (!data.success || !Array.isArray(data.activities)) {
@@ -1561,7 +1594,9 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/reading-level-distribution?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/admin/reading-level-distribution?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 if (data.success && data.distribution && data.distribution.length > 0) {
@@ -1656,7 +1691,9 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/interest-topics?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/admin/interest-topics?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 if (data.success && data.topics && data.topics.length > 0) {
@@ -1755,11 +1792,15 @@
                 console.log('Loading essay alerts...');
                 
                 // Get unread alerts
-                const alertsResp = await fetch(`/api/admin/alerts/unread?token=${encodeURIComponent(token)}`);
+                const alertsResp = await fetch(`/api/admin/alerts/unread?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const alertsData = await alertsResp.json();
                 
                 // Get essays needing review
-                const essaysResp = await fetch(`/api/admin/essays/needs-review?token=${encodeURIComponent(token)}`);
+                const essaysResp = await fetch(`/api/admin/essays/needs-review?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const essaysData = await essaysResp.json();
                 
                 console.log('Alerts:', alertsData);
@@ -1999,7 +2040,9 @@
             document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
             
             try {
-                const response = await fetch(`/api/admin/essay/${essayId}/details?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/admin/essay/${essayId}/details?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2196,7 +2239,9 @@
             table.classList.add('hidden');
             
             try {
-                const response = await fetch(`/api/admin/students?token=${token}`);
+                const response = await fetch(`/api/admin/students?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
                 
                 allStudents = data.students;
@@ -2219,7 +2264,11 @@
             if (!token) return;
             
             try {
-                const response = await fetch(`/api/admin/sessions/active?token=${token}`);
+                const token = localStorage.getItem("token");
+                const response = await fetch(`/api/admin/sessions/active`,{
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2349,8 +2398,9 @@
                 btn.textContent = 'Deleting...';
                 
                 const token = localStorage.getItem('token');
-                const response = await fetch(`/api/admin/student/${id}?token=${token}`, {
-                    method: 'DELETE'
+                const response = await fetch(`/api/admin/student/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
                 });
                 
                 if (!response.ok) throw new Error('Delete failed');
@@ -2376,7 +2426,9 @@
             document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
             
             try {
-                const response = await fetch(`/api/admin/essay/${essayId}/details?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/admin/essay/${essayId}/details?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2426,7 +2478,12 @@
             const hours = document.getElementById('activityTimeFilter').value;
             
             try {
-                const response = await fetch(`/api/admin/activity/recent?token=${token}&hours=${hours}`);
+                const token = localStorage.getItem("token");
+
+                const response = await fetch(`/api/admin/activity/recent?hours=${hours}`, {
+                headers: { Authorization: `Bearer ${token}` }
+                });
+
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2625,7 +2682,11 @@
             const token = localStorage.getItem('token');
             
             try {
-                const response = await fetch(`/api/admin/student/${studentId}/progress?token=${encodeURIComponent(token)}`);
+                const token = localStorage.getItem("token");
+
+                const response = await fetch(`/api/admin/student/${studentId}/progress?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 // Always pass an array
