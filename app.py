@@ -435,6 +435,14 @@ async def login(credentials: UserLogin):
 # ============================================
 # PASSWORD RESET
 # ============================================
+
+@app.get("/admin-invite", include_in_schema=False)
+def admin_invite_page():
+    return FileResponse("static/index.html")  # adjust path to wherever your index.html lives
+
+@app.get("/reset-password", include_in_schema=False)
+def reset_password_page():
+    return FileResponse("static/index.html")
     
 @app.post("/api/auth/forgot-password")
 async def forgot_password(request: dict):

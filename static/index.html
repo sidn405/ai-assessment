@@ -1209,7 +1209,8 @@
                 'login': 'loginModal',
                 'register': 'registerModal',
                 'forgotPassword': 'forgotPasswordModal',
-                'resetPassword': 'resetPasswordModal'
+                'resetPassword': 'resetPasswordModal',
+                'adminInvite': 'adminInviteModal'
             };
             
             const modalId = modalMap[type];
@@ -1234,7 +1235,8 @@
                 'login': 'loginModal',
                 'register': 'registerModal',
                 'forgotPassword': 'forgotPasswordModal',
-                'resetPassword': 'resetPasswordModal'
+                'resetPassword': 'resetPasswordModal',
+                'adminInvite': 'adminInviteModal'
             };
             
             const modalId = modalMap[type];
@@ -1382,6 +1384,20 @@
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Send Reset Link';
             }
+        });
+
+        // Admin invite 
+        document.addEventListener('DOMContentLoaded', () => {
+         const path = window.location.pathname;
+         const token = new URLSearchParams(window.location.search).get('token');
+      
+         if (path === '/reset-password' && token) {
+             openModal('resetPassword');
+         } else if (path === '/admin-invite' && token) {
+             openModal('adminInvite');
+         } else {
+             openModal('login');
+         }
         });
 
         // Register form handler
