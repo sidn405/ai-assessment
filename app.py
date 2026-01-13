@@ -5650,23 +5650,19 @@ def row_to_dict(cursor, row):
 
 @app.post("/api/admin/essay/{essay_id}/mark-reviewed")
 async def mark_essay_reviewed(essay_id: int, body: dict, admin=Depends(require_admin)):
-    token = body.get("notes", "")  # rename if you want; just not required
-    notes = (token or "").strip()
-
+    notes = body.get("notes", "").strip()
     conn = get_db()
     cursor = get_cursor(conn)
-
     try:
         # Optional: ensure essay exists (prevents silent no-op updates)
         if USE_POSTGRES:
             cursor.execute("SELECT id FROM user_essays WHERE id=%s", (essay_id,))
         else:
             cursor.execute("SELECT id FROM user_essays WHERE id=?", (essay_id,))
-
         exists = cursor.fetchone()
         if not exists:
             raise HTTPException(status_code=404, detail="Essay not found")
-
+        
         # Update reviewed fields
         if USE_POSTGRES:
             cursor.execute("""
@@ -5674,25 +5670,23 @@ async def mark_essay_reviewed(essay_id: int, body: dict, admin=Depends(require_a
                 SET reviewed_at = NOW(),
                     needs_admin_review = FALSE,
                     admin_reviewed = TRUE,
-                    admin_notes = %s,
-                    reviewed_at = %s
+                    admin_notes = %s
                 WHERE id = %s
-            """, (notes, admin["user_id"], essay_id))
+            """, (notes, essay_id))
         else:
             cursor.execute("""
                 UPDATE user_essays
-                SET reviewed_at = ?,
+                SET reviewed_at = datetime('now'),
                     needs_admin_review = 0,
                     admin_reviewed = 1,
-                    admin_notes = ?,
-                    reviewed_at = ?
+                    admin_notes = ?
                 WHERE id = ?
-            """, (datetime.utcnow().isoformat(), notes, admin["user_id"], essay_id))
-
+            """, (notes, essay_id))
+        
         conn.commit()
         print(f"✅ Essay {essay_id} marked as reviewed by admin {admin['user_id']}")
         return {"success": True}
-
+        
     except HTTPException:
         conn.rollback()
         raise
