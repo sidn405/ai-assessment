@@ -5640,48 +5640,65 @@ async def mark_alert_resolved(
     finally:
         conn.close()
 
+def row_to_dict(cursor, row):
+    if row is None:
+        return None
+    if hasattr(row, "keys"):
+        return dict(row)
+    cols = [d[0] for d in cursor.description]
+    return dict(zip(cols, row))
+
 @app.post("/api/admin/essay/{essay_id}/mark-reviewed")
-async def mark_essay_reviewed(
-    essay_id: int,
-    request: Request,
-    admin=Depends(require_admin),
-):
-    data = await request.json()
-    admin_notes = data.get("notes", "")
+async def mark_essay_reviewed(essay_id: int, body: dict, admin=Depends(require_admin)):
+    token = body.get("notes", "")  # rename if you want; just not required
+    notes = (token or "").strip()
 
     conn = get_db()
     cursor = get_cursor(conn)
 
     try:
+        # Optional: ensure essay exists (prevents silent no-op updates)
+        if USE_POSTGRES:
+            cursor.execute("SELECT id FROM user_essays WHERE id=%s", (essay_id,))
+        else:
+            cursor.execute("SELECT id FROM user_essays WHERE id=?", (essay_id,))
+
+        exists = cursor.fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Essay not found")
+
+        # Update reviewed fields
         if USE_POSTGRES:
             cursor.execute("""
                 UPDATE user_essays
                 SET reviewed_at = NOW(),
-                    admin_reviewed = TRUE,
                     needs_admin_review = FALSE,
+                    admin_reviewed = TRUE,
                     admin_notes = %s,
                     reviewed_by = %s
                 WHERE id = %s
-            """, (admin_notes, essay_id))
+            """, (notes, admin["user_id"], essay_id))
         else:
             cursor.execute("""
                 UPDATE user_essays
                 SET reviewed_at = ?,
-                    admin_reviewed = 1,
                     needs_admin_review = 0,
+                    admin_reviewed = 1,
                     admin_notes = ?,
                     reviewed_by = ?
                 WHERE id = ?
-            """, (admin_notes, essay_id))
+            """, (datetime.utcnow().isoformat(), notes, admin["user_id"], essay_id))
 
         conn.commit()
         print(f"✅ Essay {essay_id} marked as reviewed by admin {admin['user_id']}")
+        return {"success": True}
 
-        return {"success": True, "message": "Essay marked as reviewed"}
-
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception as e:
         conn.rollback()
-        print(f"Error marking essay reviewed: {e}")
+        print("Error marking essay reviewed:", e)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
