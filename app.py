@@ -6097,61 +6097,68 @@ async def accept_admin_invite(body: AcceptInviteReq):
     cur = get_cursor(conn)
 
     try:
-        # find pending invite
+        # 1) find pending invite (your schema uses used_at)
         if USE_POSTGRES:
             cur.execute("""
-            SELECT *
-            FROM admin_invites
-            WHERE token_hash=%s
+              SELECT id, email
+              FROM admin_invites
+              WHERE token_hash=%s
                 AND used_at IS NULL
                 AND revoked_at IS NULL
                 AND expires_at > NOW()
-            LIMIT 1
+              LIMIT 1
             """, (token_hash,))
         else:
             cur.execute("""
-            SELECT *
-            FROM admin_invites
-            WHERE token_hash=?
+              SELECT id, email
+              FROM admin_invites
+              WHERE token_hash=?
                 AND used_at IS NULL
                 AND revoked_at IS NULL
                 AND expires_at > ?
-            LIMIT 1
+              LIMIT 1
             """, (token_hash, datetime.utcnow().isoformat()))
-
 
         invite = cur.fetchone()
         if not invite:
             raise HTTPException(status_code=400, detail="Invalid or expired invite")
-        
+
         invite_id = invite["id"] if isinstance(invite, Mapping) else invite[0]
         email = (invite["email"] if isinstance(invite, Mapping) else invite[1]).lower().strip()
-    
+
+        # 2) hash password
         password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-        # upsert user as admin
+        # 3) upsert user as admin
         if USE_POSTGRES:
-            cur.execute("UPDATE admin_invites SET used_at = NOW() WHERE id = %s", (invite_id,))
+            cur.execute("SELECT id FROM users WHERE email=%s LIMIT 1", (email,))
         else:
-            cur.execute("UPDATE admin_invites SET used_at = ? WHERE id = ?", (datetime.utcnow().isoformat(), invite_id))
-
+            cur.execute("SELECT id FROM users WHERE email=? LIMIT 1", (email,))
 
         existing = cur.fetchone()
+
         if existing:
             user_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
             if USE_POSTGRES:
-                cur.execute("UPDATE users SET role='admin', password_hash=%s WHERE id=%s", (password_hash, user_id))
+                cur.execute(
+                    "UPDATE users SET role='admin', password_hash=%s WHERE id=%s",
+                    (password_hash, user_id)
+                )
             else:
-                cur.execute("UPDATE users SET role='admin', password_hash=? WHERE id=?", (password_hash, user_id))
+                cur.execute(
+                    "UPDATE users SET role='admin', password_hash=? WHERE id=?",
+                    (password_hash, user_id)
+                )
         else:
-            # Adjust full_name/created_at fields to your actual schema
+            # IMPORTANT: only fetchone() if you use RETURNING id
             if USE_POSTGRES:
                 cur.execute("""
                   INSERT INTO users (email, full_name, password_hash, role, created_at)
                   VALUES (%s, %s, %s, 'admin', NOW())
                   RETURNING id
                 """, (email, "Administrator", password_hash))
-                user_id = cur.fetchone()[0]
+                row = cur.fetchone()
+                user_id = row[0]  # RETURNING id gives a 1-col row
             else:
                 cur.execute("""
                   INSERT INTO users (email, full_name, password_hash, role, created_at)
@@ -6159,14 +6166,14 @@ async def accept_admin_invite(body: AcceptInviteReq):
                 """, (email, "Administrator", password_hash, datetime.utcnow().isoformat()))
                 user_id = cur.lastrowid
 
-        # mark invite accepted
+        # 4) mark invite used (NO fetchone here)
         if USE_POSTGRES:
-            cur.execute("UPDATE admin_invites SET admin_invites.created_at=NOW() WHERE token_hash=%s", (token_hash,))
+            cur.execute("UPDATE admin_invites SET used_at = NOW() WHERE id = %s", (invite_id,))
         else:
-            cur.execute("UPDATE admin_invites SET admin_invites.created_at=? WHERE token_hash=?", (datetime.utcnow().isoformat(), token_hash))
+            cur.execute("UPDATE admin_invites SET used_at = ? WHERE id = ?", (datetime.utcnow().isoformat(), invite_id))
 
         conn.commit()
-        return {"success": True}
+        return {"success": True, "user_id": user_id}
 
     except HTTPException:
         conn.rollback()
