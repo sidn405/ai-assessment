@@ -1103,6 +1103,18 @@
             </button>
           </div>
 
+          <!-- ✅ ADD THIS NEW FIELD -->
+          <div class="form-group">
+            <label for="registerConfirmPassword">Confirm Password</label>
+            <input type="password" id="registerConfirmPassword" required minlength="6">
+            <button type="button" class="password-toggle-btn"
+                    onclick="togglePassword('registerConfirmPassword')"
+                    aria-label="Toggle password visibility"
+                    title="Show/Hide password">
+                <i class="fas fa-eye" id="registerConfirmPassword-icon"></i>
+            </button>
+          </div>
+
           <div class="form-group" id="ageFieldWrapper">
             <label for="registerAge">Age</label>
             <input type="number" id="registerAge" min="5" max="100"
@@ -1407,8 +1419,26 @@
             const full_name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('registerConfirmPassword').value; // ✅ NEW
             const role = document.getElementById('registerRole').value;
             const errorDiv = document.getElementById('registerError');
+
+            // Clear previous errors
+            errorDiv.classList.remove('active');
+
+            // ✅ NEW: Check if passwords match
+            if (password !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.classList.add('active');
+                return;
+            }
+
+            // ✅ NEW: Validate password length
+            if (password.length < 6) {
+                errorDiv.textContent = 'Password must be at least 6 characters';
+                errorDiv.classList.add('active');
+                return;
+            }
 
             // Age is only required for students
             let age = null;
@@ -1418,49 +1448,49 @@
                 age = parseInt(document.getElementById('registerAge').value, 10);
 
                 if (!age || age < 5 || age > 100) {
-                errorDiv.textContent = 'Please enter a valid age (5-100)';
-                errorDiv.classList.add('active');
-                return;
+                    errorDiv.textContent = 'Please enter a valid age (5-100)';
+                    errorDiv.classList.add('active');
+                    return;
                 }
 
                 // Determine age band (students only)
                 if (age >= 5 && age <= 10) {
-                age_band = 'child';
+                    age_band = 'child';
                 } else if (age >= 11 && age <= 13) {
-                age_band = 'preteen';
+                    age_band = 'preteen';
                 } else if (age >= 14 && age <= 17) {
-                age_band = 'teen';
+                    age_band = 'teen';
                 } else if (age >= 18 && age <= 25) {
-                age_band = 'young_adult';
+                    age_band = 'young_adult';
                 } else {
-                age_band = 'adult';
+                    age_band = 'adult';
                 }
             }
 
             try {
                 const response = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    full_name: full_name.trim(),
-                    email: email.trim(),
-                    password,
-                    role,
-                    age,       // null for admin
-                    age_band   // null for admin
-                })
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: full_name.trim(),
+                        email: email.trim(),
+                        password,
+                        role,
+                        age,       // null for admin
+                        age_band   // null for admin
+                    })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
 
-                window.location.href = (data.user.role === 'admin') ? '/admin-dashboard' : '/dashboard';
+                    window.location.href = (data.user.role === 'admin') ? '/admin-dashboard' : '/dashboard';
                 } else {
-                errorDiv.textContent = data.detail || 'Registration failed';
-                errorDiv.classList.add('active');
+                    errorDiv.textContent = data.detail || 'Registration failed';
+                    errorDiv.classList.add('active');
                 }
             } catch (error) {
                 errorDiv.textContent = 'An error occurred. Please try again.';
@@ -1469,7 +1499,7 @@
         });
 
 
-        // Reset Password Form Handler
+        // Reset Password Form Handler (already has password match validation ✅)
         document.getElementById('resetPasswordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -1486,6 +1516,13 @@
             // Validate passwords match
             if (newPassword !== confirmPassword) {
                 errorDiv.textContent = 'Passwords do not match';
+                errorDiv.classList.add('active');
+                return;
+            }
+            
+            // Validate password length
+            if (newPassword.length < 6) {
+                errorDiv.textContent = 'Password must be at least 6 characters';
                 errorDiv.classList.add('active');
                 return;
             }
