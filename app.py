@@ -6087,15 +6087,11 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
 async def accept_admin_invite(body: AcceptInviteReq):
     raw_token = (body.token or "").strip()
     password = body.password or ""
-
     if not raw_token or not password:
         raise HTTPException(status_code=400, detail="Token and password are required")
-
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-
     conn = get_db()
     cur = get_cursor(conn)
-
     try:
         # 1) find pending invite (your schema uses used_at)
         if USE_POSTGRES:
@@ -6118,25 +6114,22 @@ async def accept_admin_invite(body: AcceptInviteReq):
                 AND expires_at > ?
               LIMIT 1
             """, (token_hash, datetime.utcnow().isoformat()))
-
         invite = cur.fetchone()
         if not invite:
             raise HTTPException(status_code=400, detail="Invalid or expired invite")
-
         invite_id = invite["id"] if isinstance(invite, Mapping) else invite[0]
         email = (invite["email"] if isinstance(invite, Mapping) else invite[1]).lower().strip()
-
+        
         # 2) hash password
         password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
+        
         # 3) upsert user as admin
         if USE_POSTGRES:
             cur.execute("SELECT id FROM users WHERE email=%s LIMIT 1", (email,))
         else:
             cur.execute("SELECT id FROM users WHERE email=? LIMIT 1", (email,))
-
         existing = cur.fetchone()
-
+        
         if existing:
             user_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
             if USE_POSTGRES:
@@ -6150,7 +6143,7 @@ async def accept_admin_invite(body: AcceptInviteReq):
                     (password_hash, user_id)
                 )
         else:
-            # IMPORTANT: only fetchone() if you use RETURNING id
+            # Create new admin user
             if USE_POSTGRES:
                 cur.execute("""
                   INSERT INTO users (email, full_name, password_hash, role, created_at)
@@ -6158,29 +6151,32 @@ async def accept_admin_invite(body: AcceptInviteReq):
                   RETURNING id
                 """, (email, "Administrator", password_hash))
                 row = cur.fetchone()
-                user_id = row[0]  # RETURNING id gives a 1-col row
+                # ✅ FIX: Handle both dict and tuple
+                user_id = row["id"] if isinstance(row, Mapping) else row[0]
             else:
                 cur.execute("""
                   INSERT INTO users (email, full_name, password_hash, role, created_at)
                   VALUES (?, ?, ?, 'admin', ?)
                 """, (email, "Administrator", password_hash, datetime.utcnow().isoformat()))
                 user_id = cur.lastrowid
-
-        # 4) mark invite used (NO fetchone here)
+        
+        # 4) mark invite used
         if USE_POSTGRES:
             cur.execute("UPDATE admin_invites SET used_at = NOW() WHERE id = %s", (invite_id,))
         else:
             cur.execute("UPDATE admin_invites SET used_at = ? WHERE id = ?", (datetime.utcnow().isoformat(), invite_id))
-
+        
         conn.commit()
         return {"success": True, "user_id": user_id}
-
+        
     except HTTPException:
         conn.rollback()
         raise
     except Exception as e:
         conn.rollback()
         print("accept_admin_invite error:", e)
+        import traceback
+        traceback.print_exc()  # ✅ Add full traceback for debugging
         raise HTTPException(status_code=500, detail="Failed to accept invite")
     finally:
         conn.close()
