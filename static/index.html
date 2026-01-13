@@ -1398,45 +1398,46 @@
             }
         });
 
-        // Admin invite 
+        // REPLACE WITH THIS:
         document.addEventListener('DOMContentLoaded', () => {
-         const path = window.location.pathname;
-         const token = new URLSearchParams(window.location.search).get('token');
-      
-         if (path === '/reset-password' && token) {
-             openModal('resetPassword');
-         } else if (path === '/admin-invite' && token) {
-             openModal('adminInvite');
-         } else {
-             openModal('login');
-         }
-        });
+            const path = window.location.pathname;
+            const token = new URLSearchParams(window.location.search).get('token');
 
-        // Register form handler
+            // Only open modals if there's a specific reason
+            if (path === '/reset-password' && token) {
+                openModal('resetPassword');
+            } else if (path === '/admin-invite' && token) {
+                openModal('adminInvite');
+            }
+            // Don't auto-open login on homepage
+        })
+
+        // Register form handler - UPDATE THE ERROR HANDLING
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const full_name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
-            const confirmPassword = document.getElementById('registerConfirmPassword').value; // ✅ NEW
+            const confirmPassword = document.getElementById('registerConfirmPassword').value;
             const role = document.getElementById('registerRole').value;
             const errorDiv = document.getElementById('registerError');
 
-            // Clear previous errors
-            errorDiv.classList.remove('active');
+            // ✅ FIX: Clear and show error properly
+            errorDiv.textContent = '';
+            errorDiv.style.display = 'none';
 
-            // ✅ NEW: Check if passwords match
+            // Check if passwords match
             if (password !== confirmPassword) {
                 errorDiv.textContent = 'Passwords do not match';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block'; // ✅ Use style.display instead of classList
                 return;
             }
 
-            // ✅ NEW: Validate password length
+            // Validate password length
             if (password.length < 6) {
                 errorDiv.textContent = 'Password must be at least 6 characters';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
                 return;
             }
 
@@ -1449,11 +1450,11 @@
 
                 if (!age || age < 5 || age > 100) {
                     errorDiv.textContent = 'Please enter a valid age (5-100)';
-                    errorDiv.classList.add('active');
+                    errorDiv.style.display = 'block';
                     return;
                 }
 
-                // Determine age band (students only)
+                // Determine age band
                 if (age >= 5 && age <= 10) {
                     age_band = 'child';
                 } else if (age >= 11 && age <= 13) {
@@ -1476,8 +1477,8 @@
                         email: email.trim(),
                         password,
                         role,
-                        age,       // null for admin
-                        age_band   // null for admin
+                        age,
+                        age_band
                     })
                 });
 
@@ -1486,20 +1487,18 @@
                 if (data.success) {
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-
                     window.location.href = (data.user.role === 'admin') ? '/admin-dashboard' : '/dashboard';
                 } else {
                     errorDiv.textContent = data.detail || 'Registration failed';
-                    errorDiv.classList.add('active');
+                    errorDiv.style.display = 'block';
                 }
             } catch (error) {
                 errorDiv.textContent = 'An error occurred. Please try again.';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
             }
         });
 
-
-        // Reset Password Form Handler (already has password match validation ✅)
+        // Reset Password Form Handler - ALSO FIX THIS
         document.getElementById('resetPasswordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -1509,21 +1508,22 @@
             const successDiv = document.getElementById('resetSuccess');
             const submitBtn = e.target.querySelector('button[type="submit"]');
             
-            // Clear previous messages
-            errorDiv.classList.remove('active');
-            successDiv.classList.remove('active');
+            // ✅ Clear previous messages properly
+            errorDiv.textContent = '';
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
             
             // Validate passwords match
             if (newPassword !== confirmPassword) {
                 errorDiv.textContent = 'Passwords do not match';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block'; // ✅ Use style.display
                 return;
             }
             
             // Validate password length
             if (newPassword.length < 6) {
                 errorDiv.textContent = 'Password must be at least 6 characters';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
                 return;
             }
             
@@ -1533,7 +1533,7 @@
             
             if (!token) {
                 errorDiv.textContent = 'Invalid or missing reset token. Please request a new password reset link.';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
                 return;
             }
             
@@ -1554,25 +1554,24 @@
                 
                 if (response.ok && data.success) {
                     successDiv.textContent = '✅ Password reset successful! Redirecting to login...';
-                    successDiv.classList.add('active');
+                    successDiv.style.display = 'block';
                     
                     setTimeout(() => {
                         closeModal('resetPassword');
                         openModal('login');
-                        // Clear the form
                         document.getElementById('resetPasswordForm').reset();
-                        successDiv.classList.remove('active');
+                        successDiv.style.display = 'none';
                     }, 2000);
                 } else {
                     errorDiv.textContent = data.detail || 'Failed to reset password. The link may be expired.';
-                    errorDiv.classList.add('active');
+                    errorDiv.style.display = 'block';
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Reset Password';
                 }
             } catch (error) {
                 console.error('Reset password error:', error);
                 errorDiv.textContent = 'An error occurred. Please try again.';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Reset Password';
             }
