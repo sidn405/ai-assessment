@@ -2260,33 +2260,34 @@
 
         async function markEssayReviewed() {
           try {
-              const token = localStorage.getItem("token");
-              const notes = document.getElementById("adminNotes").value || "";
+            const token = localStorage.getItem("token");
+            const notes = document.getElementById("adminNotesInput")?.value?.trim() || "";
         
-              if (!currentEssayId) {
+            if (!currentEssayId) {
               console.error("No currentEssayId set");
               return;
-              }
-        
-              const res = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
+            }
+       
+            const res = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
               method: "POST",
               headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
               },
               body: JSON.stringify({ notes }),
-              });
-        
-              if (!res.ok) {
+            });
+       
+            if (!res.ok) {
               console.log("mark-reviewed failed:", res.status, await res.text());
               return;
-              }
-        
-              console.log("✅ Marked reviewed");
-          } catch (e) {
-              console.error("Error marking essay reviewed:", e);
+            }
+       
+            console.log("✅ Marked reviewed");
+          }  catch (e) {
+            console.error("Error marking essay reviewed:", e);
           }
         }
+
 
 
         function closeEssayModal() {
