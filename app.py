@@ -5333,122 +5333,6 @@ async def admin_dashboard(admin=Depends(require_admin)):
     with open("admin-dashboard.html", "r", encoding="utf-8") as f:
         return f.read()
 
-    
-@app.get("/api/admin/alerts/unread")
-async def get_unread_alerts(limit: int = 50, admin=Depends(require_admin)):
-
-    conn = get_db()
-    cursor = get_cursor(conn)
-
-    try:
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT
-                    a.id AS alert_id,
-                    a.alert_type,
-                    a.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    a.essay_id,
-                    a.priority,
-                    a.message,
-                    a.details,
-                    a.created_at
-                FROM admin_alerts a
-                JOIN users u ON u.id = a.user_id
-                WHERE a.is_read = FALSE
-                ORDER BY a.created_at DESC
-                LIMIT %s
-            """, (limit,))
-        else:
-            cursor.execute("""
-                SELECT
-                    a.id AS alert_id,
-                    a.alert_type,
-                    a.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    a.essay_id,
-                    a.priority,
-                    a.message,
-                    a.details,
-                    a.created_at
-                FROM admin_alerts a
-                JOIN users u ON u.id = a.user_id
-                WHERE a.is_read = 0
-                ORDER BY a.created_at DESC
-                LIMIT ?
-            """, (limit,))
-
-        rows = cursor.fetchall() or []
-        alerts = [dict(r) for r in rows]
-        return {"success": True, "count": len(alerts), "alerts": alerts}
-
-    finally:
-        try:
-            cursor.close()
-        except Exception:
-            pass
-        conn.close()
-        
-@app.get("/api/admin/essays/needs-review")
-async def get_essays_needing_review(
-    limit: int = 50,
-    admin=Depends(require_admin),
-):
-
-    conn = get_db()
-    cursor = get_cursor(conn)
-
-    try:
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT
-                    e.id AS essay_id,
-                    e.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    e.essay_number,
-                    e.comprehension_score,
-                    e.comprehension_level,
-                    e.created_at
-                FROM user_essays e
-                JOIN users u ON u.id = e.user_id
-                WHERE e.needs_admin_review = TRUE
-                  AND e.admin_reviewed = FALSE
-                ORDER BY e.created_at DESC
-                LIMIT %s
-            """, (limit,))
-        else:
-            cursor.execute("""
-                SELECT
-                    e.id AS essay_id,
-                    e.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    e.essay_number,
-                    e.comprehension_score,
-                    e.comprehension_level,
-                    e.created_at
-                FROM user_essays e
-                JOIN users u ON u.id = e.user_id
-                WHERE e.needs_admin_review = 1
-                  AND e.admin_reviewed = 0
-                ORDER BY e.created_at DESC
-                LIMIT ?
-            """, (limit,))
-
-        rows = cursor.fetchall() or []
-        essays = [dict(r) for r in rows]
-        return {"success": True, "count": len(essays), "essays": essays}
-
-    finally:
-        try:
-            cursor.close()
-        except Exception:
-            pass
-        conn.close()
-
 # ============================================
 # ESSAY ALERTS & REVIEW ENDPOINTS
 # ============================================
@@ -5547,8 +5431,6 @@ async def get_unread_alerts(limit: int = 50, admin=Depends(require_admin)):
 
 @app.get("/api/admin/essays/needs-review")
 async def get_essays_needing_review(limit: int = 50, admin=Depends(require_admin)):
-    """Get essays that need admin review"""
-
     conn = get_db()
     cursor = get_cursor(conn)
 
@@ -5568,7 +5450,7 @@ async def get_essays_needing_review(limit: int = 50, admin=Depends(require_admin
                 FROM user_essays e
                 JOIN users u ON u.id = e.user_id
                 WHERE e.needs_admin_review = TRUE
-                  AND e.admin_reviewed = FALSE
+                  AND e.reviewed_at IS NULL
                 ORDER BY e.created_at DESC
                 LIMIT %s
             """, (limit,))
@@ -5587,7 +5469,7 @@ async def get_essays_needing_review(limit: int = 50, admin=Depends(require_admin
                 FROM user_essays e
                 JOIN users u ON u.id = e.user_id
                 WHERE e.needs_admin_review = 1
-                  AND e.admin_reviewed = 0
+                  AND e.reviewed_at IS NULL
                 ORDER BY e.created_at DESC
                 LIMIT ?
             """, (limit,))
@@ -5774,17 +5656,21 @@ async def mark_essay_reviewed(
         if USE_POSTGRES:
             cursor.execute("""
                 UPDATE user_essays
-                SET admin_reviewed = TRUE,
-                    reviewed_at = NOW(),
-                    admin_notes = %s
+                SET reviewed_at = NOW(),
+                    admin_reviewed = TRUE,
+                    needs_admin_review = FALSE,
+                    admin_notes = %s,
+                    reviewed_by = %s
                 WHERE id = %s
             """, (admin_notes, essay_id))
         else:
             cursor.execute("""
                 UPDATE user_essays
-                SET admin_reviewed = 1,
-                    reviewed_at = datetime('now'),
-                    admin_notes = ?
+                SET reviewed_at = ?,
+                    admin_reviewed = 1,
+                    needs_admin_review = 0,
+                    admin_notes = ?,
+                    reviewed_by = ?
                 WHERE id = ?
             """, (admin_notes, essay_id))
 
@@ -5833,7 +5719,7 @@ async def list_admins(admin=Depends(require_admin)):
 
         return {"success": True, "count": len(admins), "admins": admins}
     finally:
-        conn.close()
+        conn.close
         
 @app.post("/api/admin/invites")
 async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)):
@@ -5998,89 +5884,6 @@ def send_admin_invite_email(to_email: str, invite_url: str):
         raise HTTPException(status_code=500, detail=f"Resend error: {r.text}")
     
 from collections.abc import Mapping
-
-@app.post("/api/admin/invites")
-async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)):
-    email = (body.email or "").strip().lower()
-    if not email:
-        raise HTTPException(status_code=400, detail="Email is required")
-
-    raw_token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-    expires_at = datetime.utcnow() + timedelta(hours=24)
-
-    conn = get_db()
-    cur = get_cursor(conn)
-
-    try:
-        # Optional: prevent multiple active invites to same email
-        if USE_POSTGRES:
-            cur.execute("""
-                SELECT id
-                FROM admin_invites
-                WHERE email = %s
-                  AND used_at IS NULL
-                  AND revoked_at IS NULL
-                  AND expires_at > NOW()
-                ORDER BY id DESC
-                LIMIT 1
-            """, (email,))
-            existing = cur.fetchone()
-            if existing:
-                existing_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
-                return {"success": True, "invite_id": existing_id, "already_invited": True}
-
-            cur.execute("""
-                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id
-            """, (email, token_hash, expires_at, admin["user_id"]))
-
-            row = cur.fetchone()
-            if row is None:
-                raise HTTPException(status_code=500, detail="Invite insert returned no id")
-            invite_id = row["id"] if isinstance(row, Mapping) else row[0]
-
-        else:
-            # SQLite path
-            cur.execute("""
-                INSERT INTO admin_invites (email, token_hash, created_at, expires_at, invited_by)
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                email,
-                token_hash,
-                datetime.utcnow().isoformat(),
-                expires_at.isoformat(),
-                admin["user_id"],
-            ))
-            invite_id = cur.lastrowid
-
-        conn.commit()
-
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-    invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
-
-    try:
-        resend.Emails.send({
-            "from": FROM_EMAIL,
-            "to": [email],
-            "subject": "You’ve been invited as an administrator",
-            "html": f"""
-              <p>You’ve been invited to become an administrator.</p>
-              <p>This link expires in 24 hours:</p>
-              <p><a href="{invite_link}">Accept Admin Invite</a></p>
-            """
-        })
-    except Exception as e:
-        # Invite is created; email send failed
-        raise HTTPException(status_code=500, detail=f"Invite created (id={invite_id}) but email failed: {e}")
-
-    return {"success": True, "invite_id": invite_id}
 
 
 @app.post("/api/admin/invites/accept")

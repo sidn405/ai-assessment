@@ -2262,12 +2262,9 @@
           try {
             const token = localStorage.getItem("token");
             const notes = document.getElementById("adminNotesInput")?.value?.trim() || "";
-        
-            if (!currentEssayId) {
-              console.error("No currentEssayId set");
-              return;
-            }
-       
+         
+            if (!currentEssayId) return console.error("No currentEssayId set");
+         
             const res = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
               method: "POST",
               headers: {
@@ -2276,17 +2273,30 @@
               },
               body: JSON.stringify({ notes }),
             });
-       
+         
             if (!res.ok) {
               console.log("mark-reviewed failed:", res.status, await res.text());
               return;
             }
-       
+         
             console.log("✅ Marked reviewed");
-          }  catch (e) {
+         
+            // ✅ 1) remove row immediately (make sure your row has data-essay-id)
+            const row = document.querySelector(`[data-essay-id="${currentEssayId}"]`);
+            if (row) row.remove();
+         
+            // ✅ 2) close modal
+            closeEssayModal();
+         
+            // ✅ 3) refresh dashboard counts + list
+            await loadEssayAlerts();
+            await loadEssaysNeedingReview();
+         
+          } catch (e) {
             console.error("Error marking essay reviewed:", e);
           }
         }
+
 
 
 
