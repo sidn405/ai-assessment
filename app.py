@@ -5675,7 +5675,7 @@ async def mark_essay_reviewed(essay_id: int, body: dict, admin=Depends(require_a
                     needs_admin_review = FALSE,
                     admin_reviewed = TRUE,
                     admin_notes = %s,
-                    reviewed_by = %s
+                    reviewed_at = %s
                 WHERE id = %s
             """, (notes, admin["user_id"], essay_id))
         else:
@@ -5685,7 +5685,7 @@ async def mark_essay_reviewed(essay_id: int, body: dict, admin=Depends(require_a
                     needs_admin_review = 0,
                     admin_reviewed = 1,
                     admin_notes = ?,
-                    reviewed_by = ?
+                    reviewed_at = ?
                 WHERE id = ?
             """, (datetime.utcnow().isoformat(), notes, admin["user_id"], essay_id))
 
