@@ -383,12 +383,16 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
             background: rgba(0,0,0,0.7);
-            z-index: 2000;
+            z-index: 10000;
             align-items: center;
             justify-content: center;
+            padding: 1rem;
+            box-sizing: border-box;
         }
         
         .modal.active {
@@ -403,16 +407,14 @@
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
-            box-sizing: border-box; /* Add this */
-            margin: 0 auto; /* Add this to center it */
+            box-sizing: border-box;
+            position: relative;
         }
 
-        /* Add responsive adjustments */
         @media (max-width: 768px) {
             .modal-content {
                 width: 95%;
                 padding: 1rem;
-                max-height: 90vh;
             }
         }
 
