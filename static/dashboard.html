@@ -3636,17 +3636,6 @@
 
         console.log('📝 Polly script loaded');
 
-        console.log('✅ Amazon Polly TTS initialized');
-
-        // Test credentials
-        AWS.config.credentials.get(function(err) {
-            if (err) {
-                console.error('❌ Credentials error:', err);
-            } else {
-                console.log('✅ AWS credentials loaded successfully');
-                console.log('Identity ID:', AWS.config.credentials.identityId);
-            }
-        });
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
