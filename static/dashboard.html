@@ -3471,44 +3471,80 @@
           tutorHasGreeted = true;
         }
 
-        // On dashboard page load
-        window.addEventListener('load', function() {
-            const userName = localStorage.getItem('userName') || 'there';
-            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
-            
-            // Only play welcome on first load after login
-            if (justLoggedIn === 'true') {
-                sessionStorage.removeItem('justLoggedIn'); // Clear flag
-                
-                // Small delay to ensure page is fully loaded
-                setTimeout(() => {
-                    playLoginWelcome(userName);
-                }, 500);
-            }
-        });
+        // ========================================
+        // WELCOME GREETING SYSTEM
+        // ========================================
 
-        // Play sound and welcome message after login
+        // Wait for Polly to be ready, then play welcome
+        function waitForPollyThenWelcome(userName) {
+            if (!awsReady || !polly) {
+                console.log('⏳ Waiting for Polly to initialize before welcome...');
+                setTimeout(() => waitForPollyThenWelcome(userName), 200);
+                return;
+            }
+            
+            console.log('✅ Polly ready! Playing welcome for:', userName);
+            playLoginWelcome(userName);
+        }
+
+        // Play doorbell sound then Polly greeting
         async function playLoginWelcome(userName) {
+            const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+            
             try {
-                // Play doorbell chime first
-                const doorbell = new Audio('static/sounds/login.mp3');
-                doorbell.volume = 0.5; // Adjust volume (0.0 to 1.0)
+                console.log('🔔 Playing doorbell sound...');
+                const doorbell = new Audio('/static/sounds/login.mp3');
+                doorbell.volume = 0.5;
                 
                 await doorbell.play();
+                console.log('✅ Doorbell playing');
                 
-                // Wait for doorbell to finish, then speak welcome
+                // After doorbell finishes, speak with Polly
                 doorbell.onended = async () => {
-                    const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+                    console.log('🔔 Doorbell finished, now speaking with Polly...');
                     await speakTutorMessage(welcomeMessage);
                 };
                 
+                // Fallback: if doorbell doesn't play, still speak after 2 seconds
+                setTimeout(() => {
+                    if (!currentAudio) {
+                        console.log('⚠️ Doorbell timeout, speaking anyway...');
+                        speakTutorMessage(welcomeMessage);
+                    }
+                }, 2000);
+                
             } catch (error) {
-                console.error('Error playing welcome:', error);
-                // If doorbell fails, still try to speak the welcome
-                const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+                console.error('❌ Error playing doorbell:', error);
+                // If doorbell fails, still speak the message
+                console.log('🔄 Doorbell failed, speaking message anyway...');
                 await speakTutorMessage(welcomeMessage);
             }
         }
+
+        // On dashboard page load - check for welcome greeting
+        window.addEventListener('load', function() {
+            console.log('📄 Dashboard loaded, checking for welcome greeting...');
+            
+            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
+            
+            if (justLoggedIn === 'true') {
+                console.log('✅ Just logged in flag detected');
+                sessionStorage.removeItem('justLoggedIn'); // Clear flag immediately
+                
+                // Get user name from localStorage
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                const userName = user.full_name?.split(' ')[0] || user.username || 'there';
+                
+                console.log('👤 User name:', userName);
+                
+                // Wait a bit for page to settle, then check if Polly is ready
+                setTimeout(() => {
+                    waitForPollyThenWelcome(userName);
+                }, 1000);
+            } else {
+                console.log('ℹ️ No welcome greeting needed (not just logged in)');
+            }
+        });
 
         // ========================================
         // AMAZON POLLY TTS CONFIGURATION
