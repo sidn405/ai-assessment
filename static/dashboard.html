@@ -3485,60 +3485,73 @@
         // AMAZON POLLY TTS CONFIGURATION
         // ========================================
 
-        function initializePolly() {
-            // Check if AWS SDK is loaded
-            if (typeof AWS === 'undefined') {
-                console.log('⏳ Waiting for AWS SDK...');
-                setTimeout(initializePolly, 100);
-                return;
-            }
-
-            // Configure AWS Cognito
-            AWS.config.region = 'us-east-1';
-            AWS.config.credentials = new AWS.CognitoIdentityCredentials({
-                IdentityPoolId: 'us-east-1:013556af-498b-4458-966d-5c2c48197abf'
-            });
-
-            // Test credentials
-            AWS.config.credentials.get(function(err) {
-                if (err) {
-                    console.error('❌ AWS Credentials error:', err);
-                } else {
-                    console.log('✅ AWS Polly initialized successfully');
-                }
-            });
-        }
-
-        // Initialize Polly when page is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializePolly);
-        } else {
-            initializePolly();
-        }
-
-        const polly = new AWS.Polly();
+        let polly = null;
         let currentAudio = null;
+        let awsReady = false;
 
         const TUTOR_VOICE = {
             voiceId: 'Danielle',
             engine: 'generative'
         };
 
-        // Rest of your Polly functions (speakTutorMessage, fallbackToWebSpeech, etc.)
+        // Initialize Polly when AWS SDK is loaded
+        function initializePolly() {
+            if (typeof AWS === 'undefined') {
+                console.log('⏳ AWS SDK not loaded yet, retrying...');
+                setTimeout(initializePolly, 100);
+                return;
+            }
+
+            try {
+                // Configure AWS Cognito
+                AWS.config.region = 'us-east-1';
+                AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+                    IdentityPoolId: 'us-east-1:013556af-498b-4458-966d-5c2c48197abf'
+                });
+
+                polly = new AWS.Polly();
+
+                // Test credentials
+                AWS.config.credentials.get(function(err) {
+                    if (err) {
+                        console.error('❌ AWS Credentials error:', err);
+                        awsReady = false;
+                    } else {
+                        console.log('✅ AWS Polly initialized successfully');
+                        awsReady = true;
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error initializing Polly:', error);
+                awsReady = false;
+            }
+        }
+
+        // Start initialization when page loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(initializePolly, 500); // Wait 500ms after page load
+            });
+        } else {
+            setTimeout(initializePolly, 500);
+        }
+
+        // Speak with Amazon Polly
         async function speakTutorMessage(text) {
             if (!text || !text.trim()) return;
             
-            // Check if AWS is ready
-            if (typeof AWS === 'undefined' || !AWS.config.credentials) {
-                console.warn('⚠️ AWS not ready, using fallback');
-                fallbackToWebSpeech(text);
-                return;
-            }
-            
+            // Stop any currently playing audio
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
                 currentAudio = null;
+            }
+            
+            // Check if AWS is ready
+            if (!awsReady || !polly) {
+                console.warn('⚠️ AWS not ready, using fallback');
+                fallbackToWebSpeech(text);
+                return;
             }
             
             try {
@@ -3552,8 +3565,7 @@
                     LanguageCode: 'en-US'
                 };
                 
-                const pollyInstance = new AWS.Polly();
-                const data = await pollyInstance.synthesizeSpeech(params).promise();
+                const data = await polly.synthesizeSpeech(params).promise();
                 
                 console.log('✅ Speech synthesized successfully');
                 
@@ -3575,6 +3587,7 @@
             }
         }
 
+        // Fallback to browser speech
         function fallbackToWebSpeech(text) {
             console.log('⚠️ Falling back to browser speech');
             window.speechSynthesis.cancel();
@@ -3592,6 +3605,7 @@
             window.speechSynthesis.speak(u);
         }
 
+        // Test function
         function testTutorVoice() {
             speakTutorMessage("Hello! I'm your reading tutor. I'm here to help you improve your reading skills.");
         }
