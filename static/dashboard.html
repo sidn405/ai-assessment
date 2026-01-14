@@ -3517,9 +3517,16 @@
 
         // Initialize Polly when AWS SDK is fully loaded
         function initializePolly() {
-            // Check if AWS exists and is fully loaded
-            if (typeof AWS === 'undefined' || typeof AWS.Polly === 'undefined') {
-                console.log('⏳ Waiting for AWS SDK to load...');
+            // Check if AWS exists
+            if (typeof AWS === 'undefined') {
+                console.log('⏳ Waiting for AWS object...');
+                setTimeout(initializePolly, 200);
+                return;
+            }
+            
+            // Check if Polly is available
+            if (!AWS.Polly) {
+                console.log('⏳ Waiting for AWS.Polly...');
                 setTimeout(initializePolly, 200);
                 return;
             }
@@ -3547,9 +3554,8 @@
                 });
             } catch (error) {
                 console.error('❌ Error initializing Polly:', error);
+                console.error('Error details:', error.message);
                 awsReady = false;
-                // Retry once more
-                setTimeout(initializePolly, 500);
             }
         }
 
