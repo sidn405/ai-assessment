@@ -379,16 +379,17 @@
         
         /* Modal */
         .modal {
-            display: none;
+            display: flex;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.7);
-            z-index: 2000;
             align-items: center;
             justify-content: center;
+            padding: 1rem; /* Add padding on all sides */
+            box-sizing: border-box;
         }
         
         .modal.active {
@@ -403,6 +404,9 @@
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
+            padding: 2rem;
+            box-sizing: border-box;
+            position: relative;
         }
         
         .close-modal {
@@ -411,6 +415,18 @@
             cursor: pointer;
             background: none;
             border: none;
+        }
+
+        /* For smaller screens */
+        @media (max-width: 768px) {
+            .modal {
+                padding: 0.5rem;
+            }
+            
+            .modal-content {
+                padding: 1rem;
+                max-height: 95vh;
+            }
         }
         
         /* Responsive */
@@ -1204,7 +1220,7 @@
     <style>
     /* Footer Styles */
     .dashboard-footer {
-        background: linear-gradient(135deg, #667eea 0%, #403ed3 100%);
+        background: linear-gradient(135deg, #4c61c2 0%, #231a9e 100%);
         color: white;
         margin-left: 280px;
         padding: 3rem 2rem 1.5rem;
@@ -1309,7 +1325,7 @@
         
         <div class="footer-bottom">
             <p>&copy; 2025 Achieve 365. Admin-dashboard All rights reserved.</p>
-            <p>Made with ❤️ for learners everywhere</p>
+            <p>Made with ❤️ for learners everywhere.</p>
         </div>
     </footer>
 
