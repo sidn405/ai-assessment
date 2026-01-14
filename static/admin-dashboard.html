@@ -380,7 +380,7 @@
         /* Modal */
         .modal {
             display: none;
-            position: fixed !important;
+            position: fixed;
             top: 0 !important;
             left: 0 !important;
             right: 0 !important;
@@ -388,11 +388,12 @@
             width: 100vw !important;
             height: 100vh !important;
             background: rgba(0,0,0,0.7);
-            z-index: 99999 !important; /* Higher than sidebar's 1000 */
+            z-index: 10000 !important; /* Very high z-index */
             align-items: center;
             justify-content: center;
             padding: 1rem;
             box-sizing: border-box;
+            margin: 0 !important;
         }
 
         .modal.active {
@@ -409,7 +410,9 @@
             overflow-y: auto;
             box-sizing: border-box;
             position: relative;
-            z-index: 100000 !important; /* Even higher */
+            margin-left: auto;
+            margin-right: auto;
+            transform: translateZ(0); /* Force GPU rendering */
         }
 
         @media (max-width: 768px) {
@@ -552,7 +555,7 @@
                 top: 0 !important;
                 height: 100vh !important;
                 width: 280px !important;
-                z-index: 1000 !important;
+                z-index: 100 !important;
                 transition: left 0.3s ease !important;
                 overflow-y: auto !important;
             }
