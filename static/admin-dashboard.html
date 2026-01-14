@@ -403,6 +403,24 @@
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
+            box-sizing: border-box; /* Add this */
+            margin: 0 auto; /* Add this to center it */
+        }
+
+        /* Add responsive adjustments */
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                padding: 1rem;
+                max-height: 90vh;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .modal-content {
+                width: 98%;
+                padding: 0.75rem;
+            }
         }
         
         .close-modal {
@@ -2138,7 +2156,7 @@
 
             
             document.getElementById('essayDetailsContent').innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
                     <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
                         <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Student</div>
                         <div style="font-weight: bold;">${escapeHtml(essay.user_name)}</div>
