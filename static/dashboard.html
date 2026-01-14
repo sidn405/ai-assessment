@@ -26,6 +26,8 @@
     
     <!-- Android -->
     <meta name="mobile-web-app-capable" content="yes">
+
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js"></script>
     
     <title>Achieve 365 - Student Dashboard</title>
     
@@ -3482,80 +3484,102 @@
         }
 
         // ========================================
-        // ADD ALL VOICE CODE HERE
+        // AMAZON POLLY TTS CONFIGURATION
         // ========================================
 
-        // Ensure voices are loaded before use
-        function ensureVoicesLoaded(callback) {
-            const voices = window.speechSynthesis.getVoices();
-            if (voices.length > 0) {
-                if (callback) callback();
-            } else {
-                window.speechSynthesis.onvoiceschanged = () => {
-                    if (callback) callback();
-                };
-            }
-        }
+        // Configure AWS Cognito (SECURE - No API keys exposed)
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: 'us-east-1:013556af-498b-4458-966d-5c2c48197abf'
+        });
 
-        // Get the best available voice
-        function getBestTutorVoice() {
-            const voices = window.speechSynthesis.getVoices() || [];
-            
-            // Priority order: Best sounding voices first
-            const voicePriorities = [
-                // Google voices (best quality on Chrome/Android)
-                /Google US English|Google UK English Female/i,
-                
-                // Apple voices (Mac/iOS - very natural)
-                /Samantha|Karen|Victoria|Fiona|Moira|Ava|Nicky/i,
-                
-                // Microsoft voices (Windows - good quality)
-                /Microsoft Zira|Microsoft Eva|Microsoft Hazel/i,
-                
-                // Any premium female voice
-                /Premium.*Female|Enhanced.*Female/i,
-                
-                // Any female voice
-                /Female/i,
-                
-                // Fallback to any US English
-                /en-US/i
-            ];
-            
-            // Find the best available voice
-            for (const pattern of voicePriorities) {
-                const voice = voices.find(v => pattern.test(v.name) && v.lang.includes('en'));
-                if (voice) {
-                    console.log('Selected tutor voice:', voice.name);
-                    return voice;
-                }
-            }
-            
-            // Ultimate fallback
-            return voices.find(v => v.lang.includes('en')) || voices[0];
-        }
+        const polly = new AWS.Polly();
+        let currentAudio = null;
 
-        // Improved speak function
-        function speakTutorMessage(text) {
+        // Polly voice configuration
+        const TUTOR_VOICE = {
+            voiceId: 'Danielle',     // The generative voice you selected
+            engine: 'generative'      // Generative engine for most natural sound
+        };
+
+        // Speak with Amazon Polly
+        async function speakTutorMessage(text) {
             if (!text || !text.trim()) return;
             
+            // Stop any currently playing audio
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
+            }
+            
+            try {
+                console.log('🔊 Synthesizing speech with Polly...');
+                
+                const params = {
+                    Text: text,
+                    OutputFormat: 'mp3',
+                    VoiceId: TUTOR_VOICE.voiceId,
+                    Engine: TUTOR_VOICE.engine,
+                    LanguageCode: 'en-US'
+                };
+                
+                // Get speech from Polly
+                const data = await polly.synthesizeSpeech(params).promise();
+                
+                console.log('✅ Speech synthesized successfully');
+                
+                // Convert to audio and play
+                const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                currentAudio = new Audio(audioUrl);
+                await currentAudio.play();
+                
+                // Cleanup when done
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                    console.log('🎵 Audio playback completed');
+                };
+                
+            } catch (error) {
+                console.error('❌ Polly TTS error:', error);
+                fallbackToWebSpeech(text);
+            }
+        }
+
+        // Fallback to browser speech
+        function fallbackToWebSpeech(text) {
+            console.log('⚠️ Falling back to browser speech');
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
             u.rate = 0.9;
             u.pitch = 1.1;
             u.volume = 1.0;
             
-            const bestVoice = getBestTutorVoice();
-            if (bestVoice) {
-                u.voice = bestVoice;
-            }
+            const voices = window.speechSynthesis.getVoices() || [];
+            const preferred = voices.find(v =>
+                /Google US English|Samantha|Female/i.test(v.name)
+            );
+            if (preferred) u.voice = preferred;
             
             window.speechSynthesis.speak(u);
         }
 
-        // ========================================
-        // END VOICE CODE
-        // ========================================
+        // Test function
+        function testTutorVoice() {
+            speakTutorMessage("Hello! I'm your reading tutor. I'm here to help you improve your reading skills.");
+        }
+
+        // Test credentials on load
+        AWS.config.credentials.get(function(err) {
+            if (err) {
+                console.error('❌ AWS Credentials error:', err);
+            } else {
+                console.log('✅ AWS Polly initialized successfully');
+            }
+        });
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
