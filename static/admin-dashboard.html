@@ -2525,29 +2525,6 @@
             }
         }
 
-        async function viewEssayDetails(essayId) {
-            const token = localStorage.getItem('token');
-            currentEssayId = essayId;
-            
-            document.getElementById('essayDetailsModal').classList.add('active');
-            document.getElementById('essayModalTitle').textContent = 'Loading essay...';
-            document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
-            
-            try {
-                const response = await fetch(`/api/admin/essay/${essayId}/details?`, {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    displayEssayDetails(data.essay);
-                }
-            } catch (error) {
-                console.error('Error loading essay:', error);
-                document.getElementById('essayDetailsContent').innerHTML = '<p style="color: #dc3545;">Failed to load essay details.</p>';
-            }
-        }
-
         function safeJsonParse(val, fallback) {
             if (val === null || val === undefined) return fallback;
             if (typeof val !== 'string') return val; // already object/array
