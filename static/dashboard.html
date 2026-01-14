@@ -3677,19 +3677,32 @@
             playLoginWelcome(userName);
         }
 
-        // Play doorbell sound then Polly greeting
         async function playLoginWelcome(userName) {
             const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+            const audioUnlocked = sessionStorage.getItem('audioUnlocked') === 'true';
+            
+            console.log('🔊 Audio unlocked status:', audioUnlocked);
             
             try {
                 console.log('🔔 Playing doorbell sound...');
                 const doorbell = new Audio('/static/sounds/login.mp3');
                 doorbell.volume = 0.5;
                 
-                await doorbell.play();
-                console.log('✅ Doorbell playing');
+                const playPromise = doorbell.play();
                 
-                // After doorbell finishes, speak with Polly
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('✅ Doorbell playing');
+                        })
+                        .catch(error => {
+                            console.log('⚠️ Doorbell blocked:', error.message);
+                            // Doorbell failed, just speak message
+                            speakTutorMessage(welcomeMessage);
+                        });
+                }
+                
+                // Speak after doorbell finishes
                 doorbell.onended = async () => {
                     console.log('🔔 Doorbell finished, now speaking with Polly...');
                     await speakTutorMessage(welcomeMessage);
