@@ -26,8 +26,6 @@
     
     <!-- Android -->
     <meta name="mobile-web-app-capable" content="yes">
-
-    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js"></script>
     
     <title>Achieve 365 - Student Dashboard</title>
     
@@ -3487,26 +3485,56 @@
         // AMAZON POLLY TTS CONFIGURATION
         // ========================================
 
-        // Configure AWS Cognito (SECURE - No API keys exposed)
-        AWS.config.region = 'us-east-1'; // Change if you used a different region
-        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
-            IdentityPoolId: 'YOUR_IDENTITY_POOL_ID_HERE' // Paste the ID you copied
-        });
+        function initializePolly() {
+            // Check if AWS SDK is loaded
+            if (typeof AWS === 'undefined') {
+                console.log('⏳ Waiting for AWS SDK...');
+                setTimeout(initializePolly, 100);
+                return;
+            }
+
+            // Configure AWS Cognito
+            AWS.config.region = 'us-east-1';
+            AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+                IdentityPoolId: 'us-east-1:013556af-498b-4458-966d-5c2c48197abf'
+            });
+
+            // Test credentials
+            AWS.config.credentials.get(function(err) {
+                if (err) {
+                    console.error('❌ AWS Credentials error:', err);
+                } else {
+                    console.log('✅ AWS Polly initialized successfully');
+                }
+            });
+        }
+
+        // Initialize Polly when page is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializePolly);
+        } else {
+            initializePolly();
+        }
 
         const polly = new AWS.Polly();
         let currentAudio = null;
 
-        // Polly voice configuration
         const TUTOR_VOICE = {
-            voiceId: 'Danielle',  // The voice you selected in the console
-            engine: 'generative'   // Matches the "Generative" engine you selected
+            voiceId: 'Danielle',
+            engine: 'generative'
         };
 
-        // Speak with Amazon Polly
+        // Rest of your Polly functions (speakTutorMessage, fallbackToWebSpeech, etc.)
         async function speakTutorMessage(text) {
             if (!text || !text.trim()) return;
             
-            // Stop any currently playing audio
+            // Check if AWS is ready
+            if (typeof AWS === 'undefined' || !AWS.config.credentials) {
+                console.warn('⚠️ AWS not ready, using fallback');
+                fallbackToWebSpeech(text);
+                return;
+            }
+            
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
@@ -3524,19 +3552,17 @@
                     LanguageCode: 'en-US'
                 };
                 
-                // Get speech from Polly
-                const data = await polly.synthesizeSpeech(params).promise();
+                const pollyInstance = new AWS.Polly();
+                const data = await pollyInstance.synthesizeSpeech(params).promise();
                 
                 console.log('✅ Speech synthesized successfully');
                 
-                // Convert to audio and play
                 const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
                 const audioUrl = URL.createObjectURL(audioBlob);
                 
                 currentAudio = new Audio(audioUrl);
                 await currentAudio.play();
                 
-                // Cleanup when done
                 currentAudio.onended = () => {
                     URL.revokeObjectURL(audioUrl);
                     currentAudio = null;
@@ -3545,12 +3571,10 @@
                 
             } catch (error) {
                 console.error('❌ Polly TTS error:', error);
-                // Fallback to browser speech if Polly fails
                 fallbackToWebSpeech(text);
             }
         }
 
-        // Fallback to browser speech synthesis
         function fallbackToWebSpeech(text) {
             console.log('⚠️ Falling back to browser speech');
             window.speechSynthesis.cancel();
@@ -3568,16 +3592,6 @@
             window.speechSynthesis.speak(u);
         }
 
-        // Stop all audio
-        function stopTutorSpeech() {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio = null;
-            }
-            window.speechSynthesis.cancel();
-        }
-
-        // Test function
         function testTutorVoice() {
             speakTutorMessage("Hello! I'm your reading tutor. I'm here to help you improve your reading skills.");
         }
@@ -7207,6 +7221,6 @@
     <button class="tutor-close" onclick="hideTutor()">✕</button>
     <button class="tutor-mute" onclick="toggleTutorMute()"><span id="muteIcon">🔊</span></button>
     </div>
-
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js" defer></script>
 </body>
 </html>
