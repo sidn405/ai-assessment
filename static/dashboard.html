@@ -3494,15 +3494,18 @@
             engine: 'generative'
         };
 
-        // Initialize Polly when AWS SDK is loaded
+        // Initialize Polly when AWS SDK is fully loaded
         function initializePolly() {
-            if (typeof AWS === 'undefined') {
-                console.log('⏳ AWS SDK not loaded yet, retrying...');
-                setTimeout(initializePolly, 100);
+            // Check if AWS exists and is fully loaded
+            if (typeof AWS === 'undefined' || typeof AWS.Polly === 'undefined') {
+                console.log('⏳ Waiting for AWS SDK to load...');
+                setTimeout(initializePolly, 200);
                 return;
             }
 
             try {
+                console.log('🔧 Configuring AWS Polly...');
+                
                 // Configure AWS Cognito
                 AWS.config.region = 'us-east-1';
                 AWS.config.credentials = new AWS.CognitoIdentityCredentials({
@@ -3517,24 +3520,23 @@
                         console.error('❌ AWS Credentials error:', err);
                         awsReady = false;
                     } else {
-                        console.log('✅ AWS Polly initialized successfully');
+                        console.log('✅ AWS Polly ready to use!');
                         awsReady = true;
                     }
                 });
             } catch (error) {
                 console.error('❌ Error initializing Polly:', error);
                 awsReady = false;
+                // Retry once more
+                setTimeout(initializePolly, 500);
             }
         }
 
-        // Start initialization when page loads
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(initializePolly, 500); // Wait 500ms after page load
-            });
-        } else {
-            setTimeout(initializePolly, 500);
-        }
+        // Start initialization after a delay to ensure AWS SDK loads
+        window.addEventListener('load', function() {
+            console.log('📄 Page loaded, waiting for AWS SDK...');
+            setTimeout(initializePolly, 1000); // Wait 1 second after page load
+        });
 
         // Speak with Amazon Polly
         async function speakTutorMessage(text) {
@@ -3542,20 +3544,24 @@
             
             // Stop any currently playing audio
             if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
+                try {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                } catch (e) {
+                    console.warn('Could not stop current audio:', e);
+                }
                 currentAudio = null;
             }
             
             // Check if AWS is ready
             if (!awsReady || !polly) {
-                console.warn('⚠️ AWS not ready, using fallback');
+                console.warn('⚠️ Polly not ready, using browser speech');
                 fallbackToWebSpeech(text);
                 return;
             }
             
             try {
-                console.log('🔊 Synthesizing speech with Polly...');
+                console.log('🔊 Synthesizing with Polly:', text.substring(0, 50) + '...');
                 
                 const params = {
                     Text: text,
@@ -3567,48 +3573,68 @@
                 
                 const data = await polly.synthesizeSpeech(params).promise();
                 
-                console.log('✅ Speech synthesized successfully');
+                console.log('✅ Polly synthesis complete');
                 
                 const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
                 const audioUrl = URL.createObjectURL(audioBlob);
                 
                 currentAudio = new Audio(audioUrl);
-                await currentAudio.play();
                 
                 currentAudio.onended = () => {
                     URL.revokeObjectURL(audioUrl);
                     currentAudio = null;
-                    console.log('🎵 Audio playback completed');
+                    console.log('🎵 Playback finished');
                 };
                 
+                currentAudio.onerror = (e) => {
+                    console.error('Audio playback error:', e);
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                await currentAudio.play();
+                
             } catch (error) {
-                console.error('❌ Polly TTS error:', error);
+                console.error('❌ Polly error:', error);
                 fallbackToWebSpeech(text);
             }
         }
 
         // Fallback to browser speech
         function fallbackToWebSpeech(text) {
-            console.log('⚠️ Falling back to browser speech');
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.rate = 0.9;
-            u.pitch = 1.1;
-            u.volume = 1.0;
+            console.log('🔄 Using browser speech synthesis');
             
-            const voices = window.speechSynthesis.getVoices() || [];
-            const preferred = voices.find(v =>
-                /Google US English|Samantha|Female/i.test(v.name)
-            );
-            if (preferred) u.voice = preferred;
-            
-            window.speechSynthesis.speak(u);
+            try {
+                window.speechSynthesis.cancel();
+                
+                const u = new SpeechSynthesisUtterance(text);
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                u.volume = 1.0;
+                
+                const voices = window.speechSynthesis.getVoices() || [];
+                const preferred = voices.find(v =>
+                    /Google US English|Samantha|Female/i.test(v.name)
+                );
+                
+                if (preferred) {
+                    u.voice = preferred;
+                    console.log('Using voice:', preferred.name);
+                }
+                
+                window.speechSynthesis.speak(u);
+            } catch (error) {
+                console.error('Browser speech error:', error);
+            }
         }
 
         // Test function
         function testTutorVoice() {
+            console.log('🧪 Testing tutor voice...');
             speakTutorMessage("Hello! I'm your reading tutor. I'm here to help you improve your reading skills.");
         }
+
+        console.log('📝 Polly script loaded');
 
         console.log('✅ Amazon Polly TTS initialized');
 
