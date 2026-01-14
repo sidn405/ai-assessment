@@ -1284,6 +1284,29 @@
             }
         };
 
+        // Unlock audio on first user interaction (login button click)
+        let audioUnlocked = false;
+
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            
+            console.log('🔓 Unlocking audio...');
+            
+            // Play silent audio to unlock
+            const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAQKAAAAAAAAA4SYjRKKAAAAAAD/+xDEAAPAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxAkDwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
+            silentAudio.volume = 0.01;
+            
+            silentAudio.play()
+                .then(() => {
+                    console.log('✅ Audio unlocked successfully');
+                    audioUnlocked = true;
+                    sessionStorage.setItem('audioUnlocked', 'true');
+                })
+                .catch(err => {
+                    console.log('⚠️ Audio unlock failed:', err);
+                });
+        }
+
         // Login Form Handler
         document.addEventListener('DOMContentLoaded', function() {
             const loginForm = document.getElementById('loginForm');
@@ -1291,6 +1314,8 @@
             if (loginForm) {
                 loginForm.addEventListener('submit', async function(e) {
                     e.preventDefault();
+                    // Unlock audio first
+                    unlockAudio();
                     console.log('Login form submitted');
                     
                     const email = document.getElementById('loginEmail').value;
