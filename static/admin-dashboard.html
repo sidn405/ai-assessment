@@ -2128,6 +2128,12 @@
             currentEssayId = essayId;
             
             document.getElementById('essayDetailsModal').classList.add('active');
+            // Hide sidebar on Windows/small screens
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.style.display = 'none';
+            }
+
             document.getElementById('essayModalTitle').textContent = 'Loading essay...';
             document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
             
@@ -2326,6 +2332,12 @@
 
         function closeEssayModal() {
             document.getElementById('essayDetailsModal').classList.remove('active');
+
+            // Show sidebar again
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.style.display = '';
+            }
             document.getElementById('adminNotesInput').value = '';
             currentEssayId = null;
         }
