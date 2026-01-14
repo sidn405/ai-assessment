@@ -3485,19 +3485,21 @@
         // AMAZON POLLY TTS CONFIGURATION
         // ========================================
 
-        // Load AWS SDK dynamically
+        // Replace the loadAWSSDK function with this:
         (function loadAWSSDK() {
-            if (typeof AWS !== 'undefined') {
+            if (typeof AWS !== 'undefined' && AWS.Polly) {
                 console.log('✅ AWS SDK already loaded');
                 return;
             }
             
             console.log('📥 Loading AWS SDK...');
             const script = document.createElement('script');
-            script.src = 'https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js';
-            script.async = false; // Load synchronously
+            // Use the full SDK with all services
+            script.src = 'https://sdk.amazonaws.com/js/aws-sdk-2.1563.0.min.js';
+            script.async = false;
             script.onload = function() {
                 console.log('✅ AWS SDK loaded successfully!');
+                console.log('AWS.Polly available:', typeof AWS.Polly);
                 initializePolly();
             };
             script.onerror = function() {
