@@ -2692,7 +2692,7 @@
                 <ul class="footer-links">
                     <li><a href="#" onclick="alert('Help Center coming soon!'); return false;">Help Center</a></li>
                     <li><a href="#" onclick="alert('FAQs coming soon!'); return false;">FAQs</a></li>
-                    <li><a href="#" onclick="alert('Contact Support coming soon!'); return false;">Contact Support</a></li>
+                    <li><a href="#" onclick="alert('My Books coming soon!'); return false;">My Books</a></li>
                 </ul>
             </div>
             
@@ -2701,7 +2701,7 @@
                 <ul class="footer-links">
                     <li><a href="#" onclick="alert('Privacy Policy coming soon!'); return false;">Privacy Policy</a></li>
                     <li><a href="#" onclick="alert('Terms of Service coming soon!'); return false;">Terms of Service</a></li>
-                    <li><a href="#" onclick="alert('Accessibility coming soon!'); return false;">Accessibility</a></li>
+                    <li><a href="#" onclick="alert('Summer Reading Program coming soon!'); return false;">Summer Reading Program</a></li>
                 </ul>
             </div>
         </div>
@@ -3472,94 +3472,28 @@
         }
 
         // ========================================
-        // WELCOME GREETING SYSTEM
-        // ========================================
-
-        // Wait for Polly to be ready, then play welcome
-        function waitForPollyThenWelcome(userName) {
-            if (!awsReady || !polly) {
-                console.log('⏳ Waiting for Polly to initialize before welcome...');
-                setTimeout(() => waitForPollyThenWelcome(userName), 200);
-                return;
-            }
-            
-            console.log('✅ Polly ready! Playing welcome for:', userName);
-            playLoginWelcome(userName);
-        }
-
-        // Play doorbell sound then Polly greeting
-        async function playLoginWelcome(userName) {
-            const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
-            
-            try {
-                console.log('🔔 Playing doorbell sound...');
-                const doorbell = new Audio('/static/sounds/login.mp3');
-                doorbell.volume = 0.5;
-                
-                await doorbell.play();
-                console.log('✅ Doorbell playing');
-                
-                // After doorbell finishes, speak with Polly
-                doorbell.onended = async () => {
-                    console.log('🔔 Doorbell finished, now speaking with Polly...');
-                    await speakTutorMessage(welcomeMessage);
-                };
-                
-                // Fallback: if doorbell doesn't play, still speak after 2 seconds
-                setTimeout(() => {
-                    if (!currentAudio) {
-                        console.log('⚠️ Doorbell timeout, speaking anyway...');
-                        speakTutorMessage(welcomeMessage);
-                    }
-                }, 2000);
-                
-            } catch (error) {
-                console.error('❌ Error playing doorbell:', error);
-                // If doorbell fails, still speak the message
-                console.log('🔄 Doorbell failed, speaking message anyway...');
-                await speakTutorMessage(welcomeMessage);
-            }
-        }
-
-        // On dashboard page load - check for welcome greeting
-        window.addEventListener('load', function() {
-            console.log('📄 Dashboard loaded, checking for welcome greeting...');
-            
-            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
-            
-            if (justLoggedIn === 'true') {
-                console.log('✅ Just logged in flag detected');
-                sessionStorage.removeItem('justLoggedIn'); // Clear flag immediately
-                
-                // Get user name from localStorage
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                const userName = user.full_name?.split(' ')[0] || user.username || 'there';
-                
-                console.log('👤 User name:', userName);
-                
-                // Wait a bit for page to settle, then check if Polly is ready
-                setTimeout(() => {
-                    waitForPollyThenWelcome(userName);
-                }, 1000);
-            } else {
-                console.log('ℹ️ No welcome greeting needed (not just logged in)');
-            }
-        });
-
-        // ========================================
         // AMAZON POLLY TTS CONFIGURATION
         // ========================================
 
-        // Replace the loadAWSSDK function with this:
+        let polly = null;
+        let currentAudio = null;
+        let awsReady = false;
+
+        const TUTOR_VOICE = {
+            voiceId: 'Danielle',
+            engine: 'generative'
+        };
+
+        // Load AWS SDK dynamically
         (function loadAWSSDK() {
             if (typeof AWS !== 'undefined' && AWS.Polly) {
                 console.log('✅ AWS SDK already loaded');
+                initializePolly();
                 return;
             }
             
             console.log('📥 Loading AWS SDK...');
             const script = document.createElement('script');
-            // Use the full SDK with all services
             script.src = 'https://sdk.amazonaws.com/js/aws-sdk-2.1563.0.min.js';
             script.async = false;
             script.onload = function() {
@@ -3572,15 +3506,6 @@
             };
             document.head.appendChild(script);
         })();
-
-        let polly = null;
-        let currentAudio = null;
-        let awsReady = false;
-
-        const TUTOR_VOICE = {
-            voiceId: 'Danielle',
-            engine: 'generative'
-        };
 
         // Initialize Polly when AWS SDK is fully loaded
         function initializePolly() {
@@ -3626,10 +3551,179 @@
             }
         }
 
-        // Start initialization after a delay to ensure AWS SDK loads
+        // Speak with Amazon Polly
+        async function speakTutorMessage(text) {
+            console.log('🎤 speakTutorMessage called with:', text?.substring(0, 50));
+            
+            if (!text || !text.trim()) {
+                console.warn('⚠️ Empty text');
+                return;
+            }
+            
+            // Stop any currently playing audio
+            if (currentAudio) {
+                try {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                } catch (e) {
+                    console.warn('Could not stop current audio:', e);
+                }
+                currentAudio = null;
+            }
+            
+            // Check if AWS is ready
+            console.log('🔍 Polly status - awsReady:', awsReady, 'polly:', !!polly);
+            
+            if (!awsReady || !polly) {
+                console.warn('⚠️ Polly not ready, using browser speech');
+                fallbackToWebSpeech(text);
+                return;
+            }
+            
+            try {
+                console.log('🔊 Synthesizing with Polly...');
+                
+                const params = {
+                    Text: text,
+                    OutputFormat: 'mp3',
+                    VoiceId: TUTOR_VOICE.voiceId,
+                    Engine: TUTOR_VOICE.engine,
+                    LanguageCode: 'en-US'
+                };
+                
+                const data = await polly.synthesizeSpeech(params).promise();
+                
+                console.log('✅ Polly synthesis complete, audio size:', data.AudioStream.length, 'bytes');
+                
+                const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                currentAudio = new Audio(audioUrl);
+                
+                currentAudio.onended = () => {
+                    console.log('🎵 Polly playback finished');
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                currentAudio.onerror = (e) => {
+                    console.error('❌ Audio playback error:', e);
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                console.log('▶️ Starting Polly playback...');
+                await currentAudio.play();
+                console.log('✅ Polly playing!');
+                
+            } catch (error) {
+                console.error('❌ Polly error:', error);
+                fallbackToWebSpeech(text);
+            }
+        }
+
+        // Fallback to browser speech
+        function fallbackToWebSpeech(text) {
+            console.log('🔄 Using browser speech synthesis');
+            
+            try {
+                window.speechSynthesis.cancel();
+                
+                const u = new SpeechSynthesisUtterance(text);
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                u.volume = 1.0;
+                
+                const voices = window.speechSynthesis.getVoices() || [];
+                const preferred = voices.find(v =>
+                    /Google US English|Samantha|Female/i.test(v.name)
+                );
+                
+                if (preferred) {
+                    u.voice = preferred;
+                    console.log('Using voice:', preferred.name);
+                }
+                
+                window.speechSynthesis.speak(u);
+            } catch (error) {
+                console.error('Browser speech error:', error);
+            }
+        }
+
+        // Test function
+        function testTutorVoice() {
+            console.log('🧪 Testing tutor voice...');
+            speakTutorMessage("Hello! I'm your reading tutor. I'm here to help you improve your reading skills.");
+        }
+
+        console.log('📝 Polly script loaded');
+
+        // ========================================
+        // WELCOME GREETING SYSTEM
+        // ========================================
+
+        // Wait for Polly to be ready, then play welcome
+        function waitForPollyThenWelcome(userName) {
+            console.log('🔍 Checking Polly readiness - awsReady:', awsReady, 'polly:', !!polly);
+            
+            if (!awsReady || !polly) {
+                console.log('⏳ Waiting for Polly to initialize before welcome...');
+                setTimeout(() => waitForPollyThenWelcome(userName), 300);
+                return;
+            }
+            
+            console.log('✅ Polly confirmed ready! Playing welcome for:', userName);
+            playLoginWelcome(userName);
+        }
+
+        // Play doorbell sound then Polly greeting
+        async function playLoginWelcome(userName) {
+            const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+            
+            try {
+                console.log('🔔 Playing doorbell sound...');
+                const doorbell = new Audio('/static/sounds/login.mp3');
+                doorbell.volume = 0.5;
+                
+                await doorbell.play();
+                console.log('✅ Doorbell playing');
+                
+                // After doorbell finishes, speak with Polly
+                doorbell.onended = async () => {
+                    console.log('🔔 Doorbell finished, now speaking with Polly...');
+                    await speakTutorMessage(welcomeMessage);
+                };
+                
+            } catch (error) {
+                console.error('❌ Error playing doorbell:', error);
+                // If doorbell fails, still speak the message
+                console.log('🔄 Doorbell failed, speaking message anyway...');
+                await speakTutorMessage(welcomeMessage);
+            }
+        }
+
+        // On dashboard page load - check for welcome greeting
         window.addEventListener('load', function() {
-            console.log('📄 Page loaded, waiting for AWS SDK...');
-            setTimeout(initializePolly, 1000); // Wait 1 second after page load
+            console.log('📄 Dashboard loaded, checking for welcome greeting...');
+            
+            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
+            
+            if (justLoggedIn === 'true') {
+                console.log('✅ Just logged in flag detected');
+                sessionStorage.removeItem('justLoggedIn');
+                
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                const userName = user.full_name?.split(' ')[0] || user.username || 'there';
+                
+                console.log('👤 User name:', userName);
+                
+                // Wait for Polly to be ready
+                setTimeout(() => {
+                    waitForPollyThenWelcome(userName);
+                }, 1500);
+            } else {
+                console.log('ℹ️ No welcome greeting needed (not just logged in)');
+            }
         });
 
         // Speak with Amazon Polly
