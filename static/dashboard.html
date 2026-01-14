@@ -3491,7 +3491,7 @@
         async function playLoginWelcome(userName) {
             try {
                 // Play doorbell chime first
-                const doorbell = new Audio('static/sounds/login-sound.mp3');
+                const doorbell = new Audio('static/sounds/login.mp3');
                 doorbell.volume = 0.5; // Adjust volume (0.0 to 1.0)
                 
                 await doorbell.play();
