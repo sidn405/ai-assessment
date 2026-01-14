@@ -1320,6 +1320,7 @@
                             console.log('✅ Login successful');
                             localStorage.setItem('token', data.token);
                             localStorage.setItem('user', JSON.stringify(data.user));
+                            sessionStorage.setItem('justLoggedIn', 'true'); // Set flag
                             
                             if (data.user.role === 'admin') {
                                 window.location.href = '/admin-dashboard';

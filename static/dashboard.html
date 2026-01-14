@@ -3471,6 +3471,45 @@
           tutorHasGreeted = true;
         }
 
+        // On dashboard page load
+        window.addEventListener('load', function() {
+            const userName = localStorage.getItem('userName') || 'there';
+            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
+            
+            // Only play welcome on first load after login
+            if (justLoggedIn === 'true') {
+                sessionStorage.removeItem('justLoggedIn'); // Clear flag
+                
+                // Small delay to ensure page is fully loaded
+                setTimeout(() => {
+                    playLoginWelcome(userName);
+                }, 500);
+            }
+        });
+
+        // Play sound and welcome message after login
+        async function playLoginWelcome(userName) {
+            try {
+                // Play doorbell chime first
+                const doorbell = new Audio('static/sounds/login-sound.mp3');
+                doorbell.volume = 0.5; // Adjust volume (0.0 to 1.0)
+                
+                await doorbell.play();
+                
+                // Wait for doorbell to finish, then speak welcome
+                doorbell.onended = async () => {
+                    const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+                    await speakTutorMessage(welcomeMessage);
+                };
+                
+            } catch (error) {
+                console.error('Error playing welcome:', error);
+                // If doorbell fails, still try to speak the welcome
+                const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+                await speakTutorMessage(welcomeMessage);
+            }
+        }
+
         // ========================================
         // AMAZON POLLY TTS CONFIGURATION
         // ========================================

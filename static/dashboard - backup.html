@@ -1779,29 +1779,19 @@
         .tutor-avatar {
             width: 120px;
             height: 120px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-image: url('static/graphics/tutor.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
             border: 4px solid white;
-            animation: bounce 2s infinite;
+            animation: none;
         }    
-        .avatar-face { width: 64px; height: 64px; position: relative; }    
-        .eyes { display: flex; justify-content: space-between; padding: 18px 10px 0 10px; }
-        .eye { width: 10px; height: 10px; border-radius: 50%; background: #1f2a44; }    
-        .mouth {
-            position: absolute;
-            left: 50%;
-            top: 42px;
-            width: 28px;
-            height: 14px;
-            transform: translateX(-50%);
-            border-bottom: 4px solid #1f2a44;
-            border-radius: 0 0 20px 20px;
-            transition: all 0.25s ease;
-        }    
+           
         /* emotion mouths */
         .mouth.happy { border-bottom-width: 5px; }
         .mouth.encouraging { border-bottom-width: 4px; width: 26px; }
@@ -1852,7 +1842,7 @@
         }    
         /* ========== FOOTER STYLES ========== */    
         .dashboard-footer {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #4c61c2 0%, #231a9e 100%);
             color: white;
             margin-left: 280px; /* Match sidebar width */
             padding: 3rem 2rem 1.5rem;
@@ -2489,7 +2479,7 @@
                     </div>
 
                     <!-- Average Score - Purple Gradient -->
-                    <div style="text-align: center; background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(102,126,234,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="text-align: center; background: linear-gradient(135deg, #df5653 0%, #96200bcc 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(102,126,234,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⭐</div>
                         <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressAvgScore"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Average Score</div>
@@ -2718,7 +2708,7 @@
         
         <div class="footer-bottom">
             <p>&copy; 2025 Achieve 365. All rights reserved.</p>
-            <p>Made with ❤️ for learners everywhere</p>
+            <p>Made with ❤️ for learners everywhere.</p>
         </div>
     </footer>
     <script>
@@ -3385,19 +3375,7 @@
               tutorSpeaking = false;
           };
 
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(text);
-          u.rate = 0.9;
-          u.pitch = 1.1;
-          u.volume = 1.0;
-
-          const voices = window.speechSynthesis.getVoices?.() || [];
-          const preferred = voices.find(v =>
-            /Google|Samantha|Female/i.test(v.name)
-          );
-          if (preferred) u.voice = preferred;
-
-          window.speechSynthesis.speak(u);
+         
         }
 
         function displayTutorMessage(message, emotion = 'happy') {
@@ -3409,7 +3387,7 @@
           if (msg) msg.textContent = message;
           if (mouth) mouth.className = `mouth ${emotion}`;
 
-          tutorSpeak(message);
+          speakTutorMessage(message);
         }
 
         async function showTutor(context, extra = {}) {
@@ -3492,6 +3470,191 @@
           // Keep this flag if other code depends on it, but greeting is removed.
           tutorHasGreeted = true;
         }
+
+        // ========================================
+        // AMAZON POLLY TTS CONFIGURATION
+        // ========================================
+
+        // Replace the loadAWSSDK function with this:
+        (function loadAWSSDK() {
+            if (typeof AWS !== 'undefined' && AWS.Polly) {
+                console.log('✅ AWS SDK already loaded');
+                return;
+            }
+            
+            console.log('📥 Loading AWS SDK...');
+            const script = document.createElement('script');
+            // Use the full SDK with all services
+            script.src = 'https://sdk.amazonaws.com/js/aws-sdk-2.1563.0.min.js';
+            script.async = false;
+            script.onload = function() {
+                console.log('✅ AWS SDK loaded successfully!');
+                console.log('AWS.Polly available:', typeof AWS.Polly);
+                initializePolly();
+            };
+            script.onerror = function() {
+                console.error('❌ Failed to load AWS SDK');
+            };
+            document.head.appendChild(script);
+        })();
+
+        let polly = null;
+        let currentAudio = null;
+        let awsReady = false;
+
+        const TUTOR_VOICE = {
+            voiceId: 'Danielle',
+            engine: 'generative'
+        };
+
+        // Initialize Polly when AWS SDK is fully loaded
+        function initializePolly() {
+            // Check if AWS exists
+            if (typeof AWS === 'undefined') {
+                console.log('⏳ Waiting for AWS object...');
+                setTimeout(initializePolly, 200);
+                return;
+            }
+            
+            // Check if Polly is available
+            if (!AWS.Polly) {
+                console.log('⏳ Waiting for AWS.Polly...');
+                setTimeout(initializePolly, 200);
+                return;
+            }
+
+            try {
+                console.log('🔧 Configuring AWS Polly...');
+                
+                // Configure AWS Cognito
+                AWS.config.region = 'us-east-1';
+                AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+                    IdentityPoolId: 'us-east-1:013556af-498b-4458-966d-5c2c48197abf'
+                });
+
+                polly = new AWS.Polly();
+
+                // Test credentials
+                AWS.config.credentials.get(function(err) {
+                    if (err) {
+                        console.error('❌ AWS Credentials error:', err);
+                        awsReady = false;
+                    } else {
+                        console.log('✅ AWS Polly ready to use!');
+                        awsReady = true;
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error initializing Polly:', error);
+                console.error('Error details:', error.message);
+                awsReady = false;
+            }
+        }
+
+        // Start initialization after a delay to ensure AWS SDK loads
+        window.addEventListener('load', function() {
+            console.log('📄 Page loaded, waiting for AWS SDK...');
+            setTimeout(initializePolly, 1000); // Wait 1 second after page load
+        });
+
+        // Speak with Amazon Polly
+        async function speakTutorMessage(text) {
+            if (!text || !text.trim()) return;
+            
+            // Stop any currently playing audio
+            if (currentAudio) {
+                try {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                } catch (e) {
+                    console.warn('Could not stop current audio:', e);
+                }
+                currentAudio = null;
+            }
+            
+            // Check if AWS is ready
+            if (!awsReady || !polly) {
+                console.warn('⚠️ Polly not ready, using browser speech');
+                fallbackToWebSpeech(text);
+                return;
+            }
+            
+            try {
+                console.log('🔊 Synthesizing with Polly:', text.substring(0, 50) + '...');
+                
+                const params = {
+                    Text: text,
+                    OutputFormat: 'mp3',
+                    VoiceId: TUTOR_VOICE.voiceId,
+                    Engine: TUTOR_VOICE.engine,
+                    LanguageCode: 'en-US'
+                };
+                
+                const data = await polly.synthesizeSpeech(params).promise();
+                
+                console.log('✅ Polly synthesis complete');
+                
+                const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                currentAudio = new Audio(audioUrl);
+                
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                    console.log('🎵 Playback finished');
+                };
+                
+                currentAudio.onerror = (e) => {
+                    console.error('Audio playback error:', e);
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                await currentAudio.play();
+                
+            } catch (error) {
+                console.error('❌ Polly error:', error);
+                fallbackToWebSpeech(text);
+            }
+        }
+
+        // Fallback to browser speech
+        function fallbackToWebSpeech(text) {
+            console.log('🔄 Using browser speech synthesis');
+            
+            try {
+                window.speechSynthesis.cancel();
+                
+                const u = new SpeechSynthesisUtterance(text);
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                u.volume = 1.0;
+                
+                const voices = window.speechSynthesis.getVoices() || [];
+                const preferred = voices.find(v =>
+                    /Google US English|Samantha|Female/i.test(v.name)
+                );
+                
+                if (preferred) {
+                    u.voice = preferred;
+                    console.log('Using voice:', preferred.name);
+                }
+                
+                window.speechSynthesis.speak(u);
+            } catch (error) {
+                console.error('Browser speech error:', error);
+            }
+        }
+
+        // Test function
+        function testTutorVoice() {
+            console.log('🧪 Testing tutor voice...');
+            speakTutorMessage("Hello! I'm your reading tutor. I'm here to help you improve your reading skills.");
+        }
+
+        console.log('📝 Polly script loaded');
+
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
@@ -7085,7 +7248,7 @@
     });
     
     </script>
-
+    
     <!-- AI Tutor Avatar -->
     <div id="aiTutor" class="ai-tutor hidden">
     <div class="tutor-avatar">
@@ -7106,6 +7269,6 @@
     <button class="tutor-close" onclick="hideTutor()">✕</button>
     <button class="tutor-mute" onclick="toggleTutorMute()"><span id="muteIcon">🔊</span></button>
     </div>
-
+    
 </body>
 </html>

@@ -1028,7 +1028,7 @@
                 <!-- In login modal, update the forgot password link: -->
                 <div style="text-align: right; margin-bottom: 1rem;">
                     <a href="#" 
-                    onclick="event.preventDefault(); closeModal('login'); setTimeout(() => openModal('resetPassword'), 100); return false;" 
+                    onclick="event.preventDefault(); closeModal('login'); setTimeout(() => openModal('forgotPassword'), 100); return false;" 
                     style="color: var(--navy-primary); font-size: 0.9rem; text-decoration: none;">
                         Forgot Password?
                     </a>
@@ -1077,65 +1077,67 @@
 
     <!-- Register Modal -->
     <div id="registerModal" class="modal">
-        <div class="modal-content">
-            <button class="close-modal" onclick="closeModal('register')">&times;</button>
-            <h2 style="color: var(--navy-primary); margin-bottom: 2rem;">Create Your Account</h2>
-            <form id="registerForm">
-                <div class="form-group">
-                    <label for="registerName">Full Name</label>
-                    <input type="text" id="registerName" required>
-                </div>
-                <div class="form-group">
-                    <label for="registerEmail">Email</label>
-                    <input type="email" id="registerEmail" required>
-                </div>
-                <div class="form-group">
-                    <label for="registerPassword">Password</label>
-                    <input
-                        type="password"
-                        id="registerPassword"
-                        required minlength="6"
-                    >
-                    <button
-                        type="button" 
-                        class="password-toggle-btn" 
-                        onclick="togglePassword('registerPassword')"
-                        aria-label="Toggle password visibility"
-                        title="Show/Hide password"
-                    >
-                        <i class="fas fa-eye" id="registerPassword-icon"></i>
-                    </button>
-                </div>
+      <div class="modal-content">
+        <button class="close-modal" onclick="closeModal('register')">&times;</button>
+        <h2 style="color: var(--navy-primary); margin-bottom: 2rem;">Create Your Account</h2>
 
-                <!-- ✅ ADD AGE FIELD -->
-            <div class="form-group">
-                <label for="registerAge">Age</label>
-                <input 
-                    type="number" 
-                    id="registerAge" 
-                    required 
-                    min="5" 
-                    max="100"
-                    placeholder="Enter your age"
-                    style="width: 100%;"
-                >
+        <form id="registerForm">
+          <div class="form-group">
+            <label for="registerName">Full Name</label>
+            <input type="text" id="registerName" required>
+          </div>
 
-                <div class="form-group">
-                    <label for="registerRole">I am a...</label>
-                    <select id="registerRole" required>
-                        <option value="student">Student</option>
-                        <option value="admin">Administrator</option>
-                    </select>
-                </div>
-                <div class="form-error" id="registerError"></div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Create Account</button>
-            </form>
-            <p style="text-align: center; margin-top: 1.5rem;">
-                Already have an account? <a href="#" onclick="closeModal('register'); openModal('login')" style="color: var(--navy-primary); font-weight: 600;">Login here</a>
-            </p>
-        </div>
+          <div class="form-group">
+            <label for="registerEmail">Email</label>
+            <input type="email" id="registerEmail" required>
+          </div>
+
+          <div class="form-group">
+            <label for="registerPassword">Password</label>
+            <input type="password" id="registerPassword" required minlength="6">
+            <button type="button" class="password-toggle-btn"
+                    onclick="togglePassword('registerPassword')"
+                    aria-label="Toggle password visibility"
+                    title="Show/Hide password">
+            <i class="fas fa-eye" id="registerPassword-icon"></i>
+            </button>
+          </div>
+
+          <!-- ✅ ADD THIS NEW FIELD -->
+          <div class="form-group">
+            <label for="registerConfirmPassword">Confirm Password</label>
+            <input type="password" id="registerConfirmPassword" required minlength="6">
+            <button type="button" class="password-toggle-btn"
+                    onclick="togglePassword('registerConfirmPassword')"
+                    aria-label="Toggle password visibility"
+                    title="Show/Hide password">
+                <i class="fas fa-eye" id="registerConfirmPassword-icon"></i>
+            </button>
+          </div>
+
+          <div class="form-group" id="ageFieldWrapper">
+            <label for="registerAge">Age</label>
+            <input type="number" id="registerAge" min="5" max="100"
+                placeholder="Enter your age" style="width: 100%;">
+          </div>
+
+          <!-- role forced to student -->
+          <input type="hidden" id="registerRole" value="student">
+
+          <div class="form-error" id="registerError"></div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Create Account
+          </button>
+        </form>
+
+        <p style="text-align: center; margin-top: 1.5rem;">
+          Already have an account?
+          <a href="#" onclick="closeModal('register'); openModal('login')"
+            style="color: var(--navy-primary); font-weight: 600;">Login here</a>
+        </p>
+      </div>
     </div>
-
 
     <!-- Reset Password Modal -->
     <div id="resetPasswordModal" class="modal">
@@ -1180,6 +1182,19 @@
         </div>
     </div>
     <script>
+
+        function ensureAgeVisibleForRegister() {
+          const ageWrap = document.getElementById('ageFieldWrapper');
+          const ageInput = document.getElementById('registerAge');
+          if (!ageWrap || !ageInput) return;
+      
+          ageWrap.style.display = 'block';
+          ageInput.required = true;
+        }
+
+        ensureAgeVisibleForRegister();
+
+
         function togglePassword(inputId) {
             const input = document.getElementById(inputId);
             const icon = document.getElementById(inputId + '-icon');
@@ -1206,7 +1221,8 @@
                 'login': 'loginModal',
                 'register': 'registerModal',
                 'forgotPassword': 'forgotPasswordModal',
-                'resetPassword': 'resetPasswordModal'
+                'resetPassword': 'resetPasswordModal',
+                'adminInvite': 'adminInviteModal'
             };
             
             const modalId = modalMap[type];
@@ -1231,7 +1247,8 @@
                 'login': 'loginModal',
                 'register': 'registerModal',
                 'forgotPassword': 'forgotPasswordModal',
-                'resetPassword': 'resetPasswordModal'
+                'resetPassword': 'resetPasswordModal',
+                'adminInvite': 'adminInviteModal'
             };
             
             const modalId = modalMap[type];
@@ -1381,36 +1398,76 @@
             }
         });
 
-        // Register form handler
+        // REPLACE WITH THIS:
+        document.addEventListener('DOMContentLoaded', () => {
+            const path = window.location.pathname;
+            const token = new URLSearchParams(window.location.search).get('token');
+
+            // Only open modals if there's a specific reason
+            if (path === '/reset-password' && token) {
+                openModal('resetPassword');
+            } else if (path === '/admin-invite' && token) {
+                openModal('adminInvite');
+            }
+            // Don't auto-open login on homepage
+        })
+
+        // Register form handler - UPDATE THE ERROR HANDLING
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
             const full_name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
-            const ageInput = document.getElementById('registerAge');
-            const age = ageInput.value ? parseInt(ageInput.value) : null;
+            const confirmPassword = document.getElementById('registerConfirmPassword').value;
+            const role = document.getElementById('registerRole').value;
+            const errorDiv = document.getElementById('registerError');
 
-            // Validate age for students
-            if (role === 'student' && (!age || age < 5 || age > 100)) {
-                errorDiv.textContent = 'Please enter a valid age (5-100)';
+            // ✅ FIX: Clear and show error properly
+            errorDiv.textContent = '';
+            errorDiv.style.display = 'none';
+
+            // Check if passwords match
+            if (password !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.style.display = 'block'; // ✅ Use style.display instead of classList
+                return;
+            }
+
+            // Validate password length
+            if (password.length < 6) {
+                errorDiv.textContent = 'Password must be at least 6 characters';
                 errorDiv.style.display = 'block';
                 return;
             }
-            
-            // Determine age band
-            let age_band;
-            if (age >= 5 && age <= 10) {
-                age_band = 'child';
-            } else if (age >= 11 && age <= 13) {
-                age_band = 'preteen';
-            } else if (age >= 14 && age <= 17) {
-                age_band = 'teen';
-            } else if (age >= 18 && age <= 25) {
-                age_band = 'young_adult';
-            } else {
-                age_band = 'adult';
+
+            // Age is only required for students
+            let age = null;
+            let age_band = null;
+
+            if (role === 'student') {
+                age = parseInt(document.getElementById('registerAge').value, 10);
+
+                if (!age || age < 5 || age > 100) {
+                    errorDiv.textContent = 'Please enter a valid age (5-100)';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                // Determine age band
+                if (age >= 5 && age <= 10) {
+                    age_band = 'child';
+                } else if (age >= 11 && age <= 13) {
+                    age_band = 'preteen';
+                } else if (age >= 14 && age <= 17) {
+                    age_band = 'teen';
+                } else if (age >= 18 && age <= 25) {
+                    age_band = 'young_adult';
+                } else {
+                    age_band = 'adult';
+                }
             }
-            
+
             try {
                 const response = await fetch('/api/register', {
                     method: 'POST',
@@ -1418,10 +1475,10 @@
                     body: JSON.stringify({
                         full_name: full_name.trim(),
                         email: email.trim(),
-                        password: password,
-                        age: age,
-                        age_band: age_band,
-                        role: role
+                        password,
+                        role,
+                        age,
+                        age_band
                     })
                 });
 
@@ -1430,24 +1487,18 @@
                 if (data.success) {
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-                    
-                    if (data.user.role === 'admin') {
-                        window.location.href = '/admin-dashboard';
-                    } else {
-                        window.location.href = '/dashboard';
-                    }
+                    window.location.href = (data.user.role === 'admin') ? '/admin-dashboard' : '/dashboard';
                 } else {
                     errorDiv.textContent = data.detail || 'Registration failed';
-                    errorDiv.classList.add('active');
+                    errorDiv.style.display = 'block';
                 }
             } catch (error) {
                 errorDiv.textContent = 'An error occurred. Please try again.';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
             }
         });
 
-
-        // Reset Password Form Handler
+        // Reset Password Form Handler - ALSO FIX THIS
         document.getElementById('resetPasswordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -1457,14 +1508,22 @@
             const successDiv = document.getElementById('resetSuccess');
             const submitBtn = e.target.querySelector('button[type="submit"]');
             
-            // Clear previous messages
-            errorDiv.classList.remove('active');
-            successDiv.classList.remove('active');
+            // ✅ Clear previous messages properly
+            errorDiv.textContent = '';
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
             
             // Validate passwords match
             if (newPassword !== confirmPassword) {
                 errorDiv.textContent = 'Passwords do not match';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block'; // ✅ Use style.display
+                return;
+            }
+            
+            // Validate password length
+            if (newPassword.length < 6) {
+                errorDiv.textContent = 'Password must be at least 6 characters';
+                errorDiv.style.display = 'block';
                 return;
             }
             
@@ -1474,7 +1533,7 @@
             
             if (!token) {
                 errorDiv.textContent = 'Invalid or missing reset token. Please request a new password reset link.';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
                 return;
             }
             
@@ -1495,25 +1554,24 @@
                 
                 if (response.ok && data.success) {
                     successDiv.textContent = '✅ Password reset successful! Redirecting to login...';
-                    successDiv.classList.add('active');
+                    successDiv.style.display = 'block';
                     
                     setTimeout(() => {
                         closeModal('resetPassword');
                         openModal('login');
-                        // Clear the form
                         document.getElementById('resetPasswordForm').reset();
-                        successDiv.classList.remove('active');
+                        successDiv.style.display = 'none';
                     }, 2000);
                 } else {
                     errorDiv.textContent = data.detail || 'Failed to reset password. The link may be expired.';
-                    errorDiv.classList.add('active');
+                    errorDiv.style.display = 'block';
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Reset Password';
                 }
             } catch (error) {
                 console.error('Reset password error:', error);
                 errorDiv.textContent = 'An error occurred. Please try again.';
-                errorDiv.classList.add('active');
+                errorDiv.style.display = 'block';
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Reset Password';
             }
