@@ -260,6 +260,12 @@
             background: var(--navy-primary);
             color: var(--white);
         }
+
+        .option .checkbox {
+            font-size: 1.5rem;
+            min-width: 1.5rem;
+            user-select: none;
+        }
         
         .btn {
             padding: 12px 24px;
@@ -2290,7 +2296,7 @@
                                 </li>
                                 <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
                                     <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
-                                    Complete up to 3 assessment rounds
+                                    Complete all 3 assessment rounds
                                 </li>
                                 <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative;">
                                     <span style="position: absolute; left: 0; color: var(--success); font-weight: bold; font-size: 1.2rem;">✓</span>
@@ -2399,7 +2405,7 @@
 
                         <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
                             <button class="btn btn-secondary" onclick="continuePlacementTests()" id="placementContinueBtn">
-                                Take Another Test
+                                Continue Test
                             </button>
                             <button class="btn btn-primary" onclick="showSection('overview', event)">
                                 Go to Dashboard →
@@ -2723,6 +2729,7 @@
         let lastTypingTime = 0;
         const typingCooldown = 80;
         let typingSoundEnabled = true;
+        let multipleAnswers = {};
 
         // Debug: Track loadNextLesson calls
         let lessonCallCount = 0;
@@ -3589,7 +3596,7 @@
             if (sectionName !== 'placement' && isPlacementTestActive) {
                 isPlacementTestActive = false;  // ⭐ ADD THIS
             }
-            
+
             if (event) event.preventDefault();
 
             // Hide all sections
@@ -3744,16 +3751,23 @@
                 ">
                     <strong>📝 How to answer:</strong>
                     <ul style="margin: 0.5rem 0 0 1.5rem; line-height: 1.6;">
-                        <li>Click on any answer that fits you</li>
-                        <li>Or click "Other" and type your own answer</li>
-                        <li>Choose whatever feels right!</li>
+                        <li><strong>Select as many answers as you want</strong> - you can choose multiple!</li>
+                        <li>Click "Other" and type your own answer if needed</li>
+                        <li>Selected answers will be highlighted</li>
                     </ul>
                 </div>
             `;
-                                              
+            
+            // Initialize answers tracking
+            multipleAnswers = {};
+            customOtherResponses = {};
+                                            
             currentAssessment.forEach((q, index) => {
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'question-card';
+                
+                // Initialize array for this question
+                multipleAnswers[q.id] = [];
                 
                 // Add "Other" to all questions if not present
                 if (!q.options.includes('Other')) {
@@ -3763,8 +3777,8 @@
                 const optionsHTML = q.options.map((opt, i) => {
                     if (opt === 'Other') {
                         return `
-                            <div class="option" onclick="selectOption(${q.id}, ${i}, 'Other', true)">
-                                ✏️ ${opt} (please specify)
+                            <div class="option" data-question-id="${q.id}" data-option-index="${i}" data-option-text="Other" onclick="toggleOption(${q.id}, ${i}, 'Other', true)">
+                                <span class="checkbox">☐</span> ✏️ ${opt} (please specify)
                             </div>
                             <div id="other-input-${q.id}" class="other-input hidden" style="margin-top: 0.75rem; animation: slideDown 0.3s ease;">
                                 <input 
@@ -3782,17 +3796,25 @@
                                     "
                                     onfocus="this.style.borderColor='var(--teal-accent)'; this.style.boxShadow='0 0 0 3px rgba(64, 224, 208, 0.1)'"
                                     onblur="this.style.borderColor='var(--navy-primary)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
+                                    oninput="updateOtherResponse(${q.id}, this.value)"
                                 />
                             </div>
                         `;
                     } else {
-                        return `<div class="option" onclick="selectOption(${q.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">${opt}</div>`;
+                        return `
+                            <div class="option" data-question-id="${q.id}" data-option-index="${i}" data-option-text="${opt.replace(/'/g, "\\'")}" onclick="toggleOption(${q.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">
+                                <span class="checkbox">☐</span> ${opt}
+                            </div>
+                        `;
                     }
                 }).join('');
                 
                 questionDiv.innerHTML = `
                     <div class="question-text" style="font-size: 1.1rem; margin-bottom: 1rem;">
                         ${index + 1}. ${q.question}
+                        <span style="font-size: 0.9rem; color: #666; font-weight: normal; margin-left: 0.5rem;">
+                            (Select all that apply)
+                        </span>
                     </div>
                     <div class="options" id="options-${q.id}">
                         ${optionsHTML}
@@ -3809,28 +3831,96 @@
             container.appendChild(submitBtn);
         }
 
-        function selectOption(questionId, optionIndex, optionText) {
-            console.log('Option selected:', questionId, optionIndex, optionText);
-            const options = document.getElementById(`options-${questionId}`).querySelectorAll('.option');
-            options.forEach(opt => opt.classList.remove('selected'));
-            options[optionIndex].classList.add('selected');
+        function toggleOption(questionId, optionIndex, optionText, isOther = false) {
+            console.log('Toggle option:', questionId, optionIndex, optionText);
             
-            const existingIndex = assessmentAnswers.findIndex(a => a.question_id === questionId);
-            if (existingIndex >= 0) {
-                assessmentAnswers[existingIndex] = { question_id: questionId, answer: optionText };
+            const optionElement = document.querySelector(`[data-question-id="${questionId}"][data-option-index="${optionIndex}"]`);
+            if (!optionElement) return;
+            
+            const checkbox = optionElement.querySelector('.checkbox');
+            const isSelected = optionElement.classList.contains('selected');
+            
+            if (isOther) {
+                // Toggle "Other" option
+                if (isSelected) {
+                    // Deselect
+                    optionElement.classList.remove('selected');
+                    checkbox.textContent = '☐';
+                    
+                    // Hide input
+                    const otherInput = document.getElementById(`other-input-${questionId}`);
+                    if (otherInput) otherInput.classList.add('hidden');
+                    
+                    // Remove from answers
+                    multipleAnswers[questionId] = multipleAnswers[questionId].filter(a => a !== 'Other' && a !== customOtherResponses[questionId]);
+                    delete customOtherResponses[questionId];
+                } else {
+                    // Select
+                    optionElement.classList.add('selected');
+                    checkbox.textContent = '☑';
+                    
+                    // Show input
+                    const otherInput = document.getElementById(`other-input-${questionId}`);
+                    if (otherInput) {
+                        otherInput.classList.remove('hidden');
+                        document.getElementById(`other-text-${questionId}`).focus();
+                    }
+                    
+                    // Add to answers if not already there
+                    if (!multipleAnswers[questionId].includes('Other')) {
+                        multipleAnswers[questionId].push('Other');
+                    }
+                }
             } else {
-                assessmentAnswers.push({ question_id: questionId, answer: optionText });
+                // Toggle regular option
+                if (isSelected) {
+                    // Deselect
+                    optionElement.classList.remove('selected');
+                    checkbox.textContent = '☐';
+                    
+                    // Remove from answers
+                    multipleAnswers[questionId] = multipleAnswers[questionId].filter(a => a !== optionText);
+                } else {
+                    // Select
+                    optionElement.classList.add('selected');
+                    checkbox.textContent = '☑';
+                    
+                    // Add to answers if not already there
+                    if (!multipleAnswers[questionId].includes(optionText)) {
+                        multipleAnswers[questionId].push(optionText);
+                    }
+                }
             }
-            console.log('Current answers:', assessmentAnswers.length);
+            
+            console.log('Current answers for question', questionId, ':', multipleAnswers[questionId]);
+        }
+
+        function updateOtherResponse(questionId, value) {
+            if (value && value.trim()) {
+                customOtherResponses[questionId] = value.trim();
+                
+                // Update the answers array
+                multipleAnswers[questionId] = multipleAnswers[questionId].filter(a => a !== 'Other');
+                if (!multipleAnswers[questionId].includes(value.trim())) {
+                    multipleAnswers[questionId].push(value.trim());
+                }
+            }
         }
 
         async function submitAssessment() {
             console.log('=== submitAssessment START ===');
             console.log('Submit assessment clicked');
-            console.log('Answers:', assessmentAnswers.length, '/', currentAssessment.length);
             
-            if (assessmentAnswers.length < currentAssessment.length) {
-                alert(`Please answer all questions before submitting. (${assessmentAnswers.length}/${currentAssessment.length} answered)`);
+            // Check if all questions have at least one answer
+            const unansweredQuestions = [];
+            currentAssessment.forEach(q => {
+                if (!multipleAnswers[q.id] || multipleAnswers[q.id].length === 0) {
+                    unansweredQuestions.push(q.question);
+                }
+            });
+            
+            if (unansweredQuestions.length > 0) {
+                alert(`Please answer all questions before submitting.\n\nUnanswered:\n- ${unansweredQuestions.join('\n- ')}`);
                 return;
             }
             
@@ -3855,31 +3945,15 @@
                 return;
             }
             
-            // Process answers to handle "Other" custom text
-            const processedAnswers = assessmentAnswers.map(answer => {
-                const questionId = answer.question_id;
-                const answerValue = answer.answer;
+            // Format answers for submission (combine multiple answers with semicolons)
+            const processedAnswers = currentAssessment.map(q => {
+                const answers = multipleAnswers[q.id] || [];
+                const answerText = answers.join('; '); // Join multiple answers
                 
-                // Check if this was an "Other" answer with custom text
-                if (customOtherResponses[questionId]) {
-                    return {
-                        question_id: questionId,
-                        answer: customOtherResponses[questionId] // Use the custom text directly
-                    };
-                }
-                
-                // Check if answer is "Other" but no custom text
-                if (answerValue === 'Other') {
-                    const customText = document.getElementById(`other-text-${questionId}`)?.value;
-                    if (customText && customText.trim()) {
-                        return {
-                            question_id: questionId,
-                            answer: customText.trim()
-                        };
-                    }
-                }
-                
-                return answer;
+                return {
+                    question_id: q.id,
+                    answer: answerText
+                };
             });
             
             console.log('Processed answers:', processedAnswers);
@@ -3906,7 +3980,7 @@
                 if (result.user) {
                     localStorage.setItem('user', JSON.stringify(result.user));
                 }
-                 // ⭐ ADD THIS - Mark assessment as completed in UI
+                // ⭐ ADD THIS - Mark assessment as completed in UI
                 updateAssessmentStatus(true);
                 
                 showMessage('Assessment completed successfully!', 'success');
@@ -3917,7 +3991,7 @@
                 // Navigate to placement section
                 showSection('placement')
 
-               
+            
                 // Refresh dashboard to show updated state
                 loadDashboard();
                 

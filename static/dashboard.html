@@ -3385,19 +3385,7 @@
               tutorSpeaking = false;
           };
 
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(text);
-          u.rate = 0.9;
-          u.pitch = 1.1;
-          u.volume = 1.0;
-
-          const voices = window.speechSynthesis.getVoices?.() || [];
-          const preferred = voices.find(v =>
-            /Google|Samantha|Female/i.test(v.name)
-          );
-          if (preferred) u.voice = preferred;
-
-          window.speechSynthesis.speak(u);
+         
         }
 
         function displayTutorMessage(message, emotion = 'happy') {
@@ -3409,7 +3397,7 @@
           if (msg) msg.textContent = message;
           if (mouth) mouth.className = `mouth ${emotion}`;
 
-          tutorSpeak(message);
+          speakTutorMessage(message);
         }
 
         async function showTutor(context, extra = {}) {
@@ -3492,6 +3480,82 @@
           // Keep this flag if other code depends on it, but greeting is removed.
           tutorHasGreeted = true;
         }
+
+        // ========================================
+        // ADD ALL VOICE CODE HERE
+        // ========================================
+
+        // Ensure voices are loaded before use
+        function ensureVoicesLoaded(callback) {
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                if (callback) callback();
+            } else {
+                window.speechSynthesis.onvoiceschanged = () => {
+                    if (callback) callback();
+                };
+            }
+        }
+
+        // Get the best available voice
+        function getBestTutorVoice() {
+            const voices = window.speechSynthesis.getVoices() || [];
+            
+            // Priority order: Best sounding voices first
+            const voicePriorities = [
+                // Google voices (best quality on Chrome/Android)
+                /Google US English|Google UK English Female/i,
+                
+                // Apple voices (Mac/iOS - very natural)
+                /Samantha|Karen|Victoria|Fiona|Moira|Ava|Nicky/i,
+                
+                // Microsoft voices (Windows - good quality)
+                /Microsoft Zira|Microsoft Eva|Microsoft Hazel/i,
+                
+                // Any premium female voice
+                /Premium.*Female|Enhanced.*Female/i,
+                
+                // Any female voice
+                /Female/i,
+                
+                // Fallback to any US English
+                /en-US/i
+            ];
+            
+            // Find the best available voice
+            for (const pattern of voicePriorities) {
+                const voice = voices.find(v => pattern.test(v.name) && v.lang.includes('en'));
+                if (voice) {
+                    console.log('Selected tutor voice:', voice.name);
+                    return voice;
+                }
+            }
+            
+            // Ultimate fallback
+            return voices.find(v => v.lang.includes('en')) || voices[0];
+        }
+
+        // Improved speak function
+        function speakTutorMessage(text) {
+            if (!text || !text.trim()) return;
+            
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 0.9;
+            u.pitch = 1.1;
+            u.volume = 1.0;
+            
+            const bestVoice = getBestTutorVoice();
+            if (bestVoice) {
+                u.voice = bestVoice;
+            }
+            
+            window.speechSynthesis.speak(u);
+        }
+
+        // ========================================
+        // END VOICE CODE
+        // ========================================
 
         // Wrap function to log all calls
         window.loadNextLesson = function() {
