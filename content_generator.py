@@ -20,25 +20,28 @@ class ContentGenerator:
         
     def _rewrite_passage_to_word_range(self, title, content, topic, difficulty_level, word_count_min, word_count_max, target_words):
         prompt = f"""
-Rewrite the passage below into a NEW VERSION that is BETWEEN {word_count_min} and {word_count_max} words
-(aim for about {target_words} words).
+        Rewrite the passage below into a NEW VERSION.
 
-Hard rules:
-- Keep it a STORY (narrative), not an explanation/definition.
-- Keep the same topic focus: {topic}
-- Keep difficulty level: {difficulty_level}
-- Same main character(s) and setting, but you may add 1-2 new details to reach the word count naturally.
-- No headings, no bullet points.
+        HARD WORD COUNT RULE:
+        - The "content" field MUST be EXACTLY {target_words} words (content only).
+        - Count words by splitting on spaces.
+        - Before responding, self-check and adjust until exactly {target_words}.
 
-Return ONLY valid JSON with:
-{{
-  "title": "{title}",
-  "content": "...",
-  "key_concepts": ["...", "...", "..."],
-  "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
-}}
+        Hard rules:
+        - Keep it a STORY (narrative), not an explanation/definition.
+        - Keep the same topic focus: {topic}
+        - Keep difficulty level: {difficulty_level}
+        - No headings, no bullet points.
 
-PASSAGE TO REWRITE:
+        Return ONLY valid JSON with:
+        {{
+        "title": "{title}",
+        "content": "...",
+        "key_concepts": ["...", "...", "..."],
+        "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
+        }}
+
+        PASSAGE TO REWRITE:
 {content}
 """
         resp = self.client.chat.completions.create(
@@ -47,7 +50,7 @@ PASSAGE TO REWRITE:
                 {"role": "system", "content": "You rewrite reading passages to match an exact word range while keeping a narrative story style."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.5,
+            temperature=0.25,
             max_tokens=2500,
             timeout=60
         )
@@ -68,14 +71,22 @@ PASSAGE TO REWRITE:
         # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
         prompt = f"""Write a SHORT STORY (narrative) about {topic}.
     Difficulty Level: {difficulty_level}
-    Word Count: Between {word_count_min} and {word_count_max} words (aim for approximately {target_words} words)
+    
 
-    IMPORTANT: 
+    HARD WORD COUNT RULE:
+    - The "content" field MUST be EXACTLY {target_words} words.
+    - Count words by splitting on spaces.
+    - This word count applies to content ONLY (not title, not JSON keys, not vocabulary/definitions).
+    - Before you respond, self-check the word count and adjust until it is exactly {target_words}.
+
+    IMPORTANT:
     - Focus ONLY on {topic}
     - Do NOT try to combine with other topics
+    - This MUST be a story with a character, setting, and plot (beginning → problem → resolution)
+    - Include at least one line of dialogue
+    - No headings, no bullet points
     - Make it engaging and age-appropriate
-    - Use clear, accessible language
-
+  
     CRITICAL - VOCABULARY EXTRACTION:
     - Identify ALL potentially challenging words in the passage
     - Include words that a {difficulty_level} reader might not know
@@ -140,7 +151,7 @@ PASSAGE TO REWRITE:
                     },
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.8,
+                temperature=0.35,
                 max_tokens=2500,
                 timeout=60
             )
@@ -184,42 +195,11 @@ PASSAGE TO REWRITE:
             
             # Analyze readability
             from readability import analyze_readability
-            readability = analyze_readability(passage_data['content'])
-            
-            def _rewrite_passage_to_word_range(self, title, content, topic, difficulty_level, word_count_min, word_count_max, target_words):
-                prompt = f"""
-            Rewrite the passage below into a NEW VERSION that is BETWEEN {word_count_min} and {word_count_max} words
-            (aim for about {target_words} words).
 
-            Return ONLY valid JSON with:
-            {{
-            "title": "{title}",
-            "content": "...",
-            "key_concepts": ["...", "...", "..."],
-            "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
-            }}
+            readability = analyze_readability(passage_data["content"])
+            wc = readability["word_count"]
 
-            PASSAGE TO REWRITE:
-            {content}
-            """
-                resp = self.client.chat.completions.create(
-                    model="gpt-4-turbo-preview",
-                    messages=[
-                        {"role": "system", "content": "You rewrite reading passages to match an exact word range while keeping a narrative story style."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.5,
-                    max_tokens=2500,
-                    timeout=60
-                )
-                txt = resp.choices[0].message.content
-                if "```json" in txt:
-                    txt = txt.split("```json")[1].split("```")[0].strip()
-                elif "```" in txt:
-                    txt = txt.split("```")[1].split("```")[0].strip()
-                return json.loads(txt)   
-            
-            wc = readability['word_count']
+            # ✅ Only one rewrite attempt
             if wc < word_count_min or wc > word_count_max:
                 passage_data = self._rewrite_passage_to_word_range(
                     title=passage_data.get("title", f"{topic}"),
@@ -228,26 +208,30 @@ PASSAGE TO REWRITE:
                     difficulty_level=difficulty_level,
                     word_count_min=word_count_min,
                     word_count_max=word_count_max,
-                    target_words=target_words
+                    target_words=target_words  # <-- use exact target in prompt
                 )
-                readability = analyze_readability(passage_data['content'])
-                
-            
-            # Add metadata
+                readability = analyze_readability(passage_data["content"])
+                wc = readability["word_count"]
+
+            # ✅ If still out of range after rewrite, accept it (or clamp once)
+            # (This avoids 1–6 attempts)
+            # if wc < word_count_min or wc > word_count_max:
+            #     print("⚠️ Still out of range after rewrite; accepting to avoid delays.")
+
             passage_data.update({
                 "source": "AI",
                 "topic_tags": [topic],
-                "word_count": readability['word_count'],
-                "readability_score": readability['flesch_kincaid_grade'],
-                "flesch_ease": readability['flesch_reading_ease'],
+                "word_count": readability["word_count"],
+                "readability_score": readability["flesch_kincaid_grade"],
+                "flesch_ease": readability["flesch_reading_ease"],
                 "difficulty_level": difficulty_level,
-                "estimated_minutes": readability['estimated_minutes'],
-                "actual_difficulty": readability['difficulty_level'],
-                "grade_band": readability['grade_band'],
+                "estimated_minutes": readability["estimated_minutes"],
+                "actual_difficulty": readability["difficulty_level"],
+                "grade_band": readability["grade_band"],
                 "target_word_range": f"{word_count_min}-{word_count_max}",
-                "vocabulary_count": len(passage_data['vocabulary_words'])
+                "vocabulary_count": len(passage_data["vocabulary_words"])
             })
-            
+           
             print(f"✅ Generated passage: '{passage_data['title']}'")
             print(f"✅ Word count: {readability['word_count']} (target: {word_count_min}-{word_count_max})")
             print(f"✅ Vocabulary words: {len(passage_data['vocabulary_words'])}")
