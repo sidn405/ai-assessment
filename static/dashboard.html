@@ -3681,37 +3681,32 @@
             const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
             const audioUnlocked = sessionStorage.getItem('audioUnlocked') === 'true';
             
-            console.log('🔊 Audio unlocked status:', audioUnlocked);
+            console.log('🔊 Audio unlock status:', audioUnlocked);
             
             try {
-                console.log('🔔 Playing doorbell sound...');
+                console.log('🔔 Attempting to play doorbell...');
                 const doorbell = new Audio('/static/sounds/login.mp3');
                 doorbell.volume = 0.5;
                 
                 const playPromise = doorbell.play();
                 
-                if (playPromise !== undefined) {
-                    playPromise
-                        .then(() => {
-                            console.log('✅ Doorbell playing');
-                        })
-                        .catch(error => {
-                            console.log('⚠️ Doorbell blocked:', error.message);
-                            // Doorbell failed, just speak message
-                            speakTutorMessage(welcomeMessage);
-                        });
-                }
-                
-                // Speak after doorbell finishes
-                doorbell.onended = async () => {
-                    console.log('🔔 Doorbell finished, now speaking with Polly...');
-                    await speakTutorMessage(welcomeMessage);
-                };
+                playPromise
+                    .then(() => {
+                        console.log('✅ Doorbell playing successfully!');
+                        
+                        // Speak after doorbell finishes
+                        doorbell.onended = async () => {
+                            console.log('🔔 Doorbell finished, now speaking...');
+                            await speakTutorMessage(welcomeMessage);
+                        };
+                    })
+                    .catch(error => {
+                        console.log('⚠️ Doorbell blocked, speaking message only');
+                        speakTutorMessage(welcomeMessage);
+                    });
                 
             } catch (error) {
-                console.error('❌ Error playing doorbell:', error);
-                // If doorbell fails, still speak the message
-                console.log('🔄 Doorbell failed, speaking message anyway...');
+                console.error('❌ Error with doorbell:', error);
                 await speakTutorMessage(welcomeMessage);
             }
         }

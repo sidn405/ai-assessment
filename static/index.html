@@ -1288,23 +1288,28 @@
         // AUDIO UNLOCK FOR DASHBOARD WELCOME
         // ========================================
 
-        // Play silent audio on login to unlock audio for dashboard
         function unlockAudioForDashboard() {
             try {
-                // Create a very short silent audio
-                const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAQKAAAAAAAAA4SYjRKKAAAAAAD/+xDEAAPAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
+                console.log('🔓 Attempting to unlock audio...');
+                
+                // Create a very short silent audio (base64 encoded silent WAV)
+                const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
                 silentAudio.volume = 0.01; // Almost silent
                 
-                silentAudio.play()
-                    .then(() => {
-                        console.log('✅ Audio unlocked for dashboard');
-                        sessionStorage.setItem('audioUnlocked', 'true');
-                    })
-                    .catch(err => {
-                        console.log('⚠️ Could not unlock audio:', err);
-                    });
+                const playPromise = silentAudio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('✅ Audio unlocked for dashboard');
+                            sessionStorage.setItem('audioUnlocked', 'true');
+                        })
+                        .catch(err => {
+                            console.log('⚠️ Could not unlock audio:', err.message);
+                        });
+                }
             } catch (error) {
-                console.log('⚠️ Audio unlock failed:', error);
+                console.log('⚠️ Audio unlock failed:', error.message);
             }
         }
 
@@ -1315,8 +1320,10 @@
             if (loginForm) {
                 loginForm.addEventListener('submit', async function(e) {
                     e.preventDefault();
+                    
                     // 🔑 UNLOCK AUDIO FIRST (before redirect)
                     unlockAudioForDashboard();
+                    
                     console.log('Login form submitted');
                     
                     const email = document.getElementById('loginEmail').value;
