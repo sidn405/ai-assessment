@@ -4387,57 +4387,59 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         def count_words(text: str) -> int:
             return len(re.findall(r"\b[\w']+\b", text or ""))
 
-        MAX_TRIES = 6
+        print("Step 7: Generating passage...")
+
+        # We’ll do at most 2 tries: first with selected topic, second with a different topic if needed
+        try_topics = [topic] + [t for t in available_interests if t != topic]
+        try_topics = try_topics[:2]
+
         passage_data = None
         picked_topic = None
 
-        for attempt in range(1, MAX_TRIES + 1):
-            picked_topic = random.choice(available_interests)
-
-            print(f"   Attempt {attempt}/{MAX_TRIES}")
+        for idx, picked_topic in enumerate(try_topics, start=1):
+            print(f"   Try {idx}/{len(try_topics)}")
             print(f"   Topic: {picked_topic}")
             print(f"   Difficulty: {difficulty}")
             print(f"   Word count range: {word_count_min}-{word_count_max}")
 
-            try:
-                candidate = content_generator.generate_passage(
-                    topic=picked_topic,
-                    difficulty_level=difficulty,
-                    word_count_min=word_count_min,
-                    word_count_max=word_count_max,
-                    user_interests=interests
-                )
-            except Exception as gen_error:
-                print(f"⚠️ Generate error: {gen_error}")
-                if attempt == MAX_TRIES:
-                    raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(gen_error)}")
-                continue
+            candidate = content_generator.generate_passage(
+                topic=picked_topic,
+                difficulty_level=difficulty,
+                word_count_min=word_count_min,
+                word_count_max=word_count_max,
+                user_interests=interests
+            )
 
-            # ✅ enforce word count using actual content
+            # enforce word count using actual content (don’t trust candidate["word_count"])
             wc = count_words(candidate.get("content", ""))
             candidate["word_count"] = wc
 
-            if wc < word_count_min or wc > word_count_max:
-                print(f"⚠️ Reject: word_count={wc} out of range")
-                continue
-
-            # ✅ reject duplicates (title OR content fingerprint)
             title_l = (candidate.get("title") or "").strip().lower()
             content_fp = fp(candidate.get("content") or "")
 
+            # If duplicate, try next topic once
             if title_l in recent_titles or content_fp in recent_fps:
                 print("⚠️ Reject: duplicate title/content")
                 continue
 
+            # If still out of range here, DO NOT spin 6 times.
+            # Your generator already rewrites once internally; if it still misses, accept it to avoid 90s delays.
+            if wc < word_count_min or wc > word_count_max:
+                print(f"⚠️ Still out of range after generator ({wc}). Accepting to avoid long retries.")
+                # If you prefer: continue to next topic instead of accepting:
+                # continue
+
             passage_data = candidate
-            topic = picked_topic
             break
 
         if not passage_data:
-            raise HTTPException(status_code=500, detail="Could not generate a unique lesson within word count range.")
-        
+            raise HTTPException(status_code=500, detail="Could not generate a unique lesson quickly.")
+        topic = picked_topic
+
+        # Ensure topic_tags exists
         if "topic_tags" not in passage_data or not passage_data["topic_tags"]:
             passage_data["topic_tags"] = [topic]
+
    
         # Step 8: Save to database
         print("Step 8: Saving passage to database...")

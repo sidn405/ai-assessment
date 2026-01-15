@@ -1,18 +1,18 @@
 # Achieve 365 Reading Rewards
 # AI-Powered Adaptive Learning System
 
-from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 import sqlite3
 import psycopg2
 import psycopg2.extras
 import bcrypt
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import openai
 import os
 import json
@@ -21,15 +21,12 @@ import random
 import traceback
 from openai import OpenAI
 import resend
-import secrets
+import secrets, hashlib
+import requests
 
 # Import our new utilities
 from readability import analyze_readability, get_difficulty_for_user
 from content_generator import ContentGenerator
-
-# Use word count range from database
-import random
-
 
 # Initialize FastAPI
 app = FastAPI(title="Achieve 365 - Phase 2")
@@ -61,6 +58,8 @@ content_generator = ContentGenerator(OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Configure Resend
 resend.api_key = os.getenv("RESEND_API_KEY")  # Add this to your .env file
+FROM_EMAIL = os.getenv("FROM_EMAIL", "no-reply@4dgaming.games")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://ai-assessment-production-e027.up.railway.app")
 
 # Store password reset tokens (in production, use database)
 password_reset_tokens = {}
@@ -124,10 +123,8 @@ class UserCreate(BaseModel):
     email: str
     password: str
     full_name: str
-    role: str = "student"
     age_band: Optional[str] = None
-    
-    
+        
 class UserLogin(BaseModel):
     email: str
     password: str
@@ -161,6 +158,17 @@ class WritingSubmission(BaseModel):
 class WritingRevision(BaseModel):
     exercise_id: int
     revised_response: str
+    
+class InviteAdminReq(BaseModel):
+    email: EmailStr
+    
+class AcceptInviteReq(BaseModel):
+    token: str = Field(..., min_length=10)
+    password: str = Field(..., min_length=6)
+    
+class AdminInviteActionRequest(BaseModel):
+    # optional note for auditing/logging if you want
+    note: Optional[str] = None
 
 # Database initialization
 def init_db():
@@ -270,6 +278,12 @@ def update_user_activity(user_id: int):
     conn.commit()
     conn.close()
 
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.getenv("ADMIN_EMAILS", "").split(",")
+    if e.strip()
+}
+
 # ============================================
 # STATIC FILE ROUTES
 # ============================================
@@ -299,36 +313,54 @@ async def reset_password_page():
     """Serve the password reset page"""
     return FileResponse('static/reset-password.html')
 
+@app.get("/admin-invite", include_in_schema=False)
+def admin_invite_page():
+    return FileResponse("static/admin-invite.html")
+
 # ============================================
 # AUTHENTICATION (Original)
 # ============================================
+
+ADMIN_INVITE_CODE = os.getenv("ADMIN_INVITE_CODE")  # set in Railway
+# Optional: allowlist instead/in addition
+ADMIN_EMAILS = set(
+    e.strip().lower()
+    for e in os.getenv("ADMIN_EMAILS", "").split(",")
+    if e.strip()
+)
 
 @app.post("/api/register")
 async def register(user: UserCreate):
     conn = get_db()
     cursor = get_cursor(conn)
-    
+
     password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
-    
+
+    # ✅ Server decides role (email allowlist)
+    email_lc = user.email.lower().strip()
+    final_role = "admin" if (ADMIN_EMAILS and email_lc in ADMIN_EMAILS) else "student"
+
     try:
         if USE_POSTGRES:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age_band) 
+                """INSERT INTO users (email, password_hash, full_name, role, age_band)
                    VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-                (user.email, password_hash.decode('utf-8'), user.full_name, user.role, user.age_band)
+                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
             )
             result = cursor.fetchone()
-            user_id = result['id']
+            user_id = result["id"] if isinstance(result, dict) else result[0]
         else:
             cursor.execute(
                 "INSERT INTO users (email, password_hash, full_name, role, age_band) VALUES (?, ?, ?, ?, ?)",
-                (user.email, password_hash.decode('utf-8'), user.full_name, user.role, user.age_band)
+                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
             )
             user_id = cursor.lastrowid
-        
+
         conn.commit()
-        token = create_token(user_id, user.role)
-        
+
+        # ✅ token uses final_role
+        token = create_token(user_id, final_role)
+
         return {
             "success": True,
             "token": token,
@@ -336,9 +368,10 @@ async def register(user: UserCreate):
                 "id": user_id,
                 "email": user.email,
                 "full_name": user.full_name,
-                "role": user.role
+                "role": final_role
             }
         }
+
     except (sqlite3.IntegrityError, psycopg2.errors.UniqueViolation):
         conn.rollback()
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -348,6 +381,19 @@ async def register(user: UserCreate):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
     finally:
         conn.close()
+
+def get_current_user(authorization: str = Header(None)) -> dict:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization")
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization format")
+    return verify_token(parts[1])
+
+def require_admin(user: dict = Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 @app.post("/api/login")
 async def login(credentials: UserLogin):
@@ -849,12 +895,17 @@ def get_interest_assessment():  # ← Remove 'async'
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     
+@app.get("/api/me")
+async def me(user=Depends(get_current_user)):
+    return {"user_id": user["user_id"], "role": user["role"]}
+
+# ============================================
+# ADMIN ENDPOINTS
+# ============================================
+    
 @app.get("/api/admin/reading-level-distribution")
-async def get_reading_level_distribution(token: str):
+async def get_reading_level_distribution(admin=Depends(require_admin)):
     """Get distribution of students across reading levels"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
     cursor = conn.cursor()
@@ -916,11 +967,8 @@ async def get_reading_level_distribution(token: str):
 
 
 @app.get("/api/admin/interest-topics")
-async def get_interest_topics(token: str):
+async def get_interest_topics(admin=Depends(require_admin)):
     """Get breakdown of popular interest topics"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
     cursor = conn.cursor()
@@ -3273,11 +3321,8 @@ async def get_student_dashboard(token: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/admin/analytics-v2")
-async def get_enhanced_analytics(token: str):
+async def get_enhanced_analytics(admin=Depends(require_admin)):
     """Enhanced analytics for admin dashboard"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
     cursor = conn.cursor()
@@ -4672,10 +4717,7 @@ async def debug_lesson_generation(token: str):
 # ============================================
 
 @app.get("/api/admin/students")
-async def get_all_students(token: str):
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def get_all_students(admin=Depends(require_admin)):
     
     conn = get_db()
     cursor = get_cursor(conn)
@@ -4691,11 +4733,8 @@ async def get_all_students(token: str):
     return {"students": students}
 
 @app.get("/api/admin/student/{student_id}/details")
-async def get_student_details(student_id: int, token: str):
+async def get_student_details(student_id: int, admin=Depends(require_admin)):
     """Get detailed progress for a specific student"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
     cursor = get_cursor(conn)
@@ -4768,11 +4807,8 @@ async def get_student_details(student_id: int, token: str):
     }
     
 @app.get("/api/admin/student/{student_id}/progress")
-async def get_student_progress(student_id: int, token: str):
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+async def get_student_progress(student_id: int, admin=Depends(require_admin)):
+    
     conn = get_db()
     cursor = get_cursor(conn)
 
@@ -4895,13 +4931,98 @@ async def get_student_progress(student_id: int, token: str):
         "student": student,
         "progress": progress_rows,   # ✅ THIS is what your UI expects
     }
+    
+@app.delete("/api/admin/student/{student_id}")
+async def delete_student(student_id: int, admin=Depends(require_admin)):
+    """Delete a student and all their data"""
+    print(f"\n{'='*60}")
+    print(f"DELETE CALLED FOR STUDENT ID: {student_id}")
+    print(f"{'='*60}\n")
+    
+    conn = get_db()
+    cursor = get_cursor(conn)
+    
+    try:
+        # Check student exists
+        cursor.execute(
+            "SELECT full_name FROM users WHERE id=%s AND role='student'" if USE_POSTGRES
+            else "SELECT full_name FROM users WHERE id=? AND role='student'",
+            (student_id,)
+        )
+        
+        student = cursor.fetchone()
+        if not student:
+            conn.close()
+            raise HTTPException(404, "Student not found")
+        
+        name = student["full_name"] if hasattr(student, "keys") else student[0]
+        
+        # Delete related data (order matters!)
+        tables_to_clean = [
+            # Tables referencing user_sessions
+            "timeout_events",       # session_id → user_sessions
+            "activity_log",         # session_id → user_sessions
+            
+            # Tables directly referencing users
+            "session_logs",         # user_id → users
+            "user_sessions",        # user_id → users
+            "placement_attempts",   # user_id → users
+            "weekly_goals",         # user_id → users
+            "user_badges",          # user_id → users (probably)
+            "user_essays",          # user_id → users
+            "user_points",          # user_id → users
+            "user_streaks",         # user_id → users
+            "points_history",       # user_id → users
+            "progress",             # user_id → users
+            "vocabulary_tracker",   # user_id → users
+            "writing_exercises",    # user_id → users (maybe)
+            "difficulty_adjustments", # user_id → users (maybe)
+            "assessments",          # user_id → users (maybe)
+            "discussions",          # user_id → users (maybe)
+            "admin_alerts"          # student_id → users (maybe)
+        ]
+        
+        for table in tables_to_clean:
+            try:
+                cursor.execute(
+                    
+                    f"DELETE FROM {table} WHERE user_id=%s" if USE_POSTGRES
+                    else f"DELETE FROM {table} WHERE user_id=?",
+                    (student_id,)
+                )
+                conn.commit()
+                print(f"✓ Deleted from {table}")
+            except Exception as e:
+                conn.rollback()
+                print(f"⚠️ Skipping {table}: {e}")
+        
+        # Delete user
+        cursor.execute(
+            "DELETE FROM users WHERE id=%s" if USE_POSTGRES
+            else "DELETE FROM users WHERE id=?",
+            (student_id,)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Deleted student: {name}")
+        
+        return {"success": True, "message": f"Deleted {name}"}
+        
+    except HTTPException:
+        conn.rollback()
+        conn.close()
+        raise
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"❌ Error: {e}")
+        raise HTTPException(500, str(e))
 
 @app.get("/api/admin/analytics")
-async def get_analytics(token: str):
+async def get_analytics(admin=Depends(require_admin)):
     """Get basic analytics (Phase 1 compatibility)"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db()
     cursor = get_cursor(conn)
@@ -4954,10 +5075,7 @@ async def get_analytics(token: str):
     }
 
 @app.get("/api/admin/platform-activity")
-async def get_platform_activity(token: str, days: int = 7):
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def get_platform_activity(days: int = 7, admin=Depends(require_admin)):
 
     days = max(1, min(int(days or 7), 30))
 
@@ -5020,12 +5138,9 @@ async def get_platform_activity(token: str, days: int = 7):
 # ========== ADMIN ENDPOINTS ==========
 
 @app.get("/api/admin/sessions/active")
-async def get_active_sessions(token: str):
+async def get_active_sessions(admin=Depends(require_admin)):
     """Get all active sessions (admin only)"""
     try:
-        user_data = verify_token(token)
-        if user_data["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Admin only")
         
         conn = get_db()
         cursor = get_cursor(conn)
@@ -5107,12 +5222,9 @@ async def get_active_sessions(token: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/admin/activity/recent")
-async def get_recent_activity(token: str, hours: int = 24):
+async def get_recent_activity(hours: int = 24, admin=Depends(require_admin)):
     """Get recent activity logs (admin only)"""
     try:
-        user_data = verify_token(token)
-        if user_data["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Admin only")
         
         conn = get_db()
         cursor = get_cursor(conn)
@@ -5195,135 +5307,40 @@ async def get_recent_activity(token: str, hours: int = 24):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.get("/api/admin/alerts/unread")
-async def get_unread_alerts(token: str, limit: int = 50):
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+def require_admin_db(user=Depends(get_current_user)):
+    user_id = user["user_id"]
     conn = get_db()
     cursor = get_cursor(conn)
-
     try:
         if USE_POSTGRES:
-            cursor.execute("""
-                SELECT
-                    a.id AS alert_id,
-                    a.alert_type,
-                    a.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    a.essay_id,
-                    a.priority,
-                    a.message,
-                    a.details,
-                    a.created_at
-                FROM admin_alerts a
-                JOIN users u ON u.id = a.user_id
-                WHERE a.is_read = FALSE
-                ORDER BY a.created_at DESC
-                LIMIT %s
-            """, (limit,))
+            cursor.execute("SELECT role FROM users WHERE id=%s", (user_id,))
         else:
-            cursor.execute("""
-                SELECT
-                    a.id AS alert_id,
-                    a.alert_type,
-                    a.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    a.essay_id,
-                    a.priority,
-                    a.message,
-                    a.details,
-                    a.created_at
-                FROM admin_alerts a
-                JOIN users u ON u.id = a.user_id
-                WHERE a.is_read = 0
-                ORDER BY a.created_at DESC
-                LIMIT ?
-            """, (limit,))
-
-        rows = cursor.fetchall() or []
-        alerts = [dict(r) for r in rows]
-        return {"success": True, "count": len(alerts), "alerts": alerts}
-
+            cursor.execute("SELECT role FROM users WHERE id=?", (user_id,))
+        row = cursor.fetchone()
+        role = (row["role"] if isinstance(row, dict) else row[0]) if row else None
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return {"user_id": user_id, "role": role}
     finally:
-        try:
-            cursor.close()
-        except Exception:
-            pass
         conn.close()
-        
-@app.get("/api/admin/essays/needs-review")
-async def get_essays_needing_review(token: str, limit: int = 50):
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    
+@app.get("/api/admin/stats")
+async def admin_stats(admin=Depends(require_admin)):
+    return {"ok": True}
 
-    conn = get_db()
-    cursor = get_cursor(conn)
-
-    try:
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT
-                    e.id AS essay_id,
-                    e.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    e.essay_number,
-                    e.comprehension_score,
-                    e.comprehension_level,
-                    e.created_at
-                FROM user_essays e
-                JOIN users u ON u.id = e.user_id
-                WHERE e.needs_admin_review = TRUE
-                  AND e.admin_reviewed = FALSE
-                ORDER BY e.created_at DESC
-                LIMIT %s
-            """, (limit,))
-        else:
-            cursor.execute("""
-                SELECT
-                    e.id AS essay_id,
-                    e.user_id,
-                    u.full_name AS user_name,
-                    u.email AS user_email,
-                    e.essay_number,
-                    e.comprehension_score,
-                    e.comprehension_level,
-                    e.created_at
-                FROM user_essays e
-                JOIN users u ON u.id = e.user_id
-                WHERE e.needs_admin_review = 1
-                  AND e.admin_reviewed = 0
-                ORDER BY e.created_at DESC
-                LIMIT ?
-            """, (limit,))
-
-        rows = cursor.fetchall() or []
-        essays = [dict(r) for r in rows]
-        return {"success": True, "count": len(essays), "essays": essays}
-
-    finally:
-        try:
-            cursor.close()
-        except Exception:
-            pass
-        conn.close()
+@app.get("/admin-dashboard", response_class=HTMLResponse)
+async def admin_dashboard(admin=Depends(require_admin)):
+    with open("admin-dashboard.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 # ============================================
 # ESSAY ALERTS & REVIEW ENDPOINTS
 # ============================================
 
 @app.get("/api/admin/alerts/unread")
-async def get_unread_alerts(token: str, limit: int = 50):
+async def get_unread_alerts(limit: int = 50, admin=Depends(require_admin)):
     """Get unread admin alerts"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+    
     conn = get_db()
     cursor = conn.cursor()
 
@@ -5413,14 +5430,9 @@ async def get_unread_alerts(token: str, limit: int = 50):
 
 
 @app.get("/api/admin/essays/needs-review")
-async def get_essays_needing_review(token: str, limit: int = 50):
-    """Get essays that need admin review"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+async def get_essays_needing_review(limit: int = 50, admin=Depends(require_admin)):
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
 
     try:
         if USE_POSTGRES:
@@ -5438,7 +5450,7 @@ async def get_essays_needing_review(token: str, limit: int = 50):
                 FROM user_essays e
                 JOIN users u ON u.id = e.user_id
                 WHERE e.needs_admin_review = TRUE
-                  AND e.admin_reviewed = FALSE
+                  AND e.reviewed_at IS NULL
                 ORDER BY e.created_at DESC
                 LIMIT %s
             """, (limit,))
@@ -5457,7 +5469,7 @@ async def get_essays_needing_review(token: str, limit: int = 50):
                 FROM user_essays e
                 JOIN users u ON u.id = e.user_id
                 WHERE e.needs_admin_review = 1
-                  AND e.admin_reviewed = 0
+                  AND e.reviewed_at IS NULL
                 ORDER BY e.created_at DESC
                 LIMIT ?
             """, (limit,))
@@ -5493,12 +5505,9 @@ async def get_essays_needing_review(token: str, limit: int = 50):
 
 
 @app.get("/api/admin/essay/{essay_id}/details")
-async def get_essay_details(essay_id: int, token: str):
+async def get_essay_details(essay_id: int, admin=Depends(require_admin)):
     """Get full essay details including text, feedback, and student info"""
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+    
     conn = get_db()
     cursor = get_cursor(conn)
 
@@ -5576,102 +5585,605 @@ async def get_essay_details(essay_id: int, token: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/admin/alert/{alert_id}/mark-resolved")
-async def mark_alert_resolved(alert_id: int, request: Request):
-    """Mark an alert as resolved"""
-    data = await request.json()
-    token = data.get('token')
-    admin_notes = data.get('notes', '')
-    
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+async def mark_alert_resolved(
+    alert_id: int,
+    request: Request,
+    admin=Depends(require_admin),
+):
+    body = await request.json()
+    admin_notes = body.get("notes", "")
+        
     conn = get_db()
-    cursor = conn.cursor()
-
+    cursor = get_cursor(conn)
+        
     try:
         if USE_POSTGRES:
             cursor.execute("""
                 UPDATE admin_alerts
                 SET is_read = TRUE,
+                    is_resolved = TRUE,
                     resolved_at = NOW(),
                     resolved_by = %s,
-                    admin_notes = %s
+                    resolution_notes = %s
                 WHERE id = %s
-            """, (user_data['user_id'], admin_notes, alert_id))
+            """, (admin['user_id'], admin_notes, alert_id))
         else:
             cursor.execute("""
                 UPDATE admin_alerts
                 SET is_read = 1,
+                    is_resolved = 1,
                     resolved_at = datetime('now'),
                     resolved_by = ?,
-                    admin_notes = ?
+                    resolution_notes = ?
                 WHERE id = ?
-            """, (user_data['user_id'], admin_notes, alert_id))
-
+            """, (admin['user_id'], admin_notes, alert_id))
+            
         conn.commit()
         conn.close()
-
-        return {
-            "success": True,
-            "message": "Alert marked as resolved"
-        }
-
+            
+        print(f"✅ Alert {alert_id} marked as resolved by admin {admin['user_id']}")
+            
+        return {"success": True, "message": "Alert marked as resolved"}
+            
     except Exception as e:
         conn.rollback()
         conn.close()
-        print(f"Error marking alert resolved: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+    finally:
+        conn.close()
 
+def row_to_dict(cursor, row):
+    if row is None:
+        return None
+    if hasattr(row, "keys"):
+        return dict(row)
+    cols = [d[0] for d in cursor.description]
+    return dict(zip(cols, row))
 
 @app.post("/api/admin/essay/{essay_id}/mark-reviewed")
-async def mark_essay_reviewed(essay_id: int, request: Request):
-    """Mark an essay as reviewed by admin"""
-    data = await request.json()
-    token = data.get('token')
-    admin_notes = data.get('notes', '')
+async def mark_essay_reviewed(essay_id: int, body: dict, admin=Depends(require_admin)):
+    notes = body.get("notes", "").strip()
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        # Optional: ensure essay exists (prevents silent no-op updates)
+        if USE_POSTGRES:
+            cursor.execute("SELECT id FROM user_essays WHERE id=%s", (essay_id,))
+        else:
+            cursor.execute("SELECT id FROM user_essays WHERE id=?", (essay_id,))
+        exists = cursor.fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Essay not found")
+        
+        # Update reviewed fields
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE user_essays
+                SET reviewed_at = NOW(),
+                    needs_admin_review = FALSE,
+                    admin_reviewed = TRUE,
+                    admin_notes = %s
+                WHERE id = %s
+            """, (notes, essay_id))
+        else:
+            cursor.execute("""
+                UPDATE user_essays
+                SET reviewed_at = datetime('now'),
+                    needs_admin_review = 0,
+                    admin_reviewed = 1,
+                    admin_notes = ?
+                WHERE id = ?
+            """, (notes, essay_id))
+        
+        conn.commit()
+        print(f"✅ Essay {essay_id} marked as reviewed by admin {admin['user_id']}")
+        return {"success": True}
+        
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        print("Error marking essay reviewed:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
     
-    user_data = verify_token(token)
-    if user_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+# ============================================================
+
+@app.get("/api/admin/admins")
+async def list_admins(admin=Depends(require_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT id, email, full_name, role
+                FROM users
+                WHERE role = 'admin'
+                ORDER BY id DESC
+            """)
+            rows = cursor.fetchall() or []
+            admins = [{
+                "id": r["id"] if isinstance(r, dict) else r[0],
+                "email": r["email"] if isinstance(r, dict) else r[1],
+                "full_name": r["full_name"] if isinstance(r, dict) else r[2],
+                "role": r["role"] if isinstance(r, dict) else r[3],
+            } for r in rows]
+        else:
+            cursor.execute("""
+                SELECT id, email, full_name, role
+                FROM users
+                WHERE role = 'admin'
+                ORDER BY id DESC
+            """)
+            rows = cursor.fetchall() or []
+            admins = [{"id": r[0], "email": r[1], "full_name": r[2], "role": r[3]} for r in rows]
+
+        return {"success": True, "count": len(admins), "admins": admins}
+    finally:
+        conn.close
+        
+@app.post("/api/admin/invites")
+async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)):
+    email = (body.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    expires_at = datetime.utcnow() + timedelta(hours=24)
 
     conn = get_db()
-    cursor = conn.cursor()
+    cur = get_cursor(conn)
+
+    try:
+        # 1) Store invite (NOT committed yet)
+        if USE_POSTGRES:
+            cur.execute("""
+                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (email, token_hash, expires_at, admin["user_id"]))
+
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=500, detail="Failed to create invite (no id returned)")
+            invite_id = row["id"] if isinstance(row, Mapping) else row[0]
+
+        else:
+            cur.execute("""
+                INSERT INTO admin_invites (email, token_hash, created_at, expires_at, invited_by)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                email,
+                token_hash,
+                datetime.utcnow().isoformat(),
+                expires_at.isoformat(),
+                admin["user_id"],
+            ))
+            invite_id = cur.lastrowid
+
+        # 2) Build invite link
+        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+
+        # 3) Send email via Resend (same verified sender style as forgot-password)
+        try:
+            resend.Emails.send({
+                "from": "Achieve 365 <noreply@4dgaming.games>",  # must be verified in Resend
+                "to": email,
+                "subject": "You’ve been invited as an administrator",
+                "html": f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2A398A;">Admin Invitation</h2>
+                        <p>You’ve been invited to become an administrator.</p>
+                        <p>This link expires in 24 hours.</p>
+
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{invite_link}"
+                               style="background: #2A398A;
+                                      color: white;
+                                      padding: 12px 30px;
+                                      text-decoration: none;
+                                      border-radius: 5px;
+                                      display: inline-block;">
+                                Accept Admin Invite
+                            </a>
+                        </div>
+
+                        <p>Or copy and paste this link into your browser:</p>
+                        <p style="word-break: break-all; color: #666;">{invite_link}</p>
+
+                        <p style="color: #999; font-size: 14px;">
+                            If you weren’t expecting this invite, you can ignore this email.
+                        </p>
+
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                        <p style="color: #999; font-size: 12px;">
+                            Achieve 365 - Empowering Adult Literacy
+                        </p>
+                    </div>
+                """
+            })
+            print(f"✅ Admin invite email sent to {email}")
+
+        except Exception as email_error:
+            print(f"❌ Invite email error: {email_error}")
+            conn.rollback()  # prevents “invite created but email failed”
+            raise HTTPException(status_code=500, detail="Failed to send invite email")
+
+        # 4) Only commit if email succeeded
+        conn.commit()
+        return {"success": True, "invite_id": invite_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Create admin invite error: {e}")
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create admin invite")
+    finally:
+        conn.close()
+
+def get_bearer_token(authorization: Optional[str] = Header(None)) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    return parts[1].strip()
+
+def require_admin(token: str = Depends(get_bearer_token)) -> dict:
+    payload = verify_token(token)
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return payload
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")    
+
+def _sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+def send_resend_email(to_email: str, subject: str, html: str):
+    if not RESEND_API_KEY or not FROM_EMAIL or not APP_BASE_URL:
+        raise HTTPException(status_code=500, detail="Resend not configured (RESEND_API_KEY/FROM_EMAIL/APP_BASE_URL)")
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+        json={"from": FROM_EMAIL, "to": [to_email], "subject": subject, "html": html},
+        timeout=15
+    )
+    if r.status_code >= 300:
+        raise HTTPException(status_code=500, detail=f"Resend error: {r.text}")
+
+def send_admin_invite_email(to_email: str, invite_url: str):
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured")
+
+    payload = {
+        "from": FROM_EMAIL,
+        "to": [to_email],
+        "subject": "You’ve been invited as an Achieve 365 Administrator",
+        "html": f"""
+          <p>You’ve been invited to be an <b>Administrator</b> on Achieve 365.</p>
+          <p>Click to set your password (link expires in 24 hours):</p>
+          <p><a href="{invite_url}">Set Admin Password</a></p>
+          <p>If you didn’t expect this email, you can ignore it.</p>
+        """
+    }
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=15,
+    )
+
+    if r.status_code >= 300:
+        raise HTTPException(status_code=500, detail=f"Resend error: {r.text}")
+    
+from collections.abc import Mapping
+
+
+@app.post("/api/admin/invites/accept")
+async def accept_admin_invite(body: AcceptInviteReq):
+    raw_token = (body.token or "").strip()
+    password = body.password or ""
+    if not raw_token or not password:
+        raise HTTPException(status_code=400, detail="Token and password are required")
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    conn = get_db()
+    cur = get_cursor(conn)
+    try:
+        # 1) find pending invite (your schema uses used_at)
+        if USE_POSTGRES:
+            cur.execute("""
+              SELECT id, email
+              FROM admin_invites
+              WHERE token_hash=%s
+                AND used_at IS NULL
+                AND revoked_at IS NULL
+                AND expires_at > NOW()
+              LIMIT 1
+            """, (token_hash,))
+        else:
+            cur.execute("""
+              SELECT id, email
+              FROM admin_invites
+              WHERE token_hash=?
+                AND used_at IS NULL
+                AND revoked_at IS NULL
+                AND expires_at > ?
+              LIMIT 1
+            """, (token_hash, datetime.utcnow().isoformat()))
+        invite = cur.fetchone()
+        if not invite:
+            raise HTTPException(status_code=400, detail="Invalid or expired invite")
+        invite_id = invite["id"] if isinstance(invite, Mapping) else invite[0]
+        email = (invite["email"] if isinstance(invite, Mapping) else invite[1]).lower().strip()
+        
+        # 2) hash password
+        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        
+        # 3) upsert user as admin
+        if USE_POSTGRES:
+            cur.execute("SELECT id FROM users WHERE email=%s LIMIT 1", (email,))
+        else:
+            cur.execute("SELECT id FROM users WHERE email=? LIMIT 1", (email,))
+        existing = cur.fetchone()
+        
+        if existing:
+            user_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
+            if USE_POSTGRES:
+                cur.execute(
+                    "UPDATE users SET role='admin', password_hash=%s WHERE id=%s",
+                    (password_hash, user_id)
+                )
+            else:
+                cur.execute(
+                    "UPDATE users SET role='admin', password_hash=? WHERE id=?",
+                    (password_hash, user_id)
+                )
+        else:
+            # Create new admin user
+            if USE_POSTGRES:
+                cur.execute("""
+                  INSERT INTO users (email, full_name, password_hash, role, created_at)
+                  VALUES (%s, %s, %s, 'admin', NOW())
+                  RETURNING id
+                """, (email, "Administrator", password_hash))
+                row = cur.fetchone()
+                # ✅ FIX: Handle both dict and tuple
+                user_id = row["id"] if isinstance(row, Mapping) else row[0]
+            else:
+                cur.execute("""
+                  INSERT INTO users (email, full_name, password_hash, role, created_at)
+                  VALUES (?, ?, ?, 'admin', ?)
+                """, (email, "Administrator", password_hash, datetime.utcnow().isoformat()))
+                user_id = cur.lastrowid
+        
+        # 4) mark invite used
+        if USE_POSTGRES:
+            cur.execute("UPDATE admin_invites SET used_at = NOW() WHERE id = %s", (invite_id,))
+        else:
+            cur.execute("UPDATE admin_invites SET used_at = ? WHERE id = ?", (datetime.utcnow().isoformat(), invite_id))
+        
+        conn.commit()
+        return {"success": True, "user_id": user_id}
+        
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        print("accept_admin_invite error:", e)
+        import traceback
+        traceback.print_exc()  # ✅ Add full traceback for debugging
+        raise HTTPException(status_code=500, detail="Failed to accept invite")
+    finally:
+        conn.close()
+
+def sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+from collections.abc import Mapping
+
+@app.get("/api/admin/invites")
+async def list_admin_invites(admin=Depends(require_admin)):
+    conn = get_db()
+    cur = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cur.execute("""
+              SELECT id, email, invited_by, created_at, expires_at, used_at, revoked_at
+              FROM admin_invites
+              ORDER BY id DESC
+              LIMIT 200
+            """)
+        else:
+            cur.execute("""
+              SELECT id, email, invited_by, created_at, expires_at, used_at, revoked_at
+              FROM admin_invites
+              ORDER BY id DESC
+              LIMIT 200
+            """)
+
+        rows = cur.fetchall() or []
+
+        # normalize sqlite tuples -> dicts if needed
+        if rows and not isinstance(rows[0], Mapping):
+            cols = ["id","email","invited_by","created_at","expires_at","used_at","revoked_at"]
+            rows = [dict(zip(cols, r)) for r in rows]
+
+        return {"success": True, "invites": rows}
+    finally:
+        conn.close()
+
+@app.post("/api/admin/invites/{invite_id}/resend")
+async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+
+    try:
+        # 1) load invite
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT id, email, used_at, revoked_at
+                FROM admin_invites
+                WHERE id = %s
+            """, (invite_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invite not found")
+            email = row["email"]
+            used_at = row["used_at"]
+            revoked_at = row["revoked_at"]
+        else:
+            cursor.execute("""
+                SELECT id, email, used_at, revoked_at
+                FROM admin_invites
+                WHERE id = ?
+            """, (invite_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invite not found")
+            _, email, used_at, revoked_at = row
+
+        if used_at or revoked_at:
+            raise HTTPException(status_code=400, detail="Invite is not pending")
+
+        # 2) revoke old invite
+        if USE_POSTGRES:
+            cursor.execute("UPDATE admin_invites SET revoked_at = NOW() WHERE id = %s", (invite_id,))
+        else:
+            cursor.execute("UPDATE admin_invites SET revoked_at = datetime('now') WHERE id = ?", (invite_id,))
+
+        # 3) create new invite + email it
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (email.lower().strip(), token_hash, expires_at, admin["user_id"]))
+            row2 = cursor.fetchone()
+            new_id = row2["id"] if isinstance(row2, dict) else row2[0]
+
+        else:
+            cursor.execute("""
+                INSERT INTO admin_invites (email, token_hash, expires_at, invited_by)
+                VALUES (?, ?, ?, ?)
+            """, (email.lower().strip(), token_hash, expires_at.isoformat(), admin["user_id"]))
+            new_id = cursor.lastrowid
+
+        conn.commit()
+
+        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+        send_resend_email(
+            to_email=email,
+            subject="Administrator invite link (new)",
+            html=f"""
+              <p>You have a new administrator invite link (expires in 24 hours).</p>
+              <p><a href="{invite_link}">Accept Admin Invite</a></p>
+              <p style="word-break:break-all;">{invite_link}</p>
+            """
+        )
+
+        return {"success": True, "new_invite_id": new_id}
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+        
+from fastapi.responses import RedirectResponse
+
+@app.get("/admin-invite.html", include_in_schema=False)
+def admin_invite_html_redirect(token: str | None = None):
+    url = "/admin-invite"
+    if token:
+        url += f"?token={token}"
+    return RedirectResponse(url=url, status_code=307)
+
+        
+@app.post("/api/admin/invites/{invite_id}/revoke")
+async def revoke_admin_invite(invite_id: int, admin=Depends(require_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
 
     try:
         if USE_POSTGRES:
             cursor.execute("""
-                UPDATE user_essays
-                SET admin_reviewed = TRUE,
-                    admin_reviewed_at = NOW(),
-                    admin_reviewed_by = %s,
-                    admin_notes = %s
-                WHERE id = %s
-            """, (user_data['user_id'], admin_notes, essay_id))
+                UPDATE admin_invites
+                SET revoked_at = NOW()
+                WHERE id = %s AND used_at IS NULL AND revoked_at IS NULL
+            """, (invite_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=400, detail="Invite not pending or not found")
         else:
             cursor.execute("""
-                UPDATE user_essays
-                SET admin_reviewed = 1,
-                    admin_reviewed_at = datetime('now'),
-                    admin_reviewed_by = ?,
-                    admin_notes = ?
-                WHERE id = ?
-            """, (user_data['user_id'], admin_notes, essay_id))
+                UPDATE admin_invites
+                SET revoked_at = datetime('now')
+                WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL
+            """, (invite_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=400, detail="Invite not pending or not found")
 
         conn.commit()
-        conn.close()
+        return {"success": True}
 
-        return {
-            "success": True,
-            "message": "Essay marked as reviewed"
-        }
-
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception as e:
         conn.rollback()
-        conn.close()
-        print(f"Error marking essay reviewed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+    finally:
+        conn.close()
+        
+@app.delete("/api/admin/invites/{invite_id}")
+async def revoke_admin_invite(invite_id: int, admin=Depends(require_admin)):
+    conn = get_db()
+    cur = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cur.execute("""
+              UPDATE admin_invites
+              SET revoked_at = NOW()
+              WHERE id = %s AND used_at IS NULL
+            """, (invite_id,))
+        else:
+            cur.execute("""
+              UPDATE admin_invites
+              SET revoked_at = ?
+              WHERE id = ? AND used_at IS NULL
+            """, (datetime.utcnow().isoformat(), invite_id))
+
+        conn.commit()
+        return {"success": True}
+    finally:
+        conn.close()
+
+
 # ============================================================
 @app.get("/api/student/gamification")
 async def get_gamification_data(token: str):
@@ -6871,10 +7383,10 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
         
     elif context == 'instruction':
         messages = [
-            f"Alright {first_name}, read this passage carefully. Take your time and enjoy the story! Then we'll check your understanding.",
+            f"{first_name}, read this passage carefully. Take your time and enjoy the story! Then we'll check your understanding.",
             f"Here's your next reading for today, {first_name}. Focus on the main ideas and interesting details. You've got this!",
-            f"Let's dive into this passage together, {first_name}! Read at your own pace, and I'll be here when you're ready for questions.",
-            f"Time to read, {first_name}! Remember, it's not a race. Understanding is what matters most!"
+            f"{first_name}! Let's dive into this passage together, Read at your own pace, and I'll be here when you're ready for questions.",
+            f"{first_name}, It's time to read! Remember, it's not a race. Understanding is what matters most!"
         ]
         emotion = 'encouraging'
         
