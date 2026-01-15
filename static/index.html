@@ -1349,20 +1349,35 @@
                         const data = await response.json();
                         console.log('Login response data:', data);
                         
-                        if (data.success) {
-                            console.log('✅ Login successful');
-                            localStorage.setItem('token', data.token);
-                            localStorage.setItem('user', JSON.stringify(data.user));
-                            sessionStorage.setItem('justLoggedIn', 'true'); // Set flag
-                            
-                            if (data.user.role === 'admin') {
-                                window.location.href = '/admin-dashboard';
+                        async function playLoginChime() {
+                          const a = new Audio('/static/sounds/login.mp3');
+                          a.volume = 0.5;
+                          a.preload = 'auto';
+                          try {
+                              await a.play();                       // ✅ allowed because this is inside the user submit click
+                              await new Promise(res => (a.onended = res));
+                              console.log('✅ Login chime played');
+                          } catch (e) {
+                              console.log('⚠️ Login chime could not play:', e?.message || e);
+                          }
+                        }
 
-                            } else {
-                                window.location.href = '/dashboard';
-                                
-                            }
-                        } else {
+                        if (data.success) {
+                          console.log('✅ Login successful');
+                          localStorage.setItem('token', data.token);
+                          localStorage.setItem('user', JSON.stringify(data.user));
+                          sessionStorage.setItem('justLoggedIn', 'true'); // dashboard can still greet
+
+                          // ✅ PLAY CHIME HERE (before redirect)
+                          await playLoginChime();
+
+                          if (data.user.role === 'admin') {
+                              window.location.href = '/admin-dashboard';
+                          } else {
+                              window.location.href = '/dashboard';
+                          }
+                        }
+                        else {
                             console.log('❌ Login failed:', data.detail);
                             if (errorDiv) {
                                 errorDiv.textContent = data.detail || 'Login failed';
