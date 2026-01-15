@@ -66,7 +66,7 @@ class ContentGenerator:
         
         # Calculate target from range
         import random
-        target_words = random.randint(word_count_min, word_count_max)
+        target_words = (word_count_min + word_count_max) // 2
         
         # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
         prompt = f"""Write a SHORT STORY (narrative) about {topic}.
@@ -196,45 +196,43 @@ class ContentGenerator:
             # Analyze readability
             from readability import analyze_readability
 
-            readability = analyze_readability(passage_data["content"])
-            wc = readability["word_count"]
+            # Analyze readability
+            readability = analyze_readability(passage_data['content'])
+            wc = readability['word_count']
 
-            # ✅ Only one rewrite attempt
+            # If out of range, do up to 2 rewrite passes (MUCH faster than 6 new generations)
             if wc < word_count_min or wc > word_count_max:
-                passage_data = self._rewrite_passage_to_word_range(
-                    title=passage_data.get("title", f"{topic}"),
-                    content=passage_data["content"],
-                    topic=topic,
-                    difficulty_level=difficulty_level,
-                    word_count_min=word_count_min,
-                    word_count_max=word_count_max,
-                    target_words=target_words  # <-- use exact target in prompt
+                print(f"⚠️ Out of range on first draft: wc={wc}. Rewriting to fit...")
+
+                for rewrite_attempt in range(1, 3):  # 2 rewrites max
+                    passage_data = self._rewrite_passage_to_word_range(
+                        title=passage_data.get("title", f"{topic}"),
+                        content=passage_data["content"],
+                        topic=topic,
+                        difficulty_level=difficulty_level,
+                        word_count_min=word_count_min,
+                        word_count_max=word_count_max,
+                        target_words=target_words
+                    )
+                    readability = analyze_readability(passage_data['content'])
+                    wc = readability['word_count']
+                    print(f"✍️ Rewrite attempt {rewrite_attempt}: wc={wc}")
+
+                    if word_count_min <= wc <= word_count_max:
+                        break
+
+            # (Optional but recommended) Re-check vocab after rewrite because rewrite often returns fewer vocab words
+            vocab_words = passage_data.get('vocabulary_words', [])
+            vocab_count = len(vocab_words)
+            required_min = min_vocab.get(difficulty_level, 5)
+
+            if vocab_count < required_min:
+                passage_data['vocabulary_words'] = self._extract_additional_vocabulary(
+                    passage_data['content'],
+                    vocab_words,
+                    difficulty_level,
+                    required_min
                 )
-                readability = analyze_readability(passage_data["content"])
-                wc = readability["word_count"]
-
-            # ✅ If still out of range after rewrite, accept it (or clamp once)
-            # (This avoids 1–6 attempts)
-            # if wc < word_count_min or wc > word_count_max:
-            #     print("⚠️ Still out of range after rewrite; accepting to avoid delays.")
-
-            passage_data.update({
-                "source": "AI",
-                "topic_tags": [topic],
-                "word_count": readability["word_count"],
-                "readability_score": readability["flesch_kincaid_grade"],
-                "flesch_ease": readability["flesch_reading_ease"],
-                "difficulty_level": difficulty_level,
-                "estimated_minutes": readability["estimated_minutes"],
-                "actual_difficulty": readability["difficulty_level"],
-                "grade_band": readability["grade_band"],
-                "target_word_range": f"{word_count_min}-{word_count_max}",
-                "vocabulary_count": len(passage_data["vocabulary_words"])
-            })
-           
-            print(f"✅ Generated passage: '{passage_data['title']}'")
-            print(f"✅ Word count: {readability['word_count']} (target: {word_count_min}-{word_count_max})")
-            print(f"✅ Vocabulary words: {len(passage_data['vocabulary_words'])}")
             
             return passage_data
             

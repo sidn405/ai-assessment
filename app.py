@@ -4323,60 +4323,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 
         conn.close()
         
-        import random, re, hashlib
-
-        def fp(text: str) -> str:
-            norm = re.sub(r"\s+", " ", (text or "").lower()).strip()
-            norm = re.sub(r"[^a-z0-9 ]+", "", norm)
-            return hashlib.sha256(norm.encode("utf-8")).hexdigest()
-
-        MAX_TRIES = 6
-        passage_data = None
-        picked_topic = None
-
-        for attempt in range(1, MAX_TRIES + 1):
-            picked_topic = random.choice(available_interests)
-
-            print(f"Step 7: Generating passage (attempt {attempt}/{MAX_TRIES})...")
-            print(f"   Topic: {picked_topic}")
-            print(f"   Difficulty: {difficulty}")
-            print(f"   Word count range: {word_count_min}-{word_count_max}")
-
-            candidate = content_generator.generate_passage(
-                topic=picked_topic,
-                difficulty_level=difficulty,
-                word_count_min=word_count_min,
-                word_count_max=word_count_max,
-                user_interests=interests
-            )
-
-            title_l = (candidate.get("title") or "").strip().lower()
-            content_fp = fp(candidate.get("content") or "")
-
-            # Prevent identical repeats
-            if title_l in recent_titles or content_fp in recent_fps:
-                print("⚠️ Duplicate detected (title/content). Retrying...")
-                continue
-
-            # Enforce word count even if the model ignores it
-            wc = int(candidate.get("word_count") or 0)
-            if wc < word_count_min or wc > word_count_max:
-                print(f"⚠️ Word count out of range ({wc}). Retrying...")
-                continue
-
-            passage_data = candidate
-            break
-
-        if not passage_data:
-            # last resort: accept whatever was generated last time
-            passage_data = candidate
-            print("⚠️ Could not find a non-duplicate in range after retries; using last candidate.")
-
-        topic = picked_topic
-
         # Step 7: Generate passage (with duplicate + word-count enforcement)
-        print("Step 7: Generating passage with OpenAI...")
-
         import random, re, hashlib
 
         def fp(text: str) -> str:
@@ -4439,8 +4386,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Ensure topic_tags exists
         if "topic_tags" not in passage_data or not passage_data["topic_tags"]:
             passage_data["topic_tags"] = [topic]
-
-   
+  
         # Step 8: Save to database
         print("Step 8: Saving passage to database...")
         conn = get_db()
