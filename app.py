@@ -4386,6 +4386,29 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         # Ensure topic_tags exists
         if "topic_tags" not in passage_data or not passage_data["topic_tags"]:
             passage_data["topic_tags"] = [topic]
+            
+        # ---- Normalize passage_data to ensure required fields exist ----
+        if not isinstance(passage_data, dict):
+            raise HTTPException(status_code=500, detail="Generator returned invalid passage format")
+
+        passage_data.setdefault("source", "AI")
+
+        # ensure difficulty_level is present (DB insert uses passage_data['difficulty_level'])
+        passage_data.setdefault("difficulty_level", difficulty)
+
+        # ensure topic_tags exists
+        if not passage_data.get("topic_tags"):
+            passage_data["topic_tags"] = [topic]
+
+        # ensure word_count exists (you already computed wc)
+        if not passage_data.get("word_count"):
+            passage_data["word_count"] = count_words(passage_data.get("content", ""))
+
+        # optional safe defaults for DB nullable fields
+        passage_data.setdefault("readability_score", None)
+        passage_data.setdefault("flesch_ease", None)
+        passage_data.setdefault("estimated_minutes", None)
+
   
         # Step 8: Save to database
         print("Step 8: Saving passage to database...")
