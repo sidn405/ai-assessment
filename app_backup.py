@@ -4117,19 +4117,71 @@ async def retake_placement(request: Request):
 
 @app.get("/api/lessons/next")
 async def get_next_lesson(token: str, exclude_topics: str = None):
-    """Get next AI-generated lesson with topic variety"""
-    
+    """Get next AI-generated lesson with topic variety (fast + reliable)"""
+
+    import json
+    import random
+    import re
+    import hashlib
+    from difflib import SequenceMatcher
+
     print("=" * 50)
     print("LESSON REQUEST RECEIVED")
     print("=" * 50)
-    
+
+    def count_words(text: str) -> int:
+        return len(re.findall(r"\b[\w']+\b", text or ""))
+
+    # Less aggressive fingerprint (prevents false “duplicate”)
+    def fp(text: str, max_chars: int = 800) -> str:
+        norm = re.sub(r"\s+", " ", (text or "").strip().lower())
+        norm = norm[:max_chars]
+        return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+    # Near-duplicate check (only rejects if VERY similar)
+    def is_near_duplicate(a: str, b: str, threshold: float = 0.94) -> bool:
+        a = (a or "").strip().lower()
+        b = (b or "").strip().lower()
+        if not a or not b:
+            return False
+        # Compare only first part (fast + good enough)
+        a = re.sub(r"\s+", " ", a)[:1500]
+        b = re.sub(r"\s+", " ", b)[:1500]
+        return SequenceMatcher(None, a, b).ratio() >= threshold
+
+    def normalize_passage(p: dict, topic: str, difficulty: str) -> dict:
+        if not isinstance(p, dict):
+            p = {}
+
+        p.setdefault("title", topic)
+        p.setdefault("content", "")
+        p["source"] = p.get("source") or "AI"
+        p["difficulty_level"] = p.get("difficulty_level") or difficulty
+
+        if not p.get("topic_tags"):
+            p["topic_tags"] = [topic]
+
+        # Always compute word_count from content
+        p["word_count"] = count_words(p.get("content", ""))
+
+        # Optional DB fields
+        p.setdefault("readability_score", None)
+        p.setdefault("flesch_ease", None)
+        p.setdefault("estimated_minutes", None)
+
+        # Lists used by response
+        p.setdefault("key_concepts", [])
+        p.setdefault("vocabulary_words", [])
+
+        return p
+
     try:
         # Step 1: Verify token
         print("Step 1: Verifying token...")
         user_data = verify_token(token)
         user_id = user_data["user_id"]
         print(f"✓ User ID: {user_id}")
-        
+
         # Step 2: Check content generator
         print("Step 2: Checking content generator...")
         if not content_generator:
@@ -4137,31 +4189,27 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             print(f"✗ ERROR: {error_msg}")
             raise HTTPException(status_code=503, detail=error_msg)
         print("✓ Content generator available")
-        
-        # Step 3: Get user profile
+
+        # Step 3: Fetch user + recent data
         print("Step 3: Fetching user from database...")
         conn = get_db()
         cursor = get_cursor(conn)
-        
+
         if USE_POSTGRES:
             cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
         else:
             cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        
+
         user = cursor.fetchone()
-        
         if not user:
             conn.close()
-            error_msg = f"User {user_id} not found"
-            print(f"✗ ERROR: {error_msg}")
-            raise HTTPException(status_code=404, detail=error_msg)
-        
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
         print(f"✓ User found: {user.get('full_name') or user.get('email')}")
-        
-        # Step 4: Parse user interests
+
+        # Step 4: Parse interests
         print("Step 4: Parsing user interests...")
         interest_tags = user.get('interest_tags') or user.get('interests') or '[]'
-        
         try:
             if isinstance(interest_tags, str):
                 interests = json.loads(interest_tags)
@@ -4170,14 +4218,13 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         except Exception as e:
             print(f"Warning: Could not parse interests: {e}")
             interests = []
-        
+
         if not interests:
             interests = ['general reading', 'education']
-        
+
         print(f"✓ Interests: {interests}")
-        
-        # ========== ADD OPTION B HERE ==========
-        
+
+        # Placement required check
         cursor.execute(
             "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=%s" if USE_POSTGRES
             else "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=?",
@@ -4189,7 +4236,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         if attempts < PLACEMENT_MAX_ATTEMPTS:
             conn.close()
             raise HTTPException(status_code=409, detail="Placement required")
-    
+
+        # Recent titles/content for duplicate detection
         cursor.execute(
             """
             SELECT title, content
@@ -4208,47 +4256,45 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             (user_id,)
         )
         recent = cursor.fetchall() or []
+
         recent_titles = set()
         recent_fps = set()
-
-        import re, hashlib
-        def fp(text: str) -> str:
-            norm = re.sub(r"\s+", " ", (text or "").lower()).strip()
-            norm = re.sub(r"[^a-z0-9 ]+", "", norm)
-            return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+        recent_previews = []
 
         for r in recent:
             t = r["title"] if isinstance(r, dict) else r[0]
             c = r["content"] if isinstance(r, dict) else r[1]
-            if t: recent_titles.add(t.strip().lower())
-            if c: recent_fps.add(fp(c))
+            if t:
+                recent_titles.add(t.strip().lower())
+            if c:
+                recent_fps.add(fp(c))
+                recent_previews.append((c or "")[:1500])
 
-        # Step 4b: Get recently used topics for variety
+        # Step 4b: Recently used topics
         print("Step 4b: Checking recently used topics...")
         recent_topics = []
-        
         try:
             if USE_POSTGRES:
                 cursor.execute(
-                    """SELECT topic_tags 
-                       FROM passages 
-                       WHERE created_by = %s 
-                       ORDER BY created_at DESC 
+                    """SELECT topic_tags
+                       FROM passages
+                       WHERE created_by = %s
+                       ORDER BY created_at DESC
                        LIMIT 5""",
                     (user_id,)
                 )
             else:
                 cursor.execute(
-                    """SELECT topic_tags 
-                       FROM passages 
-                       WHERE created_by = ? 
-                       ORDER BY created_at DESC 
+                    """SELECT topic_tags
+                       FROM passages
+                       WHERE created_by = ?
+                       ORDER BY created_at DESC
                        LIMIT 5""",
                     (user_id,)
                 )
-            
+
             for row in cursor.fetchall():
-                topic_tags = row[0] if isinstance(row, tuple) else row['topic_tags']
+                topic_tags = row[0] if isinstance(row, tuple) else row.get('topic_tags')
                 if topic_tags:
                     try:
                         tags = json.loads(topic_tags) if isinstance(topic_tags, str) else topic_tags
@@ -4257,38 +4303,28 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                     except:
                         pass
 
-            
-            # Also check exclude_topics from query param
             if exclude_topics:
                 recent_topics.extend(exclude_topics.split(','))
-            
+
             print(f"✓ Recent topics: {recent_topics}")
-            
         except Exception as e:
             print(f"Warning: Could not fetch recent topics: {e}")
             recent_topics = []
-        
-        # Filter out recently used topics from available interests
+
         available_interests = [i for i in interests if i not in recent_topics]
-        
-        # If all interests were used recently, use all interests (fresh start)
         if not available_interests:
             print("All topics used recently - resetting to full list")
             available_interests = interests
-        
+
         print(f"✓ Available interests (excluding recent): {available_interests}")
-        # =======================================
-        
-        # Step 5: Get user's word count settings from database
+
+        # Step 5: Word count + difficulty
         print("Step 5: Getting word count settings...")
         word_count_min = user.get('word_count_min')
         word_count_max = user.get('word_count_max')
         level_estimate = (user.get('level_estimate') or user.get('reading_level') or 'intermediate').lower()
-
-        # Always define difficulty
         difficulty = level_estimate
 
-        # Defaults if DB doesn't have them
         if not word_count_min or not word_count_max:
             defaults = {
                 'beginner': (150, 200),
@@ -4297,7 +4333,6 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             }
             word_count_min, word_count_max = defaults.get(level_estimate, (200, 250))
 
-        # Count sessions to determine if it's truly a first-time user
         cursor.execute(
             "SELECT COUNT(*) AS c FROM session_logs WHERE user_id = %s" if USE_POSTGRES
             else "SELECT COUNT(*) AS c FROM session_logs WHERE user_id = ?",
@@ -4306,7 +4341,6 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         row = cursor.fetchone()
         sessions_count = (row["c"] if isinstance(row, dict) else row[0]) or 0
 
-        # First lesson only if no sessions exist
         if sessions_count == 0:
             if level_estimate == "intermediate":
                 difficulty = "beginner"
@@ -4314,30 +4348,33 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 
         print(f"✓ Difficulty: {difficulty}")
         print(f"✓ Word count range: {word_count_min}-{word_count_max} words")
-       
-        # Step 6: Select topic (MODIFIED - use available_interests)
+
+        # Step 6: Select topic
         print("Step 6: Selecting topic...")
-        import random
         topic = random.choice(available_interests)
         print(f"✓ Selected topic: {topic}")
 
+        # Done with DB reads
         conn.close()
-        
-        import random, re, hashlib
 
-        def fp(text: str) -> str:
-            norm = re.sub(r"\s+", " ", (text or "").lower()).strip()
-            norm = re.sub(r"[^a-z0-9 ]+", "", norm)
-            return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+        # Step 7: Generate passage (duplicates-only retries)
+        print("Step 7: Generating passage...")
 
-        MAX_TRIES = 6
+        # Try up to 3 topics max (duplicates only). No word-count retry storms here.
+        topics_to_try = available_interests[:]
+        random.shuffle(topics_to_try)
+
+        if topic in topics_to_try:
+            topics_to_try.remove(topic)
+        topics_to_try = [topic] + topics_to_try
+        topics_to_try = topics_to_try[:3]
+
         passage_data = None
         picked_topic = None
+        last_candidate = None
 
-        for attempt in range(1, MAX_TRIES + 1):
-            picked_topic = random.choice(available_interests)
-
-            print(f"Step 7: Generating passage (attempt {attempt}/{MAX_TRIES})...")
+        for attempt, picked_topic in enumerate(topics_to_try, start=1):
+            print(f"   Try {attempt}/{len(topics_to_try)}")
             print(f"   Topic: {picked_topic}")
             print(f"   Difficulty: {difficulty}")
             print(f"   Word count range: {word_count_min}-{word_count_max}")
@@ -4350,153 +4387,117 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 user_interests=interests
             )
 
+            candidate = normalize_passage(candidate, picked_topic, difficulty)
+            last_candidate = candidate
+
             title_l = (candidate.get("title") or "").strip().lower()
-            content_fp = fp(candidate.get("content") or "")
+            content = candidate.get("content") or ""
+            content_fp = fp(content)
 
-            # Prevent identical repeats
-            if title_l in recent_titles or content_fp in recent_fps:
-                print("⚠️ Duplicate detected (title/content). Retrying...")
-                continue
+            # Duplicate checks (avoid false positives)
+            dup = False
+            if title_l and title_l in recent_titles:
+                dup = True
 
-            # Enforce word count even if the model ignores it
-            wc = int(candidate.get("word_count") or 0)
-            if wc < word_count_min or wc > word_count_max:
-                print(f"⚠️ Word count out of range ({wc}). Retrying...")
-                continue
+            if content_fp in recent_fps:
+                dup = True
 
-            passage_data = candidate
-            break
+            if not dup:
+                for prev in recent_previews:
+                    if is_near_duplicate(content, prev, threshold=0.94):
+                        dup = True
+                        break
 
-        if not passage_data:
-            # last resort: accept whatever was generated last time
-            passage_data = candidate
-            print("⚠️ Could not find a non-duplicate in range after retries; using last candidate.")
-
-        topic = picked_topic
-
-        # Step 7: Generate passage (with duplicate + word-count enforcement)
-        print("Step 7: Generating passage with OpenAI...")
-
-        import random, re, hashlib
-
-        def fp(text: str) -> str:
-            norm = re.sub(r"\s+", " ", (text or "").lower()).strip()
-            norm = re.sub(r"[^a-z0-9 ]+", "", norm)
-            return hashlib.sha256(norm.encode("utf-8")).hexdigest()
-
-        def count_words(text: str) -> int:
-            return len(re.findall(r"\b[\w']+\b", text or ""))
-
-        MAX_TRIES = 6
-        passage_data = None
-        picked_topic = None
-
-        for attempt in range(1, MAX_TRIES + 1):
-            picked_topic = random.choice(available_interests)
-
-            print(f"   Attempt {attempt}/{MAX_TRIES}")
-            print(f"   Topic: {picked_topic}")
-            print(f"   Difficulty: {difficulty}")
-            print(f"   Word count range: {word_count_min}-{word_count_max}")
-
-            try:
-                candidate = content_generator.generate_passage(
-                    topic=picked_topic,
-                    difficulty_level=difficulty,
-                    word_count_min=word_count_min,
-                    word_count_max=word_count_max,
-                    user_interests=interests
-                )
-            except Exception as gen_error:
-                print(f"⚠️ Generate error: {gen_error}")
-                if attempt == MAX_TRIES:
-                    raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(gen_error)}")
-                continue
-
-            # ✅ enforce word count using actual content
-            wc = count_words(candidate.get("content", ""))
-            candidate["word_count"] = wc
-
-            if wc < word_count_min or wc > word_count_max:
-                print(f"⚠️ Reject: word_count={wc} out of range")
-                continue
-
-            # ✅ reject duplicates (title OR content fingerprint)
-            title_l = (candidate.get("title") or "").strip().lower()
-            content_fp = fp(candidate.get("content") or "")
-
-            if title_l in recent_titles or content_fp in recent_fps:
+            if dup:
                 print("⚠️ Reject: duplicate title/content")
                 continue
 
             passage_data = candidate
-            topic = picked_topic
             break
 
+        # If everything looked duplicate, ACCEPT last candidate instead of failing for an hour.
         if not passage_data:
-            raise HTTPException(status_code=500, detail="Could not generate a unique lesson within word count range.")
-        
-        if "topic_tags" not in passage_data or not passage_data["topic_tags"]:
-            passage_data["topic_tags"] = [topic]
-   
-        # Step 8: Save to database
+            passage_data = last_candidate
+            if not passage_data:
+                raise HTTPException(status_code=500, detail="Failed to generate lesson content.")
+            print("⚠️ Could not find a non-duplicate quickly; accepting last candidate.")
+
+        topic = picked_topic or topic
+        passage_data = normalize_passage(passage_data, topic, difficulty)
+
+        # Step 8: Save passage
         print("Step 8: Saving passage to database...")
         conn = get_db()
         cursor = get_cursor(conn)
-        
+
         try:
             if USE_POSTGRES:
                 cursor.execute(
-                    """INSERT INTO passages 
-                       (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
+                    """INSERT INTO passages
+                       (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
                         difficulty_level, estimated_minutes, approved, created_by)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                    (passage_data['title'], passage_data['content'], passage_data['source'],
-                     json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                     passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                     passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                     True, user_id)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       RETURNING id""",
+                    (
+                        passage_data.get('title'),
+                        passage_data.get('content'),
+                        passage_data.get('source', 'AI'),
+                        json.dumps(passage_data.get('topic_tags', [topic])),
+                        passage_data.get('word_count', 0),
+                        passage_data.get('readability_score'),
+                        passage_data.get('flesch_ease'),
+                        passage_data.get('difficulty_level', difficulty),
+                        passage_data.get('estimated_minutes'),
+                        True,
+                        user_id
+                    )
                 )
                 result = cursor.fetchone()
-                lesson_id = result['id']
+                lesson_id = result['id'] if isinstance(result, dict) else result[0]
             else:
                 cursor.execute(
-                    """INSERT INTO passages 
+                    """INSERT INTO passages
                        (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
                         difficulty_level, estimated_minutes, approved, created_by)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (passage_data['title'], passage_data['content'], passage_data['source'],
-                     json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                     passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                     passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                     True, user_id)
+                    (
+                        passage_data.get('title'),
+                        passage_data.get('content'),
+                        passage_data.get('source', 'AI'),
+                        json.dumps(passage_data.get('topic_tags', [topic])),
+                        passage_data.get('word_count', 0),
+                        passage_data.get('readability_score'),
+                        passage_data.get('flesch_ease'),
+                        passage_data.get('difficulty_level', difficulty),
+                        passage_data.get('estimated_minutes'),
+                        True,
+                        user_id
+                    )
                 )
                 lesson_id = cursor.lastrowid
-            
+
             print(f"✓ Passage saved with ID: {lesson_id}")
-            
+
         except Exception as db_error:
             print(f"✗ ERROR saving passage: {db_error}")
             import traceback
             traceback.print_exc()
             conn.close()
             raise HTTPException(status_code=500, detail=f"Failed to save passage: {str(db_error)}")
-        
+
         # Step 9: Generate questions
         print("Step 9: Generating comprehension questions...")
         try:
             questions = content_generator.generate_comprehension_questions(
-                passage_text=passage_data['content'],
-                passage_title=passage_data['title'],
+                passage_text=passage_data.get('content', ''),
+                passage_title=passage_data.get('title', topic),
                 num_questions=3
             )
             print(f"✓ Generated {len(questions)} questions")
-            
         except Exception as q_error:
             print(f"✗ ERROR generating questions: {q_error}")
             import traceback
             traceback.print_exc()
-            # Use fallback questions instead of failing
             questions = [
                 {
                     "question": "What is the main topic of this passage?",
@@ -4508,74 +4509,87 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 }
             ]
             print("Using fallback questions")
-        
+
         # Step 10: Save questions
         print("Step 10: Saving questions to database...")
         try:
             for q in questions:
                 if USE_POSTGRES:
                     cursor.execute(
-                        """INSERT INTO passage_questions 
+                        """INSERT INTO passage_questions
                            (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
                            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                        (lesson_id, q['question'], q.get('type'), q['correct_answer'],
-                         json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                        (
+                            lesson_id,
+                            q['question'],
+                            q.get('type'),
+                            q['correct_answer'],
+                            json.dumps(q.get('options', [])),
+                            q.get('explanation'),
+                            q.get('difficulty', 1)
+                        )
                     )
                 else:
                     cursor.execute(
-                        """INSERT INTO passage_questions 
+                        """INSERT INTO passage_questions
                            (passage_id, question_text, question_type, correct_answer, options, explanation, difficulty)
                            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                        (lesson_id, q['question'], q.get('type'), q['correct_answer'],
-                         json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
+                        (
+                            lesson_id,
+                            q['question'],
+                            q.get('type'),
+                            q['correct_answer'],
+                            json.dumps(q.get('options', [])),
+                            q.get('explanation'),
+                            q.get('difficulty', 1)
+                        )
                     )
-            
+
             conn.commit()
             print(f"✓ Saved {len(questions)} questions")
-            
+
         except Exception as save_q_error:
             print(f"✗ ERROR saving questions: {save_q_error}")
             import traceback
             traceback.print_exc()
             conn.rollback()
-            # Continue anyway - we have the passage
-        
+            # continue anyway
+
         conn.close()
-        
+
         # Step 11: Update user activity
         print("Step 11: Updating user activity...")
         update_user_activity(user_id)
-        
-        # Step 12: Format response
+
+        # Step 12: Return response
         print("Step 12: Formatting response...")
         response = {
             'id': lesson_id,
-            'title': passage_data['title'],
-            'content': passage_data['content'],
-            'difficulty_level': passage_data['difficulty_level'],
-            'word_count': passage_data['word_count'],
+            'title': passage_data.get('title', topic),
+            'content': passage_data.get('content', ''),
+            'difficulty_level': passage_data.get('difficulty_level', difficulty),
+            'word_count': passage_data.get('word_count', 0),
             'key_points': passage_data.get('key_concepts', []),
             'vocabulary': passage_data.get('vocabulary_words', []),
             'questions': questions
         }
-        
+
         print("=" * 50)
         print("✓ LESSON GENERATED SUCCESSFULLY")
         print("=" * 50)
-        
+
         return response
-        
+
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        # Catch all other errors
         print("=" * 50)
         print(f"✗ UNEXPECTED ERROR: {e}")
         print("=" * 50)
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
     
 @app.get("/api/test-openai")
 async def test_openai():
