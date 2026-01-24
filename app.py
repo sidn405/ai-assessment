@@ -355,6 +355,8 @@ async def register(user: UserCreate):
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
             )
             user_id = cursor.lastrowid
+            
+        initialize_new_user(user_id)
 
         conn.commit()
 
@@ -418,6 +420,8 @@ async def login(credentials: UserLogin):
     
     # Update last active
     update_user_activity(user['id'])
+    
+    initialize_new_user(user['id'])
     
     token = create_token(user['id'], user['role'])
     
@@ -589,6 +593,61 @@ async def reset_password(request: dict):
         conn.rollback()
         print(f"Password reset error: {e}")
         raise HTTPException(status_code=500, detail="Failed to reset password")
+    finally:
+        conn.close()
+        
+# ============================================
+# 1. ADD THIS HELPER FUNCTION
+# ============================================
+
+def initialize_new_user(user_id):
+    """
+    Initialize all required database records for a new user
+    Prevents HTTP 500 errors when new users access the dashboard
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        print(f"Initializing user data for user_id: {user_id}")
+        
+        # Initialize user_streaks
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
+                VALUES (%s, 0, 0, CURRENT_DATE)
+                ON CONFLICT (user_id) DO NOTHING
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                INSERT OR IGNORE INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
+                VALUES (?, 0, 0, date('now'))
+            """, (user_id,))
+        
+        # Check if you have user_stats table - if so, initialize it
+        try:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    INSERT INTO user_stats (user_id, total_lessons, total_points, average_score)
+                    VALUES (%s, 0, 0, 0)
+                    ON CONFLICT (user_id) DO NOTHING
+                """, (user_id,))
+            else:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO user_stats (user_id, total_lessons, total_points, average_score)
+                    VALUES (?, 0, 0, 0)
+                """, (user_id,))
+        except:
+            pass  # Table might not exist, that's OK
+        
+        conn.commit()
+        print(f"✓ User data initialized successfully for user_id: {user_id}")
+        
+    except Exception as e:
+        print(f"Error initializing user {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        conn.rollback()
     finally:
         conn.close()
 
