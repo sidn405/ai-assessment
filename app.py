@@ -355,10 +355,10 @@ async def register(user: UserCreate):
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
             )
             user_id = cursor.lastrowid
-            
-        initialize_new_user(user_id)
 
         conn.commit()
+        
+        initialize_new_user(user_id)
 
         # ✅ token uses final_role
         token = create_token(user_id, final_role)
