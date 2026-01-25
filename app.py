@@ -3846,6 +3846,145 @@ def calculate_streak(user_id, conn):
         print(f"Error calculating streak: {e}")
         return 0
     
+# Health Check Endpoint - Add to app.py
+
+# Copy this entire section and paste it into your app.py
+# (Put it near the other @app.get endpoints, around line 3850)
+
+@app.get("/api/health/full")
+async def full_health_check():
+    """
+    Comprehensive health check - shows what's working and what's broken
+    Visit: https://your-railway-url.railway.app/api/health/full
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    
+    results = {
+        "database": "connected",
+        "tables": {},
+        "issues": [],
+        "ready_for_placement": False
+    }
+    
+    # Check each table
+    tables_to_check = [
+        "users",
+        "passages", 
+        "passage_questions",
+        "placement_attempts",
+        "session_logs",
+        "writing_exercises",
+        "vocabulary_tracker",
+        "discussions"
+    ]
+    
+    for table in tables_to_check:
+        try:
+            cursor.execute(f"SELECT COUNT(*) as c FROM {table}")
+            count = cursor.fetchone()
+            results["tables"][table] = {
+                "exists": True,
+                "count": count['c'] if USE_POSTGRES else count[0]
+            }
+        except Exception as e:
+            results["tables"][table] = {
+                "exists": False,
+                "error": str(e)
+            }
+            results["issues"].append(f"Table '{table}' missing or broken: {str(e)}")
+    
+    # Check passages specifically
+    if results["tables"].get("passages", {}).get("exists"):
+        try:
+            cursor.execute("SELECT COUNT(*) as c FROM passages WHERE approved=true" if USE_POSTGRES else "SELECT COUNT(*) as c FROM passages WHERE approved=1")
+            approved_count = cursor.fetchone()
+            results["passages_approved"] = approved_count['c'] if USE_POSTGRES else approved_count[0]
+            
+            if results["passages_approved"] == 0:
+                results["issues"].append("⚠️ No approved passages! Users can't take placement test.")
+        except Exception as e:
+            results["issues"].append(f"Error checking approved passages: {str(e)}")
+    
+    # Check if passages have questions
+    if results["tables"].get("passage_questions", {}).get("exists"):
+        try:
+            cursor.execute("""
+                SELECT p.id, p.title, COUNT(pq.id) as q_count
+                FROM passages p
+                LEFT JOIN passage_questions pq ON p.id = pq.passage_id
+                WHERE p.approved=true
+                GROUP BY p.id, p.title
+                HAVING COUNT(pq.id) = 0
+                LIMIT 5
+            """ if USE_POSTGRES else """
+                SELECT p.id, p.title, COUNT(pq.id) as q_count
+                FROM passages p
+                LEFT JOIN passage_questions pq ON p.id = pq.passage_id
+                WHERE p.approved=1
+                GROUP BY p.id, p.title
+                HAVING COUNT(pq.id) = 0
+                LIMIT 5
+            """)
+            passages_without_questions = cursor.fetchall()
+            if passages_without_questions and len(passages_without_questions) > 0:
+                results["issues"].append(f"⚠️ {len(passages_without_questions)} approved passages have no questions!")
+        except Exception as e:
+            results["issues"].append(f"Error checking passage questions: {str(e)}")
+    
+    # Check user table columns
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'users'
+            """)
+        else:
+            cursor.execute("PRAGMA table_info(users)")
+        
+        columns = cursor.fetchall()
+        required_columns = ['age_band', 'grade_band', 'interest_tags', 'level_estimate']
+        existing_columns = [c['column_name'] if USE_POSTGRES else c[1] for c in columns]
+        
+        missing_columns = [col for col in required_columns if col not in existing_columns]
+        if missing_columns:
+            results["issues"].append(f"⚠️ Users table missing columns: {', '.join(missing_columns)}")
+    except Exception as e:
+        results["issues"].append(f"Error checking user columns: {str(e)}")
+    
+    # Check OPENAI_API_KEY
+    results["openai_configured"] = bool(os.getenv("OPENAI_API_KEY"))
+    if not results["openai_configured"]:
+        results["issues"].append("⚠️ OPENAI_API_KEY not set - AI features won't work")
+    
+    # Check content generator
+    results["content_generator"] = content_generator is not None
+    if not content_generator:
+        results["issues"].append("⚠️ Content generator not initialized")
+    
+    # Determine if ready for placement test
+    passages_ready = results["tables"].get("passages", {}).get("count", 0) > 0
+    questions_ready = results["tables"].get("passage_questions", {}).get("count", 0) > 0
+    placement_table_ready = results["tables"].get("placement_attempts", {}).get("exists", False)
+    
+    results["ready_for_placement"] = passages_ready and questions_ready and placement_table_ready
+    
+    if not results["ready_for_placement"]:
+        if not passages_ready:
+            results["issues"].append("❌ CRITICAL: No passages in database - placement test will fail!")
+        if not questions_ready:
+            results["issues"].append("❌ CRITICAL: No questions in database - placement test will fail!")
+        if not placement_table_ready:
+            results["issues"].append("❌ CRITICAL: placement_attempts table missing!")
+    
+    conn.close()
+    
+    results["status"] = "healthy" if len(results["issues"]) == 0 else "unhealthy"
+    results["timestamp"] = datetime.now(timezone.utc).isoformat()
+    
+    return results
+    
 # ============================================
 # PLACEMENT TEST
 # ============================================
