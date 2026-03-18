@@ -331,6 +331,7 @@ ADMIN_EMAILS = set(
     if e.strip()
 )
 
+
 @app.post("/api/register")
 async def register(user: UserCreate):
     conn = get_db()
