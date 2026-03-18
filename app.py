@@ -124,6 +124,8 @@ class UserCreate(BaseModel):
     password: str
     full_name: str
     age_band: Optional[str] = None
+    grade_band: Optional[str] = None      # NEW: Student's grade level
+    reading_level: Optional[str] = None   # NEW: Initial reading difficulty
         
 class UserLogin(BaseModel):
     email: str
@@ -333,36 +335,39 @@ ADMIN_EMAILS = set(
 async def register(user: UserCreate):
     conn = get_db()
     cursor = get_cursor(conn)
-
+ 
     password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
-
+ 
     # ✅ Server decides role (email allowlist)
     email_lc = user.email.lower().strip()
     final_role = "admin" if (ADMIN_EMAILS and email_lc in ADMIN_EMAILS) else "student"
-
+ 
     try:
         if USE_POSTGRES:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age_band)
-                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
+                """INSERT INTO users (email, password_hash, full_name, role, age_band, grade_band, reading_level)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, 
+                 user.age_band, user.grade_band, user.reading_level)
             )
             result = cursor.fetchone()
             user_id = result["id"] if isinstance(result, dict) else result[0]
         else:
             cursor.execute(
-                "INSERT INTO users (email, password_hash, full_name, role, age_band) VALUES (?, ?, ?, ?, ?)",
-                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
+                """INSERT INTO users (email, password_hash, full_name, role, age_band, grade_band, reading_level) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, 
+                 user.age_band, user.grade_band, user.reading_level)
             )
             user_id = cursor.lastrowid
-
+ 
         conn.commit()
         
         initialize_new_user(user_id)
-
+ 
         # ✅ token uses final_role
         token = create_token(user_id, final_role)
-
+ 
         return {
             "success": True,
             "token": token,
@@ -370,10 +375,12 @@ async def register(user: UserCreate):
                 "id": user_id,
                 "email": user.email,
                 "full_name": user.full_name,
-                "role": final_role
+                "role": final_role,
+                "grade_band": user.grade_band,
+                "reading_level": user.reading_level
             }
         }
-
+ 
     except (sqlite3.IntegrityError, psycopg2.errors.UniqueViolation):
         conn.rollback()
         raise HTTPException(status_code=400, detail="Email already registered")

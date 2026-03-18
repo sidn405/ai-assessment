@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - Achieve 365</title>
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -77,43 +74,20 @@
             font-size: 14px;
         }
 
-        .form-group label .optional {
-            color: #9e9e9e;
-            font-weight: 400;
-            font-size: 13px;
-        }
-
         .form-group input[type="email"],
-        .form-group input[type="text"],
-        .form-group select {
+        .form-group input[type="text"] {
             width: 100%;
             padding: 14px 16px;
             border: 2px solid #e0e0e0;
             border-radius: 10px;
             font-size: 16px;
             transition: all 0.3s;
-            font-family: inherit;
-            background-color: white;
         }
 
-        .form-group select {
-            cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23667eea' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 16px center;
-            padding-right: 45px;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
+        .form-group input:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-        }
-
-        .form-group select option {
-            padding: 10px;
         }
 
         .password-field-wrapper {
@@ -272,13 +246,13 @@
             .register-container {
                 padding: 30px 20px;
             }
-            
-            .logo h1 {
-                font-size: 28px;
-            }
-            
+
             h2 {
                 font-size: 24px;
+            }
+
+            .logo h1 {
+                font-size: 28px;
             }
         }
     </style>
@@ -306,38 +280,6 @@
                     placeholder="John Doe"
                     autocomplete="name"
                 >
-            </div>
-
-            <div class="form-group">
-                <label for="gradeLevel">
-                    Grade Level
-                    <span class="optional">(helps us personalize your experience)</span>
-                </label>
-                <select 
-                    id="gradeLevel" 
-                    name="gradeLevel" 
-                    required
-                >
-                    <option value="" disabled selected>Select your grade level...</option>
-                    <option value="pre-k">Pre-K (Ages 3-5)</option>
-                    <option value="kindergarten">Kindergarten (Ages 5-6)</option>
-                    <option value="1st">1st Grade (Ages 6-7)</option>
-                    <option value="2nd">2nd Grade (Ages 7-8)</option>
-                    <option value="3rd">3rd Grade (Ages 8-9)</option>
-                    <option value="4th">4th Grade (Ages 9-10)</option>
-                    <option value="5th">5th Grade (Ages 10-11)</option>
-                    <option value="6th">6th Grade (Ages 11-12)</option>
-                    <option value="7th">7th Grade (Ages 12-13)</option>
-                    <option value="8th">8th Grade (Ages 13-14)</option>
-                    <option value="9th">9th Grade / High School Freshman (Ages 14-15)</option>
-                    <option value="10th">10th Grade / High School Sophomore (Ages 15-16)</option>
-                    <option value="11th">11th Grade / High School Junior (Ages 16-17)</option>
-                    <option value="12th">12th Grade / High School Senior (Ages 17-18)</option>
-                    <option value="adult">Adult (18+)</option>
-                    <option value="college">College Student</option>
-                    <option value="professional">Working Professional</option>
-                </select>
-                <small>This helps us match content to your reading level and adapt lessons as you progress</small>
             </div>
 
             <div class="form-group">
@@ -493,54 +435,6 @@
             }, 5000);
         }
 
-        // Map grade level to age band for backend
-        function getAgeBandFromGrade(gradeLevel) {
-            const ageBandMap = {
-                'pre-k': 'pre-k',
-                'kindergarten': 'elementary',
-                '1st': 'elementary',
-                '2nd': 'elementary',
-                '3rd': 'elementary',
-                '4th': 'elementary',
-                '5th': 'elementary',
-                '6th': 'middle',
-                '7th': 'middle',
-                '8th': 'middle',
-                '9th': 'high',
-                '10th': 'high',
-                '11th': 'high',
-                '12th': 'high',
-                'adult': 'adult',
-                'college': 'adult',
-                'professional': 'adult'
-            };
-            return ageBandMap[gradeLevel] || 'adult';
-        }
-
-        // Map grade level to reading difficulty preference
-        function getReadingLevelFromGrade(gradeLevel) {
-            const readingLevelMap = {
-                'pre-k': 'beginner',
-                'kindergarten': 'beginner',
-                '1st': 'beginner',
-                '2nd': 'beginner',
-                '3rd': 'beginner',
-                '4th': 'intermediate',
-                '5th': 'intermediate',
-                '6th': 'intermediate',
-                '7th': 'intermediate',
-                '8th': 'intermediate',
-                '9th': 'advanced',
-                '10th': 'advanced',
-                '11th': 'advanced',
-                '12th': 'advanced',
-                'adult': 'advanced',
-                'college': 'advanced',
-                'professional': 'advanced'
-            };
-            return readingLevelMap[gradeLevel] || 'intermediate';
-        }
-
         async function handleRegister(event) {
             event.preventDefault();
             
@@ -558,11 +452,6 @@
             const fullName = document.getElementById('fullName').value;
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const gradeLevel = document.getElementById('gradeLevel').value;
-            
-            // Get age band and reading level from grade
-            const ageBand = getAgeBandFromGrade(gradeLevel);
-            const readingLevel = getReadingLevelFromGrade(gradeLevel);
             
             try {
                 const response = await fetch('/api/register', {
@@ -573,9 +462,7 @@
                         password, 
                         full_name: fullName,
                         role: 'student',
-                        age_band: ageBand,
-                        grade_band: gradeLevel,
-                        reading_level: readingLevel
+                        age_band: 'adult'
                     })
                 });
                 
