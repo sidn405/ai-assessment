@@ -386,8 +386,10 @@ async def register(user: UserCreate):
                 "email": user.email,
                 "full_name": user.full_name,
                 "role": final_role,
-                "grade_band": user.grade_band,
-                "reading_level": user.reading_level
+                "age": user.age,                    # ADD THIS
+                "age_band": user.age_band,
+                "grade_band": user.grade_band,      # ADD THIS
+                "reading_level": user.reading_level # ADD THIS
             }
         }
  
