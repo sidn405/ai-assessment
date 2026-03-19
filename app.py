@@ -123,6 +123,7 @@ class UserCreate(BaseModel):
     email: str
     password: str
     full_name: str
+    age: Optional[int] = None
     age_band: Optional[str] = None
     grade_band: Optional[str] = None      # NEW: Student's grade level
     reading_level: Optional[str] = None   # NEW: Initial reading difficulty
@@ -357,7 +358,7 @@ async def register(user: UserCreate):
                 """INSERT INTO users (email, password_hash, full_name, role, age_band, grade_band, reading_level)
                    VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role, 
-                 user.age_band, user.grade_band, user.reading_level)
+                 user.age, user.age_band, user.grade_band, user.reading_level)
             )
             result = cursor.fetchone()
             user_id = result["id"] if isinstance(result, dict) else result[0]
@@ -366,7 +367,7 @@ async def register(user: UserCreate):
                 """INSERT INTO users (email, password_hash, full_name, role, age_band, grade_band, reading_level) 
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role, 
-                 user.age_band, user.grade_band, user.reading_level)
+                 user.age, user.age_band, user.grade_band, user.reading_level)
             )
             user_id = cursor.lastrowid
  
