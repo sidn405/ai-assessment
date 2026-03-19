@@ -1786,15 +1786,17 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     user_id = user_data["user_id"]
     
     conn = get_db()
-    cursor = conn.cursor()
     
-    # FIX: Make cursor return dict-like results for SQLite
-    if not USE_POSTGRES:
+    # FIX: Get dict cursor for both databases
+    if USE_POSTGRES:
+        import psycopg2.extras
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    else:
         import sqlite3
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
     
-    # Get user profile with NEW fields
+    # Get user profile
     if USE_POSTGRES:
         cursor.execute("""
             SELECT id, level_estimate, interest_tags, total_passages_read,
@@ -1814,7 +1816,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Now this works for both PostgreSQL and SQLite
+    # Now user is a dict for both PostgreSQL and SQLite
     level_estimate = user['level_estimate'] or user['reading_level'] or 'intermediate'
     interest_tags = json.loads(user['interest_tags'] or '[]')
     total_read = user['total_passages_read'] or 0
