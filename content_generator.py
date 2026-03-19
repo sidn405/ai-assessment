@@ -18,6 +18,51 @@ class ContentGenerator:
         # NEW API - Create client
         self.client = OpenAI(api_key=self.api_key)
         
+    def _get_cultural_context_guidance(age, grade_band):
+        """
+        Provides age-appropriate cultural context guidance
+        """
+        contexts = {
+            'elementary': {
+                'settings': ['playground', 'classroom', 'community center', 'library', 'park', 'corner store'],
+                'characters': ['students', 'teachers', 'parents', 'grandparents', 'librarians', 'coaches'],
+                'themes': ['friendship', 'learning', 'helping others', 'trying new things', 'community'],
+                'avoid': ['Keep it simple and positive', 'No complex social issues', 'Focus on everyday experiences']
+            },
+            'middle': {
+                'settings': ['school', 'community center', 'basketball court', 'tech lab', 'after-school program', 'local business'],
+                'characters': ['students', 'mentors', 'coaches', 'small business owners', 'community leaders', 'older siblings'],
+                'themes': ['discovering talents', 'overcoming challenges', 'leadership', 'innovation', 'community service'],
+                'avoid': ['Avoid trauma', 'No criminal justice references', 'Focus on growth and potential']
+            },
+            'high': {
+                'settings': ['high school', 'internships', 'community college', 'local businesses', 'volunteer programs', 'STEM programs'],
+                'characters': ['students', 'mentors', 'entrepreneurs', 'professionals', 'college students', 'counselors'],
+                'themes': ['career exploration', 'college prep', 'leadership', 'social justice', 'entrepreneurship', 'identity'],
+                'avoid': ['Respectful of complex realities', 'Focus on agency and empowerment', 'No deficit narratives']
+            },
+            'adult': {
+                'settings': ['workplace', 'community organizations', 'professional settings', 'entrepreneurship', 'continuing education'],
+                'characters': ['professionals', 'entrepreneurs', 'community leaders', 'working parents', 'returning students'],
+                'themes': ['career advancement', 'community building', 'economic mobility', 'lifelong learning', 'giving back'],
+                'avoid': ['Acknowledge challenges without dwelling', 'Focus on resilience and success', 'Asset-based approach']
+            }
+        }
+        
+        # Map grade to category
+        if grade_band in ['pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th', 'elementary']:
+            category = 'elementary'
+        elif grade_band in ['6th', '7th', '8th', 'middle']:
+            category = 'middle'
+        elif grade_band in ['9th', '10th', '11th', '12th', 'high']:
+            category = 'high'
+        else:
+            category = 'adult'
+        
+        return contexts.get(category, contexts['elementary'])
+    
+    
+        
     def _rewrite_passage_to_word_range(self, title, content, topic, difficulty_level, word_count_min, word_count_max, target_words):
         prompt = f"""
         Rewrite the passage below into a NEW VERSION.
@@ -89,64 +134,73 @@ class ContentGenerator:
         The passage should be educational but fun, matching their grade level expectations.
         """
         
+        # Add after line 69
+        cultural_context = self._get_cultural_context_guidance(age, grade_band)
+        
+        # Include in prompt
+        prompt += f"""
+        
+        CULTURAL CONTEXT FOR THIS AGE/GRADE:
+        Settings to use: {', '.join(cultural_context['settings'])}
+        Characters to include: {', '.join(cultural_context['characters'])}
+        Appropriate themes: {', '.join(cultural_context['themes'])}
+        What to avoid: {', '.join(cultural_context['avoid'])}
+        """
+        
         # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
-        prompt = f"""Write a SHORT STORY (narrative) about {topic}.
-    Difficulty Level: {difficulty_level}
-    
+        prompt = f"""Write a SHORT STORY (narrative) about {topic} featuring African American characters.
 
-    HARD WORD COUNT RULE:
-    - The "content" field MUST be EXACTLY {target_words} words.
-    - Count words by splitting on spaces.
-    - This word count applies to content ONLY (not title, not JSON keys, not vocabulary/definitions).
-    - Before you respond, self-check the word count and adjust until it is exactly {target_words}.
-
-    IMPORTANT:
-    - Focus ONLY on {topic}
-    - Do NOT try to combine with other topics
-    - This MUST be a story with a character, setting, and plot (beginning → problem → resolution)
-    - Include at least one line of dialogue
-    - No headings, no bullet points
-    - Make it engaging and age-appropriate
-  
-    CRITICAL - VOCABULARY EXTRACTION:
-    - Identify ALL potentially challenging words in the passage
-    - Include words that a {difficulty_level} reader might not know
-    - For each word, provide a simple, age-appropriate definition
-    - Include at least 5-8 vocabulary words (more for longer passages)
-    - Look for: academic terms, technical words, advanced vocabulary, subject-specific jargon
-    - Examples: "phenomenon", "transformation", "immersive", "gratification", "tangible", "palpable", etc.
-    
-    Hard rules:
-    - This MUST be a story with a character, setting, and a small plot (beginning → problem → resolution)
-    - Do NOT write an article, definition, or history lesson
-    - Do NOT explain the topic directly; SHOW the topic through what happens in the story
-    - Include at least one line of dialogue
-    - Keep it realistic/relatable and age-appropriate
-
-    Generate a passage that explores {topic} in an interesting way.
-
-    Return your response as a JSON object with this exact structure:
-    {{
-        "title": "Specific title about {topic}",
-        "content": "The full passage text (approximately {target_words} words, focused on {topic})",
-        "key_concepts": ["concept1", "concept2", "concept3"],
-        "vocabulary_words": [
-            {{"word": "challenging_word1", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word2", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word3", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word4", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word5", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word6", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word7", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word8", "definition": "simple, clear definition"}}
-        ]
-    }}
-
-    VOCABULARY GUIDELINES BY LEVEL:
-    - elementary: Words at 4th-6th grade level (5-7 words minimum)
-    - intermediate: Words at 7th-9th grade level (6-8 words minimum)
-    - high_school: College-prep vocabulary (7-10 words minimum)
-    - adult: Advanced academic vocabulary (8-12 words minimum)"""
+        Student Profile:
+        - Age: {age} years old
+        - Grade Level: {grade_band}
+        - Reading Difficulty: {difficulty_level}
+        - Interests: {', '.join(user_interests) if user_interests else 'general topics'}
+        
+        CULTURAL CONTEXT:
+        - Set in an urban community (city neighborhood, public spaces)
+        - Feature authentic Black characters with realistic names
+        - Show positive community interactions and support
+        - Include cultural elements (music, food, celebrations, traditions)
+        - Demonstrate resilience and success
+        
+        HARD WORD COUNT RULE:
+        - The "content" field MUST be EXACTLY {target_words} words.
+        - Count words by splitting on spaces.
+        - Before you respond, self-check the word count and adjust until it is exactly {target_words}.
+        
+        STORY STRUCTURE:
+        - Character: African American protagonist facing a relatable challenge
+        - Setting: Urban neighborhood, school, community center, park, library, etc.
+        - Plot: Beginning → problem/challenge → resolution through creativity/effort/community
+        - Include at least one line of dialogue
+        - Show positive outcome and growth
+        - NO criminal justice, violence, or trauma content
+        - Focus on strengths, not struggles with poverty
+        
+        TOPIC FOCUS: {topic}
+        - Stay focused on this topic only
+        - Make it educational but engaging
+        - Connect to their real-world experiences
+        - Show how the topic matters in their community
+        
+        AGE-APPROPRIATE VOCABULARY:
+        - Use {difficulty_level} level vocabulary
+        - Include challenging academic words they can learn
+        - Define any cultural references they might not know
+        
+        Return your response as a JSON object:
+        {{
+            "title": "Engaging title about {topic}",
+            "content": "The full story (EXACTLY {target_words} words)",
+            "key_concepts": ["concept1", "concept2", "concept3"],
+            "vocabulary_words": [
+                {{"word": "challenging_word1", "definition": "simple, clear definition"}},
+                {{"word": "challenging_word2", "definition": "simple, clear definition"}},
+                ... (minimum 5-10 words based on difficulty level)
+            ]
+        }}
+        
+        REMINDER: This story should feel real and relatable to an African American student from an urban community. Focus on positive experiences, community strength, and educational growth."""
         
         try:
             # NEW API SYNTAX
@@ -155,20 +209,55 @@ class ContentGenerator:
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert educational content creator. 
-
-    CRITICAL VOCABULARY INSTRUCTION:
-    Extract ALL words from your passage that might be challenging for the target reading level. 
-    Don't limit yourself to just 2-3 words - identify EVERY word that a student might need help understanding.
-    A good passage should have AT LEAST 5-10 vocabulary words, more for longer passages.
-
-    Examples of words to include:
-    - Elementary: "ecosystem", "gravity", "nutrient", "habitat", "diverse"
-    - Intermediate: "phenomenon", "inevitable", "perspective", "substantial", "comprehensive"  
-    - High School: "culmination", "juxtaposition", "paradigm", "synthesis", "nuance"
-    - Adult: "epistemology", "hegemony", "empirical", "ubiquitous", "pragmatic"
-
-    Focus on ONE topic at a time. Do not blend multiple topics together."""
+                        "content": """You are an expert educational content creator specializing in culturally relevant, trauma-informed content for African American students from underserved communities.
+                        
+                        CRITICAL CULTURAL GUIDELINES:
+                        1. **Authentic Representation**: 
+                           - Use diverse Black characters with authentic names and experiences
+                           - Include positive role models from the community (teachers, coaches, entrepreneurs, artists)
+                           - Show families with different structures (single parents, grandparents, extended family)
+                           - Represent urban/neighborhood settings authentically and positively
+                        
+                        2. **TRAUMA-INFORMED - AVOID**:
+                           - Police encounters or criminal justice system references
+                           - Violence, gangs, or crime as plot elements
+                           - Poverty as a defining characteristic (it's context, not identity)
+                           - Deficit narratives or stereotypes
+                           - Drug-related content
+                        
+                        3. **EMPOWERING THEMES**:
+                           - Community strength and mutual support
+                           - Overcoming challenges through creativity and resilience
+                           - Cultural pride and heritage
+                           - Educational and career success
+                           - Arts, music, sports as pathways
+                           - Entrepreneurship and innovation
+                           - STEM and creative fields
+                        
+                        4. **RELATABLE CONTEXTS**:
+                           - Urban neighborhoods, public transportation, corner stores
+                           - Community centers, parks, libraries, churches
+                           - Barbershops, hair salons, family gatherings
+                           - Basketball courts, community gardens
+                           - Local heroes and mentors
+                           - Music (hip-hop, R&B), art, fashion, sports culture
+                        
+                        5. **VOCABULARY EXTRACTION**:
+                           Extract ALL challenging words from your passage. A good passage should have AT LEAST 5-10 vocabulary words.
+                           
+                           Examples by level:
+                           - Elementary: "ecosystem", "gravity", "nutrient", "habitat", "diverse"
+                           - Intermediate: "phenomenon", "inevitable", "perspective", "substantial", "comprehensive"  
+                           - High School: "culmination", "juxtaposition", "paradigm", "synthesis", "nuance"
+                           - Adult: "epistemology", "hegemony", "empirical", "ubiquitous", "pragmatic"
+                        
+                        STORY REQUIREMENTS:
+                        - Focus on ONE topic at a time
+                        - Include a character, setting, and plot (beginning → problem → resolution)
+                        - Make it engaging and age-appropriate
+                        - Show positive outcomes through effort, creativity, or community support
+                        - Include at least one line of dialogue
+                        - NO articles, definitions, or lectures - tell a STORY"""
                     },
                     {"role": "user", "content": prompt}
                 ],

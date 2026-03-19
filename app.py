@@ -674,201 +674,339 @@ def initialize_new_user(user_id):
 # ASSESSMENT ENDPOINTS (Phase 1 + Phase 2)
 # ============================================
 
-def generate_interest_assessment():
-    """Generate interest assessment questions with OpenAI API v1.0+"""
+def get_age_appropriate_interest_questions(age, grade_band):
+    """
+    Generate age-appropriate interest questions based on student's age and grade
+    """
     
-    # Fallback questions (in case OpenAI fails)
-    fallback_questions = [
-        {
-            "id": 1,
-            "question": "What type of books or stories do you enjoy most?",
-            "category": "genre",
-            "options": ["Fiction", "Non-fiction", "Mystery", "Science Fiction", "Other"]
-        },
-        {
-            "id": 2,
-            "question": "What topics are you most curious about?",
-            "category": "topic",
-            "options": ["Science", "History", "Technology", "Nature", "Other"]
-        },
-        {
-            "id": 3,
-            "question": "Which activities do you find most interesting?",
-            "category": "activity",
-            "options": ["Sports", "Arts & Crafts", "Music", "Gaming", "Other"]
-        },
-        {
-            "id": 4,
-            "question": "What kind of learning do you prefer?",
-            "category": "learning",
-            "options": ["Hands-on activities", "Reading", "Videos", "Discussions", "Other"]
-        },
-        {
-            "id": 5,
-            "question": "What format of content do you like?",
-            "category": "format",
-            "options": ["Short articles", "Long stories", "Comics/Graphics", "Poems", "Other"]
-        },
-        {
-            "id": 6,
-            "question": "What career or job interests you?",
-            "category": "career",
-            "options": ["Doctor/Nurse", "Teacher", "Engineer", "Artist", "Other"]
-        },
-        {
-            "id": 7,
-            "question": "What do you do in your free time?",
-            "category": "hobby",
-            "options": ["Reading", "Playing outside", "Drawing", "Building things", "Other"]
-        },
-        {
-            "id": 8,
-            "question": "What school subject do you like most?",
-            "category": "subject",
-            "options": ["Math", "English", "Science", "Social Studies", "Other"]
-        },
-        {
-            "id": 9,
-            "question": "What type of content would you like to read about?",
-            "category": "content_type",
-            "options": ["Real-life stories", "Fictional adventures", "Educational facts", "How-to guides", "Other"]
-        },
-        {
-            "id": 10,
-            "question": "What's your favorite thing to learn about?",
-            "category": "interest",
-            "options": ["Animals", "Space", "Computers", "People & cultures", "Other"]
-        }
-    ]
+    # Ages 3-7 (Pre-K to 2nd Grade)
+    if age <= 7 or grade_band in ['pre-k', 'kindergarten', '1st', '2nd']:
+        return [
+            {
+                "id": 1,
+                "question": "What do you like to play with?",
+                "category": "play",
+                "options": ["Toys", "Games", "Drawing", "Outside", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What animals do you like?",
+                "category": "animals",
+                "options": ["Dogs", "Cats", "Birds", "Fish", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What colors do you like best?",
+                "category": "colors",
+                "options": ["Blue", "Red", "Green", "Purple", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What do you like to eat?",
+                "category": "food",
+                "options": ["Pizza", "Fruit", "Chicken", "Vegetables", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "Where do you like to go?",
+                "category": "places",
+                "options": ["Park", "Library", "Store", "Friend's house", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What do you like to watch?",
+                "category": "shows",
+                "options": ["Cartoons", "Animals", "Music", "Sports", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "Who do you like to play with?",
+                "category": "social",
+                "options": ["Friends", "Family", "By myself", "Pets", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What makes you happy?",
+                "category": "emotions",
+                "options": ["Playing", "Learning", "Helping", "Making things", "Other"]
+            }
+        ]
     
-    # Try OpenAI enhancement (optional)
-    if OPENAI_API_KEY and content_generator:
-        try:
-            print("Calling OpenAI to generate assessment questions...")
-            
-            from openai import OpenAI
-            client = OpenAI(api_key=OPENAI_API_KEY)
-            
-            response = client.chat.completions.create(
-                model="gpt-4-turbo-preview",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert in educational assessment. You MUST respond with valid JSON only, no additional text."
-                    },
-                    {
-                        "role": "user",
-                        "content": """Generate 10 multiple-choice questions to assess student interests.
-
-CRITICAL: Respond with ONLY valid JSON. No markdown, no explanations, just the JSON array.
-
-Required format:
-[
-    {
-        "id": 1,
-        "question": "Question text here?",
-        "category": "genre",
-        "options": ["Option 1", "Option 2", "Option 3", "Option 4", "Other"]
-    }
-]
-
-Requirements:
-- Exactly 10 questions
-- Each has 5 options
-- Last option is always "Other"
-- Age-appropriate for young adults
-- Friendly, engaging tone"""
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=2000,
-                response_format={"type": "json_object"}  # Force JSON response
-            )
-            
-            content = response.choices[0].message.content.strip()
-            
-            print(f"Raw OpenAI response length: {len(content)} chars")
-            print(f"First 200 chars: {content[:200]}")
-            
-            # Clean up response
-            content = content.strip()
-            
-            # Remove markdown code blocks if present
-            if content.startswith("```"):
-                # Extract content between ``` markers
-                lines = content.split('\n')
-                # Remove first line (```json or ```)
-                lines = lines[1:]
-                # Remove last line if it's ```
-                if lines and lines[-1].strip() == '```':
-                    lines = lines[:-1]
-                content = '\n'.join(lines).strip()
-            
-            # Try to find JSON array or object
-            if not content.startswith('[') and not content.startswith('{'):
-                # Look for first [ or {
-                start_bracket = content.find('[')
-                start_brace = content.find('{')
-                
-                if start_bracket != -1:
-                    content = content[start_bracket:]
-                elif start_brace != -1:
-                    content = content[start_brace:]
-            
-            print(f"Cleaned content first 100 chars: {content[:100]}")
-            
-            # Parse JSON
-            try:
-                parsed = json.loads(content)
-                
-                # Handle if it's wrapped in an object
-                if isinstance(parsed, dict):
-                    if 'questions' in parsed:
-                        questions = parsed['questions']
-                    else:
-                        # Try to find the array
-                        for value in parsed.values():
-                            if isinstance(value, list):
-                                questions = value
-                                break
-                        else:
-                            raise ValueError("No questions array found in response")
-                else:
-                    questions = parsed
-                
-                # Validate structure
-                if not isinstance(questions, list) or len(questions) == 0:
-                    raise ValueError("Invalid questions format")
-                
-                # Ensure all questions have required fields and "Other" option
-                for i, q in enumerate(questions):
-                    if not all(key in q for key in ['id', 'question', 'options']):
-                        raise ValueError(f"Question {i+1} missing required fields")
-                    
-                    if "Other" not in q["options"]:
-                        q["options"].append("Other")
-                    
-                    # Ensure category exists
-                    if "category" not in q:
-                        q["category"] = "general"
-                
-                print(f"✓ Generated {len(questions)} questions with OpenAI")
-                return questions
-                
-            except json.JSONDecodeError as je:
-                print(f"JSON parsing error: {je}")
-                print(f"Failed content: {content[:500]}")
-                raise
-            
-        except Exception as e:
-            print(f"OpenAI error: {e}")
-            import traceback
-            traceback.print_exc()
-            print("Falling back to default questions")
+    # Ages 8-11 (3rd to 5th Grade)
+    elif age <= 11 or grade_band in ['3rd', '4th', '5th', 'elementary']:
+        return [
+            {
+                "id": 1,
+                "question": "What do you like to do after school?",
+                "category": "activities",
+                "options": ["Play sports", "Play video games", "Read", "Draw or make art", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What type of stories do you like?",
+                "category": "stories",
+                "options": ["Adventure", "Funny stories", "Animal stories", "Real-life stories", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What's your favorite subject in school?",
+                "category": "school",
+                "options": ["Math", "Reading", "Science", "Art/Music", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What do you want to learn about?",
+                "category": "topics",
+                "options": ["Animals", "Space", "Sports", "Technology", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What do you like to do with friends?",
+                "category": "social",
+                "options": ["Play games", "Talk", "Make things", "Play sports", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What music do you like?",
+                "category": "music",
+                "options": ["Hip-hop/Rap", "R&B", "Pop", "Gospel", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What would you like to be when you grow up?",
+                "category": "career",
+                "options": ["Doctor/Nurse", "Teacher", "Athlete", "Artist/Musician", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What do you like to watch or follow?",
+                "category": "media",
+                "options": ["Sports", "Music videos", "Gaming", "Funny videos", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "What makes a story interesting to you?",
+                "category": "engagement",
+                "options": ["Action", "Humor", "Learning something", "Relatable characters", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What do you like to create or build?",
+                "category": "creativity",
+                "options": ["Art", "Music", "Stories", "Games", "Other"]
+            }
+        ]
     
-    # Return fallback questions
-    print(f"✓ Using {len(fallback_questions)} fallback questions")
-    return fallback_questions
+    # Ages 12-14 (6th to 8th Grade / Middle School)
+    elif age <= 14 or grade_band in ['6th', '7th', '8th', 'middle']:
+        return [
+            {
+                "id": 1,
+                "question": "What content do you most enjoy?",
+                "category": "content",
+                "options": ["Sports", "Music", "Technology", "Social issues", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What type of stories interest you?",
+                "category": "stories",
+                "options": ["Action/Adventure", "Mystery", "Real-life experiences", "Fantasy/Sci-fi", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What do you spend most of your free time doing?",
+                "category": "activities",
+                "options": ["Gaming", "Sports", "Social media", "Creating content", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What career fields interest you?",
+                "category": "career",
+                "options": ["Medicine/Healthcare", "Technology/Engineering", "Arts/Entertainment", "Business/Entrepreneurship", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What music genre do you listen to most?",
+                "category": "music",
+                "options": ["Hip-hop/Rap", "R&B/Soul", "Pop", "Gospel/Christian", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What topics do you want to learn more about?",
+                "category": "topics",
+                "options": ["Science/Tech", "History/Culture", "Social justice", "Business/Money", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What type of reading do you prefer?",
+                "category": "reading",
+                "options": ["Short articles", "Long stories", "Social media posts", "News/Current events", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What do you follow on social media?",
+                "category": "social_media",
+                "options": ["Sports/Athletes", "Musicians/Artists", "Influencers", "News/Politics", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "What makes you want to read something?",
+                "category": "motivation",
+                "options": ["Relatable to my life", "Teaches me something", "Entertaining", "Helps with school", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What challenges interest you?",
+                "category": "challenges",
+                "options": ["Community issues", "Personal growth", "Academic success", "Creative projects", "Other"]
+            }
+        ]
+    
+    # Ages 15-18 (High School)
+    elif age <= 18 or grade_band in ['9th', '10th', '11th', '12th', 'high']:
+        return [
+            {
+                "id": 1,
+                "question": "What career path are you most interested in?",
+                "category": "career",
+                "options": ["Healthcare", "Technology/Engineering", "Business/Entrepreneurship", "Creative Arts", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What topics are you passionate about?",
+                "category": "passion",
+                "options": ["Social justice", "Technology/Innovation", "Arts/Culture", "Business/Economics", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What type of content do you engage with most?",
+                "category": "content",
+                "options": ["News/Current events", "Entertainment", "Educational content", "Career development", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What reading format do you prefer?",
+                "category": "format",
+                "options": ["Articles (500-1000 words)", "Long-form essays", "Social media threads", "Research/Academic", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What motivates you to read?",
+                "category": "motivation",
+                "options": ["Career preparation", "Personal development", "Entertainment", "Social awareness", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What skills do you want to develop?",
+                "category": "skills",
+                "options": ["Critical thinking", "Communication", "Technical skills", "Leadership", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What music genre resonates with you?",
+                "category": "music",
+                "options": ["Hip-hop/Rap", "R&B/Soul", "Gospel", "Pop/Alternative", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What issues matter most to you?",
+                "category": "issues",
+                "options": ["Education access", "Economic opportunity", "Criminal justice reform", "Environmental justice", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "After high school, what are you planning?",
+                "category": "future",
+                "options": ["4-year college", "Community college", "Trade school", "Work/Entrepreneurship", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What type of stories resonate with you?",
+                "category": "stories",
+                "options": ["Coming-of-age narratives", "Social commentary", "Success stories", "Historical perspectives", "Other"]
+            }
+        ]
+    
+    # Ages 19+ (Adult / College / Professional)
+    else:
+        return [
+            {
+                "id": 1,
+                "question": "What are your primary professional interests?",
+                "category": "career",
+                "options": ["Career advancement", "Entrepreneurship", "Industry knowledge", "Continuing education", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What type of reading supports your goals?",
+                "category": "reading",
+                "options": ["Professional development", "Industry news", "Academic research", "Personal growth", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What topics are most relevant to your work?",
+                "category": "work",
+                "options": ["Technology/Innovation", "Business strategy", "Leadership", "Social impact", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What content format works best for you?",
+                "category": "format",
+                "options": ["Articles (1000+ words)", "Case studies", "Research papers", "Industry reports", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What drives your learning?",
+                "category": "motivation",
+                "options": ["Career growth", "Skill development", "Community impact", "Personal fulfillment", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What professional skills are you developing?",
+                "category": "skills",
+                "options": ["Leadership", "Technical expertise", "Communication", "Strategic thinking", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What issues are you focused on?",
+                "category": "issues",
+                "options": ["Economic empowerment", "Educational equity", "Community development", "Social justice", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What content helps you most?",
+                "category": "content",
+                "options": ["How-to guides", "Best practices", "Case studies", "Research findings", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "What are your long-term goals?",
+                "category": "goals",
+                "options": ["Career success", "Business ownership", "Community leadership", "Lifelong learning", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What perspectives interest you?",
+                "category": "perspective",
+                "options": ["Innovation/Future trends", "Historical context", "Community voices", "Expert analysis", "Other"]
+            }
+        ]
+
+def generate_interest_assessment(age=None, grade_band=None):
+    """Generate age-appropriate interest assessment questions"""
+    
+    # If age/grade not provided, use generic questions
+    if not age or not grade_band:
+        age = 12  # Default to middle school
+        grade_band = 'middle'
+    
+    print(f"Generating interest assessment for age={age}, grade={grade_band}")
+    
+    # Get age-appropriate questions
+    questions = get_age_appropriate_interest_questions(age, grade_band)
+    
+    print(f"✓ Generated {len(questions)} age-appropriate questions")
+    return questions
 
 async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     """Analyze assessment answers to determine interests and reading level"""
@@ -951,27 +1089,51 @@ async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     }
 
 @app.get("/api/assessment/interest")
-def get_interest_assessment():  # ← Remove 'async'
-    """Get interest assessment questions"""
+def get_interest_assessment(token: str):
+    """Get age-appropriate interest assessment questions for the user"""
     try:
-        print("Assessment endpoint called - generating questions...")
-        questions = generate_interest_assessment()  # ← Remove 'await'
+        # Get user data to determine age/grade
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
         
-        if not questions:
-            raise HTTPException(status_code=500, detail="Failed to generate assessment")
+        conn = get_db()
+        cursor = conn.cursor()
         
-        print(f"✓ Returning {len(questions)} questions")
+        # Fetch user's age and grade
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT age, grade_band 
+                FROM users 
+                WHERE id = %s
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT age, grade_band 
+                FROM users 
+                WHERE id = ?
+            """, (user_id,))
         
-        return {
-            "success": True,
-            "questions": questions
-        }
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user:
+            age = user['age'] if hasattr(user, 'keys') else user[0]
+            grade_band = user['grade_band'] if hasattr(user, 'keys') else user[1]
+        else:
+            # Default if not found
+            age = 12
+            grade_band = 'middle'
+        
+        # Generate age-appropriate questions
+        questions = generate_interest_assessment(age, grade_band)
+        
+        return {"questions": questions}
         
     except Exception as e:
-        print(f"Error generating assessment: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error getting interest assessment: {e}")
+        # Return default middle school questions on error
+        questions = generate_interest_assessment(12, 'middle')
+        return {"questions": questions}
     
 @app.get("/api/me")
 async def me(user=Depends(get_current_user)):
@@ -2152,6 +2314,7 @@ async def submit_reading_feedback(request: Request):
     conn.close()
     
     return {"success": True, "message": "Feedback recorded"}
+
 
 @app.post("/api/read/comprehension")
 async def submit_comprehension_answers(request: Request):
