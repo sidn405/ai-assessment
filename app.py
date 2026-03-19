@@ -1788,6 +1788,12 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     conn = get_db()
     cursor = conn.cursor()
     
+    # FIX: Make cursor return dict-like results for SQLite
+    if not USE_POSTGRES:
+        import sqlite3
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+    
     # Get user profile with NEW fields
     if USE_POSTGRES:
         cursor.execute("""
@@ -1805,17 +1811,16 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     user = cursor.fetchone()
     
     if not user:
+        conn.close()
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Extract user profile data
-    level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
-    interest_tags = json.loads(user.get('interest_tags') or '[]')
-    total_read = user.get('total_passages_read') or 0
-    
-    # NEW: Get age and grade information
-    age = user.get('age') or 10
-    grade_band = user.get('grade_band') or 'elementary'
-    age_band = user.get('age_band') or 'child'
+    # Now this works for both PostgreSQL and SQLite
+    level_estimate = user['level_estimate'] or user['reading_level'] or 'intermediate'
+    interest_tags = json.loads(user['interest_tags'] or '[]')
+    total_read = user['total_passages_read'] or 0
+    age = user['age'] or 10
+    grade_band = user['grade_band'] or 'elementary'
+    age_band = user['age_band'] or 'child'
     
     # For first passage, make it easier (quick win strategy)
     if total_read == 0:
