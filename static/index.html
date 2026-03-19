@@ -357,13 +357,30 @@
         }
         
         .modal-content {
-            background: var(--white);
-            padding: 3rem;
-            border-radius: 12px;
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
             max-width: 500px;
             width: 90%;
             position: relative;
-            animation: slideDown 0.3s ease-out;
+            margin: 20px auto;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Add smooth scrolling */
+        .modal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+        
+        .modal-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
         }
         
         @keyframes slideDown {
@@ -696,6 +713,17 @@
                 width: 95% !important;
                 max-width: 95% !important;
                 margin: 1rem auto !important;
+            }
+
+            @media (max-height: 700px) {
+               .modal-content {
+                   padding: 1.5rem;
+                   max-height: 95vh;
+               }
+               
+               .form-group {
+                   margin-bottom: 1rem;
+               }
             }
             
             /* Font size adjustments */
