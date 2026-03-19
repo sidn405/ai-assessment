@@ -1136,9 +1136,15 @@ def get_interest_assessment(token: str):
         return {"questions": questions}
     
 @app.get("/api/user/assessment-status")
-async def get_assessment_status(token: str):
+async def get_assessment_status(request: Request):
     """Check if user has completed their initial assessment"""
     try:
+        # Get token from Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Missing authorization token")
+        
+        token = auth_header.replace('Bearer ', '')
         user_data = verify_token(token)
         user_id = user_data["user_id"]
         
@@ -1845,12 +1851,13 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     try:
         # Generate passage with enhanced context
         passage_data = content_generator.generate_passage(
-            topic=topic,
-            difficulty_level=difficulty,
-            target_words=target_words,
-            user_interests=interest_tags,
-            age=age,  # NEW: Pass age for age-appropriate content
-            grade_band=grade_band  # NEW: Pass grade for vocabulary level
+           topic=topic,
+           difficulty_level=difficulty,
+           word_count_min=target_words - 25,  # ✅ Correct parameter name
+           word_count_max=target_words + 25,  # ✅ Correct parameter name
+           user_interests=interest_tags,
+           age=age,
+           grade_band=grade_band
         )
         
         # Save to database (existing code continues...)
@@ -5274,9 +5281,12 @@ async def debug_lesson_generation(token: str):
         # Try to generate a simple passage
         passage_data = content_generator.generate_passage(
             topic=topic,
-            difficulty_level="intermediate",
-            target_words=100,
-            user_interests=interests
+            difficulty_level=difficulty,
+            word_count_min=target_words - 25,  # ✅ Correct parameter name
+            word_count_max=target_words + 25,  # ✅ Correct parameter name
+            user_interests=interest_tags,
+            age=age,
+            grade_band=grade_band
         )
         
         debug_info["details"]["passage_generated"] = True
