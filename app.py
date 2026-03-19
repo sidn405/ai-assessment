@@ -310,6 +310,14 @@ async def serve_reading():
 async def serve_writing():
     return FileResponse("static/writing.html")
 
+@app.get("/register", response_class=HTMLResponse)
+async def serve_register():
+    response = FileResponse("static/register.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 @app.get("/reset-password")
 async def reset_password_page():
     """Serve the password reset page"""
