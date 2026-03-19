@@ -1557,6 +1557,7 @@
 
             // Get grade level and derive age_band and reading_level
             const gradeLevel = document.getElementById('registerGradeLevel').value;
+            const age = parseInt(document.getElementById('registerAge').value, 10);  // ADD THIS LINE
 
             if (!gradeLevel) {
                 errorDiv.textContent = 'Please select your grade level';
@@ -1564,7 +1565,13 @@
                 return;
             }
 
-            
+            // ADD THIS VALIDATION:
+            // Validate age
+            if (!age || age < 3 || age > 100) {
+                errorDiv.textContent = 'Please enter a valid age (3-100)';
+                errorDiv.style.display = 'block';
+                return;
+            }
 
             const age_band = getAgeBandFromGrade(gradeLevel);
             const reading_level = getReadingLevelFromGrade(gradeLevel);
@@ -1578,7 +1585,7 @@
                         email: email.trim(),
                         password,
                         role,
-                        age: age,
+                        age,
                         age_band,
                         grade_band: gradeLevel,
                         reading_level
