@@ -1623,8 +1623,15 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Clear any stale localStorage data
+                    localStorage.clear();
+                    
+                    // Set new user data
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('justLoggedIn', 'true');  // Mark as just logged in
+                    
+                    // Redirect to dashboard
                     window.location.href = (data.user.role === 'admin') ? '/admin-dashboard' : '/dashboard';
                 } else {
                     errorDiv.textContent = data.detail || 'Registration failed';

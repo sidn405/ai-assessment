@@ -1135,6 +1135,52 @@ def get_interest_assessment(token: str):
         questions = generate_interest_assessment(12, 'middle')
         return {"questions": questions}
     
+@app.get("/api/user/assessment-status")
+async def get_assessment_status(token: str):
+    """Check if user has completed their initial assessment"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Check if user has interest_tags (completed interest assessment)
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT interest_tags, total_passages_read
+                FROM users 
+                WHERE id = %s
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT interest_tags, total_passages_read
+                FROM users 
+                WHERE id = ?
+            """, (user_id,))
+        
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            return {"assessment_complete": False}
+        
+        interest_tags = user['interest_tags'] if hasattr(user, 'keys') else user[0]
+        total_read = user['total_passages_read'] if hasattr(user, 'keys') else user[1]
+        
+        # Assessment is complete if they have interests (took interest assessment)
+        assessment_complete = bool(interest_tags and interest_tags != '[]')
+        
+        return {
+            "assessment_complete": assessment_complete,
+            "has_interests": bool(interest_tags),
+            "passages_read": total_read or 0
+        }
+        
+    except Exception as e:
+        print(f"Error checking assessment status: {e}")
+        return {"assessment_complete": False}
+    
 @app.get("/api/me")
 async def me(user=Depends(get_current_user)):
     return {"user_id": user["user_id"], "role": user["role"]}
