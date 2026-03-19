@@ -1573,65 +1573,72 @@ async def onboard_interests(request: Request):
 
 @app.get("/api/read/sample")
 async def get_reading_sample(token: str, challenge: str = "appropriate"):
-    """Get a reading passage matched to user's level and interests"""
+    """Get a reading passage matched to user's level, interests, age, and grade"""
     user_data = verify_token(token)
     user_id = user_data["user_id"]
     
     conn = get_db()
     cursor = conn.cursor()
     
-    # Get user profile
+    # Get user profile with NEW fields
     if USE_POSTGRES:
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        cursor.execute("""
+            SELECT id, level_estimate, interest_tags, total_passages_read,
+                   age, grade_band, reading_level, age_band
+            FROM users WHERE id = %s
+        """, (user_id,))
     else:
-        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        cursor.execute("""
+            SELECT id, level_estimate, interest_tags, total_passages_read,
+                   age, grade_band, reading_level, age_band
+            FROM users WHERE id = ?
+        """, (user_id,))
     
     user = cursor.fetchone()
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    level_estimate = user.get('level_estimate') or 'intermediate'
+    # Extract user profile data
+    level_estimate = user.get('level_estimate') or user.get('reading_level') or 'intermediate'
     interest_tags = json.loads(user.get('interest_tags') or '[]')
     total_read = user.get('total_passages_read') or 0
+    
+    # NEW: Get age and grade information
+    age = user.get('age') or 10
+    grade_band = user.get('grade_band') or 'elementary'
+    age_band = user.get('age_band') or 'child'
     
     # For first passage, make it easier (quick win strategy)
     if total_read == 0:
         challenge = "easier"
-        target_words = 150
+        target_words = get_target_words(grade_band, "easier")
     else:
-        target_words = 200
-    
-    # Try to get a passage from database first
-    # TODO: Implement database passage retrieval with matching
-    # For now, generate a new one
+        target_words = get_target_words(grade_band, challenge)
     
     if not content_generator:
         raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
     
-    # Pick a topic from interests or random
-    topic = random.choice(interest_tags) if interest_tags else random.choice(["science", "technology", "history", "nature"])
+    # NEW: Smart topic selection based on age and interests
+    topic = select_age_appropriate_topic(interest_tags, age, grade_band)
     
-    # Adjust difficulty based on challenge parameter
-    difficulty_map = {
-        "easier": "beginner" if level_estimate == "intermediate" else level_estimate,
-        "appropriate": level_estimate,
-        "challenging": "advanced" if level_estimate == "intermediate" else level_estimate
-    }
-    difficulty = difficulty_map.get(challenge, level_estimate)
+    # NEW: Better difficulty mapping based on grade and challenge
+    difficulty = calculate_difficulty(grade_band, level_estimate, challenge)
     
-    print(f"Generating passage: topic={topic}, difficulty={difficulty}, words={target_words}")
+    print(f"Generating passage: user_id={user_id}, age={age}, grade={grade_band}, topic={topic}, difficulty={difficulty}, words={target_words}")
     
     try:
-        # Generate passage
+        # Generate passage with enhanced context
         passage_data = content_generator.generate_passage(
             topic=topic,
             difficulty_level=difficulty,
             target_words=target_words,
-            user_interests=interest_tags
+            user_interests=interest_tags,
+            age=age,  # NEW: Pass age for age-appropriate content
+            grade_band=grade_band  # NEW: Pass grade for vocabulary level
         )
         
-        # Save to database
+        # Save to database (existing code continues...)
         if USE_POSTGRES:
             cursor.execute(
                 """INSERT INTO passages 
@@ -1642,10 +1649,10 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                  json.dumps(passage_data['topic_tags']), passage_data['word_count'],
                  passage_data.get('readability_score'), passage_data.get('flesch_ease'),
                  passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                 True, 1)  # Auto-approve AI content for now
+                 True, 1)
             )
             result = cursor.fetchone()
-            passage_id = result['id'] if hasattr(result, 'keys') else result[0]  # ← FIX
+            passage_id = result['id'] if hasattr(result, 'keys') else result[0]
         else:
             cursor.execute(
                 """INSERT INTO passages 
@@ -1664,7 +1671,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         questions = content_generator.generate_comprehension_questions(
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
-            num_questions=3  # Start with 3 questions
+            num_questions=3
         )
         
         # Save questions
@@ -1718,13 +1725,153 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             "difficulty_level": passage_data['difficulty_level'],
             "vocabulary": passage_data.get('vocabulary_words', []),
             "questions": questions,
-            "is_first_passage": total_read == 0
+            "is_first_passage": total_read == 0,
+            "personalized_for": {  # NEW: Show what it was personalized for
+                "age": age,
+                "grade": grade_band,
+                "interests": interest_tags,
+                "topic": topic
+            }
         }
         
     except Exception as e:
         conn.close()
         print(f"Error generating passage: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(e)}")
+
+
+# NEW HELPER FUNCTIONS - Add these above the endpoint
+
+def get_target_words(grade_band, challenge="appropriate"):
+    """
+    Get appropriate word count based on grade level and challenge
+    """
+    word_count_map = {
+        'pre-k': {'easier': 50, 'appropriate': 75, 'challenging': 100},
+        'kindergarten': {'easier': 75, 'appropriate': 100, 'challenging': 125},
+        '1st': {'easier': 100, 'appropriate': 125, 'challenging': 150},
+        '2nd': {'easier': 125, 'appropriate': 150, 'challenging': 175},
+        '3rd': {'easier': 150, 'appropriate': 175, 'challenging': 200},
+        '4th': {'easier': 175, 'appropriate': 200, 'challenging': 250},
+        '5th': {'easier': 200, 'appropriate': 250, 'challenging': 300},
+        'elementary': {'easier': 150, 'appropriate': 200, 'challenging': 250},
+        '6th': {'easier': 250, 'appropriate': 300, 'challenging': 350},
+        '7th': {'easier': 275, 'appropriate': 325, 'challenging': 375},
+        '8th': {'easier': 300, 'appropriate': 350, 'challenging': 400},
+        'middle': {'easier': 275, 'appropriate': 325, 'challenging': 375},
+        '9th': {'easier': 350, 'appropriate': 400, 'challenging': 450},
+        '10th': {'easier': 375, 'appropriate': 425, 'challenging': 475},
+        '11th': {'easier': 400, 'appropriate': 450, 'challenging': 500},
+        '12th': {'easier': 425, 'appropriate': 475, 'challenging': 550},
+        'high': {'easier': 375, 'appropriate': 425, 'challenging': 500},
+        'adult': {'easier': 350, 'appropriate': 450, 'challenging': 600},
+        'college': {'easier': 400, 'appropriate': 500, 'challenging': 650},
+        'professional': {'easier': 450, 'appropriate': 550, 'challenging': 700}
+    }
+    
+    counts = word_count_map.get(grade_band, word_count_map['elementary'])
+    return counts.get(challenge, counts['appropriate'])
+
+
+def select_age_appropriate_topic(interests, age, grade_band):
+    """
+    Select topic from interests that's appropriate for age/grade
+    """
+    # Age-appropriate topic filters
+    age_appropriate_topics = {
+        'pre-k': ['animals', 'colors', 'shapes', 'family', 'toys', 'food', 'nature'],
+        'kindergarten': ['animals', 'family', 'seasons', 'friends', 'pets', 'garden'],
+        'elementary': ['animals', 'sports', 'space', 'dinosaurs', 'ocean', 'video games', 
+                      'art', 'music', 'nature', 'adventure', 'friendship'],
+        'middle': ['sports', 'science', 'technology', 'music', 'history', 'adventure', 
+                  'mystery', 'fantasy', 'environment', 'social media'],
+        'high': ['science', 'technology', 'history', 'literature', 'psychology', 
+                'current events', 'philosophy', 'career', 'relationships'],
+        'adult': ['technology', 'business', 'health', 'finance', 'politics', 
+                 'philosophy', 'career development', 'relationships', 'wellness'],
+        'college': ['technology', 'business', 'psychology', 'sociology', 'economics',
+                   'research', 'career', 'innovation'],
+        'professional': ['business', 'leadership', 'technology', 'innovation', 
+                        'industry trends', 'professional development']
+    }
+    
+    # Simplify grade_band to main categories
+    if grade_band in ['pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th']:
+        category = 'elementary'
+    elif grade_band in ['6th', '7th', '8th']:
+        category = 'middle'
+    elif grade_band in ['9th', '10th', '11th', '12th']:
+        category = 'high'
+    else:
+        category = grade_band if grade_band in age_appropriate_topics else 'elementary'
+    
+    appropriate = age_appropriate_topics.get(category, age_appropriate_topics['elementary'])
+    
+    # Find matching interests
+    if interests:
+        # Check if any interest matches age-appropriate topics
+        matching = [i for i in interests if any(i.lower() in topic.lower() for topic in appropriate)]
+        if matching:
+            return random.choice(matching)
+        # Otherwise use first interest (student chose it!)
+        return interests[0]
+    
+    # No interests? Pick age-appropriate default
+    return random.choice(appropriate)
+
+
+def calculate_difficulty(grade_band, reading_level, challenge):
+    """
+    Calculate appropriate difficulty based on grade, reading level, and challenge
+    """
+    # Base difficulty from grade
+    grade_difficulty_map = {
+        'pre-k': 'beginner',
+        'kindergarten': 'beginner',
+        '1st': 'beginner',
+        '2nd': 'beginner',
+        '3rd': 'beginner',
+        '4th': 'intermediate',
+        '5th': 'intermediate',
+        'elementary': 'intermediate',
+        '6th': 'intermediate',
+        '7th': 'intermediate',
+        '8th': 'advanced',
+        'middle': 'intermediate',
+        '9th': 'advanced',
+        '10th': 'advanced',
+        '11th': 'advanced',
+        '12th': 'advanced',
+        'high': 'advanced',
+        'adult': 'advanced',
+        'college': 'advanced',
+        'professional': 'advanced'
+    }
+    
+    base_difficulty = grade_difficulty_map.get(grade_band, 'intermediate')
+    
+    # Adjust based on challenge parameter
+    difficulty_levels = ['beginner', 'intermediate', 'advanced']
+    
+    try:
+        base_index = difficulty_levels.index(base_difficulty)
+    except ValueError:
+        base_index = 1  # Default to intermediate
+    
+    if challenge == "easier":
+        final_index = max(0, base_index - 1)
+    elif challenge == "challenging":
+        final_index = min(2, base_index + 1)
+    else:  # appropriate
+        final_index = base_index
+    
+    # Override with user's actual reading_level if available
+    if reading_level and reading_level in difficulty_levels:
+        user_index = difficulty_levels.index(reading_level)
+        # Average the grade-based and user-based difficulty
+        final_index = (final_index + user_index) // 2
+    
+    return difficulty_levels[final_index]
     
 import os
 import base64

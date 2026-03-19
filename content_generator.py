@@ -61,12 +61,33 @@ class ContentGenerator:
             txt = txt.split("```")[1].split("```")[0].strip()
         return json.loads(txt)
     
-    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests):
+    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests, age=None, grade_band=None):
         """Generate educational passage using GPT-4 with dynamic word count"""
         
         # Calculate target from range
         import random
         target_words = (word_count_min + word_count_max) // 2
+        
+        # Build enhanced prompt
+        prompt = f"""
+        Generate an engaging reading passage for a student:
+        
+        Student Profile:
+        - Age: {age} years old
+        - Grade Level: {grade_band}
+        - Reading Difficulty: {difficulty_level}
+        - Interests: {', '.join(user_interests) if user_interests else 'general topics'}
+        - Topic: {topic}
+        
+        Requirements:
+        - Word count: approximately {target_words} words
+        - Use age-appropriate vocabulary for a {age}-year-old in {grade_band}
+        - Make it engaging and relatable to their interests
+        - Include vivid details and clear structure
+        - Difficulty level: {difficulty_level}
+        
+        The passage should be educational but fun, matching their grade level expectations.
+        """
         
         # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
         prompt = f"""Write a SHORT STORY (narrative) about {topic}.
