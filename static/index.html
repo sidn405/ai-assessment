@@ -1596,7 +1596,8 @@
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                errorDiv.textContent = 'An error occurred. Please try again.';
+                console.error('Registration error:', error);
+                errorDiv.textContent = 'Error: ' + (error.message || 'Please try again');
                 errorDiv.style.display = 'block';
             }
         });
