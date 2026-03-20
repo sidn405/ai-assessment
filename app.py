@@ -1954,15 +1954,15 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         return {
             "passage_id": passage_id,
             "session_id": session_id,
-            "title": passage_data['title'],
-            "content": passage_data['content'],
-            "word_count": passage_data['word_count'],
+            "title": passage_data.get('title', 'Reading Passage'),
+            "content": passage_data.get('content', ''),
+            "word_count": passage_data.get('word_count', len(passage_data.get('content', '').split())),
             "estimated_minutes": passage_data.get('estimated_minutes', 2),
-            "difficulty_level": passage_data['difficulty_level'],
+            "difficulty_level": passage_data.get('difficulty_level', difficulty),
             "vocabulary": passage_data.get('vocabulary_words', []),
             "questions": questions,
             "is_first_passage": total_read == 0,
-            "personalized_for": {  # NEW: Show what it was personalized for
+            "personalized_for": {
                 "age": age,
                 "grade": grade_band,
                 "interests": interest_tags,
