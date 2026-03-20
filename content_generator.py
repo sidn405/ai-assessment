@@ -18,7 +18,7 @@ class ContentGenerator:
         # NEW API - Create client
         self.client = OpenAI(api_key=self.api_key)
         
-    def _get_cultural_context_guidance(age, grade_band):
+    def _get_cultural_context_guidance(self, age, grade_band):
         """
         Provides age-appropriate cultural context guidance
         """
