@@ -1859,22 +1859,23 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
            age=age,
            grade_band=grade_band
         )
+        print(f"✓ Passage generated: {passage_data['title']}")
         
-        # Save to database (existing code continues...)
         if USE_POSTGRES:
             cursor.execute(
                 """INSERT INTO passages 
-                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
+                (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
                     difficulty_level, estimated_minutes, approved, created_by)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (passage_data['title'], passage_data['content'], passage_data['source'],
-                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                 True, 1)
+                json.dumps(passage_data['topic_tags']), passage_data['word_count'],
+                passage_data.get('readability_score'), passage_data.get('flesch_ease'),
+                passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                True, 1)
             )
             result = cursor.fetchone()
-            passage_id = result['id'] if hasattr(result, 'keys') else result[0]
+            # Since we used RealDictCursor, result is a dict
+            passage_id = result['id']  # ✅ Simplified
         else:
             cursor.execute(
                 """INSERT INTO passages 
@@ -1924,6 +1925,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             )
             result = cursor.fetchone()
             session_id = result['id']
+            print(f"✓ Passage saved with ID: {passage_id}")
         else:
             cursor.execute(
                 """INSERT INTO session_logs (user_id, passage_id, started_at)
@@ -1958,7 +1960,9 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         
     except Exception as e:
         conn.close()
-        print(f"Error generating passage: {e}")
+        import traceback
+        print(f"❌ Error generating passage: {e}")
+        print(f"Traceback: {traceback.format_exc()}")  # ✅ Full error details
         raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(e)}")
 
 
