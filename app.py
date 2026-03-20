@@ -1861,32 +1861,44 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         )
         print(f"✓ Passage generated: {passage_data['title']}")
         
+        # Save to database
         if USE_POSTGRES:
+            print(f"Saving passage to database...")
             cursor.execute(
                 """INSERT INTO passages 
                 (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
                     difficulty_level, estimated_minutes, approved, created_by)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                (passage_data['title'], passage_data['content'], passage_data['source'],
-                json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
+                (passage_data['title'], 
+                passage_data['content'], 
+                passage_data.get('source', 'AI Generated'),
+                json.dumps(passage_data.get('topic_tags', [])),
+                passage_data.get('word_count', 100),
+                passage_data.get('readability_score'),
+                passage_data.get('flesch_ease'),
+                passage_data.get('difficulty_level', difficulty),
+                passage_data.get('estimated_minutes', 2),
                 True, 1)
             )
             result = cursor.fetchone()
-            # Since we used RealDictCursor, result is a dict
-            passage_id = result['id']  # ✅ Simplified
+            passage_id = result['id']
+            print(f"✓ Passage saved with ID: {passage_id}")
         else:
             cursor.execute(
                 """INSERT INTO passages 
-                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
+                (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
                     difficulty_level, estimated_minutes, approved, created_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (passage_data['title'], passage_data['content'], passage_data['source'],
-                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                 True, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (passage_data['title'], 
+                passage_data['content'], 
+                passage_data.get('source', 'AI Generated'),
+                json.dumps(passage_data.get('topic_tags', [])),
+                passage_data.get('word_count', 100),
+                passage_data.get('readability_score'),
+                passage_data.get('flesch_ease'),
+                passage_data.get('difficulty_level', difficulty),
+                passage_data.get('estimated_minutes', 2),
+                True, 1)
             )
             passage_id = cursor.lastrowid
         
