@@ -5278,15 +5278,12 @@ async def debug_lesson_generation(token: str):
         # Step 6: Test content generator
         debug_info["step"] = "testing_content_generator"
         
-        # Try to generate a simple passage
         passage_data = content_generator.generate_passage(
             topic=topic,
-            difficulty_level=difficulty,
-            word_count_min=target_words - 25,  # ✅ Correct parameter name
-            word_count_max=target_words + 25,  # ✅ Correct parameter name
-            user_interests=interest_tags,
-            age=age,
-            grade_band=grade_band
+            difficulty_level="intermediate",
+            word_count_min=75,   # ✅ target_words - 25
+            word_count_max=125,  # ✅ target_words + 25
+            user_interests=interests
         )
         
         debug_info["details"]["passage_generated"] = True
