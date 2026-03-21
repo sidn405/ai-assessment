@@ -662,6 +662,19 @@
         let startTime = null;
         let utterance = null;
 
+        // Placement test tracking
+        let isPlacementTest = sessionStorage.getItem('isPlacementTest') === 'true';
+        let placementTestProgress = {
+            passagesCompleted: parseInt(sessionStorage.getItem('placementPassagesCompleted') || '0'),
+            scores: JSON.parse(sessionStorage.getItem('placementScores') || '[]'),
+            feedbacks: JSON.parse(sessionStorage.getItem('placementFeedbacks') || '[]')
+        };
+
+        console.log('📊 Placement test mode:', isPlacementTest);
+        if (isPlacementTest) {
+            console.log('Progress:', placementTestProgress);
+        }
+
         // ============================================
         // AMAZON POLLY TTS CONFIGURATION
         // ============================================
@@ -974,6 +987,29 @@
         tutorIntroTimers.push(setTimeout(() => showTutor('instruction'), 5800));
         }
 
+        // Wait for AWS Polly to be ready, then show tutor
+        function waitForPollyThenShowTutor() {
+            let attempts = 0;
+            const maxAttempts = 20; // Wait up to 4 seconds
+            
+            function checkAndShow() {
+                attempts++;
+                
+                if (awsReady && polly) {
+                    console.log('✅ AWS Polly ready, showing tutor with Danielle voice');
+                    runTutorLessonIntro();
+                } else if (attempts < maxAttempts) {
+                    console.log(`⏳ Waiting for AWS Polly... (attempt ${attempts}/${maxAttempts})`);
+                    setTimeout(checkAndShow, 200);
+                } else {
+                    console.warn('⚠️ AWS Polly timeout, showing tutor with fallback voice');
+                    runTutorLessonIntro();
+                }
+            }
+            
+            checkAndShow();
+        }
+
         // Optional: random encouragement while reading
         function startEncouragementTimerOnce() {
         if (encouragementIntervalId) return;
@@ -1065,8 +1101,8 @@
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('passageSection').classList.remove('hidden');
 
-                // Show tutor intro for EVERY passage
-                runTutorLessonIntro();
+                // Wait for AWS Polly to be ready before showing tutor
+                waitForPollyThenShowTutor();
                 startEncouragementTimerOnce();
 
                 // Show badge only on first passage
@@ -1186,6 +1222,13 @@
                 document.getElementById('scorePercent').textContent = `${result.score}%`;
                 document.getElementById('scoreMessage').textContent = result.message;
 
+                // Track score for placement test
+                if (isPlacementTest) {
+                    placementTestProgress.scores.push(result.score);
+                    sessionStorage.setItem('placementScores', JSON.stringify(placementTestProgress.scores));
+                    console.log('📊 Placement test scores so far:', placementTestProgress.scores);
+                }
+
                 handleTutorAfterScore(result.score);
 
                 document.getElementById('scoreDisplay').classList.remove('hidden');
@@ -1228,23 +1271,116 @@
                     })
                 });
 
-                if (!res.ok) throw new Error(`Feedback save failed: ${res.status}`);
-
-                maybeShowMilestone();
-
-                // Show success and redirect
-                setTimeout(() => {
-                    if (confirm('Great job! Ready for another passage?')) {
-                        location.reload();
-                    } else {
+                // Handle placement test flow
+                if (isPlacementTest) {
+                    placementTestProgress.passagesCompleted++;
+                    placementTestProgress.feedbacks.push(feedback);
+                    
+                    sessionStorage.setItem('placementPassagesCompleted', placementTestProgress.passagesCompleted.toString());
+                    sessionStorage.setItem('placementFeedbacks', JSON.stringify(placementTestProgress.feedbacks));
+                    
+                    console.log(`📊 Placement test: ${placementTestProgress.passagesCompleted}/3 passages completed`);
+                    
+                    if (placementTestProgress.passagesCompleted >= 3) {
+                        // Calculate reading level
+                        const avgScore = placementTestProgress.scores.reduce((a, b) => a + b, 0) / placementTestProgress.scores.length;
+                        const avgDifficulty = calculateAvgDifficulty(placementTestProgress.feedbacks);
+                        const readingLevel = determineReadingLevel(avgScore, avgDifficulty);
+                        
+                        console.log('✅ Placement test complete!');
+                        console.log('Average score:', avgScore);
+                        console.log('Calculated level:', readingLevel);
+                        
+                        // Save reading level
+                        await saveReadingLevel(token, readingLevel, avgScore);
+                        
+                        // Clear placement test data
+                        sessionStorage.removeItem('isPlacementTest');
+                        sessionStorage.removeItem('placementPassagesCompleted');
+                        sessionStorage.removeItem('placementScores');
+                        sessionStorage.removeItem('placementFeedbacks');
+                        
+                        // Show results and redirect
+                        alert(`Placement test complete! Your reading level: ${readingLevel.toUpperCase()}\nAverage score: ${avgScore.toFixed(0)}%`);
                         window.location.href = '/dashboard';
+                    } else {
+                        // Load next passage
+                        setTimeout(() => {
+                            alert(`Great! ${placementTestProgress.passagesCompleted}/3 passages completed. Loading next passage...`);
+                            location.reload();
+                        }, 2000);
                     }
-                }, 3500);
+                } else {
+                    // Normal lesson flow
+                    maybeShowMilestone();
+
+                    // Show success and redirect
+                    setTimeout(() => {
+                        if (confirm('Great job! Ready for another passage?')) {
+                            location.reload();
+                        } else {
+                            window.location.href = '/dashboard';
+                        }
+                    }, 3500);
+                }
 
             } catch (error) {
                 console.error('Error submitting feedback:', error);
                 alert('Feedback recorded! Click OK to continue.');
-                window.location.href = '/dashboard';
+                
+                if (isPlacementTest && placementTestProgress.passagesCompleted < 3) {
+                    location.reload();
+                } else {
+                    window.location.href = '/dashboard';
+                }
+            }
+        }
+
+        function calculateAvgDifficulty(feedbacks) {
+            const difficultyScores = feedbacks.map(f => {
+                if (f === 'too_easy') return 1;
+                if (f === 'just_right') return 2;
+                if (f === 'too_hard') return 3;
+                return 2;
+            });
+            return difficultyScores.reduce((a, b) => a + b, 0) / difficultyScores.length;
+        }
+
+        function determineReadingLevel(avgScore, avgDifficulty) {
+            // High score + too easy = move up
+            if (avgScore >= 80 && avgDifficulty < 1.5) return 'advanced';
+            // Good score + just right = current level appropriate  
+            if (avgScore >= 70 && avgDifficulty >= 1.5 && avgDifficulty <= 2.5) return 'intermediate';
+            // Lower score or too hard = beginner
+            if (avgScore < 70 || avgDifficulty > 2.5) return 'beginner';
+            // Default
+            return 'intermediate';
+        }
+
+        async function saveReadingLevel(token, level, score) {
+            try {
+                const response = await fetch('/api/reading-level/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        level: level,
+                        score: Math.round(score)
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Reading level saved:', result);
+                
+                // Update local storage
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                user.reading_level = level;
+                localStorage.setItem('user', JSON.stringify(user));
+                
+            } catch (error) {
+                console.error('Error saving reading level:', error);
             }
         }
 

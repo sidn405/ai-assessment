@@ -1415,6 +1415,123 @@ async def submit_assessment(request: Request):
         "analysis": analysis
     }
     
+# Add these endpoints to app.py after /api/assessment/submit
+
+@app.post("/api/reading-level/update")
+async def update_reading_level(request: Request):
+    """Update user's reading level and save history"""
+    try:
+        data = await request.json()
+        token = data.get('token')
+        new_level = data.get('level')
+        score = data.get('score', 0)
+        
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        
+        if USE_POSTGRES:
+            import psycopg2.extras
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        else:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+        
+        # Get current level
+        if USE_POSTGRES:
+            cursor.execute("SELECT reading_level FROM users WHERE id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT reading_level FROM users WHERE id = ?", (user_id,))
+        
+        user = cursor.fetchone()
+        previous_level = user['reading_level'] if user else None
+        
+        # Save to history
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO reading_level_history 
+                (user_id, previous_level, new_level, score)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, previous_level, new_level, score))
+            
+            # Update user's current level
+            cursor.execute("""
+                UPDATE users 
+                SET reading_level = %s, level_estimate = %s
+                WHERE id = %s
+            """, (new_level, new_level, user_id))
+        else:
+            cursor.execute("""
+                INSERT INTO reading_level_history 
+                (user_id, previous_level, new_level, score)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, previous_level, new_level, score))
+            
+            cursor.execute("""
+                UPDATE users 
+                SET reading_level = ?, level_estimate = ?
+                WHERE id = ?
+            """, (new_level, new_level, user_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "previous_level": previous_level,
+            "new_level": new_level,
+            "message": f"Reading level updated from {previous_level} to {new_level}"
+        }
+        
+    except Exception as e:
+        print(f"Error updating reading level: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reading-level/history")
+async def get_reading_level_history(token: str):
+    """Get user's reading level history"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        
+        if USE_POSTGRES:
+            import psycopg2.extras
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute("""
+                SELECT previous_level, new_level, score, test_date
+                FROM reading_level_history
+                WHERE user_id = %s
+                ORDER BY test_date DESC
+                LIMIT 10
+            """, (user_id,))
+        else:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT previous_level, new_level, score, test_date
+                FROM reading_level_history
+                WHERE user_id = ?
+                ORDER BY test_date DESC
+                LIMIT 10
+            """, (user_id,))
+        
+        history = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return {"success": True, "history": history}
+        
+    except Exception as e:
+        print(f"Error getting reading level history: {e}")
+        return {"success": False, "history": []}
+    
 @app.post("/api/admin/run-gamification-migration")
 async def run_gamification_migration(request: Request):
     """Run gamification database migration"""
@@ -2500,119 +2617,6 @@ async def submit_comprehension_answers(request: Request):
         "message": message
     }
     
-@app.post("/api/reading-level/update")
-async def update_reading_level(request: Request):
-    """Update user's reading level and save history"""
-    try:
-        data = await request.json()
-        token = data.get('token')
-        new_level = data.get('level')
-        score = data.get('score', 0)
-        
-        user_data = verify_token(token)
-        user_id = user_data["user_id"]
-        
-        conn = get_db()
-        
-        if USE_POSTGRES:
-            import psycopg2.extras
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        else:
-            import sqlite3
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-        
-        # Get current level
-        if USE_POSTGRES:
-            cursor.execute("SELECT reading_level FROM users WHERE id = %s", (user_id,))
-        else:
-            cursor.execute("SELECT reading_level FROM users WHERE id = ?", (user_id,))
-        
-        user = cursor.fetchone()
-        previous_level = user['reading_level'] if user else None
-        
-        # Save to history
-        if USE_POSTGRES:
-            cursor.execute("""
-                INSERT INTO reading_level_history 
-                (user_id, previous_level, new_level, score)
-                VALUES (%s, %s, %s, %s)
-            """, (user_id, previous_level, new_level, score))
-            
-            # Update user's current level
-            cursor.execute("""
-                UPDATE users 
-                SET reading_level = %s, level_estimate = %s
-                WHERE id = %s
-            """, (new_level, new_level, user_id))
-        else:
-            cursor.execute("""
-                INSERT INTO reading_level_history 
-                (user_id, previous_level, new_level, score)
-                VALUES (?, ?, ?, ?)
-            """, (user_id, previous_level, new_level, score))
-            
-            cursor.execute("""
-                UPDATE users 
-                SET reading_level = ?, level_estimate = ?
-                WHERE id = ?
-            """, (new_level, new_level, user_id))
-        
-        conn.commit()
-        conn.close()
-        
-        return {
-            "success": True,
-            "previous_level": previous_level,
-            "new_level": new_level,
-            "message": f"Reading level updated from {previous_level} to {new_level}"
-        }
-        
-    except Exception as e:
-        print(f"Error updating reading level: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-    
-@app.get("/api/reading-level/history")
-async def get_reading_level_history(token: str):
-    """Get user's reading level history"""
-    try:
-        user_data = verify_token(token)
-        user_id = user_data["user_id"]
-        
-        conn = get_db()
-        
-        if USE_POSTGRES:
-            import psycopg2.extras
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cursor.execute("""
-                SELECT previous_level, new_level, score, test_date
-                FROM reading_level_history
-                WHERE user_id = %s
-                ORDER BY test_date DESC
-                LIMIT 10
-            """, (user_id,))
-        else:
-            import sqlite3
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT previous_level, new_level, score, test_date
-                FROM reading_level_history
-                WHERE user_id = ?
-                ORDER BY test_date DESC
-                LIMIT 10
-            """, (user_id,))
-        
-        history = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        
-        return {"success": True, "history": history}
-        
-    except Exception as e:
-        print(f"Error getting reading level history: {e}")
-        return {"success": False, "history": []}
 
 # ============================================
 # PHASE 2: DISCUSSION ENDPOINTS
