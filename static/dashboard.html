@@ -3232,32 +3232,10 @@
         function hasCompletedAssessment(progressData = null) {
             // Method 1: Check localStorage flag FIRST (most reliable)
             const localFlag = localStorage.getItem("assessmentCompleted") === "true";
-            async function checkAssessmentStatus() {
-                try {
-                    const response = await fetch('/api/user/assessment-status', {
-                        headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        }
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.assessment_complete) {
-                        console.log('✅ Assessment completed (verified from backend)');
-                        showDashboard();
-                    } else {
-                        console.log('⚠️ Assessment not complete');
-                        
-                    }
-                } catch (error) {
-                    console.error('Error checking assessment status:', error);
-                    // Default to showing dashboard on error
-                    showDashboard();
-                }
-              
+            if (localFlag) {
+                console.log('✅ Assessment completed (localStorage flag)');
+                return true;
             }
-
-            checkAssessmentStatus();
 
             // Method 2: Check if user has actual interests selected
             try {
