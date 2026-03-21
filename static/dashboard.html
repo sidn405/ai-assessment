@@ -2181,7 +2181,7 @@
                             <button class="btn btn-primary" onclick="showSection('lessons', event)">
                                 📚 Continue Learning
                             </button>
-                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
+                            <button class="btn btn-secondary" onclick="startReadingLevelTest()">
                                 🔄 Retake Reading Level Test
                             </button>
                         </div>
@@ -3150,6 +3150,20 @@
         function closePlacementModal() {
             const modal = document.getElementById('placementRequiredModal');
             if (modal) modal.remove();
+        }
+
+        function startReadingLevelTest() {
+            console.log('🎯 Starting reading level test...');
+            
+            // Clear any cached level
+            localStorage.removeItem('estimatedLevel');
+            
+            // Mark as taking placement test
+            sessionStorage.setItem('isPlacementTest', 'true');
+            sessionStorage.setItem('audioUnlocked', 'true');
+            
+            // Navigate to reading page
+            window.location.href = '/reading';
         }
 
         // Load dashboard
