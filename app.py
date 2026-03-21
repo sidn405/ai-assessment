@@ -1089,15 +1089,28 @@ async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     }
 
 @app.get("/api/assessment/interest")
-def get_interest_assessment(token: str):
+async def get_interest_assessment(request: Request):
     """Get age-appropriate interest assessment questions for the user"""
     try:
-        # Get user data to determine age/grade
+        # Get token from Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Missing authorization token")
+        
+        token = auth_header.replace('Bearer ', '')
         user_data = verify_token(token)
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        
+        # Use dict cursor
+        if USE_POSTGRES:
+            import psycopg2.extras
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        else:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
         
         # Fetch user's age and grade
         if USE_POSTGRES:
@@ -1117,8 +1130,8 @@ def get_interest_assessment(token: str):
         conn.close()
         
         if user:
-            age = user['age'] if hasattr(user, 'keys') else user[0]
-            grade_band = user['grade_band'] if hasattr(user, 'keys') else user[1]
+            age = user['age'] or 12
+            grade_band = user['grade_band'] or 'middle'
         else:
             # Default if not found
             age = 12
@@ -1131,6 +1144,8 @@ def get_interest_assessment(token: str):
         
     except Exception as e:
         print(f"Error getting interest assessment: {e}")
+        import traceback
+        traceback.print_exc()
         # Return default middle school questions on error
         questions = generate_interest_assessment(12, 'middle')
         return {"questions": questions}
