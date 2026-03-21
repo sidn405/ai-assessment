@@ -681,6 +681,11 @@
         </button>
     </div>
 
+    <div class="header">
+        <h1>📖 Reading Practice</h1>
+        
+    </div>
+
     <div class="container">
         <!-- Loading State -->
         <div id="loadingState" class="loading">
@@ -1077,15 +1082,20 @@
             }
             
             const cleanText = String(text).replace(/<[^>]*>/g, '');
-            console.log('🎤 Reading tutor speaking:', cleanText.substring(0, 50));
+            console.log('🎤 Reading tutor attempting to speak:', cleanText.substring(0, 50));
+            console.log('🔍 Polly status - awsReady:', awsReady, 'polly:', !!polly);
             
-            // ONLY use AWS Polly - wait if not ready yet
+            // CRITICAL: ONLY use AWS Polly - NEVER browser voice
             if (awsReady && polly) {
+                console.log('✅ Using AWS Polly Danielle voice');
                 speakWithPolly(cleanText, emotion);
             } else {
-                console.log('⏳ AWS Polly not ready yet, waiting...');
-                // Wait for Polly instead of using browser voice
-                setTimeout(() => speakTutor(text, emotion), 300);
+                console.log('⏳ AWS Polly not ready, waiting 500ms and retrying...');
+                // Keep waiting until Polly is ready
+                setTimeout(() => {
+                    console.log('🔄 Retrying speakTutor...');
+                    speakTutor(text, emotion);
+                }, 500);
             }
         }
 
@@ -1227,26 +1237,34 @@
         // Wait for AWS Polly to be ready, then show tutor
         function waitForPollyThenShowTutor() {
             let attempts = 0;
-            const maxAttempts = 20; // Wait up to 4 seconds
+            const maxAttempts = 30; // Wait up to 6 seconds
             
             function checkAndShow() {
                 attempts++;
                 
+                console.log(`🔍 Polly check #${attempts}: awsReady=${awsReady}, polly=${!!polly}`);
+                
                 if (awsReady && polly) {
-                    console.log('✅ AWS Polly ready, showing tutor with Danielle voice');
-                    runTutorLessonIntro();
+                    console.log('✅ AWS Polly confirmed ready, showing tutor with Danielle voice');
+                    // Extra delay to ensure Polly is fully initialized
+                    setTimeout(() => {
+                        runTutorLessonIntro();
+                    }, 500);
                 } else if (attempts < maxAttempts) {
                     console.log(`⏳ Waiting for AWS Polly... (attempt ${attempts}/${maxAttempts})`);
                     setTimeout(checkAndShow, 200);
                 } else {
-                    console.warn('⚠️ AWS Polly timeout, showing tutor with fallback voice');
-                    runTutorLessonIntro();
+                    console.error('❌ AWS Polly timeout after 6 seconds - this should not happen!');
+                    console.error('awsReady:', awsReady);
+                    console.error('polly:', polly);
+                    console.error('AWS:', typeof AWS);
+                    console.error('AWS.Polly:', typeof AWS?.Polly);
+                    // Don't show tutor at all if Polly isn't ready
                 }
             }
             
             checkAndShow();
         }
-
         // Optional: random encouragement while reading
         function startEncouragementTimerOnce() {
         if (encouragementIntervalId) return;
@@ -1650,15 +1668,23 @@
                 });
                 
                 const result = await response.json();
-                console.log('Reading level saved:', result);
+                console.log('✅ Reading level saved to database:', result);
                 
-                // Update local storage
+                // Update local storage with BOTH fields to match database
                 const user = JSON.parse(localStorage.getItem('user') || '{}');
                 user.reading_level = level;
+                user.level_estimate = level;  // Match database field
                 localStorage.setItem('user', JSON.stringify(user));
+                console.log('✅ localStorage updated with reading level:', level);
+                
+                // Clear any assessment flags that might trigger modals
+                localStorage.removeItem('needsReadingAssessment');
+                localStorage.removeItem('assessmentRequired');
+                sessionStorage.removeItem('showAssessmentModal');
+                console.log('✅ Cleared assessment requirement flags');
                 
             } catch (error) {
-                console.error('Error saving reading level:', error);
+                console.error('❌ Error saving reading level:', error);
             }
         }
 
