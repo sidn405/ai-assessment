@@ -1089,15 +1089,18 @@ async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     }
 
 @app.get("/api/assessment/interest")
-async def get_interest_assessment(request: Request):
+async def get_interest_assessment(request: Request, token: str = None):
     """Get age-appropriate interest assessment questions for the user"""
     try:
-        # Get token from Authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
+        # Try to get token from header first, then query param
+        if not token:
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
+                token = auth_header.replace('Bearer ', '')
+        
+        if not token:
             raise HTTPException(status_code=401, detail="Missing authorization token")
         
-        token = auth_header.replace('Bearer ', '')
         user_data = verify_token(token)
         user_id = user_data["user_id"]
         
@@ -1130,24 +1133,29 @@ async def get_interest_assessment(request: Request):
         conn.close()
         
         if user:
-            age = user['age'] or 12
-            grade_band = user['grade_band'] or 'middle'
+            age = user['age'] or 7
+            grade_band = user['grade_band'] or 'elementary'
+            print(f"📚 Interest assessment for user {user_id}: age={age}, grade={grade_band}")
         else:
             # Default if not found
-            age = 12
-            grade_band = 'middle'
+            age = 7
+            grade_band = 'elementary'
+            print(f"⚠️ User {user_id} not found, using defaults: age={age}, grade={grade_band}")
         
         # Generate age-appropriate questions
         questions = generate_interest_assessment(age, grade_band)
+        print(f"✓ Generated {len(questions)} questions for {age}yo in {grade_band}")
         
         return {"questions": questions}
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error getting interest assessment: {e}")
         import traceback
         traceback.print_exc()
-        # Return default middle school questions on error
-        questions = generate_interest_assessment(12, 'middle')
+        # Return age-appropriate default questions
+        questions = generate_interest_assessment(7, 'elementary')
         return {"questions": questions}
     
 @app.get("/api/user/assessment-status")

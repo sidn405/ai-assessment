@@ -1065,12 +1065,13 @@
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('passageSection').classList.remove('hidden');
 
+                // Show tutor intro for EVERY passage
+                runTutorLessonIntro();
+                startEncouragementTimerOnce();
+
+                // Show badge only on first passage
                 if (data.is_first_passage) {
                     document.getElementById('firstPassageBadge').classList.remove('hidden');
-
-                    runTutorLessonIntro();
-                    startEncouragementTimerOnce();
-
                 }
             } catch (error) {
                 console.error('Error loading passage:', error);
