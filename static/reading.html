@@ -538,14 +538,7 @@
     <!-- AI Tutor Avatar -->
     <div id="aiTutor" class="ai-tutor hidden">
         <div class="tutor-avatar">
-            <div class="avatar-face" id="avatarFace">
-                <!-- Animated face -->
-                <div class="eyes">
-                    <div class="eye left"></div>
-                    <div class="eye right"></div>
-                </div>
-                <div class="mouth" id="avatarMouth"></div>
-            </div>
+            <!-- Avatar image set via CSS background-image: tutor.jpg -->
         </div>
         <div class="tutor-speech-bubble">
             <div class="speech-text" id="tutorMessage"></div>
@@ -819,18 +812,13 @@
         }
 
         function displayTutorMessage(message, emotion = 'happy') {
-        const tutor = document.getElementById('aiTutor');
-        const messageEl = document.getElementById('tutorMessage');
-        const avatarEl = document.getElementById('tutorAvatar');
-        const mouthEl = document.getElementById('avatarMouth');
+            const tutor = document.getElementById('aiTutor');
+            const messageEl = document.getElementById('tutorMessage');
 
-        if (!tutor || !messageEl) return;
+            if (!tutor || !messageEl) return;
 
-        tutor.classList.remove('hidden');
-        messageEl.textContent = message;
-
-        if (avatarEl) avatarEl.className = 'avatar ' + emotion;
-        if (mouthEl) mouthEl.className = 'mouth ' + emotion;
+            tutor.classList.remove('hidden');
+            messageEl.textContent = message;
         }
 
         function speakTutor(text, emotion = 'happy') {
