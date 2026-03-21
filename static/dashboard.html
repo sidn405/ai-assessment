@@ -3246,8 +3246,8 @@
                         console.log('✅ Assessment completed (verified from backend)');
                         showDashboard();
                     } else {
-                        console.log('⚠️ Assessment not complete, redirecting...');
-                        window.location.href = '/reading';  // Or wherever assessment is
+                        console.log('⚠️ Assessment not complete, showing prompt');
+                        showReadingAssessmentPrompt();  // ✅ Show button instead
                     }
                 } catch (error) {
                     console.error('Error checking assessment status:', error);
@@ -3258,7 +3258,7 @@
             }
 
             checkAssessmentStatus();
-            
+
             // Method 2: Check if user has actual interests selected
             try {
                 const u = progressData?.user || JSON.parse(localStorage.getItem("user") || "{}");
