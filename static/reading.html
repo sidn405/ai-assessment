@@ -1443,16 +1443,29 @@
         function displayQuestions(questions) {
             const questionsList = document.getElementById('questionsList');
             
-            // DEBUG: Log question types
-            console.log('📋 Displaying questions:');
-            questions.forEach((q, i) => {
-                console.log(`Q${i+1}: type="${q.type}", has_options=${!!q.options}, question="${q.question.substring(0, 50)}..."`);
-            });
+            // DEBUG: Log raw questions data
+            console.log('📋 Raw questions received:', JSON.stringify(questions, null, 2));
             
             questionsList.innerHTML = questions.map((q, index) => {
-                // Fill in the blank - CHECK THIS FIRST
-                if (q.type === 'fill_in_blank' || q.type === 'fill-in-blank' || q.type === 'fill_blank') {
-                    console.log(`✏️ Rendering Q${index+1} as FILL-IN-BLANK`);
+                console.log(`\n--- Question ${index + 1} ---`);
+                console.log('Type:', q.type);
+                console.log('Has options:', !!q.options);
+                console.log('Has correct_answer:', !!q.correct_answer);
+                console.log('Has accept_answers:', !!q.accept_answers);
+                
+                // Determine question type
+                const isFillBlank = (
+                    q.type === 'fill_in_blank' || 
+                    q.type === 'fill-in-blank' || 
+                    q.type === 'fill_blank' ||
+                    (q.question && q.question.includes('__________'))
+                );
+                
+                if (isFillBlank) {
+                    console.log('✏️ Rendering as FILL-IN-BLANK');
+                    const correctAnswer = q.correct_answer || '';
+                    const acceptAnswers = q.accept_answers || [correctAnswer];
+                    
                     return `
                         <div class="question" data-question-id="${index}" data-type="fill_in_blank">
                             <div class="question-text">
@@ -1463,19 +1476,19 @@
                                     type="text" 
                                     name="question${index}" 
                                     placeholder="Type your answer here..."
-                                    data-correct="${q.correct_answer || ''}"
-                                    data-accept="${JSON.stringify(q.accept_answers || [q.correct_answer]).replace(/"/g, '&quot;')}"
+                                    data-correct="${correctAnswer}"
+                                    data-accept='${JSON.stringify(acceptAnswers).replace(/'/g, "&#39;")}'
                                     autocomplete="off"
                                     spellcheck="false"
+                                    style="width: 100%; max-width: 400px; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px;"
                                 />
                             </div>
                         </div>
                     `;
-                } 
-                // Multiple choice - DEFAULT
-                else {
-                    console.log(`☑️ Rendering Q${index+1} as MULTIPLE CHOICE`);
+                } else {
+                    console.log('☑️ Rendering as MULTIPLE CHOICE');
                     const options = q.options || [q.correct_answer, 'Option 2', 'Option 3', 'Option 4'];
+                    
                     return `
                         <div class="question" data-question-id="${index}" data-type="multiple_choice">
                             <div class="question-text">
@@ -1493,6 +1506,8 @@
                     `;
                 }
             }).join('');
+            
+            console.log('\n✅ Questions rendered');
         }
 
         async function submitAnswers() {
