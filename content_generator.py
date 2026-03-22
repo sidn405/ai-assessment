@@ -516,7 +516,7 @@ class ContentGenerator:
 
         try:
             response = self.client.chat.completions.create(
-                model="ggpt-4-turbo-preview",
+                model="gpt-4-turbo-preview",
                 messages=[
                     {"role": "system", "content": "You are an expert educator creating engaging comprehension questions."},
                     {"role": "user", "content": prompt}
