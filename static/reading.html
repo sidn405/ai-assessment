@@ -1413,6 +1413,9 @@
         }
 
         function displayPassage(data) {
+            // IMMEDIATE ALERT
+            alert(`displayPassage called! Has questions: ${!!data.questions}, Questions length: ${data.questions?.length}, First question type: ${data.questions?.[0]?.type}`);
+            
             document.getElementById('passageTitle').textContent = data.title;
             document.getElementById('wordCount').textContent = data.word_count;
             document.getElementById('estimatedTime').textContent = data.estimated_minutes;
@@ -1436,87 +1439,83 @@
                 document.getElementById('vocabularyBox').classList.remove('hidden');
             }
 
+            // ALERT BEFORE CALLING displayQuestions
+            alert(`About to call displayQuestions with ${data.questions?.length} questions`);
+            
             // Display questions
             displayQuestions(data.questions);
+            
+            // ALERT AFTER
+            alert('displayQuestions finished!');
         }
 
         function displayQuestions(questions) {
             const questionsList = document.getElementById('questionsList');
             
             // ALERT to confirm function is called
-            alert(`displayQuestions called with ${questions.length} questions. First type: ${questions[0]?.type}`);
+            alert(`displayQuestions called with ${questions ? questions.length : 0} questions`);
+            
+            if (!questions || questions.length === 0) {
+                questionsList.innerHTML = '<div style="color: red; font-size: 20px;">ERROR: No questions received!</div>';
+                return;
+            }
             
             // INLINE DEBUG at top of questions
-            const debugHTML = `
-                <div style="background: black; color: lime; padding: 20px; margin: 20px 0; border: 5px solid red; border-radius: 10px; white-space: pre-wrap; font-family: monospace; font-size: 14px;">
-                    <div style="color: yellow; font-size: 18px; font-weight: bold; margin-bottom: 15px;">🔍 DEBUG: Questions Data (${questions.length} total)</div>
+            let html = `
+                <div style="background: black; color: lime; padding: 20px; margin: 20px 0; border: 5px solid red; border-radius: 10px; white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow: auto;">
+                    <div style="color: yellow; font-size: 16px; font-weight: bold; margin-bottom: 10px;">🔍 DEBUG: ${questions.length} Questions</div>
                     ${JSON.stringify(questions, null, 2)}
                 </div>
             `;
             
-            questionsList.innerHTML = debugHTML + questions.map((q, index) => {
+            questions.forEach((q, index) => {
+                if (!q) {
+                    html += `<div style="color: red; border: 3px solid red; padding: 20px; margin: 10px 0;">Question ${index + 1}: NULL/UNDEFINED</div>`;
+                    return;
+                }
+                
                 const questionText = q.question || 'NO QUESTION TEXT';
-                const questionType = q.type || 'NO TYPE';
-                const hasOptions = !!q.options;
                 const hasBlank = questionText.includes('__________');
                 
-                // Determine if fill-in-blank
-                const isFillBlank = (
-                    questionType === 'fill_in_blank' || 
-                    questionType === 'fill-in-blank' || 
-                    questionType === 'fill_blank' ||
-                    hasBlank
-                );
-                
-                if (isFillBlank) {
-                    const correctAnswer = q.correct_answer || '';
-                    const acceptAnswers = q.accept_answers || [correctAnswer];
-                    
-                    return `
-                        <div class="question" data-question-id="${index}" data-type="fill_in_blank" style="border: 5px solid green; padding: 20px; margin: 15px 0; background: #e8f5e9;">
-                            <div class="question-text" style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
+                // ALWAYS render as text input if has blank in question
+                if (hasBlank) {
+                    html += `
+                        <div style="border: 5px solid green; padding: 20px; margin: 15px 0; background: #e8f5e9;">
+                            <div style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
                                 ${index + 1}. ${questionText}
                             </div>
-                            <div class="fill-blank-input">
-                                <input 
-                                    type="text" 
-                                    name="question${index}" 
-                                    placeholder="👉 Type your answer here..."
-                                    data-correct="${correctAnswer}"
-                                    data-accept='${JSON.stringify(acceptAnswers).replace(/'/g, "&#39;")}'
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                    style="width: 100%; max-width: 500px; padding: 15px; font-size: 18px; border: 3px solid green; border-radius: 8px; background: yellow; font-weight: bold;"
-                                />
-                                <div style="color: green; margin-top: 10px; font-size: 14px; font-weight: bold;">
-                                    ✓ FILL-IN-BLANK MODE (type: "${questionType}", has blank: ${hasBlank}, has options: ${hasOptions})
-                                </div>
-                            </div>
+                            <input 
+                                type="text" 
+                                name="question${index}" 
+                                placeholder="TYPE HERE"
+                                data-correct="${q.correct_answer || ''}"
+                                style="width: 100%; padding: 15px; font-size: 18px; border: 3px solid green; background: yellow; font-weight: bold;"
+                            />
+                            <div style="color: green; margin-top: 10px;">✓ TEXT INPUT (has blank in question)</div>
                         </div>
                     `;
                 } else {
-                    const options = q.options || [q.correct_answer, 'Option 2', 'Option 3', 'Option 4'];
-                    
-                    return `
-                        <div class="question" data-question-id="${index}" data-type="multiple_choice" style="border: 5px solid blue; padding: 20px; margin: 15px 0; background: #e3f2fd;">
-                            <div class="question-text" style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
+                    // Multiple choice
+                    const options = q.options || [q.correct_answer || 'Option 1', 'Option 2', 'Option 3', 'Option 4'];
+                    html += `
+                        <div style="border: 5px solid blue; padding: 20px; margin: 15px 0; background: #e3f2fd;">
+                            <div style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
                                 ${index + 1}. ${questionText}
                             </div>
-                            <div class="options">
-                                ${options.map((option, optIndex) => `
-                                    <label class="option" style="display: block; padding: 10px; margin: 5px 0; background: white; border: 2px solid blue;">
-                                        <input type="radio" name="question${index}" value="${option}" data-correct="${option === q.correct_answer}">
-                                        <span style="font-size: 16px; margin-left: 10px;">${option}</span>
-                                    </label>
-                                `).join('')}
-                            </div>
-                            <div style="color: blue; margin-top: 10px; font-size: 14px; font-weight: bold;">
-                                ☑ MULTIPLE CHOICE MODE (type: "${questionType}", has options: ${hasOptions})
-                            </div>
+                            ${options.map((opt, i) => `
+                                <label style="display: block; padding: 10px; margin: 5px 0; background: white;">
+                                    <input type="radio" name="question${index}" value="${opt}">
+                                    <span style="margin-left: 10px;">${opt}</span>
+                                </label>
+                            `).join('')}
+                            <div style="color: blue; margin-top: 10px;">☑ MULTIPLE CHOICE (no blank in question)</div>
                         </div>
                     `;
                 }
-            }).join('');
+            });
+            
+            questionsList.innerHTML = html;
+            alert('Questions rendered!');
         }
 
         async function submitAnswers() {
