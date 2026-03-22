@@ -1443,33 +1443,43 @@
         function displayQuestions(questions) {
             const questionsList = document.getElementById('questionsList');
             
-            // DEBUG: Log raw questions data
-            console.log('📋 Raw questions received:', JSON.stringify(questions, null, 2));
+            // VISIBLE DEBUG PANEL
+            const debugPanel = document.createElement('div');
+            debugPanel.style.cssText = 'position: fixed; top: 10px; right: 10px; background: black; color: lime; padding: 15px; border-radius: 8px; max-width: 400px; max-height: 400px; overflow: auto; z-index: 999999; font-family: monospace; font-size: 12px;';
+            debugPanel.innerHTML = `
+                <div style="color: yellow; font-weight: bold; margin-bottom: 10px;">DEBUG: Questions Data</div>
+                <div style="white-space: pre-wrap;">${JSON.stringify(questions, null, 2)}</div>
+            `;
+            document.body.appendChild(debugPanel);
+            
+            // Also log to console
+            console.log('📋 QUESTIONS DATA:', questions);
             
             questionsList.innerHTML = questions.map((q, index) => {
-                console.log(`\n--- Question ${index + 1} ---`);
-                console.log('Type:', q.type);
-                console.log('Has options:', !!q.options);
-                console.log('Has correct_answer:', !!q.correct_answer);
-                console.log('Has accept_answers:', !!q.accept_answers);
+                const questionText = q.question || 'NO QUESTION TEXT';
+                const questionType = q.type || 'NO TYPE';
+                const hasOptions = !!q.options;
+                const hasBlank = questionText.includes('__________');
                 
-                // Determine question type
+                console.log(`Q${index+1}: type=${questionType}, hasOptions=${hasOptions}, hasBlank=${hasBlank}`);
+                
+                // Determine if fill-in-blank
                 const isFillBlank = (
-                    q.type === 'fill_in_blank' || 
-                    q.type === 'fill-in-blank' || 
-                    q.type === 'fill_blank' ||
-                    (q.question && q.question.includes('__________'))
+                    questionType === 'fill_in_blank' || 
+                    questionType === 'fill-in-blank' || 
+                    questionType === 'fill_blank' ||
+                    hasBlank
                 );
                 
                 if (isFillBlank) {
-                    console.log('✏️ Rendering as FILL-IN-BLANK');
+                    console.log(`→ Rendering Q${index+1} as FILL-IN-BLANK`);
                     const correctAnswer = q.correct_answer || '';
                     const acceptAnswers = q.accept_answers || [correctAnswer];
                     
                     return `
-                        <div class="question" data-question-id="${index}" data-type="fill_in_blank">
-                            <div class="question-text">
-                                ${index + 1}. ${q.question}
+                        <div class="question" data-question-id="${index}" data-type="fill_in_blank" style="border: 3px solid green; padding: 15px; margin: 10px 0;">
+                            <div class="question-text" style="margin-bottom: 10px;">
+                                ${index + 1}. ${questionText}
                             </div>
                             <div class="fill-blank-input">
                                 <input 
@@ -1480,19 +1490,20 @@
                                     data-accept='${JSON.stringify(acceptAnswers).replace(/'/g, "&#39;")}'
                                     autocomplete="off"
                                     spellcheck="false"
-                                    style="width: 100%; max-width: 400px; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px;"
+                                    style="width: 100%; max-width: 400px; padding: 12px; font-size: 16px; border: 2px solid blue; border-radius: 8px; background: yellow;"
                                 />
+                                <div style="color: green; margin-top: 5px; font-size: 12px;">✓ Fill-in-blank detected (type: ${questionType}, blank: ${hasBlank})</div>
                             </div>
                         </div>
                     `;
                 } else {
-                    console.log('☑️ Rendering as MULTIPLE CHOICE');
+                    console.log(`→ Rendering Q${index+1} as MULTIPLE CHOICE`);
                     const options = q.options || [q.correct_answer, 'Option 2', 'Option 3', 'Option 4'];
                     
                     return `
-                        <div class="question" data-question-id="${index}" data-type="multiple_choice">
-                            <div class="question-text">
-                                ${index + 1}. ${q.question}
+                        <div class="question" data-question-id="${index}" data-type="multiple_choice" style="border: 3px solid blue; padding: 15px; margin: 10px 0;">
+                            <div class="question-text" style="margin-bottom: 10px;">
+                                ${index + 1}. ${questionText}
                             </div>
                             <div class="options">
                                 ${options.map((option, optIndex) => `
@@ -1502,12 +1513,11 @@
                                     </label>
                                 `).join('')}
                             </div>
+                            <div style="color: blue; margin-top: 5px; font-size: 12px;">☑ Multiple choice (type: ${questionType})</div>
                         </div>
                     `;
                 }
             }).join('');
-            
-            console.log('\n✅ Questions rendered');
         }
 
         async function submitAnswers() {
