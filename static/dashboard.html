@@ -3778,6 +3778,17 @@
             
             console.log('🔊 Audio unlock status:', audioUnlocked);
             
+            let greetingPlayed = false;
+            
+            // Fallback: play greeting after 2 seconds if doorbell doesn't trigger it
+            const fallbackTimer = setTimeout(() => {
+                if (!greetingPlayed) {
+                    console.log('⏰ Doorbell timeout - playing greeting anyway');
+                    greetingPlayed = true;
+                    speakWelcomeAndNavigate(welcomeMessage);
+                }
+            }, 2000);
+            
             try {
                 console.log('🔔 Attempting to play doorbell...');
                 const doorbell = new Audio('/static/sounds/login.mp3');
@@ -3792,16 +3803,24 @@
                         // Speak after doorbell finishes
                         doorbell.onended = async () => {
                             console.log('🔔 Doorbell finished, now speaking...');
-                            await speakWelcomeAndNavigate(welcomeMessage);
+                            if (!greetingPlayed) {
+                                clearTimeout(fallbackTimer);
+                                greetingPlayed = true;
+                                await speakWelcomeAndNavigate(welcomeMessage);
+                            }
                         };
                     })
                     .catch(error => {
                         console.log('⚠️ Doorbell blocked, speaking message only');
+                        clearTimeout(fallbackTimer);
+                        greetingPlayed = true;
                         speakWelcomeAndNavigate(welcomeMessage);
                     });
                 
             } catch (error) {
                 console.error('❌ Error with doorbell:', error);
+                clearTimeout(fallbackTimer);
+                greetingPlayed = true;
                 await speakWelcomeAndNavigate(welcomeMessage);
             }
         }
@@ -3834,22 +3853,27 @@
             const sessionFlag = sessionStorage.getItem('justLoggedIn');
             const localFlag = localStorage.getItem('justLoggedIn');
             const loginTime = localStorage.getItem('loginTimestamp');
+            const greetingAlreadyPlayed = sessionStorage.getItem('greetingPlayed');
             
             console.log('🔍 Session flag:', sessionFlag);
             console.log('🔍 Local flag:', localFlag);
             console.log('🔍 Login timestamp:', loginTime);
+            console.log('🔍 Greeting already played this session:', greetingAlreadyPlayed);
             
-            // Consider recently logged in if within last 5 seconds
-            const isRecentLogin = loginTime && (Date.now() - parseInt(loginTime) < 5000);
-            console.log('🔍 Is recent login (< 5s):', isRecentLogin);
+            // Consider recently logged in if within last 15 seconds
+            const isRecentLogin = loginTime && (Date.now() - parseInt(loginTime) < 15000);
+            console.log('🔍 Is recent login (< 15s):', isRecentLogin);
             
-            if ((sessionFlag === 'true' || localFlag === 'true') && isRecentLogin) {
+            // Play greeting if: fresh login AND haven't played greeting this session yet
+            if ((sessionFlag === 'true' || localFlag === 'true') && isRecentLogin && !greetingAlreadyPlayed) {
                 console.log('✅ Just logged in flag detected (recent login)');
                 
-                // Clear flags
+                // Mark greeting as played for THIS session (prevents replaying on page refresh)
+                sessionStorage.setItem('greetingPlayed', 'true');
+                
+                // Clear the login flags (but keep timestamp for now)
                 sessionStorage.removeItem('justLoggedIn');
                 localStorage.removeItem('justLoggedIn');
-                localStorage.removeItem('loginTimestamp');
                 
                 const user = JSON.parse(localStorage.getItem('user') || '{}');
                 const userName = user.full_name?.split(' ')[0] || user.username || 'there';
@@ -3861,13 +3885,17 @@
                     waitForPollyThenWelcome(userName);
                 }, 1500);
             } else {
-                console.log('ℹ️ No welcome greeting needed (not just logged in)');
+                console.log('ℹ️ No welcome greeting needed');
                 
-                // Clean up stale flags if any
-                if (!isRecentLogin && localFlag === 'true') {
-                    console.log('🧹 Cleaning up stale login flag');
-                    localStorage.removeItem('justLoggedIn');
-                    localStorage.removeItem('loginTimestamp');
+                if (greetingAlreadyPlayed) {
+                    console.log('   Reason: Greeting already played this session');
+                } else if (!isRecentLogin) {
+                    console.log('   Reason: Login timestamp too old or missing');
+                    // Clean up stale timestamp if > 15 seconds old
+                    if (loginTime && !isRecentLogin) {
+                        console.log('🧹 Cleaning up stale login timestamp');
+                        localStorage.removeItem('loginTimestamp');
+                    }
                 }
                 
                 // ✅ If no greeting, play voice navigation directly after delay
@@ -6740,12 +6768,17 @@
             }, 3000);
         }
 
+        // NOTE: Duplicate logout function removed - using the more complete one below (line ~7309)
+        // which includes server session cleanup
+        /*
         function logout() {
             console.log('Logging out...');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            sessionStorage.removeItem('greetingPlayed');
             window.location.href = '/';
         }
+        */
 
         // ========== INITIALIZE SESSION ==========
 
@@ -7314,6 +7347,9 @@
             // Clear local storage
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            
+            // ✅ Clear sessionStorage greeting flag for next login
+            sessionStorage.removeItem('greetingPlayed');
             
             // Redirect to login
             window.location.href = '/';
