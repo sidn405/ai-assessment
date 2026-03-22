@@ -578,41 +578,66 @@ class ContentGenerator:
                 
         except Exception as e:
             print(f"Error generating questions: {e}")
-            # Fallback questions
+            import traceback
+            traceback.print_exc()
+            
+            # CRITICAL: Fill-in-blank questions must NOT have 'options' field
             return [
                 {
-                    "question": "What is the main topic of this passage?",
+                    "question": "What is the main idea of this passage?",
                     "type": "multiple_choice",
-                    "options": ["The main topic", "Something else", "Another topic", "Different subject"],
-                    "correct_answer": "The main topic",
-                    "explanation": "The passage focuses on this main topic.",
+                    "options": [
+                        "A story about the topic",
+                        "A science experiment",
+                        "A history lesson",  
+                        "A cooking recipe"
+                    ],
+                    "correct_answer": "A story about the topic",
+                    "explanation": "The passage discusses this main theme.",
                     "difficulty": 1
                 },
                 {
-                    "question": "Fill in the blank: The passage is about __________.",
+                    "question": f"Fill in the blank: This passage is about __________.",
                     "type": "fill_in_blank",
-                    "correct_answer": passage_title.lower(),
-                    "accept_answers": [passage_title.lower()],
-                    "explanation": "The passage title tells us what it's about.",
-                    "difficulty": 1
+                    "correct_answer": passage_title.lower() if passage_title else "the topic",
+                    "accept_answers": [
+                        passage_title.lower() if passage_title else "the topic",
+                        "the story",
+                        "this topic"
+                    ],
+                    "explanation": "The passage focuses on this subject.",
+                    "difficulty": 2
+                    # NOTE: NO 'options' field for fill-in-blank!
                 },
                 {
-                    "question": "What was discussed in the passage?",
+                    "question": "What challenge or situation is described?",
                     "type": "multiple_choice",
-                    "options": ["The topic", "Nothing", "Everything", "Something random"],
-                    "correct_answer": "The topic",
-                    "explanation": "The passage discussed this topic.",
+                    "options": [
+                        "A problem to solve",
+                        "A celebration",
+                        "A vacation",
+                        "A test"
+                    ],
+                    "correct_answer": "A problem to solve",
+                    "explanation": "The passage describes a challenge.",
                     "difficulty": 2
                 },
                 {
-                    "question": "What is one key point from the passage?",
-                    "type": "multiple_choice",
-                    "options": ["A key point", "Unrelated info", "Random fact", "Wrong answer"],
-                    "correct_answer": "A key point",
-                    "explanation": "This was mentioned in the passage.",
+                    "question": "The main character wanted to __________.",
+                    "type": "fill_in_blank",
+                    "correct_answer": "achieve a goal",
+                    "accept_answers": [
+                        "achieve a goal",
+                        "reach a goal",
+                        "accomplish something",
+                        "succeed"
+                    ],
+                    "explanation": "The passage shows the character working toward something.",
                     "difficulty": 2
+                    # NOTE: NO 'options' field for fill-in-blank!
                 }
             ]
+        
     
     def _extract_topics(self, main_topic, interests):
         """Extract relevant topic tags"""

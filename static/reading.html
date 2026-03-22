@@ -1442,27 +1442,17 @@
 
         function displayQuestions(questions) {
             const questionsList = document.getElementById('questionsList');
+            
+            // DEBUG: Log question types
+            console.log('📋 Displaying questions:');
+            questions.forEach((q, i) => {
+                console.log(`Q${i+1}: type="${q.type}", has_options=${!!q.options}, question="${q.question.substring(0, 50)}..."`);
+            });
+            
             questionsList.innerHTML = questions.map((q, index) => {
-                // Multiple choice
-                if (q.type === 'multiple_choice' || !q.type) {
-                    return `
-                        <div class="question" data-question-id="${index}" data-type="multiple_choice">
-                            <div class="question-text">
-                                ${index + 1}. ${q.question}
-                            </div>
-                            <div class="options">
-                                ${q.options.map((option, optIndex) => `
-                                    <label class="option">
-                                        <input type="radio" name="question${index}" value="${option}" data-correct="${option === q.correct_answer}">
-                                        <span>${option}</span>
-                                    </label>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `;
-                } 
-                // Fill in the blank
-                else if (q.type === 'fill_in_blank' || q.type === 'fill-in-blank') {
+                // Fill in the blank - CHECK THIS FIRST
+                if (q.type === 'fill_in_blank' || q.type === 'fill-in-blank' || q.type === 'fill_blank') {
+                    console.log(`✏️ Rendering Q${index+1} as FILL-IN-BLANK`);
                     return `
                         <div class="question" data-question-id="${index}" data-type="fill_in_blank">
                             <div class="question-text">
@@ -1473,11 +1463,31 @@
                                     type="text" 
                                     name="question${index}" 
                                     placeholder="Type your answer here..."
-                                    data-correct="${q.correct_answer}"
+                                    data-correct="${q.correct_answer || ''}"
                                     data-accept="${JSON.stringify(q.accept_answers || [q.correct_answer]).replace(/"/g, '&quot;')}"
                                     autocomplete="off"
                                     spellcheck="false"
                                 />
+                            </div>
+                        </div>
+                    `;
+                } 
+                // Multiple choice - DEFAULT
+                else {
+                    console.log(`☑️ Rendering Q${index+1} as MULTIPLE CHOICE`);
+                    const options = q.options || [q.correct_answer, 'Option 2', 'Option 3', 'Option 4'];
+                    return `
+                        <div class="question" data-question-id="${index}" data-type="multiple_choice">
+                            <div class="question-text">
+                                ${index + 1}. ${q.question}
+                            </div>
+                            <div class="options">
+                                ${options.map((option, optIndex) => `
+                                    <label class="option">
+                                        <input type="radio" name="question${index}" value="${option}" data-correct="${option === q.correct_answer}">
+                                        <span>${option}</span>
+                                    </label>
+                                `).join('')}
                             </div>
                         </div>
                     `;
