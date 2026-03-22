@@ -1443,25 +1443,22 @@
         function displayQuestions(questions) {
             const questionsList = document.getElementById('questionsList');
             
-            // VISIBLE DEBUG PANEL
-            const debugPanel = document.createElement('div');
-            debugPanel.style.cssText = 'position: fixed; top: 10px; right: 10px; background: black; color: lime; padding: 15px; border-radius: 8px; max-width: 400px; max-height: 400px; overflow: auto; z-index: 999999; font-family: monospace; font-size: 12px;';
-            debugPanel.innerHTML = `
-                <div style="color: yellow; font-weight: bold; margin-bottom: 10px;">DEBUG: Questions Data</div>
-                <div style="white-space: pre-wrap;">${JSON.stringify(questions, null, 2)}</div>
+            // ALERT to confirm function is called
+            alert(`displayQuestions called with ${questions.length} questions. First type: ${questions[0]?.type}`);
+            
+            // INLINE DEBUG at top of questions
+            const debugHTML = `
+                <div style="background: black; color: lime; padding: 20px; margin: 20px 0; border: 5px solid red; border-radius: 10px; white-space: pre-wrap; font-family: monospace; font-size: 14px;">
+                    <div style="color: yellow; font-size: 18px; font-weight: bold; margin-bottom: 15px;">🔍 DEBUG: Questions Data (${questions.length} total)</div>
+                    ${JSON.stringify(questions, null, 2)}
+                </div>
             `;
-            document.body.appendChild(debugPanel);
             
-            // Also log to console
-            console.log('📋 QUESTIONS DATA:', questions);
-            
-            questionsList.innerHTML = questions.map((q, index) => {
+            questionsList.innerHTML = debugHTML + questions.map((q, index) => {
                 const questionText = q.question || 'NO QUESTION TEXT';
                 const questionType = q.type || 'NO TYPE';
                 const hasOptions = !!q.options;
                 const hasBlank = questionText.includes('__________');
-                
-                console.log(`Q${index+1}: type=${questionType}, hasOptions=${hasOptions}, hasBlank=${hasBlank}`);
                 
                 // Determine if fill-in-blank
                 const isFillBlank = (
@@ -1472,48 +1469,50 @@
                 );
                 
                 if (isFillBlank) {
-                    console.log(`→ Rendering Q${index+1} as FILL-IN-BLANK`);
                     const correctAnswer = q.correct_answer || '';
                     const acceptAnswers = q.accept_answers || [correctAnswer];
                     
                     return `
-                        <div class="question" data-question-id="${index}" data-type="fill_in_blank" style="border: 3px solid green; padding: 15px; margin: 10px 0;">
-                            <div class="question-text" style="margin-bottom: 10px;">
+                        <div class="question" data-question-id="${index}" data-type="fill_in_blank" style="border: 5px solid green; padding: 20px; margin: 15px 0; background: #e8f5e9;">
+                            <div class="question-text" style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
                                 ${index + 1}. ${questionText}
                             </div>
                             <div class="fill-blank-input">
                                 <input 
                                     type="text" 
                                     name="question${index}" 
-                                    placeholder="Type your answer here..."
+                                    placeholder="👉 Type your answer here..."
                                     data-correct="${correctAnswer}"
                                     data-accept='${JSON.stringify(acceptAnswers).replace(/'/g, "&#39;")}'
                                     autocomplete="off"
                                     spellcheck="false"
-                                    style="width: 100%; max-width: 400px; padding: 12px; font-size: 16px; border: 2px solid blue; border-radius: 8px; background: yellow;"
+                                    style="width: 100%; max-width: 500px; padding: 15px; font-size: 18px; border: 3px solid green; border-radius: 8px; background: yellow; font-weight: bold;"
                                 />
-                                <div style="color: green; margin-top: 5px; font-size: 12px;">✓ Fill-in-blank detected (type: ${questionType}, blank: ${hasBlank})</div>
+                                <div style="color: green; margin-top: 10px; font-size: 14px; font-weight: bold;">
+                                    ✓ FILL-IN-BLANK MODE (type: "${questionType}", has blank: ${hasBlank}, has options: ${hasOptions})
+                                </div>
                             </div>
                         </div>
                     `;
                 } else {
-                    console.log(`→ Rendering Q${index+1} as MULTIPLE CHOICE`);
                     const options = q.options || [q.correct_answer, 'Option 2', 'Option 3', 'Option 4'];
                     
                     return `
-                        <div class="question" data-question-id="${index}" data-type="multiple_choice" style="border: 3px solid blue; padding: 15px; margin: 10px 0;">
-                            <div class="question-text" style="margin-bottom: 10px;">
+                        <div class="question" data-question-id="${index}" data-type="multiple_choice" style="border: 5px solid blue; padding: 20px; margin: 15px 0; background: #e3f2fd;">
+                            <div class="question-text" style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
                                 ${index + 1}. ${questionText}
                             </div>
                             <div class="options">
                                 ${options.map((option, optIndex) => `
-                                    <label class="option">
+                                    <label class="option" style="display: block; padding: 10px; margin: 5px 0; background: white; border: 2px solid blue;">
                                         <input type="radio" name="question${index}" value="${option}" data-correct="${option === q.correct_answer}">
-                                        <span>${option}</span>
+                                        <span style="font-size: 16px; margin-left: 10px;">${option}</span>
                                     </label>
                                 `).join('')}
                             </div>
-                            <div style="color: blue; margin-top: 5px; font-size: 12px;">☑ Multiple choice (type: ${questionType})</div>
+                            <div style="color: blue; margin-top: 10px; font-size: 14px; font-weight: bold;">
+                                ☑ MULTIPLE CHOICE MODE (type: "${questionType}", has options: ${hasOptions})
+                            </div>
                         </div>
                     `;
                 }
