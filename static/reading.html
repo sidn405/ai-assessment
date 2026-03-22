@@ -315,43 +315,6 @@
             border-color: var(--error);
             background: #FFEBEE;
         }
-
-        /* Fill-in-the-blank styles */
-        .fill-blank-input {
-            margin-top: 0.5rem;
-        }
-
-        .fill-blank-input input[type="text"] {
-            width: 100%;
-            max-width: 400px;
-            padding: 0.75rem 1rem;
-            font-size: 1rem;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            transition: all 0.2s;
-            font-family: inherit;
-        }
-
-        .fill-blank-input input[type="text"]:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .fill-blank-input input[type="text"].correct {
-            border-color: var(--success);
-            background: #E8F5E9;
-        }
-
-        .fill-blank-input input[type="text"].incorrect {
-            border-color: var(--error);
-            background: #FFEBEE;
-        }
-
-        .fill-blank-input input[type="text"]:disabled {
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
         
         .feedback-section {
             background: var(--white);
@@ -1413,9 +1376,6 @@
         }
 
         function displayPassage(data) {
-            // IMMEDIATE ALERT
-            alert(`displayPassage called! Has questions: ${!!data.questions}, Questions length: ${data.questions?.length}, First question type: ${data.questions?.[0]?.type}`);
-            
             document.getElementById('passageTitle').textContent = data.title;
             document.getElementById('wordCount').textContent = data.word_count;
             document.getElementById('estimatedTime').textContent = data.estimated_minutes;
@@ -1439,83 +1399,27 @@
                 document.getElementById('vocabularyBox').classList.remove('hidden');
             }
 
-            // ALERT BEFORE CALLING displayQuestions
-            alert(`About to call displayQuestions with ${data.questions?.length} questions`);
-            
             // Display questions
             displayQuestions(data.questions);
-            
-            // ALERT AFTER
-            alert('displayQuestions finished!');
         }
 
         function displayQuestions(questions) {
             const questionsList = document.getElementById('questionsList');
-            
-            // ALERT to confirm function is called
-            alert(`displayQuestions called with ${questions ? questions.length : 0} questions`);
-            
-            if (!questions || questions.length === 0) {
-                questionsList.innerHTML = '<div style="color: red; font-size: 20px;">ERROR: No questions received!</div>';
-                return;
-            }
-            
-            // INLINE DEBUG at top of questions
-            let html = `
-                <div style="background: black; color: lime; padding: 20px; margin: 20px 0; border: 5px solid red; border-radius: 10px; white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow: auto;">
-                    <div style="color: yellow; font-size: 16px; font-weight: bold; margin-bottom: 10px;">🔍 DEBUG: ${questions.length} Questions</div>
-                    ${JSON.stringify(questions, null, 2)}
+            questionsList.innerHTML = questions.map((q, index) => `
+                <div class="question" data-question-id="${index}">
+                    <div class="question-text">
+                        ${index + 1}. ${q.question}
+                    </div>
+                    <div class="options">
+                        ${q.options.map((option, optIndex) => `
+                            <label class="option">
+                                <input type="radio" name="question${index}" value="${option}" data-correct="${option === q.correct_answer}">
+                                <span>${option}</span>
+                            </label>
+                        `).join('')}
+                    </div>
                 </div>
-            `;
-            
-            questions.forEach((q, index) => {
-                if (!q) {
-                    html += `<div style="color: red; border: 3px solid red; padding: 20px; margin: 10px 0;">Question ${index + 1}: NULL/UNDEFINED</div>`;
-                    return;
-                }
-                
-                const questionText = q.question || 'NO QUESTION TEXT';
-                const hasBlank = questionText.includes('__________');
-                
-                // ALWAYS render as text input if has blank in question
-                if (hasBlank) {
-                    html += `
-                        <div style="border: 5px solid green; padding: 20px; margin: 15px 0; background: #e8f5e9;">
-                            <div style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
-                                ${index + 1}. ${questionText}
-                            </div>
-                            <input 
-                                type="text" 
-                                name="question${index}" 
-                                placeholder="TYPE HERE"
-                                data-correct="${q.correct_answer || ''}"
-                                style="width: 100%; padding: 15px; font-size: 18px; border: 3px solid green; background: yellow; font-weight: bold;"
-                            />
-                            <div style="color: green; margin-top: 10px;">✓ TEXT INPUT (has blank in question)</div>
-                        </div>
-                    `;
-                } else {
-                    // Multiple choice
-                    const options = q.options || [q.correct_answer || 'Option 1', 'Option 2', 'Option 3', 'Option 4'];
-                    html += `
-                        <div style="border: 5px solid blue; padding: 20px; margin: 15px 0; background: #e3f2fd;">
-                            <div style="margin-bottom: 15px; font-size: 18px; font-weight: bold;">
-                                ${index + 1}. ${questionText}
-                            </div>
-                            ${options.map((opt, i) => `
-                                <label style="display: block; padding: 10px; margin: 5px 0; background: white;">
-                                    <input type="radio" name="question${index}" value="${opt}">
-                                    <span style="margin-left: 10px;">${opt}</span>
-                                </label>
-                            `).join('')}
-                            <div style="color: blue; margin-top: 10px;">☑ MULTIPLE CHOICE (no blank in question)</div>
-                        </div>
-                    `;
-                }
-            });
-            
-            questionsList.innerHTML = html;
-            alert('Questions rendered!');
+            `).join('');
         }
 
         async function submitAnswers() {
@@ -1524,72 +1428,29 @@
             let allAnswered = true;
 
             currentQuestions.forEach((q, index) => {
-                const questionDiv = document.querySelector(`[data-question-id="${index}"]`);
-                const questionType = questionDiv.getAttribute('data-type');
-                
-                let isCorrect = false;
-                let selectedAnswer = '';
-                
-                if (questionType === 'fill_in_blank') {
-                    // Fill-in-the-blank question
-                    const input = questionDiv.querySelector('input[type="text"]');
-                    const userAnswer = (input.value || '').trim().toLowerCase();
-                    
-                    if (!userAnswer) {
-                        allAnswered = false;
-                        return;
-                    }
-                    
-                    selectedAnswer = input.value;
-                    
-                    // Get accepted answers
-                    const acceptAnswers = JSON.parse(input.getAttribute('data-accept') || '[]');
-                    const correctAnswer = input.getAttribute('data-correct').toLowerCase();
-                    
-                    // Check if answer matches any accepted variation
-                    isCorrect = acceptAnswers.some(acc => 
-                        userAnswer === acc.toLowerCase().trim()
-                    ) || userAnswer === correctAnswer;
-                    
-                    // Visual feedback
-                    if (isCorrect) {
-                        input.classList.add('correct');
-                        input.classList.remove('incorrect');
-                    } else {
-                        input.classList.add('incorrect');
-                        input.classList.remove('correct');
-                    }
-                    input.disabled = true;
-                    
-                } else {
-                    // Multiple choice question
-                    const selected = questionDiv.querySelector('input[type="radio"]:checked');
-                    
-                    if (!selected) {
-                        allAnswered = false;
-                        return;
-                    }
-                    
-                    selectedAnswer = selected.value;
-                    isCorrect = selected.dataset.correct === 'true';
-                    
-                    // Visual feedback
-                    const options = questionDiv.querySelectorAll('input[type="radio"]');
-                    options.forEach(opt => {
-                        if (opt.dataset.correct === 'true') {
-                            opt.parentElement.classList.add('correct');
-                        } else if (opt.checked && opt.dataset.correct !== 'true') {
-                            opt.parentElement.classList.add('incorrect');
-                        }
-                        opt.disabled = true;
-                    });
+                const selected = document.querySelector(`input[name="question${index}"]:checked`);
+                if (!selected) {
+                    allAnswered = false;
+                    return;
                 }
-                
+
+                const isCorrect = selected.dataset.correct === 'true';
                 answers.push({
                     question: q.question,
-                    selected_answer: selectedAnswer,
+                    selected_answer: selected.value,
                     correct_answer: q.correct_answer,
                     is_correct: isCorrect
+                });
+
+                // Visual feedback
+                const options = document.querySelectorAll(`input[name="question${index}"]`);
+                options.forEach(opt => {
+                    if (opt.dataset.correct === 'true') {
+                        opt.parentElement.classList.add('correct');
+                    } else if (opt.checked && opt.dataset.correct !== 'true') {
+                        opt.parentElement.classList.add('incorrect');
+                    }
+                    opt.disabled = true;
                 });
             });
 

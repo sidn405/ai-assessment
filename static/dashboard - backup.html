@@ -2096,11 +2096,11 @@
                 </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link" onclick="showSection('assessment', event); return false;">
-                        <span>📝</span> Take Assessment
+                        <span>📝</span> Interests Assessment
                     </a>
                     <!-- ADD THIS -->
                     <a href="#" class="nav-link" onclick="showSection('placement', event); return false;">
-                        <span>📚</span> Reading Level
+                        <span>📚</span> Reading Assessment
                     </a>
                 </li>
                 <li class="nav-item">
@@ -2181,7 +2181,7 @@
                             <button class="btn btn-primary" onclick="showSection('lessons', event)">
                                 📚 Continue Learning
                             </button>
-                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
+                            <button class="btn btn-secondary" onclick="startReadingLevelTest()">
                                 🔄 Retake Reading Level Test
                             </button>
                         </div>
@@ -2479,7 +2479,7 @@
                     </div>
 
                     <!-- Average Score - Purple Gradient -->
-                    <div style="text-align: center; background: linear-gradient(135deg, #df5653 0%, #96200bcc 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(102,126,234,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="text-align: center; background: linear-gradient(135deg, #2281ee 0%, #0525dacc 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(102,126,234,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⭐</div>
                         <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressAvgScore"></div>
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Average Score</div>
@@ -2692,7 +2692,8 @@
                 <ul class="footer-links">
                     <li><a href="#" onclick="alert('Help Center coming soon!'); return false;">Help Center</a></li>
                     <li><a href="#" onclick="alert('FAQs coming soon!'); return false;">FAQs</a></li>
-                    <li><a href="#" onclick="alert('Contact Support coming soon!'); return false;">Contact Support</a></li>
+                    <li><a href="#" onclick="alert('My Books coming soon!'); return false;">My Books</a></li>
+                    <li><a href="#" onclick="alert('Summer Reading Program coming soon!'); return false;">Summer Reading Program</a></li>
                 </ul>
             </div>
             
@@ -2701,7 +2702,7 @@
                 <ul class="footer-links">
                     <li><a href="#" onclick="alert('Privacy Policy coming soon!'); return false;">Privacy Policy</a></li>
                     <li><a href="#" onclick="alert('Terms of Service coming soon!'); return false;">Terms of Service</a></li>
-                    <li><a href="#" onclick="alert('Accessibility coming soon!'); return false;">Accessibility</a></li>
+                    <li><a href="#" onclick="alert('Accessibity coming soon!'); return false;">Accessibity</a></li>
                 </ul>
             </div>
         </div>
@@ -3151,6 +3152,20 @@
             if (modal) modal.remove();
         }
 
+        function startReadingLevelTest() {
+            console.log('🎯 Starting reading level test...');
+            
+            // Clear any cached level
+            localStorage.removeItem('estimatedLevel');
+            
+            // Mark as taking placement test
+            sessionStorage.setItem('isPlacementTest', 'true');
+            sessionStorage.setItem('audioUnlocked', 'true');
+            
+            // Navigate to reading page
+            window.location.href = '/reading';
+        }
+
         // Load dashboard
         async function loadDashboard() {
             const token = localStorage.getItem('token');
@@ -3235,7 +3250,7 @@
                 console.log('✅ Assessment completed (localStorage flag)');
                 return true;
             }
-            
+
             // Method 2: Check if user has actual interests selected
             try {
                 const u = progressData?.user || JSON.parse(localStorage.getItem("user") || "{}");
@@ -3475,16 +3490,25 @@
         // AMAZON POLLY TTS CONFIGURATION
         // ========================================
 
-        // Replace the loadAWSSDK function with this:
+        let polly = null;
+        let currentAudio = null;
+        let awsReady = false;
+
+        const TUTOR_VOICE = {
+            voiceId: 'Danielle',
+            engine: 'generative'
+        };
+
+        // Load AWS SDK dynamically
         (function loadAWSSDK() {
             if (typeof AWS !== 'undefined' && AWS.Polly) {
                 console.log('✅ AWS SDK already loaded');
+                initializePolly();
                 return;
             }
             
             console.log('📥 Loading AWS SDK...');
             const script = document.createElement('script');
-            // Use the full SDK with all services
             script.src = 'https://sdk.amazonaws.com/js/aws-sdk-2.1563.0.min.js';
             script.async = false;
             script.onload = function() {
@@ -3497,15 +3521,6 @@
             };
             document.head.appendChild(script);
         })();
-
-        let polly = null;
-        let currentAudio = null;
-        let awsReady = false;
-
-        const TUTOR_VOICE = {
-            voiceId: 'Danielle',
-            engine: 'generative'
-        };
 
         // Initialize Polly when AWS SDK is fully loaded
         function initializePolly() {
@@ -3551,10 +3566,187 @@
             }
         }
 
-        // Start initialization after a delay to ensure AWS SDK loads
+        // Speak with Amazon Polly
+        async function speakTutorMessage(text) {
+            console.log('🎤 speakTutorMessage called with:', text?.substring(0, 50));
+            
+            if (!text || !text.trim()) {
+                console.warn('⚠️ Empty text');
+                return;
+            }
+            
+            // Stop any currently playing audio
+            if (currentAudio) {
+                try {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                } catch (e) {
+                    console.warn('Could not stop current audio:', e);
+                }
+                currentAudio = null;
+            }
+            
+            // Check if AWS is ready
+            console.log('🔍 Polly status - awsReady:', awsReady, 'polly:', !!polly);
+            
+            if (!awsReady || !polly) {
+                console.warn('⚠️ Polly not ready, using browser speech');
+                fallbackToWebSpeech(text);
+                return;
+            }
+            
+            try {
+                console.log('🔊 Synthesizing with Polly...');
+                
+                const params = {
+                    Text: text,
+                    OutputFormat: 'mp3',
+                    VoiceId: TUTOR_VOICE.voiceId,
+                    Engine: TUTOR_VOICE.engine,
+                    LanguageCode: 'en-US'
+                };
+                
+                const data = await polly.synthesizeSpeech(params).promise();
+                
+                console.log('✅ Polly synthesis complete, audio size:', data.AudioStream.length, 'bytes');
+                
+                const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                currentAudio = new Audio(audioUrl);
+                
+                currentAudio.onended = () => {
+                    console.log('🎵 Polly playback finished');
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                currentAudio.onerror = (e) => {
+                    console.error('❌ Audio playback error:', e);
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                console.log('▶️ Starting Polly playback...');
+                await currentAudio.play();
+                console.log('✅ Polly playing!');
+                
+            } catch (error) {
+                console.error('❌ Polly error:', error);
+                fallbackToWebSpeech(text);
+            }
+        }
+
+        // Fallback to browser speech
+        function fallbackToWebSpeech(text) {
+            console.log('🔄 Using browser speech synthesis');
+            
+            try {
+                window.speechSynthesis.cancel();
+                
+                const u = new SpeechSynthesisUtterance(text);
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                u.volume = 1.0;
+                
+                const voices = window.speechSynthesis.getVoices() || [];
+                const preferred = voices.find(v =>
+                    /Google US English|Samantha|Female/i.test(v.name)
+                );
+                
+                if (preferred) {
+                    u.voice = preferred;
+                    console.log('Using voice:', preferred.name);
+                }
+                
+                window.speechSynthesis.speak(u);
+            } catch (error) {
+                console.error('Browser speech error:', error);
+            }
+        }
+
+        // Test function
+        function testTutorVoice() {
+            console.log('🧪 Testing tutor voice...');
+            speakTutorMessage("Hello! I'm your reading tutor. I'm here to help you improve your reading skills.");
+        }
+
+        console.log('📝 Polly script loaded');
+
+        // ========================================
+        // WELCOME GREETING SYSTEM
+        // ========================================
+
+        // Wait for Polly to be ready, then play welcome
+        function waitForPollyThenWelcome(userName) {
+            console.log('🔍 Checking Polly readiness - awsReady:', awsReady, 'polly:', !!polly);
+            
+            if (!awsReady || !polly) {
+                console.log('⏳ Waiting for Polly to initialize before welcome...');
+                setTimeout(() => waitForPollyThenWelcome(userName), 300);
+                return;
+            }
+            
+            console.log('✅ Polly confirmed ready! Playing welcome for:', userName);
+            playLoginWelcome(userName);
+        }
+
+        async function playLoginWelcome(userName) {
+            const welcomeMessage = `Hello ${userName}! Welcome to Achieve 365 Reading Rewards.`;
+            const audioUnlocked = sessionStorage.getItem('audioUnlocked') === 'true';
+            
+            console.log('🔊 Audio unlock status:', audioUnlocked);
+            
+            try {
+                console.log('🔔 Attempting to play doorbell...');
+                const doorbell = new Audio('/static/sounds/login.mp3');
+                doorbell.volume = 0.5;
+                
+                const playPromise = doorbell.play();
+                
+                playPromise
+                    .then(() => {
+                        console.log('✅ Doorbell playing successfully!');
+                        
+                        // Speak after doorbell finishes
+                        doorbell.onended = async () => {
+                            console.log('🔔 Doorbell finished, now speaking...');
+                            await speakTutorMessage(welcomeMessage);
+                        };
+                    })
+                    .catch(error => {
+                        console.log('⚠️ Doorbell blocked, speaking message only');
+                        speakTutorMessage(welcomeMessage);
+                    });
+                
+            } catch (error) {
+                console.error('❌ Error with doorbell:', error);
+                await speakTutorMessage(welcomeMessage);
+            }
+        }
+
+        // On dashboard page load - check for welcome greeting
         window.addEventListener('load', function() {
-            console.log('📄 Page loaded, waiting for AWS SDK...');
-            setTimeout(initializePolly, 1000); // Wait 1 second after page load
+            console.log('📄 Dashboard loaded, checking for welcome greeting...');
+            
+            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
+            
+            if (justLoggedIn === 'true') {
+                console.log('✅ Just logged in flag detected');
+                sessionStorage.removeItem('justLoggedIn');
+                
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                const userName = user.full_name?.split(' ')[0] || user.username || 'there';
+                
+                console.log('👤 User name:', userName);
+                
+                // Wait for Polly to be ready
+                setTimeout(() => {
+                    waitForPollyThenWelcome(userName);
+                }, 1500);
+            } else {
+                console.log('ℹ️ No welcome greeting needed (not just logged in)');
+            }
         });
 
         // Speak with Amazon Polly
