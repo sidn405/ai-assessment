@@ -6,7 +6,7 @@ import json
 import os
 from typing import List, Dict, Optional
 from readability import analyze_readability
-
+import re
 
 class ContentGenerator:
     def __init__(self, api_key=None):
@@ -458,72 +458,161 @@ class ContentGenerator:
             ],
             "vocabulary_count": 3
         }
-            
-    def generate_comprehension_questions(self, passage_text, passage_title, num_questions=3):
-        """Generate comprehension questions using GPT-4"""
         
-        prompt = f"""Based on the following passage, create {num_questions} comprehension questions.
+            
+    def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4):
+        """Generate mix of multiple choice and fill-in-the-blank questions"""
+    
+        prompt = f"""
+    You are an expert educator creating comprehension questions for a reading passage.
 
-Passage Title: {passage_title}
+    PASSAGE TITLE: {passage_title}
 
-Passage:
-{passage_text}
+    PASSAGE:
+    {passage_text}
 
-Generate questions that test understanding at different levels (recall, inference, analysis).
+    Generate EXACTLY {num_questions} comprehension questions with this distribution:
+    - 2-3 multiple choice questions
+    - 1-2 fill-in-the-blank questions
 
-Return your response as a JSON array with this exact structure:
-[
+    QUESTION TYPES:
+
+    1. MULTIPLE CHOICE: Standard 4-option questions
+    2. FILL-IN-THE-BLANK: Questions where user types a word or short phrase
+
+    REQUIREMENTS:
+    - Mix question types naturally
+    - Vary difficulty (easier questions first)
+    - Cover different aspects of the passage
+    - Make fill-in-the-blank answers simple (1-3 words)
+    - Ensure only ONE correct answer
+
+    Return as JSON array:
+    [
     {{
-        "question": "Question text here?",
-        "type": "main_idea|detail|inference|vocabulary",
+        "question": "What is the main topic?",
+        "type": "multiple_choice",
         "options": ["Option A", "Option B", "Option C", "Option D"],
-        "correct_answer": "The correct option text",
+        "correct_answer": "Option A",
         "explanation": "Why this is correct",
-        "difficulty": 1-3
+        "difficulty": 1
+    }},
+    {{
+        "question": "The story takes place in a __________.",
+        "type": "fill_in_blank",
+        "correct_answer": "library",
+        "accept_answers": ["library", "public library", "the library"],
+        "explanation": "The passage mentions they met at the library",
+        "difficulty": 2
     }}
-]"""
+    ]
+
+    IMPORTANT:
+    - For fill-in-the-blank, provide "accept_answers" with variations (lowercase)
+    - Keep fill-in-the-blank answers SHORT (1-3 words max)
+    - Make questions age-appropriate
+    - Test different comprehension skills
+    """
 
         try:
-            # NEW API SYNTAX
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model=self.model_name,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at creating educational assessment questions."
-                    },
+                    {"role": "system", "content": "You are an expert educator creating engaging comprehension questions."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=1000,
-                timeout=60
+                max_tokens=2000
             )
             
-            content = response.choices[0].message.content
+            content = response.choices[0].message.content.strip()
             
-            # Extract JSON
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            
-            questions = json.loads(content)
-            # ========== ADD THIS SECTION ==========
-            # Shuffle options for each question to randomize correct answer position
-            import random
-            for q in questions:
-                if 'options' in q and isinstance(q['options'], list):
-                    # Shuffle the options
-                    random.shuffle(q['options'])
-            # =====================================
-            
-            return questions
-            
+            # Extract JSON from response
+            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+            if json_match:
+                questions = json.loads(json_match.group())
+                
+                # Validate and normalize questions
+                validated = []
+                for q in questions[:num_questions]:
+                    # Set default type if missing
+                    if 'type' not in q:
+                        q['type'] = 'multiple_choice'
+                    
+                    # Normalize type names
+                    if q['type'] in ['fill_in_blank', 'fill-in-blank', 'fill_blank']:
+                        q['type'] = 'fill_in_blank'
+                    elif q['type'] in ['multiple_choice', 'mc', 'choice']:
+                        q['type'] = 'multiple_choice'
+                    
+                    # For fill-in-the-blank, ensure accept_answers exists
+                    if q['type'] == 'fill_in_blank':
+                        if 'accept_answers' not in q:
+                            # Create variations of correct answer
+                            base = q['correct_answer'].lower().strip()
+                            q['accept_answers'] = [
+                                base,
+                                f"the {base}",
+                                f"a {base}"
+                            ]
+                        # Remove options if present
+                        q.pop('options', None)
+                    else:
+                        # Multiple choice - ensure options exist
+                        if 'options' not in q or len(q['options']) < 4:
+                            # Create default options if missing
+                            q['options'] = [
+                                q['correct_answer'],
+                                "Another option",
+                                "Different answer",
+                                "Alternative choice"
+                            ]
+                    
+                    validated.append(q)
+                
+                print(f"✓ Generated {len(validated)} mixed-type questions")
+                return validated
+                
+            else:
+                raise ValueError("Could not find JSON in response")
+                
         except Exception as e:
             print(f"Error generating questions: {e}")
-            import traceback
-            traceback.print_exc()
-            return self._get_fallback_questions()
+            # Fallback questions
+            return [
+                {
+                    "question": "What is the main topic of this passage?",
+                    "type": "multiple_choice",
+                    "options": ["The main topic", "Something else", "Another topic", "Different subject"],
+                    "correct_answer": "The main topic",
+                    "explanation": "The passage focuses on this main topic.",
+                    "difficulty": 1
+                },
+                {
+                    "question": "Fill in the blank: The passage is about __________.",
+                    "type": "fill_in_blank",
+                    "correct_answer": passage_title.lower(),
+                    "accept_answers": [passage_title.lower()],
+                    "explanation": "The passage title tells us what it's about.",
+                    "difficulty": 1
+                },
+                {
+                    "question": "What was discussed in the passage?",
+                    "type": "multiple_choice",
+                    "options": ["The topic", "Nothing", "Everything", "Something random"],
+                    "correct_answer": "The topic",
+                    "explanation": "The passage discussed this topic.",
+                    "difficulty": 2
+                },
+                {
+                    "question": "What is one key point from the passage?",
+                    "type": "multiple_choice",
+                    "options": ["A key point", "Unrelated info", "Random fact", "Wrong answer"],
+                    "correct_answer": "A key point",
+                    "explanation": "This was mentioned in the passage.",
+                    "difficulty": 2
+                }
+            ]
     
     def _extract_topics(self, main_topic, interests):
         """Extract relevant topic tags"""

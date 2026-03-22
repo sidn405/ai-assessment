@@ -2058,7 +2058,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         questions = content_generator.generate_comprehension_questions(
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
-            num_questions=3
+            num_questions=4
         )
         
         # Save questions
@@ -5243,7 +5243,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             questions = content_generator.generate_comprehension_questions(
                 passage_text=passage_data.get('content', ''),
                 passage_title=passage_data.get('title', topic),
-                num_questions=3
+                num_questions=4
             )
             print(f"✓ Generated {len(questions)} questions")
         except Exception as q_error:
