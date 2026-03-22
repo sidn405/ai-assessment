@@ -2058,7 +2058,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         questions = content_generator.generate_comprehension_questions(
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
-            num_questions=4
+            num_questions=4,
+            allow_fill_blank=False
         )
         
         # Save questions
