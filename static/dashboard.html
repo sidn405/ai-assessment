@@ -5470,31 +5470,59 @@
                     const questionDiv = document.createElement('div');
                     questionDiv.className = 'question-card';
                     
-                    // Build options HTML safely
-                    let optionsHTML = '';
-                    if (q.options && Array.isArray(q.options)) {
-                        optionsHTML = q.options.map((opt, i) => {
-                            // Escape HTML in option text
-                            const safeOpt = opt.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                            return `
-                                <div class="option" data-question-index="${index}" data-option-index="${i}" data-option-text="${safeOpt}">
-                                    ${opt}
-                                </div>
-                            `;
-                        }).join('');
-                    }
+                    // Check if this is a fill-in-blank question
+                    const isFillBlank = (
+                        q.type === 'fill_in_blank' || 
+                        q.type === 'fill-in-blank' ||
+                        q.type === 'fill_blank' ||
+                        (q.question && q.question.includes('__________'))
+                    );
                     
-                    questionDiv.innerHTML = `
-                        <div class="question-text">${index + 1}. ${q.question || 'Question'}</div>
-                        <div class="options" id="lesson-options-${index}">
-                            ${optionsHTML}
-                        </div>
-                    `;
+                    if (isFillBlank) {
+                        // FILL-IN-BLANK: Render text input
+                        questionDiv.innerHTML = `
+                            <div class="question-text">${index + 1}. ${q.question || 'Question'}</div>
+                            <div class="fill-blank-container" style="margin-top: 1rem;">
+                                <input 
+                                    type="text" 
+                                    class="fill-blank-input" 
+                                    id="fill-blank-${index}"
+                                    data-question-index="${index}"
+                                    data-correct="${q.correct_answer || ''}"
+                                    data-accept='${JSON.stringify(q.accept_answers || [q.correct_answer]).replace(/'/g, "&#39;")}'
+                                    placeholder="Type your answer here..."
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                    style="width: 100%; max-width: 500px; padding: 12px 16px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px; transition: border-color 0.3s;"
+                                />
+                            </div>
+                        `;
+                    } else {
+                        // MULTIPLE CHOICE: Render options
+                        let optionsHTML = '';
+                        if (q.options && Array.isArray(q.options)) {
+                            optionsHTML = q.options.map((opt, i) => {
+                                const safeOpt = opt.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                                return `
+                                    <div class="option" data-question-index="${index}" data-option-index="${i}" data-option-text="${safeOpt}">
+                                        ${opt}
+                                    </div>
+                                `;
+                            }).join('');
+                        }
+                        
+                        questionDiv.innerHTML = `
+                            <div class="question-text">${index + 1}. ${q.question || 'Question'}</div>
+                            <div class="options" id="lesson-options-${index}">
+                                ${optionsHTML}
+                            </div>
+                        `;
+                    }
                     
                     questionsDiv.appendChild(questionDiv);
                 });
                 
-                // Add click handlers using event delegation
+                // Add click handlers for multiple choice options using event delegation
                 questionsDiv.onclick = function(e) {
                     const optionEl = e.target.closest('.option');
                     if (!optionEl) return;
@@ -5505,11 +5533,42 @@
                     
                     selectLessonOption(questionIndex, optionIndex, optionText);
                 };
+                
+                // Add input handlers for fill-in-blank questions
+                const fillBlankInputs = questionsDiv.querySelectorAll('.fill-blank-input');
+                fillBlankInputs.forEach(input => {
+                    input.addEventListener('input', function(e) {
+                        const questionIndex = parseInt(e.target.dataset.questionIndex);
+                        const userAnswer = e.target.value.trim();
+                        
+                        // Store the answer
+                        const question = currentLesson.questions[questionIndex];
+                        lessonAnswers[questionIndex] = {
+                            questionIndex: questionIndex,
+                            question: question.question,
+                            selected: userAnswer,
+                            correct: question.correct_answer || question.correct,
+                            accept_answers: question.accept_answers || [question.correct_answer],
+                            is_fill_blank: true
+                        };
+                        
+                        console.log('Fill-in-blank answer stored:', userAnswer);
+                    });
+                    
+                    // Focus effect
+                    input.addEventListener('focus', function(e) {
+                        e.target.style.borderColor = '#4F46E5';
+                    });
+                    input.addEventListener('blur', function(e) {
+                        e.target.style.borderColor = '#ddd';
+                    });
+                });
+                
                 // Make sure submit button is visible for new lesson
                 const submitBtn = questionsCard.querySelector('button');
                 if (submitBtn) {
                     submitBtn.classList.remove('hidden');
-                    submitBtn.disabled = false; // Also re-enable it
+                    submitBtn.disabled = false;
                 }
                 
                 console.log('Questions rendered successfully');
@@ -5574,26 +5633,62 @@
                 const token = localStorage.getItem('token');
                 const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
                 
-                // Calculate score
-                const correctCount = lessonAnswers.filter(a => a.is_correct).length;
+                // Calculate score - validate fill-in-blank answers
+                lessonAnswers.forEach((answer, index) => {
+                    if (answer && answer.is_fill_blank) {
+                        // Validate fill-in-blank answer
+                        const userAnswer = answer.selected.toLowerCase().trim();
+                        const acceptAnswers = answer.accept_answers || [answer.correct];
+                        const isCorrect = acceptAnswers.some(accepted => 
+                            accepted.toLowerCase().trim() === userAnswer
+                        );
+                        answer.is_correct = isCorrect;
+                    }
+                });
+                
+                const correctCount = lessonAnswers.filter(a => a && a.is_correct).length;
                 const score = Math.round((correctCount / lessonAnswers.length) * 100);
                 
                 console.log('Score:', score, '% (', correctCount, '/', lessonAnswers.length, ')');
                 
                 // Visual feedback on questions
                 lessonAnswers.forEach((answer, index) => {
-                    const options = document.querySelectorAll(`#lesson-options-${index} .option`);
-                    options.forEach(opt => {
-                        const text = opt.dataset.optionText;
-                        if (text === answer.correct) {
-                            opt.style.background = '#d4edda';
-                            opt.style.borderColor = '#28a745';
-                        } else if (text === answer.selected && !answer.is_correct) {
-                            opt.style.background = '#f8d7da';
-                            opt.style.borderColor = '#dc3545';
+                    if (answer.is_fill_blank) {
+                        // Visual feedback for fill-in-blank
+                        const input = document.getElementById(`fill-blank-${index}`);
+                        if (input) {
+                            if (answer.is_correct) {
+                                input.style.borderColor = '#28a745';
+                                input.style.background = '#d4edda';
+                            } else {
+                                input.style.borderColor = '#dc3545';
+                                input.style.background = '#f8d7da';
+                            }
+                            input.disabled = true;
+                            
+                            // Show correct answer below if wrong
+                            if (!answer.is_correct) {
+                                const correctAnswerDiv = document.createElement('div');
+                                correctAnswerDiv.style.cssText = 'margin-top: 8px; padding: 8px; background: #d4edda; border: 1px solid #28a745; border-radius: 4px; color: #155724;';
+                                correctAnswerDiv.textContent = `Correct answer: ${answer.correct}`;
+                                input.parentElement.appendChild(correctAnswerDiv);
+                            }
                         }
-                        opt.style.pointerEvents = 'none';
-                    });
+                    } else {
+                        // Visual feedback for multiple choice
+                        const options = document.querySelectorAll(`#lesson-options-${index} .option`);
+                        options.forEach(opt => {
+                            const text = opt.dataset.optionText;
+                            if (text === answer.correct) {
+                                opt.style.background = '#d4edda';
+                                opt.style.borderColor = '#28a745';
+                            } else if (text === answer.selected && !answer.is_correct) {
+                                opt.style.background = '#f8d7da';
+                                opt.style.borderColor = '#dc3545';
+                            }
+                            opt.style.pointerEvents = 'none';
+                        });
+                    }
                 });
                 
                 try {
