@@ -6685,19 +6685,26 @@
             const gettingStarted = document.getElementById('gettingStarted');
             if (!gettingStarted) return;
 
-            const totalCompleted = Number(progressData?.stats?.total_lessons || 0);
-            const assessmentDone =
-              totalCompleted > 0 ||
-              hasCompletedAssessment(progressData); // reading_level is a default; don't use it
+            // ✅ Check BOTH assessments
+            const hasInterests = hasCompletedAssessment(progressData);  // Interest Assessment
+            const hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true';
+            
+            const bothComplete = hasInterests && hasCompletedReading;
+            
+            console.log('🔍 toggleAssessmentCTA check:', {
+                hasInterests,
+                hasCompletedReading,
+                bothComplete
+            });
 
-
-            // If assessment is done, hide the big CTA card on Overview.
-            if (assessmentDone) {
+            // Only show "Continue Learning" if BOTH assessments are complete
+            if (bothComplete) {
+                console.log('✅ Both assessments complete - showing Continue Learning');
                 gettingStarted.classList.add('hidden');
-                // (optional) show a “Continue Learning” card if you have one:
                 const continueLearning = document.getElementById('continueLearning');
                 if (continueLearning) continueLearning.classList.remove('hidden');
             } else {
+                console.log('📝 At least one assessment incomplete - showing Getting Started');
                 gettingStarted.classList.remove('hidden');
                 const continueLearning = document.getElementById('continueLearning');
                 if (continueLearning) continueLearning.classList.add('hidden');
