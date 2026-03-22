@@ -3432,71 +3432,47 @@
             
             // Message 1: First time on dashboard - guide to Interest Assessment
             if (!hasInterests && !playedMessages.welcomeGuide) {
-                console.log('🎯 Triggering Message 1: Interest Assessment guide');
+                console.log('🎯 Playing navigation: Interest Assessment guide');
                 setTimeout(() => {
-                    console.log('⏰ Timeout fired - displaying interest assessment message');
                     const message = `Click the Interest Assessment button and complete the questions, so we can personalize stories based on your interests.`;
-                    
-                    try {
-                        displayTutorMessage(message, 'happy');
-                        console.log('✅ Message displayed successfully');
-                    } catch (error) {
-                        console.error('❌ Error displaying message:', error);
-                    }
+                    displayTutorMessage(message, 'happy');
                     
                     // Mark as played
                     playedMessages.welcomeGuide = true;
                     localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
-                    console.log('✅ Marked welcomeGuide as played');
-                }, 500); // Short delay after greeting
+                }, 500);
                 return;
             }
             
             // Message 2: After Interest Assessment - guide to Reading Assessment
             if (hasInterests && !hasReadingLevel && !playedMessages.afterInterest) {
-                console.log('🎯 Triggering Message 2: Reading Assessment guide');
+                console.log('🎯 Playing navigation: Reading Assessment guide');
                 setTimeout(() => {
-                    console.log('⏰ Timeout fired - displaying reading assessment message');
                     const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Assessment button.`;
-                    
-                    try {
-                        displayTutorMessage(message, 'happy');
-                        console.log('✅ Message displayed successfully');
-                    } catch (error) {
-                        console.error('❌ Error displaying message:', error);
-                    }
+                    displayTutorMessage(message, 'happy');
                     
                     // Mark as played
                     playedMessages.afterInterest = true;
                     localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
-                    console.log('✅ Marked afterInterest as played');
                 }, 500);
                 return;
             }
             
             // Message 3: After both assessments - guide to lessons
             if (hasInterests && hasReadingLevel && !playedMessages.bothComplete) {
-                console.log('🎯 Triggering Message 3: Both complete guide');
+                console.log('🎯 Playing navigation: Both assessments complete');
                 setTimeout(() => {
-                    console.log('⏰ Timeout fired - displaying both complete message');
                     const message = `Both assessments are complete and your lessons are now personalized to your interests and reading level. Ready to start your learning journey? Click below to explore your customized lessons!`;
-                    
-                    try {
-                        displayTutorMessage(message, 'excited');
-                        console.log('✅ Message displayed successfully');
-                    } catch (error) {
-                        console.error('❌ Error displaying message:', error);
-                    }
+                    displayTutorMessage(message, 'excited');
                     
                     // Mark as played
                     playedMessages.bothComplete = true;
                     localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
-                    console.log('✅ Marked bothComplete as played');
                 }, 500);
                 return;
             }
             
-            console.log('ℹ️ No navigation message to play (all conditions checked)');
+            console.log('ℹ️ No navigation message needed');
         }
 
         // Clear voice navigation when user completes an assessment
@@ -7381,6 +7357,9 @@
             
             // ✅ Clear sessionStorage greeting flag for next login
             sessionStorage.removeItem('greetingPlayed');
+            
+            // ✅ Clear voice navigation flags for next login
+            localStorage.removeItem('voiceNavigationPlayed');
             
             // Redirect to login
             window.location.href = '/';
