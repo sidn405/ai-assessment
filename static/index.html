@@ -1411,6 +1411,8 @@
                           localStorage.setItem('token', data.token);
                           localStorage.setItem('user', JSON.stringify(data.user));
                           sessionStorage.setItem('justLoggedIn', 'true'); // dashboard can still greet
+                          localStorage.setItem('justLoggedIn', 'true');
+                          localStorage.setItem('loginTimestamp', Date.now().toString());
 
                           // ✅ PLAY CHIME HERE (before redirect)
                           await playLoginChime();
@@ -1630,6 +1632,7 @@
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
                     localStorage.setItem('justLoggedIn', 'true');  // Mark as just logged in
+                    localStorage.setItem('loginTimestamp', Date.now().toString());
                     
                     // Redirect to dashboard
                     window.location.href = (data.user.role === 'admin') ? '/admin-dashboard' : '/dashboard';

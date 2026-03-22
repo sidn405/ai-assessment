@@ -3830,11 +3830,26 @@
         window.addEventListener('load', function() {
             console.log('📄 Dashboard loaded, checking for welcome greeting...');
             
-            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
+            // Check BOTH sessionStorage and localStorage
+            const sessionFlag = sessionStorage.getItem('justLoggedIn');
+            const localFlag = localStorage.getItem('justLoggedIn');
+            const loginTime = localStorage.getItem('loginTimestamp');
             
-            if (justLoggedIn === 'true') {
-                console.log('✅ Just logged in flag detected');
+            console.log('🔍 Session flag:', sessionFlag);
+            console.log('🔍 Local flag:', localFlag);
+            console.log('🔍 Login timestamp:', loginTime);
+            
+            // Consider recently logged in if within last 5 seconds
+            const isRecentLogin = loginTime && (Date.now() - parseInt(loginTime) < 5000);
+            console.log('🔍 Is recent login (< 5s):', isRecentLogin);
+            
+            if ((sessionFlag === 'true' || localFlag === 'true') && isRecentLogin) {
+                console.log('✅ Just logged in flag detected (recent login)');
+                
+                // Clear flags
                 sessionStorage.removeItem('justLoggedIn');
+                localStorage.removeItem('justLoggedIn');
+                localStorage.removeItem('loginTimestamp');
                 
                 const user = JSON.parse(localStorage.getItem('user') || '{}');
                 const userName = user.full_name?.split(' ')[0] || user.username || 'there';
@@ -3847,6 +3862,13 @@
                 }, 1500);
             } else {
                 console.log('ℹ️ No welcome greeting needed (not just logged in)');
+                
+                // Clean up stale flags if any
+                if (!isRecentLogin && localFlag === 'true') {
+                    console.log('🧹 Cleaning up stale login flag');
+                    localStorage.removeItem('justLoggedIn');
+                    localStorage.removeItem('loginTimestamp');
+                }
                 
                 // ✅ If no greeting, play voice navigation directly after delay
                 setTimeout(() => {
