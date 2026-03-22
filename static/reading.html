@@ -1807,6 +1807,10 @@
                 sessionStorage.removeItem('showAssessmentModal');
                 console.log('✅ Cleared assessment requirement flags');
                 
+                // ✅ Set reading assessment completion flag
+                localStorage.setItem('hasCompletedReadingAssessment', 'true');
+                console.log('✅ Set reading assessment completion flag');
+                
                 // ✅ Reset voice navigation so "both complete" message plays on dashboard
                 const playedMessages = JSON.parse(localStorage.getItem('voiceNavigationPlayed') || '{}');
                 playedMessages.bothComplete = false;
