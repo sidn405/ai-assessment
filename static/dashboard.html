@@ -3405,6 +3405,87 @@
           speakTutorMessage(message);
         }
 
+        // ========================================
+        // VOICE NAVIGATION GUIDANCE
+        // ========================================
+
+        function playVoiceNavigation() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const studentName = user.full_name ? user.full_name.split(' ')[0] : 'there';
+            
+            // Track which navigation messages have been played
+            const playedMessages = JSON.parse(localStorage.getItem('voiceNavigationPlayed') || '{}');
+            
+            // Check assessment completion status
+            const hasInterests = localStorage.getItem('hasCompletedInterestAssessment') === 'true' || 
+                                 localStorage.getItem('assessmentCompleted') === 'true' ||
+                                 (user.interests && user.interests.length > 0);
+            const hasReadingLevel = user.reading_level && user.reading_level !== 'beginner';
+            
+            console.log('Voice Navigation Check:', {
+                hasInterests,
+                hasReadingLevel,
+                playedMessages
+            });
+            
+            // Message 1: First time on dashboard - guide to Interest Assessment
+            if (!hasInterests && !playedMessages.welcomeGuide) {
+                setTimeout(() => {
+                    const message = `Click the Interest Assessment button and complete the questions, so we can personalize stories based on your interests.`;
+                    displayTutorMessage(message, 'happy');
+                    
+                    // Mark as played
+                    playedMessages.welcomeGuide = true;
+                    localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
+                }, 500); // Short delay after greeting
+                return;
+            }
+            
+            // Message 2: After Interest Assessment - guide to Reading Assessment
+            if (hasInterests && !hasReadingLevel && !playedMessages.afterInterest) {
+                setTimeout(() => {
+                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Assessment button.`;
+                    displayTutorMessage(message, 'happy');
+                    
+                    // Mark as played
+                    playedMessages.afterInterest = true;
+                    localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
+                }, 500);
+                return;
+            }
+            
+            // Message 3: After both assessments - guide to lessons
+            if (hasInterests && hasReadingLevel && !playedMessages.bothComplete) {
+                setTimeout(() => {
+                    const message = `Both assessments are complete and your lessons are now personalized to your interests and reading level. Ready to start your learning journey? Click below to explore your customized lessons!`;
+                    displayTutorMessage(message, 'excited');
+                    
+                    // Mark as played
+                    playedMessages.bothComplete = true;
+                    localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
+                }, 500);
+                return;
+            }
+        }
+
+        // Clear voice navigation when user completes an assessment
+        function resetVoiceNavigation(stage) {
+            const playedMessages = JSON.parse(localStorage.getItem('voiceNavigationPlayed') || '{}');
+            
+            // When interest assessment completes, reset afterInterest message
+            if (stage === 'interest') {
+                playedMessages.afterInterest = false;
+            }
+            
+            // When reading assessment completes, reset bothComplete message
+            if (stage === 'reading') {
+                playedMessages.bothComplete = false;
+            }
+            
+            localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
+        }
+
+
         async function showTutor(context, extra = {}) {
           const token = localStorage.getItem('token');
           if (!token) return;
@@ -3711,17 +3792,37 @@
                         // Speak after doorbell finishes
                         doorbell.onended = async () => {
                             console.log('🔔 Doorbell finished, now speaking...');
-                            await speakTutorMessage(welcomeMessage);
+                            await speakWelcomeAndNavigate(welcomeMessage);
                         };
                     })
                     .catch(error => {
                         console.log('⚠️ Doorbell blocked, speaking message only');
-                        speakTutorMessage(welcomeMessage);
+                        speakWelcomeAndNavigate(welcomeMessage);
                     });
                 
             } catch (error) {
                 console.error('❌ Error with doorbell:', error);
+                await speakWelcomeAndNavigate(welcomeMessage);
+            }
+        }
+
+        // Speak welcome message and then play voice navigation
+        async function speakWelcomeAndNavigate(welcomeMessage) {
+            try {
+                // Speak the welcome message
                 await speakTutorMessage(welcomeMessage);
+                
+                // Wait for welcome message to finish (estimate 3-4 seconds)
+                // Add extra delay to ensure audio completes
+                setTimeout(() => {
+                    console.log('✅ Welcome complete, playing voice navigation...');
+                    playVoiceNavigation();
+                }, 4000); // 4 second delay after welcome starts
+                
+            } catch (error) {
+                console.error('Error with welcome:', error);
+                // Still play navigation even if welcome fails
+                setTimeout(() => playVoiceNavigation(), 2000);
             }
         }
 
@@ -3740,12 +3841,18 @@
                 
                 console.log('👤 User name:', userName);
                 
-                // Wait for Polly to be ready
+                // Wait for Polly to be ready, then play greeting (which calls voice navigation)
                 setTimeout(() => {
                     waitForPollyThenWelcome(userName);
                 }, 1500);
             } else {
                 console.log('ℹ️ No welcome greeting needed (not just logged in)');
+                
+                // ✅ If no greeting, play voice navigation directly after delay
+                setTimeout(() => {
+                    console.log('🎙️ Playing voice navigation without greeting');
+                    playVoiceNavigation();
+                }, 2000);
             }
         });
 
@@ -3886,6 +3993,9 @@
                 document.getElementById('userLevel').textContent = `Reading Level: ${user.reading_level}`;
                 document.getElementById('currentLevel').textContent = user.reading_level;
             }
+            
+            // NOTE: playVoiceNavigation() is now called AFTER the welcome greeting
+            // See playLoginWelcome() and speakWelcomeAndNavigate()
             
             console.log('=== INITIALIZATION COMPLETE ===');
         });
@@ -4342,6 +4452,12 @@
 
                 // Show success message
                 alert('✓ Assessment completed! Next: complete the Reading Level Assessment.');
+
+                // ✅ Reset voice navigation and trigger next message
+                resetVoiceNavigation('interest');
+                setTimeout(() => {
+                    playVoiceNavigation();
+                }, 2000);
 
                 // Navigate to placement section
                 showSection('placement')

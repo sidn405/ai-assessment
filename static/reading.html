@@ -1807,6 +1807,12 @@
                 sessionStorage.removeItem('showAssessmentModal');
                 console.log('✅ Cleared assessment requirement flags');
                 
+                // ✅ Reset voice navigation so "both complete" message plays on dashboard
+                const playedMessages = JSON.parse(localStorage.getItem('voiceNavigationPlayed') || '{}');
+                playedMessages.bothComplete = false;
+                localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
+                console.log('✅ Reset voice navigation for dashboard');
+                
             } catch (error) {
                 console.error('❌ Error saving reading level:', error);
             }
