@@ -4197,7 +4197,12 @@
                     controller.abort();
                 }, 45000); // Increased to 45 seconds to allow for OpenAI timeout + fallback
                 
+                const token = localStorage.getItem('token');
+
                 const response = await fetch('/api/assessment/interest', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`  // ✅ Added
+                    },
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
