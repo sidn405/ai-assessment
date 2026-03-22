@@ -4980,18 +4980,14 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 
         print(f"✓ Interests: {interests}")
 
-        # Placement required check
-        cursor.execute(
-            "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=%s" if USE_POSTGRES
-            else "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=?",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        attempts = (row["c"] if hasattr(row, "keys") else row[0]) or 0
+        # Check if user has completed reading level assessment
+        reading_level = user.get('reading_level') or user.get('level_estimate')
 
-        if attempts < PLACEMENT_MAX_ATTEMPTS:
+        if not reading_level:
             conn.close()
-            raise HTTPException(status_code=409, detail="Placement required")
+            raise HTTPException(status_code=409, detail="Reading level assessment required")
+
+        print(f"✓ Reading level: {reading_level}")
 
         # Recent titles/content for duplicate detection
         cursor.execute(
