@@ -461,32 +461,25 @@ class ContentGenerator:
         
             
     def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4):
-        """Generate mix of multiple choice and fill-in-the-blank questions"""
-    
+        """Generate ONLY multiple choice questions (no fill-in-blank)"""
+        
         prompt = f"""
     You are an expert educator creating comprehension questions for a reading passage.
-
+    
     PASSAGE TITLE: {passage_title}
-
+    
     PASSAGE:
     {passage_text}
-
-    Generate EXACTLY {num_questions} comprehension questions with this distribution:
-    - 2-3 multiple choice questions
-    - 1-2 fill-in-the-blank questions
-
-    QUESTION TYPES:
-
-    1. MULTIPLE CHOICE: Standard 4-option questions
-    2. FILL-IN-THE-BLANK: Questions where user types a word or short phrase
-
+    
+    Generate EXACTLY {num_questions} MULTIPLE CHOICE questions.
+    
     REQUIREMENTS:
-    - Mix question types naturally
+    - ALL questions must be multiple choice with 4 options
     - Vary difficulty (easier questions first)
     - Cover different aspects of the passage
-    - Make fill-in-the-blank answers simple (1-3 words)
-    - Ensure only ONE correct answer
-
+    - Ensure only ONE correct answer per question
+    - Make questions clear and unambiguous
+    
     Return as JSON array:
     [
     {{
@@ -498,25 +491,25 @@ class ContentGenerator:
         "difficulty": 1
     }},
     {{
-        "question": "The story takes place in a __________.",
-        "type": "fill_in_blank",
-        "correct_answer": "library",
-        "accept_answers": ["library", "public library", "the library"],
-        "explanation": "The passage mentions they met at the library",
+        "question": "What did the character do?",
+        "type": "multiple_choice",
+        "options": ["Action A", "Action B", "Action C", "Action D"],
+        "correct_answer": "Action A",
+        "explanation": "The passage states this clearly",
         "difficulty": 2
     }}
     ]
-
+    
     IMPORTANT:
-    - For fill-in-the-blank, provide "accept_answers" with variations (lowercase)
-    - Keep fill-in-the-blank answers SHORT (1-3 words max)
+    - NO fill-in-the-blank questions
+    - ONLY multiple choice questions
     - Make questions age-appropriate
     - Test different comprehension skills
     """
-
+    
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4o-mini",  # Hardcoded - no self.model_name
                 messages=[
                     {"role": "system", "content": "You are an expert educator creating engaging comprehension questions."},
                     {"role": "user", "content": prompt}
@@ -528,49 +521,33 @@ class ContentGenerator:
             content = response.choices[0].message.content.strip()
             
             # Extract JSON from response
+            import re
             json_match = re.search(r'\[.*\]', content, re.DOTALL)
             if json_match:
+                import json
                 questions = json.loads(json_match.group())
                 
-                # Validate and normalize questions
+                # Validate questions - ensure ALL are multiple choice
                 validated = []
                 for q in questions[:num_questions]:
-                    # Set default type if missing
-                    if 'type' not in q:
-                        q['type'] = 'multiple_choice'
+                    # Force type to multiple_choice
+                    q['type'] = 'multiple_choice'
                     
-                    # Normalize type names
-                    if q['type'] in ['fill_in_blank', 'fill-in-blank', 'fill_blank']:
-                        q['type'] = 'fill_in_blank'
-                    elif q['type'] in ['multiple_choice', 'mc', 'choice']:
-                        q['type'] = 'multiple_choice'
+                    # Ensure options exist
+                    if 'options' not in q or len(q['options']) < 4:
+                        q['options'] = [
+                            q.get('correct_answer', 'Option A'),
+                            "Option B",
+                            "Option C",
+                            "Option D"
+                        ]
                     
-                    # For fill-in-the-blank, ensure accept_answers exists
-                    if q['type'] == 'fill_in_blank':
-                        if 'accept_answers' not in q:
-                            # Create variations of correct answer
-                            base = q['correct_answer'].lower().strip()
-                            q['accept_answers'] = [
-                                base,
-                                f"the {base}",
-                                f"a {base}"
-                            ]
-                        # Remove options if present
-                        q.pop('options', None)
-                    else:
-                        # Multiple choice - ensure options exist
-                        if 'options' not in q or len(q['options']) < 4:
-                            # Create default options if missing
-                            q['options'] = [
-                                q['correct_answer'],
-                                "Another option",
-                                "Different answer",
-                                "Alternative choice"
-                            ]
+                    # Remove any fill-in-blank artifacts
+                    q.pop('accept_answers', None)
                     
                     validated.append(q)
                 
-                print(f"✓ Generated {len(validated)} mixed-type questions")
+                print(f"✓ Generated {len(validated)} multiple choice questions")
                 return validated
                 
             else:
@@ -581,7 +558,7 @@ class ContentGenerator:
             import traceback
             traceback.print_exc()
             
-            # CRITICAL: Fill-in-blank questions must NOT have 'options' field
+            # Fallback: ALL multiple choice questions
             return [
                 {
                     "question": "What is the main idea of this passage?",
@@ -589,25 +566,12 @@ class ContentGenerator:
                     "options": [
                         "A story about the topic",
                         "A science experiment",
-                        "A history lesson",  
+                        "A history lesson",
                         "A cooking recipe"
                     ],
                     "correct_answer": "A story about the topic",
                     "explanation": "The passage discusses this main theme.",
                     "difficulty": 1
-                },
-                {
-                    "question": f"Fill in the blank: This passage is about __________.",
-                    "type": "fill_in_blank",
-                    "correct_answer": passage_title.lower() if passage_title else "the topic",
-                    "accept_answers": [
-                        passage_title.lower() if passage_title else "the topic",
-                        "the story",
-                        "this topic"
-                    ],
-                    "explanation": "The passage focuses on this subject.",
-                    "difficulty": 2
-                    # NOTE: NO 'options' field for fill-in-blank!
                 },
                 {
                     "question": "What challenge or situation is described?",
@@ -623,20 +587,32 @@ class ContentGenerator:
                     "difficulty": 2
                 },
                 {
-                    "question": "The main character wanted to __________.",
-                    "type": "fill_in_blank",
-                    "correct_answer": "achieve a goal",
-                    "accept_answers": [
-                        "achieve a goal",
-                        "reach a goal",
-                        "accomplish something",
-                        "succeed"
+                    "question": "What did the main character want to achieve?",
+                    "type": "multiple_choice",
+                    "options": [
+                        "To accomplish a goal",
+                        "To give up",
+                        "To run away",
+                        "To do nothing"
                     ],
+                    "correct_answer": "To accomplish a goal",
                     "explanation": "The passage shows the character working toward something.",
                     "difficulty": 2
-                    # NOTE: NO 'options' field for fill-in-blank!
+                },
+                {
+                    "question": "What was the result of the character's efforts?",
+                    "type": "multiple_choice",
+                    "options": [
+                        "They made a positive impact",
+                        "They gave up completely",
+                        "Nothing changed",
+                        "They moved away"
+                    ],
+                    "correct_answer": "They made a positive impact",
+                    "explanation": "The passage shows positive outcomes.",
+                    "difficulty": 2
                 }
-            ]
+            ][:num_questions]
         
     
     def _extract_topics(self, main_topic, interests):
