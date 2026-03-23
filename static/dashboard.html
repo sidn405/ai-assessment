@@ -2095,17 +2095,18 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('assessment', event); return false;">
-                        <span>📝</span> Interests Assessment
-                    </a>
-                    <!-- ADD THIS -->
-                    <a href="#" class="nav-link" onclick="showSection('placement', event); return false;">
-                        <span>📚</span> Reading Assessment
+                    <a href="#" class="nav-link" onclick="unlockSpeechOnce(); showSection('lessons', event); return false;">
+                        <span>📚</span> My Lessons
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="unlockSpeechOnce(); showSection('lessons', event); return false;">
-                        <span>📚</span> My Lessons
+                    <a href="#" class="nav-link" onclick="showSection('wordgames', event); return false;">
+                        <span>🎮</span> Word Games
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('ebooks', event); return false;">
+                        <span>📖</span> eBooks Library
                     </a>
                 </li>
                 <li class="nav-item">
@@ -2459,6 +2460,131 @@
                 <div id="noLessons" class="card">
                     <p>Lessons will appear here after you complete your assessment.</p>
                     <button class="btn btn-primary" onclick="showSection('assessment', event)">Take Assessment</button>
+                </div>
+            </div>
+
+            <!-- Word Games Section -->
+            <div id="wordgamesSection" class="hidden">
+                <div class="header">
+                    <h1>🎮 Word Games</h1>
+                    <p>Master vocabulary through fun challenges!</p>
+                </div>
+
+                <!-- Game Selection Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+                    
+                    <!-- Word Match Game -->
+                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)'"
+                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow=''"
+                         onclick="startWordGame('word-match')">
+                        <div style="text-align: center;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
+                            <h2 style="color: var(--navy-primary); margin-bottom: 0.5rem;">Word Match</h2>
+                            <p style="color: #666; margin-bottom: 1rem;">Match each vocabulary word to its correct definition</p>
+                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; font-size: 0.9rem; font-weight: 600;">
+                                Quick & Fun
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Which Word Fits Game -->
+                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)'"
+                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow=''"
+                         onclick="startWordGame('word-fits')">
+                        <div style="text-align: center;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">📝</div>
+                            <h2 style="color: var(--navy-primary); margin-bottom: 0.5rem;">Which Word Fits?</h2>
+                            <p style="color: #666; margin-bottom: 1rem;">Fill in the blank with the perfect vocabulary word</p>
+                            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; font-size: 0.9rem; font-weight: 600;">
+                                Build Context
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Word Builder Game -->
+                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)'"
+                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow=''"
+                         onclick="startWordGame('word-builder')">
+                        <div style="text-align: center;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🔤</div>
+                            <h2 style="color: var(--navy-primary); margin-bottom: 0.5rem;">Word Builder</h2>
+                            <p style="color: #666; margin-bottom: 1rem;">Unscramble letters to build vocabulary words</p>
+                            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; font-size: 0.9rem; font-weight: 600;">
+                                Brain Teaser
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Container (shown when game is active) -->
+                <div id="gameContainer" class="hidden">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 2px solid #eee;">
+                            <h2 id="gameTitle" style="color: var(--navy-primary); margin: 0;">Game Loading...</h2>
+                            <button class="btn btn-secondary" onclick="exitGame()">Exit Game</button>
+                        </div>
+                        
+                        <!-- Game Stats -->
+                        <div style="display: flex; gap: 2rem; margin-bottom: 2rem; flex-wrap: wrap;">
+                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem 1.5rem; border-radius: 12px; flex: 1; min-width: 150px;">
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Score</div>
+                                <div id="gameScore" style="font-size: 2rem; font-weight: bold;">0</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 1rem 1.5rem; border-radius: 12px; flex: 1; min-width: 150px;">
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Round</div>
+                                <div id="gameRound" style="font-size: 2rem; font-weight: bold;">1/10</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 1rem 1.5rem; border-radius: 12px; flex: 1; min-width: 150px;">
+                                <div style="font-size: 0.9rem; opacity: 0.9;">Streak</div>
+                                <div id="gameStreak" style="font-size: 2rem; font-weight: bold;">0🔥</div>
+                            </div>
+                        </div>
+
+                        <!-- Game Play Area -->
+                        <div id="gamePlayArea"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- eBooks Library Section -->
+            <div id="ebooksSection" class="hidden">
+                <div class="header">
+                    <h1>📖 eBooks Library</h1>
+                    <p>Discover books tailored to your interests</p>
+                </div>
+
+                <!-- Search and Filters -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                        <input type="text" id="ebookSearch" placeholder="Search for books..." 
+                               style="flex: 1; min-width: 250px; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
+                               onkeyup="if(event.key==='Enter') searchEbooks()">
+                        <button class="btn btn-primary" onclick="searchEbooks()">🔍 Search</button>
+                        <button class="btn btn-secondary" onclick="loadRecommendedBooks()">✨ Recommended for You</button>
+                    </div>
+                    
+                    <!-- Interest Tags -->
+                    <div id="interestTags" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem;"></div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="ebooksLoading" class="hidden" style="text-align: center; padding: 3rem;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">📚</div>
+                    <p style="color: #666; font-size: 1.1rem;">Finding great books for you...</p>
+                </div>
+
+                <!-- Books Grid -->
+                <div id="ebooksGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2rem;"></div>
+
+                <!-- Empty State -->
+                <div id="ebooksEmpty" class="hidden" style="text-align: center; padding: 3rem;">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">📖</div>
+                    <h3 style="color: var(--navy-primary); margin-bottom: 0.5rem;">No books found</h3>
+                    <p style="color: #666;">Try searching for something else or check out our recommendations!</p>
+                    <button class="btn btn-primary" onclick="loadRecommendedBooks()" style="margin-top: 1rem;">Browse Recommendations</button>
                 </div>
             </div>
 
@@ -4149,7 +4275,7 @@
             if (event) event.preventDefault();
 
             // Hide all sections
-            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'progressSection'];
+            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'wordgamesSection', 'ebooksSection', 'progressSection'];
             sections.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -4194,6 +4320,11 @@
                 loadAssessment();
             } else if (sectionName === 'placement') {
                 resetPlacementTest();
+            } else if (sectionName === 'ebooks') {
+                // Load recommended books on first visit
+                if (currentBooks.length === 0) {
+                    loadRecommendedBooks();
+                }
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5410,6 +5541,8 @@
                         showPlacementRequiredModal();
                         return;
                     }
+                    // If 409 but not placement required, throw error with the detail
+                    throw new Error(errorData.detail || 'Conflict error occurred');
                 }
                 
                 if (!response.ok) {
@@ -7780,6 +7913,498 @@
         
         console.log('Profile photo system initialized');
     });
+    
+    // ========================================
+    // WORD GAMES SYSTEM
+    // ========================================
+    
+    let currentGame = null;
+    let gameState = {
+        score: 0,
+        round: 1,
+        totalRounds: 10,
+        streak: 0,
+        vocabulary: [],
+        currentQuestion: null
+    };
+
+    async function startWordGame(gameType) {
+        console.log('🎮 Starting game:', gameType);
+        currentGame = gameType;
+        
+        // Hide game selection, show game container
+        document.querySelectorAll('#wordgamesSection > div').forEach(div => {
+            if (!div.id) div.style.display = 'none';
+        });
+        document.getElementById('gameContainer').classList.remove('hidden');
+        
+        // Reset game state
+        gameState = {
+            score: 0,
+            round: 1,
+            totalRounds: 10,
+            streak: 0,
+            vocabulary: [],
+            currentQuestion: null
+        };
+        
+        // Set game title
+        const titles = {
+            'word-match': '🎯 Word Match',
+            'word-fits': '📝 Which Word Fits?',
+            'word-builder': '🔤 Word Builder'
+        };
+        document.getElementById('gameTitle').textContent = titles[gameType];
+        
+        // Load vocabulary from user's lessons
+        await loadGameVocabulary();
+        
+        // Start first round
+        nextGameRound();
+    }
+
+    async function loadGameVocabulary() {
+        // Get user's interests to generate appropriate vocabulary
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const interests = typeof user.interests === 'string' ? JSON.parse(user.interests) : (user.interests || []);
+        
+        // Sample vocabulary based on reading level
+        const level = user.reading_level || 'intermediate';
+        
+        // Generate vocabulary list (in production, this would come from lessons API)
+        const vocabularyByLevel = {
+            beginner: [
+                { word: 'happy', definition: 'feeling joy or pleasure', sentence: 'She felt ____ when she won the game.' },
+                { word: 'brave', definition: 'showing courage', sentence: 'The ____ firefighter saved the cat.' },
+                { word: 'curious', definition: 'wanting to learn or know', sentence: 'The ____ student asked many questions.' },
+                { word: 'gentle', definition: 'kind and careful', sentence: 'He was very ____ with the puppy.' },
+                { word: 'clever', definition: 'smart and quick-thinking', sentence: 'The ____ fox found a way out.' },
+                { word: 'excited', definition: 'very enthusiastic', sentence: 'They were ____ about the trip.' },
+                { word: 'peaceful', definition: 'calm and quiet', sentence: 'The lake was ____ in the morning.' },
+                { word: 'generous', definition: 'willing to give and share', sentence: 'She was ____ with her toys.' },
+                { word: 'patient', definition: 'able to wait calmly', sentence: 'You need to be ____ while learning.' },
+                { word: 'honest', definition: 'telling the truth', sentence: 'It\'s important to be ____.' }
+            ],
+            intermediate: [
+                { word: 'resilient', definition: 'able to recover from difficulties', sentence: 'The ____ team bounced back after the loss.' },
+                { word: 'ambitious', definition: 'having strong desire to succeed', sentence: 'She was ____ and worked hard for her goals.' },
+                { word: 'innovative', definition: 'introducing new ideas', sentence: 'The ____ scientist created a new invention.' },
+                { word: 'persistent', definition: 'continuing despite challenges', sentence: 'His ____ efforts finally paid off.' },
+                { word: 'thoughtful', definition: 'showing careful consideration', sentence: 'She gave a ____ response to the question.' },
+                { word: 'authentic', definition: 'genuine and real', sentence: 'The museum displayed ____ artifacts.' },
+                { word: 'compassionate', definition: 'showing sympathy and concern', sentence: 'The nurse was ____ toward all patients.' },
+                { word: 'efficient', definition: 'working well without waste', sentence: 'The new system was very ____.' },
+                { word: 'versatile', definition: 'able to adapt to many uses', sentence: 'She is a ____ athlete who plays many sports.' },
+                { word: 'meticulous', definition: 'showing great attention to detail', sentence: 'He was ____ in his work.' }
+            ],
+            advanced: [
+                { word: 'tenacious', definition: 'holding firmly to purpose', sentence: 'Her ____ pursuit of justice inspired others.' },
+                { word: 'eloquent', definition: 'fluent and persuasive in speaking', sentence: 'The ____ speaker moved the audience.' },
+                { word: 'pragmatic', definition: 'dealing with things practically', sentence: 'We need a ____ solution to this problem.' },
+                { word: 'exemplary', definition: 'serving as a desirable model', sentence: 'His ____ behavior set a standard.' },
+                { word: 'profound', definition: 'having deep meaning', sentence: 'The book had a ____ impact on her thinking.' },
+                { word: 'scrupulous', definition: 'very careful and thorough', sentence: 'She was ____ in her research methods.' },
+                { word: 'enigmatic', definition: 'mysterious and puzzling', sentence: 'The ____ message left everyone wondering.' },
+                { word: 'diligent', definition: 'showing care and effort', sentence: 'The ____ student never missed an assignment.' },
+                { word: 'astute', definition: 'showing sharp judgment', sentence: 'The ____ investor made smart choices.' },
+                { word: 'meticulous', definition: 'showing extreme care', sentence: 'She was ____ in planning the event.' }
+            ]
+        };
+        
+        gameState.vocabulary = vocabularyByLevel[level] || vocabularyByLevel.intermediate;
+        
+        // Shuffle vocabulary
+        gameState.vocabulary.sort(() => Math.random() - 0.5);
+    }
+
+    function nextGameRound() {
+        if (gameState.round > gameState.totalRounds) {
+            endGame();
+            return;
+        }
+        
+        // Update UI
+        document.getElementById('gameScore').textContent = gameState.score;
+        document.getElementById('gameRound').textContent = `${gameState.round}/${gameState.totalRounds}`;
+        document.getElementById('gameStreak').textContent = `${gameState.streak}🔥`;
+        
+        // Get current vocabulary item
+        const vocabIndex = (gameState.round - 1) % gameState.vocabulary.length;
+        const vocab = gameState.vocabulary[vocabIndex];
+        
+        // Generate question based on game type
+        switch(currentGame) {
+            case 'word-match':
+                generateWordMatchQuestion(vocab);
+                break;
+            case 'word-fits':
+                generateWordFitsQuestion(vocab);
+                break;
+            case 'word-builder':
+                generateWordBuilderQuestion(vocab);
+                break;
+        }
+    }
+
+    function generateWordMatchQuestion(vocab) {
+        // Create 4 options: 1 correct + 3 distractors
+        const allVocab = gameState.vocabulary;
+        const distractors = allVocab
+            .filter(v => v.word !== vocab.word)
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3)
+            .map(v => v.definition);
+        
+        const options = [vocab.definition, ...distractors].sort(() => Math.random() - 0.5);
+        
+        gameState.currentQuestion = {
+            word: vocab.word,
+            correctAnswer: vocab.definition,
+            options: options
+        };
+        
+        const html = `
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h2 style="font-size: 3rem; color: var(--navy-primary); margin-bottom: 1rem;">${vocab.word}</h2>
+                <p style="color: #666; font-size: 1.1rem;">Match this word to its correct definition:</p>
+            </div>
+            <div style="display: grid; gap: 1rem;">
+                ${options.map((option, index) => `
+                    <button class="game-option" onclick="checkWordMatchAnswer('${option.replace(/'/g, "\\'")}')">
+                        ${option}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+        
+        document.getElementById('gamePlayArea').innerHTML = html;
+    }
+
+    function generateWordFitsQuestion(vocab) {
+        const sentence = vocab.sentence;
+        
+        // Create 4 options: 1 correct + 3 distractors
+        const allVocab = gameState.vocabulary;
+        const distractors = allVocab
+            .filter(v => v.word !== vocab.word)
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3)
+            .map(v => v.word);
+        
+        const options = [vocab.word, ...distractors].sort(() => Math.random() - 0.5);
+        
+        gameState.currentQuestion = {
+            word: vocab.word,
+            correctAnswer: vocab.word,
+            sentence: sentence
+        };
+        
+        const html = `
+            <div style="background: #f8f9fa; padding: 2rem; border-radius: 12px; margin-bottom: 2rem;">
+                <p style="font-size: 1.3rem; color: var(--navy-primary); text-align: center; line-height: 1.6;">
+                    ${sentence.replace('____', '<span style="color: #667eea; font-weight: bold; border-bottom: 3px dashed #667eea; padding: 0 10px;">____</span>')}
+                </p>
+            </div>
+            <p style="text-align: center; color: #666; margin-bottom: 1.5rem; font-size: 1.1rem;">Which word fits best?</p>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                ${options.map((option, index) => `
+                    <button class="game-option" onclick="checkWordFitsAnswer('${option}')">
+                        ${option}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+        
+        document.getElementById('gamePlayArea').innerHTML = html;
+    }
+
+    function generateWordBuilderQuestion(vocab) {
+        const word = vocab.word;
+        const scrambled = word.split('').sort(() => Math.random() - 0.5).join('');
+        
+        gameState.currentQuestion = {
+            word: word,
+            correctAnswer: word,
+            hint: vocab.definition
+        };
+        
+        const html = `
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <div style="background: #f8f9fa; padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                    <h2 style="font-size: 2.5rem; color: var(--navy-primary); letter-spacing: 10px; font-family: monospace;">
+                        ${scrambled.toUpperCase()}
+                    </h2>
+                </div>
+                <p style="color: #666; font-size: 1.1rem; margin-bottom: 0.5rem;">Hint:</p>
+                <p style="color: var(--navy-primary); font-size: 1.2rem; font-weight: 500;">${vocab.definition}</p>
+            </div>
+            <div style="max-width: 400px; margin: 0 auto;">
+                <input type="text" id="wordBuilderInput" 
+                       placeholder="Type the unscrambled word..."
+                       style="width: 100%; padding: 1rem; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 8px; text-align: center; text-transform: lowercase; margin-bottom: 1rem;"
+                       onkeyup="if(event.key==='Enter') checkWordBuilderAnswer()">
+                <button class="btn btn-primary" onclick="checkWordBuilderAnswer()" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                    Submit Answer
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('gamePlayArea').innerHTML = html;
+        setTimeout(() => document.getElementById('wordBuilderInput').focus(), 100);
+    }
+
+    function checkWordMatchAnswer(selected) {
+        const correct = selected === gameState.currentQuestion.correctAnswer;
+        handleGameAnswer(correct);
+    }
+
+    function checkWordFitsAnswer(selected) {
+        const correct = selected.toLowerCase() === gameState.currentQuestion.correctAnswer.toLowerCase();
+        handleGameAnswer(correct);
+    }
+
+    function checkWordBuilderAnswer() {
+        const input = document.getElementById('wordBuilderInput');
+        const answer = input.value.trim().toLowerCase();
+        const correct = answer === gameState.currentQuestion.correctAnswer.toLowerCase();
+        handleGameAnswer(correct);
+    }
+
+    function handleGameAnswer(correct) {
+        if (correct) {
+            gameState.score += 10;
+            gameState.streak++;
+            showGameFeedback(true, 'Correct! 🎉');
+        } else {
+            gameState.streak = 0;
+            showGameFeedback(false, `Not quite. The answer was: ${gameState.currentQuestion.correctAnswer}`);
+        }
+        
+        gameState.round++;
+        
+        setTimeout(() => {
+            nextGameRound();
+        }, 2000);
+    }
+
+    function showGameFeedback(correct, message) {
+        const color = correct ? '#10b981' : '#ef4444';
+        const icon = correct ? '✓' : '✗';
+        
+        const feedback = document.createElement('div');
+        feedback.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: ${color};
+            color: white;
+            padding: 2rem 3rem;
+            border-radius: 16px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 10000;
+            text-align: center;
+        `;
+        feedback.innerHTML = `<div style="font-size: 3rem; margin-bottom: 0.5rem;">${icon}</div>${message}`;
+        
+        document.body.appendChild(feedback);
+        
+        setTimeout(() => {
+            feedback.style.opacity = '0';
+            feedback.style.transition = 'opacity 0.3s';
+            setTimeout(() => feedback.remove(), 300);
+        }, 1700);
+    }
+
+    function endGame() {
+        const percentage = Math.round((gameState.score / (gameState.totalRounds * 10)) * 100);
+        const grade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F';
+        
+        const html = `
+            <div style="text-align: center;">
+                <div style="font-size: 5rem; margin-bottom: 1rem;">🏆</div>
+                <h2 style="color: var(--navy-primary); margin-bottom: 1rem;">Game Complete!</h2>
+                
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 16px; margin-bottom: 2rem;">
+                    <div style="font-size: 4rem; font-weight: bold; margin-bottom: 0.5rem;">${gameState.score}</div>
+                    <div style="font-size: 1.2rem; opacity: 0.9;">Total Points</div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                    <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 12px;">
+                        <div style="font-size: 2rem; color: var(--navy-primary); font-weight: bold;">${percentage}%</div>
+                        <div style="color: #666;">Accuracy</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 12px;">
+                        <div style="font-size: 2rem; color: var(--navy-primary); font-weight: bold;">Grade ${grade}</div>
+                        <div style="color: #666;">Performance</div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="startWordGame('${currentGame}')">Play Again</button>
+                    <button class="btn btn-secondary" onclick="exitGame()">Back to Games</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('gamePlayArea').innerHTML = html;
+    }
+
+    function exitGame() {
+        currentGame = null;
+        document.getElementById('gameContainer').classList.add('hidden');
+        document.querySelectorAll('#wordgamesSection > div').forEach(div => {
+            if (!div.id) div.style.display = '';
+        });
+    }
+
+    // ========================================
+    // EBOOKS LIBRARY SYSTEM
+    // ========================================
+    
+    let currentBooks = [];
+
+    async function searchEbooks() {
+        const query = document.getElementById('ebookSearch').value.trim();
+        if (!query) return;
+        
+        showEbooksLoading();
+        
+        try {
+            // Use Open Library API
+            const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=20`);
+            const data = await response.json();
+            
+            currentBooks = data.docs.map(book => ({
+                title: book.title,
+                author: book.author_name?.[0] || 'Unknown Author',
+                cover: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg` : null,
+                year: book.first_publish_year,
+                key: book.key,
+                subjects: book.subject || []
+            }));
+            
+            displayBooks(currentBooks);
+        } catch (error) {
+            console.error('Error searching books:', error);
+            showEbooksEmpty();
+        }
+    }
+
+    async function loadRecommendedBooks() {
+        showEbooksLoading();
+        
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const interests = typeof user.interests === 'string' ? JSON.parse(user.interests) : (user.interests || []);
+        
+        // Create interest tags
+        const tagsContainer = document.getElementById('interestTags');
+        tagsContainer.innerHTML = interests.map(interest => `
+            <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem; cursor: pointer;"
+                  onclick="searchEbooksByInterest('${interest}')">
+                ${interest}
+            </span>
+        `).join('');
+        
+        // Search for first interest or popular books
+        const query = interests[0] || 'adventure';
+        try {
+            const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=20`);
+            const data = await response.json();
+            
+            currentBooks = data.docs.map(book => ({
+                title: book.title,
+                author: book.author_name?.[0] || 'Unknown Author',
+                cover: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg` : null,
+                year: book.first_publish_year,
+                key: book.key,
+                subjects: book.subject || []
+            }));
+            
+            displayBooks(currentBooks);
+        } catch (error) {
+            console.error('Error loading recommended books:', error);
+            showEbooksEmpty();
+        }
+    }
+
+    function searchEbooksByInterest(interest) {
+        document.getElementById('ebookSearch').value = interest;
+        searchEbooks();
+    }
+
+    function displayBooks(books) {
+        document.getElementById('ebooksLoading').classList.add('hidden');
+        document.getElementById('ebooksEmpty').classList.add('hidden');
+        
+        if (!books || books.length === 0) {
+            showEbooksEmpty();
+            return;
+        }
+        
+        const grid = document.getElementById('ebooksGrid');
+        grid.innerHTML = books.map(book => `
+            <div class="card" style="padding: 0; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
+                 onmouseover="this.style.transform='translateY(-8px)'; this.style.boxShadow='0 12px 24px rgba(0,0,0,0.15)'"
+                 onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow=''"
+                 onclick="openBook('${book.key}')">
+                <div style="aspect-ratio: 2/3; background: ${book.cover ? `url('${book.cover}') center/cover` : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}; display: flex; align-items: center; justify-content: center;">
+                    ${!book.cover ? `<div style="font-size: 3rem; color: white;">📚</div>` : ''}
+                </div>
+                <div style="padding: 1rem;">
+                    <h3 style="font-size: 1rem; color: var(--navy-primary); margin-bottom: 0.5rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                        ${book.title}
+                    </h3>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.25rem;">${book.author}</p>
+                    ${book.year ? `<p style="font-size: 0.75rem; color: #999;">${book.year}</p>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function showEbooksLoading() {
+        document.getElementById('ebooksLoading').classList.remove('hidden');
+        document.getElementById('ebooksEmpty').classList.add('hidden');
+        document.getElementById('ebooksGrid').innerHTML = '';
+    }
+
+    function showEbooksEmpty() {
+        document.getElementById('ebooksLoading').classList.add('hidden');
+        document.getElementById('ebooksEmpty').classList.remove('hidden');
+        document.getElementById('ebooksGrid').innerHTML = '';
+    }
+
+    async function openBook(bookKey) {
+        // Open book in new tab (Open Library reader)
+        window.open(`https://openlibrary.org${bookKey}`, '_blank');
+    }
+
+    // Add CSS for game options
+    const gameStyles = document.createElement('style');
+    gameStyles.textContent = `
+        .game-option {
+            background: white;
+            border: 2px solid #e5e7eb;
+            padding: 1.5rem;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            color: var(--navy-primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        .game-option:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+    `;
+    document.head.appendChild(gameStyles);
     
     </script>
     
