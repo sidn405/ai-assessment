@@ -3872,9 +3872,9 @@
             console.log('🔍 Login timestamp:', loginTime);
             console.log('🔍 Greeting already played this session:', greetingAlreadyPlayed);
             
-            // Consider recently logged in if within last 15 seconds
-            const isRecentLogin = loginTime && (Date.now() - parseInt(loginTime) < 15000);
-            console.log('🔍 Is recent login (< 15s):', isRecentLogin);
+            // Consider recently logged in if within last 30 seconds (increased for new users with slower loads)
+            const isRecentLogin = loginTime && (Date.now() - parseInt(loginTime) < 30000);
+            console.log('🔍 Is recent login (< 30s):', isRecentLogin);
             
             // Play greeting if: fresh login AND haven't played greeting this session yet
             if ((sessionFlag === 'true' || localFlag === 'true') && isRecentLogin && !greetingAlreadyPlayed) {
@@ -3903,7 +3903,7 @@
                     console.log('   Reason: Greeting already played this session');
                 } else if (!isRecentLogin) {
                     console.log('   Reason: Login timestamp too old or missing');
-                    // Clean up stale timestamp if > 15 seconds old
+                    // Clean up stale timestamp if > 30 seconds old
                     if (loginTime && !isRecentLogin) {
                         console.log('🧹 Cleaning up stale login timestamp');
                         localStorage.removeItem('loginTimestamp');
@@ -4527,8 +4527,8 @@
                     playVoiceNavigation();
                 }, 2000);
 
-                // Navigate to placement section
-                showSection('placement')
+                // ✅ Navigate to overview to show "Reading Level Test" button
+                showSection('overview');
 
             
                 // Refresh dashboard to show updated state
@@ -4564,7 +4564,7 @@
                         </ul>
                     ` : ''}
                 </div>
-                <button class="btn btn-primary" onclick="showSection('placement', event)">Continue to Reading Level Test</button>
+                <button class="btn btn-primary" onclick="showSection('overview', event)">Continue</button>
             `;
             
             // Update UI
