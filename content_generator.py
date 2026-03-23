@@ -460,8 +460,71 @@ class ContentGenerator:
         }
         
             
-    def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4):
-        """Generate ONLY multiple choice questions (no fill-in-blank)"""
+    def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4, allow_fill_blank: bool = True):
+        """
+        Generate comprehension questions with optional fill-in-blank
+        
+        Args:
+            passage_text: The passage content
+            passage_title: Title of the passage  
+            num_questions: Number of questions (default 4)
+            allow_fill_blank: If True, mix MC and fill-in-blank. If False, MC only.
+        """
+        
+        if allow_fill_blank:
+            # Mix of question types for lessons
+            type_instruction = """
+    Generate EXACTLY {num_questions} comprehension questions with this distribution:
+    - 2-3 multiple choice questions
+    - 1-2 fill-in-the-blank questions
+    
+    QUESTION TYPES:
+    1. MULTIPLE CHOICE: Standard 4-option questions
+    2. FILL-IN-THE-BLANK: Questions where user types a word or short phrase
+    
+    REQUIREMENTS FOR FILL-IN-BLANK:
+    - Provide "accept_answers" array with variations (lowercase)
+    - Keep answers SHORT (1-3 words max)
+    - Example: "accept_answers": ["library", "public library", "the library"]
+    """
+            json_example = """[
+    {
+        "question": "What is the main topic?",
+        "type": "multiple_choice",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correct_answer": "Option A",
+        "explanation": "Why this is correct",
+        "difficulty": 1
+    },
+    {
+        "question": "The story takes place in a __________.",
+        "type": "fill_in_blank",
+        "correct_answer": "library",
+        "accept_answers": ["library", "public library", "the library"],
+        "explanation": "The passage mentions they met at the library",
+        "difficulty": 2
+    }
+    ]"""
+        else:
+            # Only multiple choice for assessments
+            type_instruction = """
+    Generate EXACTLY {num_questions} MULTIPLE CHOICE questions.
+    
+    REQUIREMENTS:
+    - ALL questions must be multiple choice with 4 options
+    - NO fill-in-the-blank questions
+    - Ensure only ONE correct answer per question
+    """
+            json_example = """[
+    {
+        "question": "What is the main topic?",
+        "type": "multiple_choice",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correct_answer": "Option A",
+        "explanation": "Why this is correct",
+        "difficulty": 1
+    }
+    ]"""
         
         prompt = f"""
     You are an expert educator creating comprehension questions for a reading passage.
@@ -471,45 +534,21 @@ class ContentGenerator:
     PASSAGE:
     {passage_text}
     
-    Generate EXACTLY {num_questions} MULTIPLE CHOICE questions.
-    
-    REQUIREMENTS:
-    - ALL questions must be multiple choice with 4 options
-    - Vary difficulty (easier questions first)
-    - Cover different aspects of the passage
-    - Ensure only ONE correct answer per question
-    - Make questions clear and unambiguous
+    {type_instruction.format(num_questions=num_questions)}
     
     Return as JSON array:
-    [
-    {{
-        "question": "What is the main topic?",
-        "type": "multiple_choice",
-        "options": ["Option A", "Option B", "Option C", "Option D"],
-        "correct_answer": "Option A",
-        "explanation": "Why this is correct",
-        "difficulty": 1
-    }},
-    {{
-        "question": "What did the character do?",
-        "type": "multiple_choice",
-        "options": ["Action A", "Action B", "Action C", "Action D"],
-        "correct_answer": "Action A",
-        "explanation": "The passage states this clearly",
-        "difficulty": 2
-    }}
-    ]
+    {json_example}
     
     IMPORTANT:
-    - NO fill-in-the-blank questions
-    - ONLY multiple choice questions
+    - Vary difficulty (easier questions first)
+    - Cover different aspects of the passage
     - Make questions age-appropriate
     - Test different comprehension skills
     """
     
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # Hardcoded - no self.model_name
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an expert educator creating engaging comprehension questions."},
                     {"role": "user", "content": prompt}
@@ -527,27 +566,42 @@ class ContentGenerator:
                 import json
                 questions = json.loads(json_match.group())
                 
-                # Validate questions - ensure ALL are multiple choice
+                # Validate and normalize questions
                 validated = []
                 for q in questions[:num_questions]:
-                    # Force type to multiple_choice
-                    q['type'] = 'multiple_choice'
+                    # If allow_fill_blank=False, force all to multiple choice
+                    if not allow_fill_blank:
+                        q['type'] = 'multiple_choice'
+                        q.pop('accept_answers', None)
+                    else:
+                        # Normalize type names
+                        if q.get('type') in ['fill_in_blank', 'fill-in-blank', 'fill_blank']:
+                            q['type'] = 'fill_in_blank'
+                        else:
+                            q['type'] = 'multiple_choice'
                     
-                    # Ensure options exist
-                    if 'options' not in q or len(q['options']) < 4:
-                        q['options'] = [
-                            q.get('correct_answer', 'Option A'),
-                            "Option B",
-                            "Option C",
-                            "Option D"
-                        ]
-                    
-                    # Remove any fill-in-blank artifacts
-                    q.pop('accept_answers', None)
+                    # Ensure required fields exist
+                    if q['type'] == 'fill_in_blank':
+                        # Ensure accept_answers exists
+                        if 'accept_answers' not in q:
+                            base = q['correct_answer'].lower().strip()
+                            q['accept_answers'] = [base, f"the {base}", f"a {base}"]
+                        # Remove options field if present
+                        q.pop('options', None)
+                    else:
+                        # Multiple choice - ensure options exist
+                        if 'options' not in q or len(q['options']) < 4:
+                            q['options'] = [
+                                q.get('correct_answer', 'Option A'),
+                                "Option B",
+                                "Option C", 
+                                "Option D"
+                            ]
                     
                     validated.append(q)
                 
-                print(f"✓ Generated {len(validated)} multiple choice questions")
+                question_types = "mixed" if allow_fill_blank else "MC only"
+                print(f"✓ Generated {len(validated)} questions ({question_types})")
                 return validated
                 
             else:
@@ -558,61 +612,79 @@ class ContentGenerator:
             import traceback
             traceback.print_exc()
             
-            # Fallback: ALL multiple choice questions
-            return [
-                {
-                    "question": "What is the main idea of this passage?",
-                    "type": "multiple_choice",
-                    "options": [
-                        "A story about the topic",
-                        "A science experiment",
-                        "A history lesson",
-                        "A cooking recipe"
-                    ],
-                    "correct_answer": "A story about the topic",
-                    "explanation": "The passage discusses this main theme.",
-                    "difficulty": 1
-                },
-                {
-                    "question": "What challenge or situation is described?",
-                    "type": "multiple_choice",
-                    "options": [
-                        "A problem to solve",
-                        "A celebration",
-                        "A vacation",
-                        "A test"
-                    ],
-                    "correct_answer": "A problem to solve",
-                    "explanation": "The passage describes a challenge.",
-                    "difficulty": 2
-                },
-                {
-                    "question": "What did the main character want to achieve?",
-                    "type": "multiple_choice",
-                    "options": [
-                        "To accomplish a goal",
-                        "To give up",
-                        "To run away",
-                        "To do nothing"
-                    ],
-                    "correct_answer": "To accomplish a goal",
-                    "explanation": "The passage shows the character working toward something.",
-                    "difficulty": 2
-                },
-                {
-                    "question": "What was the result of the character's efforts?",
-                    "type": "multiple_choice",
-                    "options": [
-                        "They made a positive impact",
-                        "They gave up completely",
-                        "Nothing changed",
-                        "They moved away"
-                    ],
-                    "correct_answer": "They made a positive impact",
-                    "explanation": "The passage shows positive outcomes.",
-                    "difficulty": 2
-                }
-            ][:num_questions]
+            # Fallback questions based on allow_fill_blank
+            if allow_fill_blank:
+                # Mix of MC and fill-in-blank
+                return [
+                    {
+                        "question": "What is the main idea of this passage?",
+                        "type": "multiple_choice",
+                        "options": ["A story about the topic", "A science experiment", "A history lesson", "A cooking recipe"],
+                        "correct_answer": "A story about the topic",
+                        "explanation": "The passage discusses this main theme.",
+                        "difficulty": 1
+                    },
+                    {
+                        "question": f"Fill in the blank: This passage is about __________.",
+                        "type": "fill_in_blank",
+                        "correct_answer": passage_title.lower() if passage_title else "the topic",
+                        "accept_answers": [passage_title.lower() if passage_title else "the topic", "the story", "this topic"],
+                        "explanation": "The passage focuses on this subject.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "What challenge or situation is described?",
+                        "type": "multiple_choice",
+                        "options": ["A problem to solve", "A celebration", "A vacation", "A test"],
+                        "correct_answer": "A problem to solve",
+                        "explanation": "The passage describes a challenge.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "The main character wanted to __________.",
+                        "type": "fill_in_blank",
+                        "correct_answer": "achieve a goal",
+                        "accept_answers": ["achieve a goal", "reach a goal", "accomplish something", "succeed"],
+                        "explanation": "The passage shows the character working toward something.",
+                        "difficulty": 2
+                    }
+                ][:num_questions]
+            else:
+                # All multiple choice
+                return [
+                    {
+                        "question": "What is the main idea of this passage?",
+                        "type": "multiple_choice",
+                        "options": ["A story about the topic", "A science experiment", "A history lesson", "A cooking recipe"],
+                        "correct_answer": "A story about the topic",
+                        "explanation": "The passage discusses this main theme.",
+                        "difficulty": 1
+                    },
+                    {
+                        "question": "What challenge or situation is described?",
+                        "type": "multiple_choice",
+                        "options": ["A problem to solve", "A celebration", "A vacation", "A test"],
+                        "correct_answer": "A problem to solve",
+                        "explanation": "The passage describes a challenge.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "What did the main character want to achieve?",
+                        "type": "multiple_choice",
+                        "options": ["To accomplish a goal", "To give up", "To run away", "To do nothing"],
+                        "correct_answer": "To accomplish a goal",
+                        "explanation": "The passage shows the character working toward something.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "What was the result of the character's efforts?",
+                        "type": "multiple_choice",
+                        "options": ["They made a positive impact", "They gave up completely", "Nothing changed", "They moved away"],
+                        "correct_answer": "They made a positive impact",
+                        "explanation": "The passage shows positive outcomes.",
+                        "difficulty": 2
+                    }
+                ][:num_questions]
         
     
     def _extract_topics(self, main_topic, interests):
