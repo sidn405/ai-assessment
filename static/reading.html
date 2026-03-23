@@ -1393,9 +1393,13 @@
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('passageSection').classList.remove('hidden');
 
-                // Wait for AWS Polly to be ready before showing tutor
-                waitForPollyThenShowTutor();
-                startEncouragementTimerOnce();
+                // ✅ Only show tutor intro for normal lessons, NOT during placement test
+                if (!isPlacementTest) {
+                    waitForPollyThenShowTutor();
+                    startEncouragementTimerOnce();
+                } else {
+                    console.log('📊 Placement test mode - skipping tutor intro');
+                }
 
                 // Show badge only on actual first passage (not in placement test)
                 if (data.is_first_passage && !isPlacementTest && placementTestProgress.passagesCompleted === 0) {
