@@ -3869,12 +3869,17 @@
         window.addEventListener('load', function() {
             console.log('📄 Dashboard loaded, checking for welcome greeting...');
             
+            // Check for URL parameter (most reliable for new users/fresh redirects)
+            const urlParams = new URLSearchParams(window.location.search);
+            const greetingParam = urlParams.get('greeting') === 'true';
+            
             // Check BOTH sessionStorage and localStorage
             const sessionFlag = sessionStorage.getItem('justLoggedIn');
             const localFlag = localStorage.getItem('justLoggedIn');
             const loginTime = localStorage.getItem('loginTimestamp');
             const greetingAlreadyPlayed = sessionStorage.getItem('greetingPlayed');
             
+            console.log('🔍 URL greeting param:', greetingParam);
             console.log('🔍 Session flag:', sessionFlag);
             console.log('🔍 Local flag:', localFlag);
             console.log('🔍 Login timestamp:', loginTime);
@@ -3884,9 +3889,18 @@
             const isRecentLogin = loginTime && (Date.now() - parseInt(loginTime) < 30000);
             console.log('🔍 Is recent login (< 30s):', isRecentLogin);
             
-            // Play greeting if: fresh login AND haven't played greeting this session yet
-            if ((sessionFlag === 'true' || localFlag === 'true') && isRecentLogin && !greetingAlreadyPlayed) {
-                console.log('✅ Just logged in flag detected (recent login)');
+            // Play greeting if: (URL param OR flags set) AND recent login AND haven't played this session
+            const shouldPlayGreeting = (greetingParam || sessionFlag === 'true' || localFlag === 'true') && 
+                                      isRecentLogin && 
+                                      !greetingAlreadyPlayed;
+            
+            if (shouldPlayGreeting) {
+                console.log('✅ Greeting triggered - clearing URL parameter and playing welcome');
+                
+                // Clean URL by removing greeting parameter
+                if (greetingParam) {
+                    window.history.replaceState({}, '', '/dashboard');
+                }
                 
                 // Mark greeting as played for THIS session (prevents replaying on page refresh)
                 sessionStorage.setItem('greetingPlayed', 'true');
