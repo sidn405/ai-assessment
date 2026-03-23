@@ -3225,19 +3225,27 @@
                 return;
             }
             
-            // ⭐ FIX: Handle undefined isCompleted
-            if (typeof isCompleted === 'undefined') {
-                isCompleted = hasCompletedAssessment();
-            }
+            // ✅ Check BOTH assessments before showing Continue Learning
+            const hasInterests = hasCompletedAssessment();
+            const hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true';
+            const bothComplete = hasInterests && hasCompletedReading;
             
-            if (isCompleted) {
+            console.log('🔍 updateAssessmentStatus check:', {
+                hasInterests,
+                hasCompletedReading,
+                bothComplete,
+                isCompletedParam: isCompleted
+            });
+            
+            // Only show "Continue Learning" if BOTH assessments are complete
+            if (bothComplete) {
                 gettingStarted.classList.add('hidden');
                 continueLearning.classList.remove('hidden');
-                console.log('✅ Assessment marked as completed');
+                console.log('✅ Both assessments complete - showing Continue Learning');
             } else {
                 gettingStarted.classList.remove('hidden');
                 continueLearning.classList.add('hidden');
-                console.log('📝 Assessment not yet completed');
+                console.log('📝 At least one assessment incomplete - showing Getting Started');
             }
         }
 
