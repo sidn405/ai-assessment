@@ -2161,10 +2161,10 @@
                             Start by taking our assessment to help us understand your interests and reading level.
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                            <button class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
+                            <button id="interestAssessmentBtn" class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
                                 📝 Take Assessment
                             </button>
-                            <button class="btn btn-secondary" onclick="showSection('placement', event)">
+                            <button id="readingAssessmentBtn" class="btn btn-secondary" onclick="window.location.href='/reading'">
                                 📊 Reading Level Test
                             </button>
                         </div>
@@ -6696,6 +6696,29 @@
                 hasCompletedReading,
                 bothComplete
             });
+
+            // ✅ Control individual button visibility
+            const interestBtn = document.getElementById('interestAssessmentBtn');
+            const readingBtn = document.getElementById('readingAssessmentBtn');
+            
+            // Hide Interest Assessment button if already complete
+            if (interestBtn) {
+                if (hasInterests) {
+                    interestBtn.classList.add('hidden');
+                    console.log('✅ Hiding Interest Assessment button (already complete)');
+                } else {
+                    interestBtn.classList.remove('hidden');
+                }
+            }
+            
+            // Always show Reading Assessment button until it's complete
+            if (readingBtn) {
+                if (hasCompletedReading) {
+                    readingBtn.classList.add('hidden');
+                } else {
+                    readingBtn.classList.remove('hidden');
+                }
+            }
 
             // Only show "Continue Learning" if BOTH assessments are complete
             if (bothComplete) {
