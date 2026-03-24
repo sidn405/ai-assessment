@@ -2043,7 +2043,7 @@ async def send_message_to_student(
         
         # Verify student exists
         cursor.execute(
-            "SELECT id FROM users WHERE id = %s AND role = 'user'",
+            "SELECT id FROM users WHERE id = %s AND role = 'student'",
             (request.recipient_id,)
         )
         student = cursor.fetchone()
@@ -2170,7 +2170,7 @@ async def get_student_conversation(current_user: dict = Depends(require_user)):
             ORDER BY m.created_at ASC
         """
         
-        student_id = current_user['id']
+        student_id = current_user['user_id']
         admin_id = admin['id']
         cursor.execute(query, (student_id, admin_id, admin_id, student_id))
         messages = cursor.fetchall()
@@ -2213,7 +2213,7 @@ async def send_message_to_teacher(
             RETURNING id, created_at
         """
         
-        cursor.execute(query, (current_user['id'], admin['id'], request.content))
+        cursor.execute(query, (current_user['user_id'], admin['id'], request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
