@@ -8310,6 +8310,13 @@
         nextGameRound();
     }
 
+    // Track used vocabulary words to ensure fresh words each game
+    let usedVocabularyWords = {
+        beginner: new Set(),
+        intermediate: new Set(),
+        advanced: new Set()
+    };
+
     async function loadGameVocabulary() {
         // Get user's interests to generate appropriate vocabulary
         const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -8318,7 +8325,7 @@
         // Sample vocabulary based on reading level
         const level = user.reading_level || 'intermediate';
         
-        // Generate vocabulary list (in production, this would come from lessons API)
+        // Expanded vocabulary list - 30 words per level
         const vocabularyByLevel = {
             beginner: [
                 { word: 'happy', definition: 'feeling joy or pleasure', sentence: 'She felt ____ when she won the game.' },
@@ -8330,7 +8337,27 @@
                 { word: 'peaceful', definition: 'calm and quiet', sentence: 'The lake was ____ in the morning.' },
                 { word: 'generous', definition: 'willing to give and share', sentence: 'She was ____ with her toys.' },
                 { word: 'patient', definition: 'able to wait calmly', sentence: 'You need to be ____ while learning.' },
-                { word: 'honest', definition: 'telling the truth', sentence: 'It\'s important to be ____.' }
+                { word: 'honest', definition: 'telling the truth', sentence: 'It\'s important to be ____.' },
+                { word: 'friendly', definition: 'kind and pleasant', sentence: 'The ____ neighbor helped us move.' },
+                { word: 'careful', definition: 'taking care to avoid danger', sentence: 'Be ____ when crossing the street.' },
+                { word: 'polite', definition: 'having good manners', sentence: 'She was always ____ to everyone.' },
+                { word: 'creative', definition: 'using imagination', sentence: 'The ____ artist painted beautiful pictures.' },
+                { word: 'helpful', definition: 'willing to help', sentence: 'He was very ____ around the house.' },
+                { word: 'strong', definition: 'having great power', sentence: 'The ____ athlete lifted heavy weights.' },
+                { word: 'smart', definition: 'very intelligent', sentence: 'The ____ girl solved the puzzle quickly.' },
+                { word: 'kind', definition: 'caring about others', sentence: 'She was ____ to animals.' },
+                { word: 'proud', definition: 'feeling pleased about something', sentence: 'He was ____ of his work.' },
+                { word: 'confident', definition: 'believing in yourself', sentence: 'She felt ____ before the test.' },
+                { word: 'cheerful', definition: 'happy and positive', sentence: 'His ____ attitude made everyone smile.' },
+                { word: 'lucky', definition: 'having good fortune', sentence: 'She was ____ to win the prize.' },
+                { word: 'quiet', definition: 'making little noise', sentence: 'The library was very ____.' },
+                { word: 'busy', definition: 'having much to do', sentence: 'She was ____ preparing for the party.' },
+                { word: 'neat', definition: 'clean and organized', sentence: 'He kept his room very ____.' },
+                { word: 'bright', definition: 'smart or giving much light', sentence: 'The ____ student got good grades.' },
+                { word: 'quick', definition: 'moving fast', sentence: 'The ____ rabbit ran away.' },
+                { word: 'fair', definition: 'treating everyone equally', sentence: 'The teacher was always ____.' },
+                { word: 'loyal', definition: 'faithful and true', sentence: 'The ____ dog stayed by his side.' },
+                { word: 'calm', definition: 'peaceful and not worried', sentence: 'She stayed ____ during the storm.' }
             ],
             intermediate: [
                 { word: 'resilient', definition: 'able to recover from difficulties', sentence: 'The ____ team bounced back after the loss.' },
@@ -8342,7 +8369,27 @@
                 { word: 'compassionate', definition: 'showing sympathy and concern', sentence: 'The nurse was ____ toward all patients.' },
                 { word: 'efficient', definition: 'working well without waste', sentence: 'The new system was very ____.' },
                 { word: 'versatile', definition: 'able to adapt to many uses', sentence: 'She is a ____ athlete who plays many sports.' },
-                { word: 'meticulous', definition: 'showing great attention to detail', sentence: 'He was ____ in his work.' }
+                { word: 'meticulous', definition: 'showing great attention to detail', sentence: 'He was ____ in his work.' },
+                { word: 'diligent', definition: 'showing care and effort', sentence: 'The ____ student completed all assignments.' },
+                { word: 'confident', definition: 'certain about abilities', sentence: 'She was ____ in her presentation.' },
+                { word: 'determined', definition: 'having firm decision', sentence: 'He was ____ to finish the race.' },
+                { word: 'flexible', definition: 'able to change easily', sentence: 'The ____ schedule worked for everyone.' },
+                { word: 'reliable', definition: 'able to be trusted', sentence: 'She was a ____ friend.' },
+                { word: 'independent', definition: 'not needing help from others', sentence: 'The ____ teenager moved to college.' },
+                { word: 'responsible', definition: 'having duties and can be trusted', sentence: 'He was ____ for feeding the pets.' },
+                { word: 'organized', definition: 'arranged in order', sentence: 'Her ____ notes helped her study.' },
+                { word: 'enthusiastic', definition: 'showing intense excitement', sentence: 'The ____ fans cheered loudly.' },
+                { word: 'dedicated', definition: 'devoted to a task', sentence: 'The ____ teacher stayed late to help.' },
+                { word: 'curious', definition: 'eager to know or learn', sentence: 'The ____ child asked many questions.' },
+                { word: 'analytical', definition: 'using logical thinking', sentence: 'His ____ mind solved complex problems.' },
+                { word: 'diplomatic', definition: 'tactful in dealing with people', sentence: 'Her ____ approach resolved the conflict.' },
+                { word: 'resourceful', definition: 'able to find clever solutions', sentence: 'The ____ explorer survived in the wild.' },
+                { word: 'empathetic', definition: 'understanding others feelings', sentence: 'The ____ counselor listened carefully.' },
+                { word: 'methodical', definition: 'systematic and organized', sentence: 'His ____ approach ensured nothing was missed.' },
+                { word: 'optimistic', definition: 'hopeful about the future', sentence: 'She remained ____ despite setbacks.' },
+                { word: 'practical', definition: 'focused on what works', sentence: 'He gave ____ advice for the problem.' },
+                { word: 'strategic', definition: 'carefully planned', sentence: 'The ____ plan led to success.' },
+                { word: 'cooperative', definition: 'willing to work together', sentence: 'The ____ team finished quickly.' }
             ],
             advanced: [
                 { word: 'tenacious', definition: 'holding firmly to purpose', sentence: 'Her ____ pursuit of justice inspired others.' },
@@ -8354,14 +8401,48 @@
                 { word: 'enigmatic', definition: 'mysterious and puzzling', sentence: 'The ____ message left everyone wondering.' },
                 { word: 'diligent', definition: 'showing care and effort', sentence: 'The ____ student never missed an assignment.' },
                 { word: 'astute', definition: 'showing sharp judgment', sentence: 'The ____ investor made smart choices.' },
-                { word: 'meticulous', definition: 'showing extreme care', sentence: 'She was ____ in planning the event.' }
+                { word: 'meticulous', definition: 'showing extreme care', sentence: 'She was ____ in planning the event.' },
+                { word: 'articulate', definition: 'expressing ideas clearly', sentence: 'The ____ writer explained complex concepts.' },
+                { word: 'judicious', definition: 'having good judgment', sentence: 'The ____ leader made wise decisions.' },
+                { word: 'perspicacious', definition: 'having keen insight', sentence: 'Her ____ observation revealed the truth.' },
+                { word: 'conscientious', definition: 'wishing to do right', sentence: 'The ____ worker double-checked everything.' },
+                { word: 'magnanimous', definition: 'generous and forgiving', sentence: 'His ____ gesture surprised everyone.' },
+                { word: 'sagacious', definition: 'having wisdom', sentence: 'The ____ advisor gave sound counsel.' },
+                { word: 'intrepid', definition: 'fearless and adventurous', sentence: 'The ____ explorer ventured into unknown lands.' },
+                { word: 'indefatigable', definition: 'never tiring', sentence: 'Her ____ energy inspired the team.' },
+                { word: 'quintessential', definition: 'representing the perfect example', sentence: 'He was the ____ scholar.' },
+                { word: 'ubiquitous', definition: 'present everywhere', sentence: 'Smartphones are ____ in modern society.' },
+                { word: 'ameliorate', definition: 'to make better', sentence: 'The policy helped ____ the situation.' },
+                { word: 'discerning', definition: 'showing good judgment', sentence: 'The ____ critic praised the film.' },
+                { word: 'fastidious', definition: 'very attentive to detail', sentence: 'The ____ chef perfected every dish.' },
+                { word: 'gregarious', definition: 'sociable and outgoing', sentence: 'The ____ host made everyone feel welcome.' },
+                { word: 'industrious', definition: 'hardworking and diligent', sentence: 'The ____ student studied every night.' },
+                { word: 'laudable', definition: 'deserving praise', sentence: 'Her ____ efforts helped many people.' },
+                { word: 'candid', definition: 'truthful and straightforward', sentence: 'His ____ feedback was appreciated.' },
+                { word: 'benevolent', definition: 'kind and generous', sentence: 'The ____ donor supported education.' },
+                { word: 'circumspect', definition: 'cautious and prudent', sentence: 'The ____ approach avoided mistakes.' },
+                { word: 'erudite', definition: 'having great knowledge', sentence: 'The ____ professor taught advanced courses.' }
             ]
         };
         
-        gameState.vocabulary = vocabularyByLevel[level] || vocabularyByLevel.intermediate;
+        const allVocab = vocabularyByLevel[level] || vocabularyByLevel.intermediate;
         
-        // Shuffle vocabulary
-        gameState.vocabulary.sort(() => Math.random() - 0.5);
+        // Get fresh 10 words that haven't been used recently
+        const usedWords = usedVocabularyWords[level];
+        const availableWords = allVocab.filter(v => !usedWords.has(v.word));
+        
+        // If we've used all words, reset the used list
+        if (availableWords.length < 10) {
+            usedWords.clear();
+            availableWords.push(...allVocab);
+        }
+        
+        // Shuffle and take first 10
+        availableWords.sort(() => Math.random() - 0.5);
+        gameState.vocabulary = availableWords.slice(0, 10);
+        
+        // Mark these words as used
+        gameState.vocabulary.forEach(v => usedWords.add(v.word));
     }
 
     function nextGameRound() {
@@ -8388,8 +8469,9 @@
             GameEffects.pulseElement(document.getElementById('gameStreak').parentElement);
         }
         
-        // Get current vocabulary item
-        const vocabIndex = (gameState.round - 1) % gameState.vocabulary.length;
+        // Get unique vocabulary item for this round (no repeats)
+        // Since vocabulary was shuffled at game start, just use sequential index
+        const vocabIndex = gameState.round - 1;
         const vocab = gameState.vocabulary[vocabIndex];
         
         // Generate question based on game type
@@ -8420,7 +8502,8 @@
         gameState.currentQuestion = {
             word: vocab.word,
             correctAnswer: vocab.definition,
-            options: options
+            options: options,
+            vocab: vocab  // Store for repeat avoidance
         };
         
         const html = `
@@ -8456,7 +8539,8 @@
         gameState.currentQuestion = {
             word: vocab.word,
             correctAnswer: vocab.word,
-            sentence: sentence
+            sentence: sentence,
+            vocab: vocab  // Store for repeat avoidance
         };
         
         const html = `
@@ -8485,7 +8569,8 @@
         gameState.currentQuestion = {
             word: word,
             correctAnswer: word,
-            hint: vocab.definition
+            hint: vocab.definition,
+            vocab: vocab  // Store for repeat avoidance
         };
         
         const html = `
