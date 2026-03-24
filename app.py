@@ -1943,7 +1943,7 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
             )
             SELECT 
                 u.id,
-                u.first_name || ' ' || u.last_name as student_name,
+                u.full_name as student_name,
                 u.email as student_email,
                 lm.last_message,
                 lm.last_message_time,
@@ -1953,7 +1953,7 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
             LEFT JOIN latest_messages lm ON u.id = lm.student_id
             LEFT JOIN unread_counts uc ON u.id = uc.student_id
             WHERE 
-                u.role = 'user' 
+                u.role = 'student' 
                 AND lm.student_id IS NOT NULL
             ORDER BY lm.last_message_time DESC NULLS LAST
         """
@@ -2001,9 +2001,9 @@ async def get_conversation_messages(
                 m.sender_type,
                 CASE 
                     WHEN m.sender_type = 'admin' THEN 
-                        (SELECT first_name || ' ' || last_name FROM users WHERE id = m.sender_id AND role = 'admin')
+                        (SELECT full_name FROM users WHERE id = m.sender_id AND role = 'admin')
                     ELSE 
-                        (SELECT first_name || ' ' || last_name FROM users WHERE id = m.sender_id AND role = 'user')
+                        (SELECT full_name FROM users WHERE id = m.sender_id AND role = 'student')
                 END as sender_name,
                 m.recipient_id,
                 m.recipient_type,
@@ -2141,7 +2141,7 @@ async def get_student_conversation(current_user: dict = Depends(require_user)):
         
         # Find the admin (teacher)
         cursor.execute(
-            "SELECT id, first_name || ' ' || last_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+            "SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
         )
         admin = cursor.fetchone()
         
