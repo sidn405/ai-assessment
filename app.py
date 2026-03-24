@@ -330,39 +330,6 @@ ADMIN_EMAILS = {
     if e.strip()
 }
 
-def get_current_user(authorization: str = Header(None)) -> dict:
-    """Extract and validate user from Authorization header"""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    token = authorization.replace("Bearer ", "")
-    user = validate_token(token)
-    
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    return user
-
-
-def require_user(authorization: str = Header(None)) -> dict:
-    """Require user to be a student (role='user')"""
-    user = get_current_user(authorization)
-    
-    if user.get('role') != 'user':
-        raise HTTPException(status_code=403, detail="Student access required")
-    
-    return user
-
-
-def require_admin(authorization: str = Header(None)) -> dict:
-    """Require user to be an admin (role='admin')"""
-    user = get_current_user(authorization)
-    
-    if user.get('role') != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    return user
-
 # ============================================
 # STATIC FILE ROUTES
 # ============================================
@@ -482,14 +449,24 @@ async def register(user: UserCreate):
 def get_current_user(authorization: str = Header(None)) -> dict:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization")
+
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
         raise HTTPException(status_code=401, detail="Invalid Authorization format")
-    return verify_token(parts[1])
+
+    payload = verify_token(parts[1])
+    return payload
+
 
 def require_admin(user: dict = Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def require_user(user: dict = Depends(get_current_user)):
+    if user.get("role") not in ("student", "user"):
+        raise HTTPException(status_code=403, detail="Student access required")
     return user
 
 @app.post("/api/login")

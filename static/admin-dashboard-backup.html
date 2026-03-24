@@ -381,20 +381,25 @@
         .modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
             background: rgba(0,0,0,0.7);
-            z-index: 2000;
+            z-index: 10000 !important; /* Very high z-index */
             align-items: center;
             justify-content: center;
+            padding: 1rem;
+            box-sizing: border-box;
+            margin: 0 !important;
         }
-        
+
         .modal.active {
-            display: flex;
+            display: flex !important;
         }
-        
+
         .modal-content {
             background: var(--white);
             padding: 2rem;
@@ -403,6 +408,25 @@
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
+            box-sizing: border-box;
+            position: relative;
+            margin-left: auto;
+            margin-right: auto;
+            transform: translateZ(0); /* Force GPU rendering */
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .modal-content {
+                width: 98%;
+                padding: 0.75rem;
+            }
         }
         
         .close-modal {
@@ -531,7 +555,7 @@
                 top: 0 !important;
                 height: 100vh !important;
                 width: 280px !important;
-                z-index: 1000 !important;
+                z-index: 100 !important;
                 transition: left 0.3s ease !important;
                 overflow-y: auto !important;
             }
@@ -815,6 +839,11 @@
                         <span>📝</span> Essay Alerts
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('invite admin', event); return false;">
+                        <span>✉️</span> Invite Admin
+                    </a>
+                </li>
             </ul>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
@@ -1023,6 +1052,63 @@
                 </div>
             </div>
           
+
+            <!-- Invite Admin Section -->
+            <div id="inviteAdminSection" class="hidden">
+                <div class="header">
+                    <h1>✉️ Invite Administrators</h1>
+                    <p>Send an email invite to grant admin access. Invites expire after 24 hours.</p>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">Send Invite</h3>
+                    <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                        <input id="inviteAdminEmail" type="email" placeholder="admin@example.com"
+                               style="flex:1; min-width: 260px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
+                        <button class="btn btn-primary" type="button" onclick="sendAdminInvite()">Send Invite</button>
+                    </div>
+                    <div id="inviteAdminMsg" class="form-error" style="margin-top: 0.75rem;"></div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">Current Admins</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="students-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminsTableBody">
+                                <tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-top: 0;">Pending Invites</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="students-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Invited</th>
+                                    <th>Expires</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminInvitesTableBody">
+                                <tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
         <!-- Add this as a new section in your admin dashboard -->
 
         <div id="sessionTrackingSection" class="section hidden">
@@ -1142,7 +1228,7 @@
     <style>
     /* Footer Styles */
     .dashboard-footer {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #4c61c2 0%, #231a9e 100%);
         color: white;
         margin-left: 280px;
         padding: 3rem 2rem 1.5rem;
@@ -1243,38 +1329,11 @@
                 <p style="margin-top: 0.5rem; font-style: italic;">Empowering literacy through personalized learning</p>
             </div>
             
-            <div class="footer-section">
-                <h4>Quick Links</h4>
-                <ul class="footer-links">
-                    <li><a href="#" onclick="showSection('overview', event); return false;">Dashboard</a></li>
-                    <li><a href="#" onclick="showSection('lessons', event); return false;">My Lessons</a></li>
-                    <li><a href="#" onclick="showSection('progress', event); return false;">Progress</a></li>
-                    <li><a href="#" onclick="showSection('assessment', event); return false;">Assessment</a></li>
-                </ul>
-            </div>
-            
-            <div class="footer-section">
-                <h4>Resources</h4>
-                <ul class="footer-links">
-                    <li><a href="#" onclick="alert('Help Center coming soon!'); return false;">Help Center</a></li>
-                    <li><a href="#" onclick="alert('FAQs coming soon!'); return false;">FAQs</a></li>
-                    <li><a href="#" onclick="alert('My Books coming soon!'); return false;">My Books</a></li>
-                </ul>
-            </div>
-            
-            <div class="footer-section">
-                <h4>Legal</h4>
-                <ul class="footer-links">
-                    <li><a href="#" onclick="alert('Privacy Policy coming soon!'); return false;">Privacy Policy</a></li>
-                    <li><a href="#" onclick="alert('Terms of Service coming soon!'); return false;">Terms of Service</a></li>
-                    <li><a href="#" onclick="alert('Summer Reading Program coming soon!'); return false;">Summer Reading Program</a></li>
-                </ul>
-            </div>
         </div>
         
         <div class="footer-bottom">
-            <p>&copy; 2025 Achieve 365. All rights reserved.</p>
-            <p>Made with ❤️ for learners everywhere</p>
+            <p>&copy; 2025 Achieve 365. Admin-dashboard All rights reserved.</p>
+            <p>Made with ❤️ for learners everywhere.</p>
         </div>
     </footer>
 
@@ -1283,6 +1342,20 @@
     END OF FOOTER CODE - Paste this entire block after line 2462
     ===============================================================================
     -->
+
+     <div id="deleteStudentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2>⚠️ Delete Student</h2>
+            <p id="deleteStudentMessage" style="margin: 1.5rem 0; font-size: 1.1rem;"></p>
+            <p style="color: var(--danger); margin-bottom: 1.5rem;">
+                <strong>Warning:</strong> This cannot be undone.
+            </p>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteStudent()">Delete</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         let currentUser = null;
@@ -1311,11 +1384,39 @@
             loadOverviewRecentActivity(168); // last 7 days
         });
 
+        async function guardAdminPage() {
+          const token = localStorage.getItem("token");
+          if (!token) {
+              window.location.href = "/";
+              return;
+          }
+        
+          // if you have a /api/me endpoint, use it; otherwise decode role from token on backend
+          const res = await fetch("/api/me", {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+        
+          if (!res.ok) {
+              window.location.href = "/";
+              return;
+          }
+        
+          const me = await res.json();
+          if (me.role !== "admin") {
+              window.location.href = "/dashboard";
+          }
+        }
+
+        guardAdminPage();
+
+
         async function loadAnalytics() {
             const token = localStorage.getItem('token');
             
             try {
-                const response = await fetch(`/api/admin/analytics?token=${token}`);
+                const response = await fetch(`/api/admin/analytics`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
                 
                 document.getElementById('totalStudents').textContent = data.total_students;
@@ -1342,7 +1443,10 @@
             }
 
             try {
-                const resp = await fetch(`/api/admin/platform-activity?token=${token}`);
+                
+                const resp = await fetch(`/api/admin/platform-activity`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 if (resp.ok) {
                     const data = await resp.json();
 
@@ -1455,7 +1559,9 @@
             container.innerHTML = '<p style="color:#666;">Loading recent activity.</p>';
 
             try {
-                const response = await fetch(`/api/admin/activity/recent?token=${encodeURIComponent(token)}&hours=${hours}`);
+                const response = await fetch(`/api/admin/activity/recent?hours=${hours}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 if (!data.success || !Array.isArray(data.activities)) {
@@ -1512,7 +1618,9 @@
                 'session tracking': 'sessionTrackingSection',
                 'sessionTracking': 'sessionTrackingSection',
                 'essay alerts': 'essayAlertsSection',
-                'essayAlerts': 'essayAlertsSection'
+                'essayAlerts': 'essayAlertsSection',
+                'invite admin': 'inviteAdminSection',
+                'inviteAdmin': 'inviteAdminSection'
             };
 
             document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
@@ -1537,6 +1645,10 @@
 
             if (section === 'essay alerts' || section === 'essayAlerts') {
                 loadEssayAlerts();
+            }
+
+            if (section === 'invite admin' || section === 'inviteAdmin') {
+                loadAdminsAndInvites();
             }
 
             if (section === 'session tracking' || section === 'sessionTracking') {
@@ -1574,7 +1686,9 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/reading-level-distribution?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/admin/reading-level-distribution?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 if (data.success && data.distribution && data.distribution.length > 0) {
@@ -1669,7 +1783,9 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/interest-topics?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/admin/interest-topics?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 if (data.success && data.topics && data.topics.length > 0) {
@@ -1768,11 +1884,15 @@
                 console.log('Loading essay alerts...');
                 
                 // Get unread alerts
-                const alertsResp = await fetch(`/api/admin/alerts/unread?token=${encodeURIComponent(token)}`);
+                const alertsResp = await fetch(`/api/admin/alerts/unread?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const alertsData = await alertsResp.json();
                 
                 // Get essays needing review
-                const essaysResp = await fetch(`/api/admin/essays/needs-review?token=${encodeURIComponent(token)}`);
+                const essaysResp = await fetch(`/api/admin/essays/needs-review?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const essaysData = await essaysResp.json();
                 
                 console.log('Alerts:', alertsData);
@@ -2008,11 +2128,19 @@
             currentEssayId = essayId;
             
             document.getElementById('essayDetailsModal').classList.add('active');
+            // Hide sidebar on Windows/small screens
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.style.display = 'none';
+            }
+
             document.getElementById('essayModalTitle').textContent = 'Loading essay...';
             document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
             
             try {
-                const response = await fetch(`/api/admin/essay/${essayId}/details?token=${encodeURIComponent(token)}`);
+                const response = await fetch(`/api/admin/essay/${essayId}/details?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2040,7 +2168,7 @@
 
             
             document.getElementById('essayDetailsContent').innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
                     <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
                         <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Student</div>
                         <div style="font-weight: bold;">${escapeHtml(essay.user_name)}</div>
@@ -2161,33 +2289,55 @@
         }
 
         async function markEssayReviewed() {
-            const token = localStorage.getItem('token');
-            const notes = document.getElementById('adminNotesInput').value;
-            
-            if (!currentEssayId) return;
-            
-            try {
-                const response = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token, notes })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Essay marked as reviewed!');
-                    closeEssayModal();
-                    loadEssayAlerts(); // Reload essays
-                }
-            } catch (error) {
-                console.error('Error marking essay reviewed:', error);
-                alert('Failed to mark essay as reviewed');
+          try {
+            const token = localStorage.getItem("token");
+            const notes = document.getElementById("adminNotesInput")?.value?.trim() || "";
+         
+            if (!currentEssayId) return console.error("No currentEssayId set");
+         
+            const res = await fetch(`/api/admin/essay/${currentEssayId}/mark-reviewed`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+              },
+              body: JSON.stringify({ notes }),
+            });
+         
+            if (!res.ok) {
+              console.log("mark-reviewed failed:", res.status, await res.text());
+              return;
             }
+         
+            console.log("✅ Marked reviewed");
+         
+            // ✅ 1) remove row immediately (make sure your row has data-essay-id)
+            const row = document.querySelector(`[data-essay-id="${currentEssayId}"]`);
+            if (row) row.remove();
+         
+            // ✅ 2) close modal
+            closeEssayModal();
+         
+            // ✅ 3) refresh dashboard counts + list
+            await loadEssayAlerts();
+            await loadEssaysNeedingReview();
+         
+          } catch (e) {
+            console.error("Error marking essay reviewed:", e);
+          }
         }
+
+
+
 
         function closeEssayModal() {
             document.getElementById('essayDetailsModal').classList.remove('active');
+
+            // Show sidebar again
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.style.display = '';
+            }
             document.getElementById('adminNotesInput').value = '';
             currentEssayId = null;
         }
@@ -2209,7 +2359,9 @@
             table.classList.add('hidden');
             
             try {
-                const response = await fetch(`/api/admin/students?token=${token}`);
+                const response = await fetch(`/api/admin/students?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
                 
                 allStudents = data.students;
@@ -2232,7 +2384,11 @@
             if (!token) return;
             
             try {
-                const response = await fetch(`/api/admin/sessions/active?token=${token}`);
+                const token = localStorage.getItem("token");
+                const response = await fetch(`/api/admin/sessions/active`,{
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2338,30 +2494,46 @@
             // You can navigate to student details or show a modal
         }
 
-        function markAlertResolved(alertId) {
-            // TODO: Implement mark as resolved
-            alert(`Mark alert ${alertId} as resolved - implement API call`);
-            // Make API call to mark alert as resolved, then reload
+        let studentToDelete = null;
+
+        function confirmDeleteStudent(studentId, studentName) {
+            studentToDelete = { id: studentId, name: studentName };
+            document.getElementById('deleteStudentMessage').textContent = `Delete ${studentName}?`;
+            document.getElementById('deleteStudentModal').classList.add('active');
         }
 
-        async function viewEssayDetails(essayId) {
-            const token = localStorage.getItem('token');
-            currentEssayId = essayId;
+        function closeDeleteModal() {
+            document.getElementById('deleteStudentModal').classList.remove('active');
+            studentToDelete = null;
+        }
+
+        async function deleteStudent() {
+            if (!studentToDelete) return;
             
-            document.getElementById('essayDetailsModal').classList.add('active');
-            document.getElementById('essayModalTitle').textContent = 'Loading essay...';
-            document.getElementById('essayDetailsContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading essay details...</p></div>';
+            const { id, name } = studentToDelete;
+            const btn = document.getElementById('confirmDeleteBtn');
             
             try {
-                const response = await fetch(`/api/admin/essay/${essayId}/details?token=${encodeURIComponent(token)}`);
-                const data = await response.json();
+                btn.disabled = true;
+                btn.textContent = 'Deleting...';
                 
-                if (data.success) {
-                    displayEssayDetails(data.essay);
-                }
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/admin/student/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Delete failed');
+                
+                closeDeleteModal();
+                alert(`Student ${name} deleted successfully`);
+                await loadStudents();
+                loadDashboardStats();
+                
             } catch (error) {
-                console.error('Error loading essay:', error);
-                document.getElementById('essayDetailsContent').innerHTML = '<p style="color: #dc3545;">Failed to load essay details.</p>';
+                alert(`Error: ${error.message}`);
+                btn.disabled = false;
+                btn.textContent = 'Delete';
             }
         }
 
@@ -2403,7 +2575,12 @@
             const hours = document.getElementById('activityTimeFilter').value;
             
             try {
-                const response = await fetch(`/api/admin/activity/recent?token=${token}&hours=${hours}`);
+                const token = localStorage.getItem("token");
+
+                const response = await fetch(`/api/admin/activity/recent?hours=${hours}`, {
+                headers: { Authorization: `Bearer ${token}` }
+                });
+
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2555,9 +2732,12 @@
                     <td>${levelBadge}</td>
                     <td>${joinDate}</td>
                     <td><span class="badge badge-success">Active</span></td>
-                    <td>
+                    <td style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name}')">
                             View Progress
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="confirmDeleteStudent(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
+                            Delete
                         </button>
                     </td>
                 `;
@@ -2599,7 +2779,11 @@
             const token = localStorage.getItem('token');
             
             try {
-                const response = await fetch(`/api/admin/student/${studentId}/progress?token=${encodeURIComponent(token)}`);
+                const token = localStorage.getItem("token");
+
+                const response = await fetch(`/api/admin/student/${studentId}/progress?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await response.json();
 
                 // Always pass an array
@@ -2689,6 +2873,143 @@
         if (menuIcon) menuIcon.textContent = icon;
         if (menuIconMain) menuIconMain.textContent = icon;
     }
-    </script>
+
+    
+
+        // ========== INVITE ADMIN (EMAIL VIA BACKEND) ==========
+
+        async function loadAdminsAndInvites() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const adminsBody = document.getElementById('adminsTableBody');
+            const invitesBody = document.getElementById('adminInvitesTableBody');
+
+            if (adminsBody) adminsBody.innerHTML = '<tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>';
+            if (invitesBody) invitesBody.innerHTML = '<tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>';
+
+            try {
+                // Current admins
+                const adminsRes = await fetch('/api/admin/admins', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const adminsData = await adminsRes.json();
+
+                if (adminsBody) {
+                    if (!adminsRes.ok) {
+                        adminsBody.innerHTML = `<tr><td colspan="3">Failed to load admins: ${adminsData.detail || adminsRes.status}</td></tr>`;
+                    } else {
+                        const rows = (adminsData.admins || []).map(a => `
+                            <tr>
+                                <td>${a.email || ''}</td>
+                                <td>${a.full_name || ''}</td>
+                                <td>${a.created_at || ''}</td>
+                            </tr>
+                        `).join('');
+                        adminsBody.innerHTML = rows || '<tr><td colspan="3" style="opacity:0.7;">No admins found.</td></tr>';
+                    }
+                }
+
+                // Pending invites
+                const invitesRes = await fetch('/api/admin/invites', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const invitesData = await invitesRes.json();
+
+                if (invitesBody) {
+                    if (!invitesRes.ok) {
+                        invitesBody.innerHTML = `<tr><td colspan="5">Failed to load invites: ${invitesData.detail || invitesRes.status}</td></tr>`;
+                    } else {
+                        const rows = (invitesData.invites || []).map(inv => `
+                            <tr>
+                                <td>${inv.email || ''}</td>
+                                <td>${inv.created_at || ''}</td>
+                                <td>${inv.expires_at || ''}</td>
+                                <td>${inv.status || 'pending'}</td>
+                                <td style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                    <button class="btn btn-secondary" type="button" onclick="resendAdminInvite(${inv.id})">Resend</button>
+                                    <button class="btn btn-danger" type="button" onclick="revokeAdminInvite(${inv.id})">Revoke</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                        invitesBody.innerHTML = rows || '<tr><td colspan="5" style="opacity:0.7;">No pending invites.</td></tr>';
+                    }
+                }
+
+            } catch (err) {
+                if (adminsBody) adminsBody.innerHTML = `<tr><td colspan="3">Error: ${err}</td></tr>`;
+                if (invitesBody) invitesBody.innerHTML = `<tr><td colspan="5">Error: ${err}</td></tr>`;
+            }
+        }
+
+        async function sendAdminInvite() {
+            const token = localStorage.getItem('token');
+            const email = (document.getElementById('inviteAdminEmail')?.value || '').trim();
+            const msg = document.getElementById('inviteAdminMsg');
+
+            if (msg) { msg.textContent = ''; msg.classList.remove('active'); }
+
+            if (!email) {
+                if (msg) { msg.textContent = 'Enter an email address.'; msg.classList.add('active'); }
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/invites', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    if (msg) { msg.textContent = data.detail || 'Failed to send invite.'; msg.classList.add('active'); }
+                    return;
+                }
+
+                if (msg) { msg.textContent = 'Invite sent!'; msg.classList.remove('active'); }
+                document.getElementById('inviteAdminEmail').value = '';
+                await loadAdminsAndInvites();
+
+            } catch (err) {
+                if (msg) { msg.textContent = 'Error sending invite.'; msg.classList.add('active'); }
+            }
+        }
+
+        async function resendAdminInvite(inviteId) {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`/api/admin/invites/${inviteId}/resend`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.detail || 'Failed to resend invite.');
+                await loadAdminsAndInvites();
+            } catch (e) {
+                alert('Error resending invite.');
+            }
+        }
+
+        async function revokeAdminInvite(inviteId) {
+            const token = localStorage.getItem('token');
+            if (!confirm('Revoke this invite?')) return;
+            try {
+                const res = await fetch(`/api/admin/invites/${inviteId}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.detail || 'Failed to revoke invite.');
+                await loadAdminsAndInvites();
+            } catch (e) {
+                alert('Error revoking invite.');
+            }
+        }
+</script>
 </body>
 </html>

@@ -123,7 +123,10 @@ class UserCreate(BaseModel):
     email: str
     password: str
     full_name: str
+    age: Optional[int] = None
     age_band: Optional[str] = None
+    grade_band: Optional[str] = None      # NEW: Student's grade level
+    reading_level: Optional[str] = None   # NEW: Initial reading difficulty
         
 class UserLogin(BaseModel):
     email: str
@@ -220,6 +223,18 @@ def init_db():
             )
         ''')
         
+        # ADD YOUR NEW TABLE HERE:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS reading_level_history (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                previous_level VARCHAR(50),
+                new_level VARCHAR(50),
+                score INTEGER,
+                test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         # Create admin
         admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
         try:
@@ -308,6 +323,14 @@ async def serve_reading():
 async def serve_writing():
     return FileResponse("static/writing.html")
 
+@app.get("/register", response_class=HTMLResponse)
+async def serve_register():
+    response = FileResponse("static/register.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 @app.get("/reset-password")
 async def reset_password_page():
     """Serve the password reset page"""
@@ -329,40 +352,44 @@ ADMIN_EMAILS = set(
     if e.strip()
 )
 
+
 @app.post("/api/register")
 async def register(user: UserCreate):
     conn = get_db()
     cursor = get_cursor(conn)
-
+ 
     password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
-
+ 
     # ✅ Server decides role (email allowlist)
     email_lc = user.email.lower().strip()
     final_role = "admin" if (ADMIN_EMAILS and email_lc in ADMIN_EMAILS) else "student"
-
+ 
     try:
         if USE_POSTGRES:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age_band)
-                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
+                 user.age, user.age_band, user.grade_band, user.reading_level)
             )
             result = cursor.fetchone()
             user_id = result["id"] if isinstance(result, dict) else result[0]
         else:
             cursor.execute(
-                "INSERT INTO users (email, password_hash, full_name, role, age_band) VALUES (?, ?, ?, ?, ?)",
-                (user.email, password_hash.decode('utf-8'), user.full_name, final_role, user.age_band)
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
+                 user.age, user.age_band, user.grade_band, user.reading_level)
             )
             user_id = cursor.lastrowid
-
+ 
         conn.commit()
         
         initialize_new_user(user_id)
-
+ 
         # ✅ token uses final_role
         token = create_token(user_id, final_role)
-
+ 
         return {
             "success": True,
             "token": token,
@@ -370,10 +397,14 @@ async def register(user: UserCreate):
                 "id": user_id,
                 "email": user.email,
                 "full_name": user.full_name,
-                "role": final_role
+                "role": final_role,
+                "age": user.age,                    # ADD THIS
+                "age_band": user.age_band,
+                "grade_band": user.grade_band,      # ADD THIS
+                "reading_level": user.reading_level # ADD THIS
             }
         }
-
+ 
     except (sqlite3.IntegrityError, psycopg2.errors.UniqueViolation):
         conn.rollback()
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -655,201 +686,339 @@ def initialize_new_user(user_id):
 # ASSESSMENT ENDPOINTS (Phase 1 + Phase 2)
 # ============================================
 
-def generate_interest_assessment():
-    """Generate interest assessment questions with OpenAI API v1.0+"""
+def get_age_appropriate_interest_questions(age, grade_band):
+    """
+    Generate age-appropriate interest questions based on student's age and grade
+    """
     
-    # Fallback questions (in case OpenAI fails)
-    fallback_questions = [
-        {
-            "id": 1,
-            "question": "What type of books or stories do you enjoy most?",
-            "category": "genre",
-            "options": ["Fiction", "Non-fiction", "Mystery", "Science Fiction", "Other"]
-        },
-        {
-            "id": 2,
-            "question": "What topics are you most curious about?",
-            "category": "topic",
-            "options": ["Science", "History", "Technology", "Nature", "Other"]
-        },
-        {
-            "id": 3,
-            "question": "Which activities do you find most interesting?",
-            "category": "activity",
-            "options": ["Sports", "Arts & Crafts", "Music", "Gaming", "Other"]
-        },
-        {
-            "id": 4,
-            "question": "What kind of learning do you prefer?",
-            "category": "learning",
-            "options": ["Hands-on activities", "Reading", "Videos", "Discussions", "Other"]
-        },
-        {
-            "id": 5,
-            "question": "What format of content do you like?",
-            "category": "format",
-            "options": ["Short articles", "Long stories", "Comics/Graphics", "Poems", "Other"]
-        },
-        {
-            "id": 6,
-            "question": "What career or job interests you?",
-            "category": "career",
-            "options": ["Doctor/Nurse", "Teacher", "Engineer", "Artist", "Other"]
-        },
-        {
-            "id": 7,
-            "question": "What do you do in your free time?",
-            "category": "hobby",
-            "options": ["Reading", "Playing outside", "Drawing", "Building things", "Other"]
-        },
-        {
-            "id": 8,
-            "question": "What school subject do you like most?",
-            "category": "subject",
-            "options": ["Math", "English", "Science", "Social Studies", "Other"]
-        },
-        {
-            "id": 9,
-            "question": "What type of content would you like to read about?",
-            "category": "content_type",
-            "options": ["Real-life stories", "Fictional adventures", "Educational facts", "How-to guides", "Other"]
-        },
-        {
-            "id": 10,
-            "question": "What's your favorite thing to learn about?",
-            "category": "interest",
-            "options": ["Animals", "Space", "Computers", "People & cultures", "Other"]
-        }
-    ]
+    # Ages 3-7 (Pre-K to 2nd Grade)
+    if age <= 7 or grade_band in ['pre-k', 'kindergarten', '1st', '2nd']:
+        return [
+            {
+                "id": 1,
+                "question": "What do you like to play with?",
+                "category": "play",
+                "options": ["Toys", "Games", "Drawing", "Outside", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What animals do you like?",
+                "category": "animals",
+                "options": ["Dogs", "Cats", "Birds", "Fish", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What colors do you like best?",
+                "category": "colors",
+                "options": ["Blue", "Red", "Green", "Purple", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What do you like to eat?",
+                "category": "food",
+                "options": ["Pizza", "Fruit", "Chicken", "Vegetables", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "Where do you like to go?",
+                "category": "places",
+                "options": ["Park", "Library", "Store", "Friend's house", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What do you like to watch?",
+                "category": "shows",
+                "options": ["Cartoons", "Animals", "Music", "Sports", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "Who do you like to play with?",
+                "category": "social",
+                "options": ["Friends", "Family", "By myself", "Pets", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What makes you happy?",
+                "category": "emotions",
+                "options": ["Playing", "Learning", "Helping", "Making things", "Other"]
+            }
+        ]
     
-    # Try OpenAI enhancement (optional)
-    if OPENAI_API_KEY and content_generator:
-        try:
-            print("Calling OpenAI to generate assessment questions...")
-            
-            from openai import OpenAI
-            client = OpenAI(api_key=OPENAI_API_KEY)
-            
-            response = client.chat.completions.create(
-                model="gpt-4-turbo-preview",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert in educational assessment. You MUST respond with valid JSON only, no additional text."
-                    },
-                    {
-                        "role": "user",
-                        "content": """Generate 10 multiple-choice questions to assess student interests.
-
-CRITICAL: Respond with ONLY valid JSON. No markdown, no explanations, just the JSON array.
-
-Required format:
-[
-    {
-        "id": 1,
-        "question": "Question text here?",
-        "category": "genre",
-        "options": ["Option 1", "Option 2", "Option 3", "Option 4", "Other"]
-    }
-]
-
-Requirements:
-- Exactly 10 questions
-- Each has 5 options
-- Last option is always "Other"
-- Age-appropriate for young adults
-- Friendly, engaging tone"""
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=2000,
-                response_format={"type": "json_object"}  # Force JSON response
-            )
-            
-            content = response.choices[0].message.content.strip()
-            
-            print(f"Raw OpenAI response length: {len(content)} chars")
-            print(f"First 200 chars: {content[:200]}")
-            
-            # Clean up response
-            content = content.strip()
-            
-            # Remove markdown code blocks if present
-            if content.startswith("```"):
-                # Extract content between ``` markers
-                lines = content.split('\n')
-                # Remove first line (```json or ```)
-                lines = lines[1:]
-                # Remove last line if it's ```
-                if lines and lines[-1].strip() == '```':
-                    lines = lines[:-1]
-                content = '\n'.join(lines).strip()
-            
-            # Try to find JSON array or object
-            if not content.startswith('[') and not content.startswith('{'):
-                # Look for first [ or {
-                start_bracket = content.find('[')
-                start_brace = content.find('{')
-                
-                if start_bracket != -1:
-                    content = content[start_bracket:]
-                elif start_brace != -1:
-                    content = content[start_brace:]
-            
-            print(f"Cleaned content first 100 chars: {content[:100]}")
-            
-            # Parse JSON
-            try:
-                parsed = json.loads(content)
-                
-                # Handle if it's wrapped in an object
-                if isinstance(parsed, dict):
-                    if 'questions' in parsed:
-                        questions = parsed['questions']
-                    else:
-                        # Try to find the array
-                        for value in parsed.values():
-                            if isinstance(value, list):
-                                questions = value
-                                break
-                        else:
-                            raise ValueError("No questions array found in response")
-                else:
-                    questions = parsed
-                
-                # Validate structure
-                if not isinstance(questions, list) or len(questions) == 0:
-                    raise ValueError("Invalid questions format")
-                
-                # Ensure all questions have required fields and "Other" option
-                for i, q in enumerate(questions):
-                    if not all(key in q for key in ['id', 'question', 'options']):
-                        raise ValueError(f"Question {i+1} missing required fields")
-                    
-                    if "Other" not in q["options"]:
-                        q["options"].append("Other")
-                    
-                    # Ensure category exists
-                    if "category" not in q:
-                        q["category"] = "general"
-                
-                print(f"✓ Generated {len(questions)} questions with OpenAI")
-                return questions
-                
-            except json.JSONDecodeError as je:
-                print(f"JSON parsing error: {je}")
-                print(f"Failed content: {content[:500]}")
-                raise
-            
-        except Exception as e:
-            print(f"OpenAI error: {e}")
-            import traceback
-            traceback.print_exc()
-            print("Falling back to default questions")
+    # Ages 8-11 (3rd to 5th Grade)
+    elif age <= 11 or grade_band in ['3rd', '4th', '5th', 'elementary']:
+        return [
+            {
+                "id": 1,
+                "question": "What do you like to do after school?",
+                "category": "activities",
+                "options": ["Play sports", "Play video games", "Read", "Draw or make art", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What type of stories do you like?",
+                "category": "stories",
+                "options": ["Adventure", "Funny stories", "Animal stories", "Real-life stories", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What's your favorite subject in school?",
+                "category": "school",
+                "options": ["Math", "Reading", "Science", "Art/Music", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What do you want to learn about?",
+                "category": "topics",
+                "options": ["Animals", "Space", "Sports", "Technology", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What do you like to do with friends?",
+                "category": "social",
+                "options": ["Play games", "Talk", "Make things", "Play sports", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What music do you like?",
+                "category": "music",
+                "options": ["Hip-hop/Rap", "R&B", "Pop", "Gospel", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What would you like to be when you grow up?",
+                "category": "career",
+                "options": ["Doctor/Nurse", "Teacher", "Athlete", "Artist/Musician", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What do you like to watch or follow?",
+                "category": "media",
+                "options": ["Sports", "Music videos", "Gaming", "Funny videos", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "What makes a story interesting to you?",
+                "category": "engagement",
+                "options": ["Action", "Humor", "Learning something", "Relatable characters", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What do you like to create or build?",
+                "category": "creativity",
+                "options": ["Art", "Music", "Stories", "Games", "Other"]
+            }
+        ]
     
-    # Return fallback questions
-    print(f"✓ Using {len(fallback_questions)} fallback questions")
-    return fallback_questions
+    # Ages 12-14 (6th to 8th Grade / Middle School)
+    elif age <= 14 or grade_band in ['6th', '7th', '8th', 'middle']:
+        return [
+            {
+                "id": 1,
+                "question": "What content do you most enjoy?",
+                "category": "content",
+                "options": ["Sports", "Music", "Technology", "Social issues", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What type of stories interest you?",
+                "category": "stories",
+                "options": ["Action/Adventure", "Mystery", "Real-life experiences", "Fantasy/Sci-fi", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What do you spend most of your free time doing?",
+                "category": "activities",
+                "options": ["Gaming", "Sports", "Social media", "Creating content", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What career fields interest you?",
+                "category": "career",
+                "options": ["Medicine/Healthcare", "Technology/Engineering", "Arts/Entertainment", "Business/Entrepreneurship", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What music genre do you listen to most?",
+                "category": "music",
+                "options": ["Hip-hop/Rap", "R&B/Soul", "Pop", "Gospel/Christian", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What topics do you want to learn more about?",
+                "category": "topics",
+                "options": ["Science/Tech", "History/Culture", "Social justice", "Business/Money", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What type of reading do you prefer?",
+                "category": "reading",
+                "options": ["Short articles", "Long stories", "Social media posts", "News/Current events", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What do you follow on social media?",
+                "category": "social_media",
+                "options": ["Sports/Athletes", "Musicians/Artists", "Influencers", "News/Politics", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "What makes you want to read something?",
+                "category": "motivation",
+                "options": ["Relatable to my life", "Teaches me something", "Entertaining", "Helps with school", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What challenges interest you?",
+                "category": "challenges",
+                "options": ["Community issues", "Personal growth", "Academic success", "Creative projects", "Other"]
+            }
+        ]
+    
+    # Ages 15-18 (High School)
+    elif age <= 18 or grade_band in ['9th', '10th', '11th', '12th', 'high']:
+        return [
+            {
+                "id": 1,
+                "question": "What career path are you most interested in?",
+                "category": "career",
+                "options": ["Healthcare", "Technology/Engineering", "Business/Entrepreneurship", "Creative Arts", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What topics are you passionate about?",
+                "category": "passion",
+                "options": ["Social justice", "Technology/Innovation", "Arts/Culture", "Business/Economics", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What type of content do you engage with most?",
+                "category": "content",
+                "options": ["News/Current events", "Entertainment", "Educational content", "Career development", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What reading format do you prefer?",
+                "category": "format",
+                "options": ["Articles (500-1000 words)", "Long-form essays", "Social media threads", "Research/Academic", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What motivates you to read?",
+                "category": "motivation",
+                "options": ["Career preparation", "Personal development", "Entertainment", "Social awareness", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What skills do you want to develop?",
+                "category": "skills",
+                "options": ["Critical thinking", "Communication", "Technical skills", "Leadership", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What music genre resonates with you?",
+                "category": "music",
+                "options": ["Hip-hop/Rap", "R&B/Soul", "Gospel", "Pop/Alternative", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What issues matter most to you?",
+                "category": "issues",
+                "options": ["Education access", "Economic opportunity", "Criminal justice reform", "Environmental justice", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "After high school, what are you planning?",
+                "category": "future",
+                "options": ["4-year college", "Community college", "Trade school", "Work/Entrepreneurship", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What type of stories resonate with you?",
+                "category": "stories",
+                "options": ["Coming-of-age narratives", "Social commentary", "Success stories", "Historical perspectives", "Other"]
+            }
+        ]
+    
+    # Ages 19+ (Adult / College / Professional)
+    else:
+        return [
+            {
+                "id": 1,
+                "question": "What are your primary professional interests?",
+                "category": "career",
+                "options": ["Career advancement", "Entrepreneurship", "Industry knowledge", "Continuing education", "Other"]
+            },
+            {
+                "id": 2,
+                "question": "What type of reading supports your goals?",
+                "category": "reading",
+                "options": ["Professional development", "Industry news", "Academic research", "Personal growth", "Other"]
+            },
+            {
+                "id": 3,
+                "question": "What topics are most relevant to your work?",
+                "category": "work",
+                "options": ["Technology/Innovation", "Business strategy", "Leadership", "Social impact", "Other"]
+            },
+            {
+                "id": 4,
+                "question": "What content format works best for you?",
+                "category": "format",
+                "options": ["Articles (1000+ words)", "Case studies", "Research papers", "Industry reports", "Other"]
+            },
+            {
+                "id": 5,
+                "question": "What drives your learning?",
+                "category": "motivation",
+                "options": ["Career growth", "Skill development", "Community impact", "Personal fulfillment", "Other"]
+            },
+            {
+                "id": 6,
+                "question": "What professional skills are you developing?",
+                "category": "skills",
+                "options": ["Leadership", "Technical expertise", "Communication", "Strategic thinking", "Other"]
+            },
+            {
+                "id": 7,
+                "question": "What issues are you focused on?",
+                "category": "issues",
+                "options": ["Economic empowerment", "Educational equity", "Community development", "Social justice", "Other"]
+            },
+            {
+                "id": 8,
+                "question": "What content helps you most?",
+                "category": "content",
+                "options": ["How-to guides", "Best practices", "Case studies", "Research findings", "Other"]
+            },
+            {
+                "id": 9,
+                "question": "What are your long-term goals?",
+                "category": "goals",
+                "options": ["Career success", "Business ownership", "Community leadership", "Lifelong learning", "Other"]
+            },
+            {
+                "id": 10,
+                "question": "What perspectives interest you?",
+                "category": "perspective",
+                "options": ["Innovation/Future trends", "Historical context", "Community voices", "Expert analysis", "Other"]
+            }
+        ]
+
+def generate_interest_assessment(age=None, grade_band=None):
+    """Generate age-appropriate interest assessment questions"""
+    
+    # If age/grade not provided, use generic questions
+    if not age or not grade_band:
+        age = 12  # Default to middle school
+        grade_band = 'middle'
+    
+    print(f"Generating interest assessment for age={age}, grade={grade_band}")
+    
+    # Get age-appropriate questions
+    questions = get_age_appropriate_interest_questions(age, grade_band)
+    
+    print(f"✓ Generated {len(questions)} age-appropriate questions")
+    return questions
 
 async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     """Analyze assessment answers to determine interests and reading level"""
@@ -932,27 +1101,126 @@ async def analyze_assessment_results(answers: List[Dict]) -> Dict:
     }
 
 @app.get("/api/assessment/interest")
-def get_interest_assessment():  # ← Remove 'async'
-    """Get interest assessment questions"""
+async def get_interest_assessment(request: Request, token: str = None):
+    """Get age-appropriate interest assessment questions for the user"""
     try:
-        print("Assessment endpoint called - generating questions...")
-        questions = generate_interest_assessment()  # ← Remove 'await'
+        # Try to get token from header first, then query param
+        if not token:
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
+                token = auth_header.replace('Bearer ', '')
         
-        if not questions:
-            raise HTTPException(status_code=500, detail="Failed to generate assessment")
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing authorization token")
         
-        print(f"✓ Returning {len(questions)} questions")
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        
+        # Use dict cursor
+        if USE_POSTGRES:
+            import psycopg2.extras
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        else:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+        
+        # Fetch user's age and grade
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT age, grade_band 
+                FROM users 
+                WHERE id = %s
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT age, grade_band 
+                FROM users 
+                WHERE id = ?
+            """, (user_id,))
+        
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user:
+            age = user['age'] or 7
+            grade_band = user['grade_band'] or 'elementary'
+            print(f"📚 Interest assessment for user {user_id}: age={age}, grade={grade_band}")
+        else:
+            # Default if not found
+            age = 7
+            grade_band = 'elementary'
+            print(f"⚠️ User {user_id} not found, using defaults: age={age}, grade={grade_band}")
+        
+        # Generate age-appropriate questions
+        questions = generate_interest_assessment(age, grade_band)
+        print(f"✓ Generated {len(questions)} questions for {age}yo in {grade_band}")
+        
+        return {"questions": questions}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting interest assessment: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return age-appropriate default questions
+        questions = generate_interest_assessment(7, 'elementary')
+        return {"questions": questions}
+    
+@app.get("/api/user/assessment-status")
+async def get_assessment_status(request: Request):
+    """Check if user has completed their initial assessment"""
+    try:
+        # Get token from Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Missing authorization token")
+        
+        token = auth_header.replace('Bearer ', '')
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Check if user has interest_tags (completed interest assessment)
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT interest_tags, total_passages_read
+                FROM users 
+                WHERE id = %s
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT interest_tags, total_passages_read
+                FROM users 
+                WHERE id = ?
+            """, (user_id,))
+        
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            return {"assessment_complete": False}
+        
+        interest_tags = user['interest_tags'] if hasattr(user, 'keys') else user[0]
+        total_read = user['total_passages_read'] if hasattr(user, 'keys') else user[1]
+        
+        # Assessment is complete if they have interests (took interest assessment)
+        assessment_complete = bool(interest_tags and interest_tags != '[]')
         
         return {
-            "success": True,
-            "questions": questions
+            "assessment_complete": assessment_complete,
+            "has_interests": bool(interest_tags),
+            "passages_read": total_read or 0
         }
         
     except Exception as e:
-        print(f"Error generating assessment: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error checking assessment status: {e}")
+        return {"assessment_complete": False}
     
 @app.get("/api/me")
 async def me(user=Depends(get_current_user)):
@@ -1146,6 +1414,123 @@ async def submit_assessment(request: Request):
         "success": True,
         "analysis": analysis
     }
+    
+# Add these endpoints to app.py after /api/assessment/submit
+
+@app.post("/api/reading-level/update")
+async def update_reading_level(request: Request):
+    """Update user's reading level and save history"""
+    try:
+        data = await request.json()
+        token = data.get('token')
+        new_level = data.get('level')
+        score = data.get('score', 0)
+        
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        
+        if USE_POSTGRES:
+            import psycopg2.extras
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        else:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+        
+        # Get current level
+        if USE_POSTGRES:
+            cursor.execute("SELECT reading_level FROM users WHERE id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT reading_level FROM users WHERE id = ?", (user_id,))
+        
+        user = cursor.fetchone()
+        previous_level = user['reading_level'] if user else None
+        
+        # Save to history
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO reading_level_history 
+                (user_id, previous_level, new_level, score)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, previous_level, new_level, score))
+            
+            # Update user's current level
+            cursor.execute("""
+                UPDATE users 
+                SET reading_level = %s, level_estimate = %s
+                WHERE id = %s
+            """, (new_level, new_level, user_id))
+        else:
+            cursor.execute("""
+                INSERT INTO reading_level_history 
+                (user_id, previous_level, new_level, score)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, previous_level, new_level, score))
+            
+            cursor.execute("""
+                UPDATE users 
+                SET reading_level = ?, level_estimate = ?
+                WHERE id = ?
+            """, (new_level, new_level, user_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "previous_level": previous_level,
+            "new_level": new_level,
+            "message": f"Reading level updated from {previous_level} to {new_level}"
+        }
+        
+    except Exception as e:
+        print(f"Error updating reading level: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reading-level/history")
+async def get_reading_level_history(token: str):
+    """Get user's reading level history"""
+    try:
+        user_data = verify_token(token)
+        user_id = user_data["user_id"]
+        
+        conn = get_db()
+        
+        if USE_POSTGRES:
+            import psycopg2.extras
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute("""
+                SELECT previous_level, new_level, score, test_date
+                FROM reading_level_history
+                WHERE user_id = %s
+                ORDER BY test_date DESC
+                LIMIT 10
+            """, (user_id,))
+        else:
+            import sqlite3
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT previous_level, new_level, score, test_date
+                FROM reading_level_history
+                WHERE user_id = ?
+                ORDER BY test_date DESC
+                LIMIT 10
+            """, (user_id,))
+        
+        history = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return {"success": True, "history": history}
+        
+    except Exception as e:
+        print(f"Error getting reading level history: {e}")
+        return {"success": False, "history": []}
     
 @app.post("/api/admin/run-gamification-migration")
 async def run_gamification_migration(request: Request):
@@ -1554,90 +1939,118 @@ async def onboard_interests(request: Request):
 
 @app.get("/api/read/sample")
 async def get_reading_sample(token: str, challenge: str = "appropriate"):
-    """Get a reading passage matched to user's level and interests"""
+    """Get a reading passage matched to user's level, interests, age, and grade"""
     user_data = verify_token(token)
     user_id = user_data["user_id"]
     
     conn = get_db()
-    cursor = conn.cursor()
+    
+    # FIX: Get dict cursor for both databases
+    if USE_POSTGRES:
+        import psycopg2.extras
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    else:
+        import sqlite3
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
     
     # Get user profile
     if USE_POSTGRES:
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        cursor.execute("""
+            SELECT id, level_estimate, interest_tags, total_passages_read,
+                   age, grade_band, reading_level, age_band
+            FROM users WHERE id = %s
+        """, (user_id,))
     else:
-        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        cursor.execute("""
+            SELECT id, level_estimate, interest_tags, total_passages_read,
+                   age, grade_band, reading_level, age_band
+            FROM users WHERE id = ?
+        """, (user_id,))
     
     user = cursor.fetchone()
     
     if not user:
+        conn.close()
         raise HTTPException(status_code=404, detail="User not found")
     
-    level_estimate = user.get('level_estimate') or 'intermediate'
-    interest_tags = json.loads(user.get('interest_tags') or '[]')
-    total_read = user.get('total_passages_read') or 0
+    # Now user is a dict for both PostgreSQL and SQLite
+    level_estimate = user['level_estimate'] or user['reading_level'] or 'intermediate'
+    interest_tags = json.loads(user['interest_tags'] or '[]')
+    total_read = user['total_passages_read'] or 0
+    age = user['age'] or 10
+    grade_band = user['grade_band'] or 'elementary'
+    age_band = user['age_band'] or 'child'
     
     # For first passage, make it easier (quick win strategy)
     if total_read == 0:
         challenge = "easier"
-        target_words = 150
+        target_words = get_target_words(grade_band, "easier")
     else:
-        target_words = 200
-    
-    # Try to get a passage from database first
-    # TODO: Implement database passage retrieval with matching
-    # For now, generate a new one
+        target_words = get_target_words(grade_band, challenge)
     
     if not content_generator:
         raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
     
-    # Pick a topic from interests or random
-    topic = random.choice(interest_tags) if interest_tags else random.choice(["science", "technology", "history", "nature"])
+    # NEW: Smart topic selection based on age and interests
+    topic = select_age_appropriate_topic(interest_tags, age, grade_band)
     
-    # Adjust difficulty based on challenge parameter
-    difficulty_map = {
-        "easier": "beginner" if level_estimate == "intermediate" else level_estimate,
-        "appropriate": level_estimate,
-        "challenging": "advanced" if level_estimate == "intermediate" else level_estimate
-    }
-    difficulty = difficulty_map.get(challenge, level_estimate)
+    # NEW: Better difficulty mapping based on grade and challenge
+    difficulty = calculate_difficulty(grade_band, level_estimate, challenge)
     
-    print(f"Generating passage: topic={topic}, difficulty={difficulty}, words={target_words}")
+    print(f"Generating passage: user_id={user_id}, age={age}, grade={grade_band}, topic={topic}, difficulty={difficulty}, words={target_words}")
     
     try:
-        # Generate passage
+        # Generate passage with enhanced context
         passage_data = content_generator.generate_passage(
-            topic=topic,
-            difficulty_level=difficulty,
-            target_words=target_words,
-            user_interests=interest_tags
+           topic=topic,
+           difficulty_level=difficulty,
+           word_count_min=target_words - 25,  # ✅ Correct parameter name
+           word_count_max=target_words + 25,  # ✅ Correct parameter name
+           user_interests=interest_tags,
+           age=age,
+           grade_band=grade_band
         )
+        print(f"✓ Passage generated: {passage_data['title']}")
         
         # Save to database
         if USE_POSTGRES:
+            print(f"Saving passage to database...")
             cursor.execute(
                 """INSERT INTO passages 
-                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
+                (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
                     difficulty_level, estimated_minutes, approved, created_by)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                (passage_data['title'], passage_data['content'], passage_data['source'],
-                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                 True, 1)  # Auto-approve AI content for now
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (passage_data['title'], 
+                passage_data['content'], 
+                passage_data.get('source', 'AI Generated'),
+                json.dumps(passage_data.get('topic_tags', [])),
+                passage_data.get('word_count', 100),
+                passage_data.get('readability_score'),
+                passage_data.get('flesch_ease'),
+                passage_data.get('difficulty_level', difficulty),
+                passage_data.get('estimated_minutes', 2),
+                True, 1)
             )
             result = cursor.fetchone()
-            passage_id = result['id'] if hasattr(result, 'keys') else result[0]  # ← FIX
+            passage_id = result['id']
+            print(f"✓ Passage saved with ID: {passage_id}")
         else:
             cursor.execute(
                 """INSERT INTO passages 
-                   (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
+                (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
                     difficulty_level, estimated_minutes, approved, created_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (passage_data['title'], passage_data['content'], passage_data['source'],
-                 json.dumps(passage_data['topic_tags']), passage_data['word_count'],
-                 passage_data.get('readability_score'), passage_data.get('flesch_ease'),
-                 passage_data['difficulty_level'], passage_data.get('estimated_minutes'),
-                 True, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (passage_data['title'], 
+                passage_data['content'], 
+                passage_data.get('source', 'AI Generated'),
+                json.dumps(passage_data.get('topic_tags', [])),
+                passage_data.get('word_count', 100),
+                passage_data.get('readability_score'),
+                passage_data.get('flesch_ease'),
+                passage_data.get('difficulty_level', difficulty),
+                passage_data.get('estimated_minutes', 2),
+                True, 1)
             )
             passage_id = cursor.lastrowid
         
@@ -1645,7 +2058,9 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         questions = content_generator.generate_comprehension_questions(
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
-            num_questions=3  # Start with 3 questions
+            num_questions=4, 
+            allow_fill_blank=False  # ✅ No fill-in-blank
+            
         )
         
         # Save questions
@@ -1676,6 +2091,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             )
             result = cursor.fetchone()
             session_id = result['id']
+            print(f"✓ Passage saved with ID: {passage_id}")
         else:
             cursor.execute(
                 """INSERT INTO session_logs (user_id, passage_id, started_at)
@@ -1692,20 +2108,162 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         return {
             "passage_id": passage_id,
             "session_id": session_id,
-            "title": passage_data['title'],
-            "content": passage_data['content'],
-            "word_count": passage_data['word_count'],
+            "title": passage_data.get('title', 'Reading Passage'),
+            "content": passage_data.get('content', ''),
+            "word_count": passage_data.get('word_count', len(passage_data.get('content', '').split())),
             "estimated_minutes": passage_data.get('estimated_minutes', 2),
-            "difficulty_level": passage_data['difficulty_level'],
+            "difficulty_level": passage_data.get('difficulty_level', difficulty),
             "vocabulary": passage_data.get('vocabulary_words', []),
             "questions": questions,
-            "is_first_passage": total_read == 0
+            "is_first_passage": total_read == 0,
+            "personalized_for": {
+                "age": age,
+                "grade": grade_band,
+                "interests": interest_tags,
+                "topic": topic
+            }
         }
         
     except Exception as e:
         conn.close()
-        print(f"Error generating passage: {e}")
+        import traceback
+        print(f"❌ Error generating passage: {e}")
+        print(f"Traceback: {traceback.format_exc()}")  # ✅ Full error details
         raise HTTPException(status_code=500, detail=f"Failed to generate passage: {str(e)}")
+
+
+# NEW HELPER FUNCTIONS - Add these above the endpoint
+
+def get_target_words(grade_band, challenge="appropriate"):
+    """
+    Get appropriate word count based on grade level and challenge
+    """
+    word_count_map = {
+        'pre-k': {'easier': 50, 'appropriate': 75, 'challenging': 100},
+        'kindergarten': {'easier': 75, 'appropriate': 100, 'challenging': 125},
+        '1st': {'easier': 100, 'appropriate': 125, 'challenging': 150},
+        '2nd': {'easier': 125, 'appropriate': 150, 'challenging': 175},
+        '3rd': {'easier': 150, 'appropriate': 175, 'challenging': 200},
+        '4th': {'easier': 175, 'appropriate': 200, 'challenging': 250},
+        '5th': {'easier': 200, 'appropriate': 250, 'challenging': 300},
+        'elementary': {'easier': 150, 'appropriate': 200, 'challenging': 250},
+        '6th': {'easier': 250, 'appropriate': 300, 'challenging': 350},
+        '7th': {'easier': 275, 'appropriate': 325, 'challenging': 375},
+        '8th': {'easier': 300, 'appropriate': 350, 'challenging': 400},
+        'middle': {'easier': 275, 'appropriate': 325, 'challenging': 375},
+        '9th': {'easier': 350, 'appropriate': 400, 'challenging': 450},
+        '10th': {'easier': 375, 'appropriate': 425, 'challenging': 475},
+        '11th': {'easier': 400, 'appropriate': 450, 'challenging': 500},
+        '12th': {'easier': 425, 'appropriate': 475, 'challenging': 550},
+        'high': {'easier': 375, 'appropriate': 425, 'challenging': 500},
+        'adult': {'easier': 350, 'appropriate': 450, 'challenging': 600},
+        'college': {'easier': 400, 'appropriate': 500, 'challenging': 650},
+        'professional': {'easier': 450, 'appropriate': 550, 'challenging': 700}
+    }
+    
+    counts = word_count_map.get(grade_band, word_count_map['elementary'])
+    return counts.get(challenge, counts['appropriate'])
+
+
+def select_age_appropriate_topic(interests, age, grade_band):
+    """
+    Select topic from interests that's appropriate for age/grade
+    """
+    # Age-appropriate topic filters
+    age_appropriate_topics = {
+        'pre-k': ['animals', 'colors', 'shapes', 'family', 'toys', 'food', 'nature'],
+        'kindergarten': ['animals', 'family', 'seasons', 'friends', 'pets', 'garden'],
+        'elementary': ['animals', 'sports', 'space', 'dinosaurs', 'ocean', 'video games', 
+                      'art', 'music', 'nature', 'adventure', 'friendship'],
+        'middle': ['sports', 'science', 'technology', 'music', 'history', 'adventure', 
+                  'mystery', 'fantasy', 'environment', 'social media'],
+        'high': ['science', 'technology', 'history', 'literature', 'psychology', 
+                'current events', 'philosophy', 'career', 'relationships'],
+        'adult': ['technology', 'business', 'health', 'finance', 'politics', 
+                 'philosophy', 'career development', 'relationships', 'wellness'],
+        'college': ['technology', 'business', 'psychology', 'sociology', 'economics',
+                   'research', 'career', 'innovation'],
+        'professional': ['business', 'leadership', 'technology', 'innovation', 
+                        'industry trends', 'professional development']
+    }
+    
+    # Simplify grade_band to main categories
+    if grade_band in ['pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th']:
+        category = 'elementary'
+    elif grade_band in ['6th', '7th', '8th']:
+        category = 'middle'
+    elif grade_band in ['9th', '10th', '11th', '12th']:
+        category = 'high'
+    else:
+        category = grade_band if grade_band in age_appropriate_topics else 'elementary'
+    
+    appropriate = age_appropriate_topics.get(category, age_appropriate_topics['elementary'])
+    
+    # Find matching interests
+    if interests:
+        # Check if any interest matches age-appropriate topics
+        matching = [i for i in interests if any(i.lower() in topic.lower() for topic in appropriate)]
+        if matching:
+            return random.choice(matching)
+        # Otherwise use first interest (student chose it!)
+        return interests[0]
+    
+    # No interests? Pick age-appropriate default
+    return random.choice(appropriate)
+
+
+def calculate_difficulty(grade_band, reading_level, challenge):
+    """
+    Calculate appropriate difficulty based on grade, reading level, and challenge
+    """
+    # Base difficulty from grade
+    grade_difficulty_map = {
+        'pre-k': 'beginner',
+        'kindergarten': 'beginner',
+        '1st': 'beginner',
+        '2nd': 'beginner',
+        '3rd': 'beginner',
+        '4th': 'intermediate',
+        '5th': 'intermediate',
+        'elementary': 'intermediate',
+        '6th': 'intermediate',
+        '7th': 'intermediate',
+        '8th': 'advanced',
+        'middle': 'intermediate',
+        '9th': 'advanced',
+        '10th': 'advanced',
+        '11th': 'advanced',
+        '12th': 'advanced',
+        'high': 'advanced',
+        'adult': 'advanced',
+        'college': 'advanced',
+        'professional': 'advanced'
+    }
+    
+    base_difficulty = grade_difficulty_map.get(grade_band, 'intermediate')
+    
+    # Adjust based on challenge parameter
+    difficulty_levels = ['beginner', 'intermediate', 'advanced']
+    
+    try:
+        base_index = difficulty_levels.index(base_difficulty)
+    except ValueError:
+        base_index = 1  # Default to intermediate
+    
+    if challenge == "easier":
+        final_index = max(0, base_index - 1)
+    elif challenge == "challenging":
+        final_index = min(2, base_index + 1)
+    else:  # appropriate
+        final_index = base_index
+    
+    # Override with user's actual reading_level if available
+    if reading_level and reading_level in difficulty_levels:
+        user_index = difficulty_levels.index(reading_level)
+        # Average the grade-based and user-based difficulty
+        final_index = (final_index + user_index) // 2
+    
+    return difficulty_levels[final_index]
     
 import os
 import base64
@@ -1987,6 +2545,7 @@ async def submit_reading_feedback(request: Request):
     
     return {"success": True, "message": "Feedback recorded"}
 
+
 @app.post("/api/read/comprehension")
 async def submit_comprehension_answers(request: Request):
     """Submit answers to comprehension questions"""
@@ -2059,6 +2618,7 @@ async def submit_comprehension_answers(request: Request):
         "total": total_questions,
         "message": message
     }
+    
 
 # ============================================
 # PHASE 2: DISCUSSION ENDPOINTS
@@ -4422,18 +4982,14 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 
         print(f"✓ Interests: {interests}")
 
-        # Placement required check
-        cursor.execute(
-            "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=%s" if USE_POSTGRES
-            else "SELECT COUNT(*) AS c FROM placement_attempts WHERE user_id=?",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        attempts = (row["c"] if hasattr(row, "keys") else row[0]) or 0
+        # Check if user has completed reading level assessment
+        reading_level = user.get('reading_level') or user.get('level_estimate')
 
-        if attempts < PLACEMENT_MAX_ATTEMPTS:
+        if not reading_level:
             conn.close()
-            raise HTTPException(status_code=409, detail="Placement required")
+            raise HTTPException(status_code=409, detail="Reading level assessment required")
+
+        print(f"✓ Reading level: {reading_level}")
 
         # Recent titles/content for duplicate detection
         cursor.execute(
@@ -4689,7 +5245,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             questions = content_generator.generate_comprehension_questions(
                 passage_text=passage_data.get('content', ''),
                 passage_title=passage_data.get('title', topic),
-                num_questions=3
+                num_questions=4, 
+                allow_fill_blank=True  # ✅ Include fill-in-blank
             )
             print(f"✓ Generated {len(questions)} questions")
         except Exception as q_error:
@@ -4889,11 +5446,11 @@ async def debug_lesson_generation(token: str):
         # Step 6: Test content generator
         debug_info["step"] = "testing_content_generator"
         
-        # Try to generate a simple passage
         passage_data = content_generator.generate_passage(
             topic=topic,
             difficulty_level="intermediate",
-            target_words=100,
+            word_count_min=75,   # ✅ target_words - 25
+            word_count_max=125,  # ✅ target_words + 25
             user_interests=interests
         )
         
