@@ -1958,7 +1958,7 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
             ORDER BY lm.last_message_time DESC NULLS LAST
         """
         
-        admin_id = current_user['id']
+        admin_id = current_user['user_id']
         cursor.execute(query, (admin_id, admin_id, admin_id))
         conversations = cursor.fetchall()
         conn.close()
@@ -1967,7 +1967,7 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
             "conversations": [
                 {
                     "id": c['conversation_id'],
-                    "student_id": c['id'],
+                    "student_id": c['user_id'],
                     "student_name": c['student_name'],
                     "student_email": c['student_email'],
                     "last_message": c['last_message'],
@@ -2018,7 +2018,7 @@ async def get_conversation_messages(
             ORDER BY m.created_at ASC
         """
         
-        admin_id = current_user['id']
+        admin_id = current_user['user_id']
         cursor.execute(query, (admin_id, student_id, student_id, admin_id))
         messages = cursor.fetchall()
         conn.close()
@@ -2059,14 +2059,14 @@ async def send_message_to_student(
             RETURNING id, created_at
         """
         
-        cursor.execute(query, (current_user['id'], request.recipient_id, request.content))
+        cursor.execute(query, (current_user['user_id'], request.recipient_id, request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
         
         return {
             "success": True,
-            "message_id": result['id'],
+            "message_id": result['user_id'],
             "created_at": result['created_at']
         }
         
@@ -2115,7 +2115,7 @@ async def mark_conversation_as_read(
                        AND recipient_id = %s
                        AND recipient_type = 'admin'
                        AND NOT read""",
-                (student_id, current_user['id'])
+                (student_id, current_user['user_id'])
             )
             conn.commit()
         
@@ -2246,7 +2246,7 @@ async def mark_student_messages_as_read(current_user: dict = Depends(require_use
                    recipient_id = %s
                    AND recipient_type = 'student'
                    AND NOT read""",
-            (current_user['id'],)
+            (current_user['user_id'],)
         )
         
         conn.commit()
@@ -2280,7 +2280,7 @@ async def get_unread_message_count(current_user: dict = Depends(get_current_user
                        recipient_id = %s
                        AND recipient_type = 'admin'
                        AND NOT read""",
-                (current_user['id'],)
+                (current_user['user_id'],)
             )
         else:
             # Student: count unread from admin
@@ -2291,7 +2291,7 @@ async def get_unread_message_count(current_user: dict = Depends(get_current_user
                        recipient_id = %s
                        AND recipient_type = 'student'
                        AND NOT read""",
-                (current_user['id'],)
+                (current_user['user_id'],)
             )
         
         result = cursor.fetchone()
