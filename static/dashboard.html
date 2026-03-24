@@ -7915,6 +7915,350 @@
     });
     
     // ========================================
+    // SOUND EFFECTS SYSTEM
+    // ========================================
+    
+    const GameSounds = {
+        // Create audio context
+        audioContext: null,
+        
+        init() {
+            if (!this.audioContext) {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        },
+        
+        // Correct answer - pleasant chime
+        playCorrect() {
+            this.init();
+            const ctx = this.audioContext;
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            oscillator.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+            oscillator.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
+            oscillator.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2); // G5
+            
+            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.5);
+        },
+        
+        // Incorrect answer - gentle buzz
+        playIncorrect() {
+            this.init();
+            const ctx = this.audioContext;
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(200, ctx.currentTime);
+            oscillator.frequency.setValueAtTime(150, ctx.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.3);
+        },
+        
+        // Game start - uplifting tone
+        playGameStart() {
+            this.init();
+            const ctx = this.audioContext;
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            oscillator.frequency.setValueAtTime(261.63, ctx.currentTime); // C4
+            oscillator.frequency.setValueAtTime(329.63, ctx.currentTime + 0.1); // E4
+            oscillator.frequency.setValueAtTime(392.00, ctx.currentTime + 0.2); // G4
+            oscillator.frequency.setValueAtTime(523.25, ctx.currentTime + 0.3); // C5
+            
+            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+            
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.6);
+        },
+        
+        // Victory - triumphant fanfare
+        playVictory() {
+            this.init();
+            const ctx = this.audioContext;
+            
+            // Play a sequence of notes
+            const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+            notes.forEach((freq, i) => {
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                
+                oscillator.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.15);
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.3);
+                
+                oscillator.start(ctx.currentTime + i * 0.15);
+                oscillator.stop(ctx.currentTime + i * 0.15 + 0.3);
+            });
+        },
+        
+        // Streak bonus - exciting ding
+        playStreak() {
+            this.init();
+            const ctx = this.audioContext;
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            oscillator.frequency.setValueAtTime(1046.50, ctx.currentTime); // C6
+            oscillator.frequency.setValueAtTime(1318.51, ctx.currentTime + 0.05); // E6
+            
+            gainNode.gain.setValueAtTime(0.25, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.3);
+        },
+        
+        // Round transition - subtle whoosh
+        playTransition() {
+            this.init();
+            const ctx = this.audioContext;
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.2);
+            
+            gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+            
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.2);
+        }
+    };
+    
+    // ========================================
+    // VISUAL EFFECTS SYSTEM
+    // ========================================
+    
+    const GameEffects = {
+        // Confetti explosion
+        createConfetti(x, y) {
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#ffd700', '#ff69b4'];
+            const confettiCount = 50;
+            
+            for (let i = 0; i < confettiCount; i++) {
+                const confetti = document.createElement('div');
+                confetti.style.cssText = `
+                    position: fixed;
+                    left: ${x}px;
+                    top: ${y}px;
+                    width: 10px;
+                    height: 10px;
+                    background: ${colors[Math.floor(Math.random() * colors.length)]};
+                    border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+                    pointer-events: none;
+                    z-index: 10001;
+                    transform: rotate(${Math.random() * 360}deg);
+                `;
+                
+                document.body.appendChild(confetti);
+                
+                const angle = (Math.random() * Math.PI * 2);
+                const velocity = 150 + Math.random() * 150;
+                const vx = Math.cos(angle) * velocity;
+                const vy = Math.sin(angle) * velocity - 200;
+                
+                this.animateConfetti(confetti, vx, vy);
+            }
+        },
+        
+        animateConfetti(element, vx, vy) {
+            let x = 0, y = 0;
+            let time = 0;
+            const gravity = 500;
+            
+            const animate = () => {
+                time += 0.016;
+                x += vx * 0.016;
+                y += vy * 0.016;
+                vy += gravity * 0.016;
+                
+                element.style.transform = `translate(${x}px, ${y}px) rotate(${time * 360}deg)`;
+                element.style.opacity = Math.max(0, 1 - time * 0.8);
+                
+                if (time < 1.5) {
+                    requestAnimationFrame(animate);
+                } else {
+                    element.remove();
+                }
+            };
+            
+            requestAnimationFrame(animate);
+        },
+        
+        // Star burst effect
+        createStarBurst(x, y) {
+            const stars = 8;
+            for (let i = 0; i < stars; i++) {
+                const star = document.createElement('div');
+                star.textContent = '⭐';
+                star.style.cssText = `
+                    position: fixed;
+                    left: ${x}px;
+                    top: ${y}px;
+                    font-size: 20px;
+                    pointer-events: none;
+                    z-index: 10001;
+                `;
+                
+                document.body.appendChild(star);
+                
+                const angle = (i / stars) * Math.PI * 2;
+                const distance = 100;
+                this.animateStar(star, angle, distance);
+            }
+        },
+        
+        animateStar(element, angle, distance) {
+            let progress = 0;
+            
+            const animate = () => {
+                progress += 0.02;
+                const x = Math.cos(angle) * distance * progress;
+                const y = Math.sin(angle) * distance * progress;
+                const scale = 1 + progress;
+                
+                element.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+                element.style.opacity = Math.max(0, 1 - progress);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    element.remove();
+                }
+            };
+            
+            requestAnimationFrame(animate);
+        },
+        
+        // Particle trail effect
+        createParticleTrail(element) {
+            const colors = ['#667eea', '#764ba2', '#f093fb'];
+            
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const particle = document.createElement('div');
+                    particle.style.cssText = `
+                        position: absolute;
+                        width: 8px;
+                        height: 8px;
+                        background: ${colors[Math.floor(Math.random() * colors.length)]};
+                        border-radius: 50%;
+                        pointer-events: none;
+                        z-index: 10000;
+                    `;
+                    
+                    const rect = element.getBoundingClientRect();
+                    particle.style.left = (rect.left + rect.width / 2) + 'px';
+                    particle.style.top = (rect.top + rect.height / 2) + 'px';
+                    
+                    document.body.appendChild(particle);
+                    
+                    let y = 0;
+                    let opacity = 1;
+                    
+                    const animate = () => {
+                        y += 2;
+                        opacity -= 0.02;
+                        particle.style.transform = `translateY(${y}px)`;
+                        particle.style.opacity = opacity;
+                        
+                        if (opacity > 0) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            particle.remove();
+                        }
+                    };
+                    
+                    requestAnimationFrame(animate);
+                }, i * 50);
+            }
+        },
+        
+        // Animate number counter
+        animateScore(element, from, to, duration = 500) {
+            const start = Date.now();
+            const range = to - from;
+            
+            const animate = () => {
+                const now = Date.now();
+                const progress = Math.min((now - start) / duration, 1);
+                const eased = this.easeOutQuart(progress);
+                const current = Math.floor(from + range * eased);
+                
+                element.textContent = current;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+            
+            requestAnimationFrame(animate);
+        },
+        
+        // Easing function
+        easeOutQuart(t) {
+            return 1 - Math.pow(1 - t, 4);
+        },
+        
+        // Pulse effect
+        pulseElement(element) {
+            element.style.transition = 'transform 0.3s';
+            element.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                element.style.transform = 'scale(1)';
+            }, 300);
+        },
+        
+        // Shake effect for wrong answer
+        shakeElement(element) {
+            element.style.transition = 'transform 0.1s';
+            const shakes = [-10, 10, -8, 8, -5, 5, 0];
+            
+            shakes.forEach((offset, i) => {
+                setTimeout(() => {
+                    element.style.transform = `translateX(${offset}px)`;
+                }, i * 50);
+            });
+            
+            setTimeout(() => {
+                element.style.transform = 'translateX(0)';
+            }, shakes.length * 50);
+        }
+    };
+    
+    // ========================================
     // WORD GAMES SYSTEM
     // ========================================
     
@@ -7931,6 +8275,9 @@
     async function startWordGame(gameType) {
         console.log('🎮 Starting game:', gameType);
         currentGame = gameType;
+        
+        // 🎵 Play game start sound
+        GameSounds.playGameStart();
         
         // Hide game selection, show game container
         document.querySelectorAll('#wordgamesSection > div').forEach(div => {
@@ -8023,10 +8370,23 @@
             return;
         }
         
-        // Update UI
-        document.getElementById('gameScore').textContent = gameState.score;
+        // 🎵 Play transition sound (except for first round)
+        if (gameState.round > 1) {
+            GameSounds.playTransition();
+        }
+        
+        // Update UI with animations
+        const scoreElement = document.getElementById('gameScore');
+        const oldScore = parseInt(scoreElement.textContent) || 0;
+        GameEffects.animateScore(scoreElement, oldScore, gameState.score, 300);
+        
         document.getElementById('gameRound').textContent = `${gameState.round}/${gameState.totalRounds}`;
         document.getElementById('gameStreak').textContent = `${gameState.streak}🔥`;
+        
+        // Pulse the streak counter if streak > 0
+        if (gameState.streak > 0) {
+            GameEffects.pulseElement(document.getElementById('gameStreak').parentElement);
+        }
         
         // Get current vocabulary item
         const vocabIndex = (gameState.round - 1) % gameState.vocabulary.length;
@@ -8174,9 +8534,32 @@
         if (correct) {
             gameState.score += 10;
             gameState.streak++;
+            
+            // 🎵 Play correct sound
+            GameSounds.playCorrect();
+            
+            // ✨ Create confetti at center of screen
+            GameEffects.createConfetti(window.innerWidth / 2, window.innerHeight / 2);
+            
+            // 🌟 Star burst for streak milestones
+            if (gameState.streak === 3 || gameState.streak === 5 || gameState.streak === 10) {
+                GameSounds.playStreak();
+                GameEffects.createStarBurst(window.innerWidth / 2, window.innerHeight / 2);
+            }
+            
             showGameFeedback(true, 'Correct! 🎉');
         } else {
             gameState.streak = 0;
+            
+            // 🎵 Play incorrect sound
+            GameSounds.playIncorrect();
+            
+            // Shake the game play area
+            const playArea = document.getElementById('gamePlayArea');
+            if (playArea) {
+                GameEffects.shakeElement(playArea);
+            }
+            
             showGameFeedback(false, `Not quite. The answer was: ${gameState.currentQuestion.correctAnswer}`);
         }
         
@@ -8196,7 +8579,7 @@
             position: fixed;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%) scale(0);
             background: ${color};
             color: white;
             padding: 2rem 3rem;
@@ -8206,14 +8589,21 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
             z-index: 10000;
             text-align: center;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         `;
         feedback.innerHTML = `<div style="font-size: 3rem; margin-bottom: 0.5rem;">${icon}</div>${message}`;
         
         document.body.appendChild(feedback);
         
+        // Animate entrance
+        requestAnimationFrame(() => {
+            feedback.style.transform = 'translate(-50%, -50%) scale(1)';
+        });
+        
         setTimeout(() => {
             feedback.style.opacity = '0';
-            feedback.style.transition = 'opacity 0.3s';
+            feedback.style.transform = 'translate(-50%, -50%) scale(0.8)';
+            feedback.style.transition = 'opacity 0.3s, transform 0.3s';
             setTimeout(() => feedback.remove(), 300);
         }, 1700);
     }
@@ -8222,13 +8612,30 @@
         const percentage = Math.round((gameState.score / (gameState.totalRounds * 10)) * 100);
         const grade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F';
         
+        // 🎵 Play victory sound
+        GameSounds.playVictory();
+        
+        // 🎊 Create massive confetti celebration
+        setTimeout(() => {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    GameEffects.createConfetti(window.innerWidth * Math.random(), 100);
+                }, i * 200);
+            }
+        }, 300);
+        
+        // 🌟 Star burst from center
+        setTimeout(() => {
+            GameEffects.createStarBurst(window.innerWidth / 2, window.innerHeight / 3);
+        }, 600);
+        
         const html = `
             <div style="text-align: center;">
                 <div style="font-size: 5rem; margin-bottom: 1rem;">🏆</div>
                 <h2 style="color: var(--navy-primary); margin-bottom: 1rem;">Game Complete!</h2>
                 
                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 16px; margin-bottom: 2rem;">
-                    <div style="font-size: 4rem; font-weight: bold; margin-bottom: 0.5rem;">${gameState.score}</div>
+                    <div style="font-size: 4rem; font-weight: bold; margin-bottom: 0.5rem;" id="finalScore">0</div>
                     <div style="font-size: 1.2rem; opacity: 0.9;">Total Points</div>
                 </div>
                 
@@ -8251,6 +8658,14 @@
         `;
         
         document.getElementById('gamePlayArea').innerHTML = html;
+        
+        // Animate final score counting up
+        setTimeout(() => {
+            const scoreElement = document.getElementById('finalScore');
+            if (scoreElement) {
+                GameEffects.animateScore(scoreElement, 0, gameState.score, 1500);
+            }
+        }, 100);
     }
 
     function exitGame() {
