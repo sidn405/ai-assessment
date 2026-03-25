@@ -1901,83 +1901,89 @@ async def check_tables():
         
 @app.get("/api/messages/conversations")
 async def get_admin_conversations(current_user: dict = Depends(require_admin)):
-    """Get all conversations for admin (teacher)"""
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-        
+
         query = """
-            WITH latest_messages AS (
-                SELECT DISTINCT ON (
-                    CASE 
+            WITH last_messages AS (
+                SELECT
+                    CASE
                         WHEN sender_type = 'student' THEN sender_id
-                        WHEN recipient_type = 'student' THEN recipient_id
-                    END
-                )
-                    CASE 
-                        WHEN sender_type = 'student' THEN sender_id
-                        WHEN recipient_type = 'student' THEN recipient_id
-                    END as student_id,
-                    content as last_message,
-                    created_at as last_message_time,
-                    id
+                        ELSE recipient_id
+                    END AS student_id,
+                    content AS last_message,
+                    created_at AS last_message_time,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY CASE
+                            WHEN sender_type = 'student' THEN sender_id
+                            ELSE recipient_id
+                        END
+                        ORDER BY created_at DESC
+                    ) AS rn
                 FROM messages
-                WHERE sender_id = %s OR recipient_id = %s
-                ORDER BY 
-                    CASE 
-                        WHEN sender_type = 'student' THEN sender_id
-                        WHEN recipient_type = 'student' THEN recipient_id
-                    END,
-                    created_at DESC
+                WHERE
+                    (sender_type = 'admin' AND sender_id = %s)
+                    OR
+                    (recipient_type = 'admin' AND recipient_id = %s)
             ),
             unread_counts AS (
-                SELECT 
-                    sender_id as student_id,
-                    COUNT(*) as unread_count
+                SELECT
+                    sender_id AS student_id,
+                    COUNT(*) AS unread_count
                 FROM messages
-                WHERE 
-                    recipient_id = %s
-                    AND recipient_type = 'admin'
-                    AND NOT read
+                WHERE recipient_type = 'admin'
+                  AND recipient_id = %s
+                  AND sender_type = 'student'
+                  AND read = FALSE
                 GROUP BY sender_id
             )
-            SELECT 
-                u.id,
-                u.full_name as student_name,
-                u.email as student_email,
+            SELECT
+                u.id AS student_id,
+                u.full_name AS student_name,
+                u.email AS student_email,
                 lm.last_message,
                 lm.last_message_time,
-                lm.id as conversation_id,
-                COALESCE(uc.unread_count, 0) as unread_count
+                COALESCE(uc.unread_count, 0) AS unread_count
             FROM users u
-            LEFT JOIN latest_messages lm ON u.id = lm.student_id
-            LEFT JOIN unread_counts uc ON u.id = uc.student_id
-            WHERE 
-                u.role = 'student' 
-                AND lm.student_id IS NOT NULL
-            ORDER BY lm.last_message_time DESC NULLS LAST
+            LEFT JOIN last_messages lm
+                ON lm.student_id = u.id AND lm.rn = 1
+            LEFT JOIN unread_counts uc
+                ON uc.student_id = u.id
+            WHERE u.role = 'student'
+              AND (
+                    lm.student_id IS NOT NULL
+                    OR EXISTS (
+                        SELECT 1
+                        FROM messages m
+                        WHERE
+                            (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
+                            OR
+                            (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
+                  )
+              )
+            ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
         """
-        
-        admin_id = current_user['user_id']
-        cursor.execute(query, (admin_id, admin_id, admin_id))
+
+        admin_id = current_user["user_id"]
+        cursor.execute(query, (admin_id, admin_id, admin_id, admin_id, admin_id))
         conversations = cursor.fetchall()
         conn.close()
-        
+
         return {
             "conversations": [
                 {
-                    "id": c['conversation_id'],
-                    "student_id": c['user_id'],
-                    "student_name": c['student_name'],
-                    "student_email": c['student_email'],
-                    "last_message": c['last_message'],
-                    "last_message_time": c['last_message_time'],
-                    "unread_count": c['unread_count']
+                    "student_id": c["student_id"],
+                    "student_name": c["student_name"],
+                    "student_email": c["student_email"],
+                    "last_message": c["last_message"],
+                    "last_message_time": c["last_message_time"],
+                    "unread_count": c["unread_count"],
                 }
                 for c in conversations
             ]
         }
-        
+
     except Exception as e:
         print(f"Error loading conversations: {e}")
         traceback.print_exc()
@@ -1989,42 +1995,53 @@ async def get_conversation_messages(
     student_id: int,
     current_user: dict = Depends(require_admin)
 ):
-    """Get all messages between admin and a specific student"""
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-        
+
         query = """
-            SELECT 
+            SELECT
                 m.id,
                 m.sender_id,
                 m.sender_type,
-                CASE 
-                    WHEN m.sender_type = 'admin' THEN 
+                CASE
+                    WHEN m.sender_type = 'admin' THEN
                         (SELECT full_name FROM users WHERE id = m.sender_id AND role = 'admin')
-                    ELSE 
+                    ELSE
                         (SELECT full_name FROM users WHERE id = m.sender_id AND role = 'student')
-                END as sender_name,
+                END AS sender_name,
                 m.recipient_id,
                 m.recipient_type,
                 m.content,
                 m.read,
                 m.created_at
             FROM messages m
-            WHERE 
+            WHERE
                 (m.sender_id = %s AND m.sender_type = 'admin' AND m.recipient_id = %s AND m.recipient_type = 'student')
                 OR
                 (m.sender_id = %s AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = 'admin')
             ORDER BY m.created_at ASC
         """
-        
-        admin_id = current_user['user_id']
+
+        admin_id = current_user["user_id"]
         cursor.execute(query, (admin_id, student_id, student_id, admin_id))
         messages = cursor.fetchall()
+
+        mark_read_query = """
+            UPDATE messages
+            SET read = TRUE
+            WHERE sender_id = %s
+              AND sender_type = 'student'
+              AND recipient_id = %s
+              AND recipient_type = 'admin'
+              AND read = FALSE
+        """
+        cursor.execute(mark_read_query, (student_id, admin_id))
+        conn.commit()
         conn.close()
-        
+
         return {"messages": [dict(m) for m in messages]}
-        
+
     except Exception as e:
         print(f"Error loading messages: {e}")
         traceback.print_exc()
@@ -2036,42 +2053,38 @@ async def send_message_to_student(
     request: SendMessageRequest,
     current_user: dict = Depends(require_admin)
 ):
-    """Admin sends message to student"""
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-        
-        # Verify student exists
+
         cursor.execute(
             "SELECT id FROM users WHERE id = %s AND role = 'student'",
             (request.recipient_id,)
         )
         student = cursor.fetchone()
-        
+
         if not student:
             conn.close()
             raise HTTPException(status_code=404, detail="Student not found")
-        
-        # Insert message
+
         query = """
             INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
             VALUES (%s, 'admin', %s, 'student', %s)
             RETURNING id, created_at
         """
-        
-        cursor.execute(query, (current_user['user_id'], request.recipient_id, request.content))
+
+        admin_id = current_user["user_id"]
+        cursor.execute(query, (admin_id, request.recipient_id, request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
-            "message_id": result['user_id'],
-            "created_at": result['created_at']
+            "message_id": result["id"],
+            "created_at": result["created_at"]
         }
-        
-    except HTTPException:
-        raise
+
     except Exception as e:
         print(f"Error sending message: {e}")
         traceback.print_exc()
@@ -2193,41 +2206,37 @@ async def send_message_to_teacher(
     request: SendToTeacherRequest,
     current_user: dict = Depends(require_user)
 ):
-    """Student sends message to their teacher"""
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-        
-        # Find the admin (teacher)
+
         cursor.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
         admin = cursor.fetchone()
-        
+
         if not admin:
             conn.close()
-            raise HTTPException(status_code=404, detail="Teacher not found")
-        
-        # Insert message
+            raise HTTPException(status_code=404, detail="No administrator found")
+
         query = """
             INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
             VALUES (%s, 'student', %s, 'admin', %s)
             RETURNING id, created_at
         """
-        
-        cursor.execute(query, (current_user['user_id'], admin['id'], request.content))
+
+        student_id = current_user["user_id"]
+        cursor.execute(query, (student_id, admin["id"], request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
-            "message_id": result['id'],
-            "created_at": result['created_at']
+            "message_id": result["id"],
+            "created_at": result["created_at"]
         }
-        
-    except HTTPException:
-        raise
+
     except Exception as e:
-        print(f"Error sending message: {e}")
+        print(f"Error sending message to teacher: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
  
@@ -2266,43 +2275,39 @@ async def mark_student_messages_as_read(current_user: dict = Depends(require_use
  
 @app.get("/api/messages/unread-count")
 async def get_unread_message_count(current_user: dict = Depends(get_current_user)):
-    """Get unread message count for current user (admin or student)"""
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-        
-        if current_user.get('role') == 'admin':
-            # Admin: count unread from all students
-            cursor.execute(
-                """SELECT COUNT(*) as count
-                   FROM messages
-                   WHERE 
-                       recipient_id = %s
-                       AND recipient_type = 'admin'
-                       AND NOT read""",
-                (current_user['user_id'],)
-            )
+
+        user_id = current_user["user_id"]
+        role = current_user["role"]
+
+        if role == "admin":
+            cursor.execute("""
+                SELECT COUNT(*) AS unread_count
+                FROM messages
+                WHERE recipient_id = %s
+                  AND recipient_type = 'admin'
+                  AND read = FALSE
+            """, (user_id,))
         else:
-            # Student: count unread from admin
-            cursor.execute(
-                """SELECT COUNT(*) as count
-                   FROM messages
-                   WHERE 
-                       recipient_id = %s
-                       AND recipient_type = 'student'
-                       AND NOT read""",
-                (current_user['user_id'],)
-            )
-        
-        result = cursor.fetchone()
+            cursor.execute("""
+                SELECT COUNT(*) AS unread_count
+                FROM messages
+                WHERE recipient_id = %s
+                  AND recipient_type = 'student'
+                  AND read = FALSE
+            """, (user_id,))
+
+        row = cursor.fetchone()
         conn.close()
-        
-        return {"unread_count": result['count'] if result else 0}
-        
+
+        return {"success": True, "unread_count": row["unread_count"] if row else 0}
+
     except Exception as e:
         print(f"Error getting unread count: {e}")
         traceback.print_exc()
-        return {"unread_count": 0}
+        return {"success": False, "unread_count": 0}
 
 # ============================================
 # PHASE 2: ONBOARDING ENDPOINTS
