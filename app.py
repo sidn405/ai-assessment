@@ -2091,50 +2091,33 @@ async def send_message_to_student(
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
  
  
-@app.post("/api/messages/conversation/{conversation_id}/read")
+@app.post("/api/messages/conversation/{student_id}/read")
 async def mark_conversation_as_read(
-    conversation_id: int,
+    student_id: int,
     current_user: dict = Depends(require_admin)
 ):
-    """Mark all messages in conversation as read"""
+    """Mark all messages from a student to this admin as read"""
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-        
-        # Get student_id from conversation_id
+
         cursor.execute(
-            """SELECT 
-                CASE 
-                    WHEN sender_type = 'student' THEN sender_id
-                    ELSE recipient_id
-                END as student_id
-               FROM messages
-               WHERE id = %s""",
-            (conversation_id,)
+            """
+            UPDATE messages
+            SET read = TRUE, updated_at = NOW()
+            WHERE sender_id = %s
+              AND sender_type = 'student'
+              AND recipient_id = %s
+              AND recipient_type = 'admin'
+              AND read = FALSE
+            """,
+            (student_id, current_user["user_id"])
         )
-        
-        result = cursor.fetchone()
-        
-        if result:
-            student_id = result['student_id']
-            
-            # Mark all messages from this student as read
-            cursor.execute(
-                """UPDATE messages
-                   SET read = TRUE, updated_at = NOW()
-                   WHERE 
-                       sender_id = %s
-                       AND sender_type = 'student'
-                       AND recipient_id = %s
-                       AND recipient_type = 'admin'
-                       AND NOT read""",
-                (student_id, current_user['user_id'])
-            )
-            conn.commit()
-        
+
+        conn.commit()
         conn.close()
         return {"success": True}
-        
+
     except Exception as e:
         print(f"Error marking as read: {e}")
         traceback.print_exc()

@@ -3502,7 +3502,7 @@
             await loadMessages(studentId);
             
             // Mark as read
-            await markConversationAsRead(conversationId);
+            await markConversationAsRead(conversation.student_id);
             
             // Update conversations list
             await loadConversations();
@@ -3635,9 +3635,14 @@
         }
         
         // Mark conversation as read
-        async function markConversationAsRead(conversationId) {
+        async function markConversationAsRead(studentId) {
+            if (!studentId || Number.isNaN(Number(studentId))) {
+                console.warn('markConversationAsRead skipped: invalid studentId', studentId);
+                return;
+            }
+
             try {
-                await fetch(`/api/messages/conversation/${conversationId}/read`, {
+                await fetch(`/api/messages/conversation/${studentId}/read`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
