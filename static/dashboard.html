@@ -4368,6 +4368,9 @@
                 if (currentBooks.length === 0) {
                     loadRecommendedBooks();
                 }
+            } else if (sectionName === 'messages') {
+                // Initialize messaging when Messages section is shown
+                initializeStudentMessaging();
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -7955,6 +7958,9 @@
         }
         
         console.log('Profile photo system initialized');
+        
+        // Check for unread messages on page load
+        checkStudentUnreadMessages();
     });
     
     // ========================================
@@ -8951,14 +8957,29 @@
         .notification-badge {
             background: #DC3545;
             color: white;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: bold;
-            padding: 0.2rem 0.5rem;
-            border-radius: 10px;
+            padding: 0.15rem 0.4rem;
+            border-radius: 12px;
             margin-left: 0.5rem;
             display: inline-block;
-            min-width: 18px;
+            min-width: 20px;
+            height: 20px;
+            line-height: 20px;
             text-align: center;
+            box-shadow: 0 2px 4px rgba(220, 53, 69, 0.4);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 2px 4px rgba(220, 53, 69, 0.4);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 3px 6px rgba(220, 53, 69, 0.6);
+            }
         }
         
         .messaging-simple {

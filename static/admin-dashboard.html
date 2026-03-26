@@ -1154,7 +1154,7 @@
                             <div class="message-panel-header">
                                 <div>
                                     <div class="message-panel-title" id="conversationStudentName">Student Name</div>
-                                    <div class="message-panel-subtitle" id="conversationStudentEmail">student@email.com</div>
+                                    <div class="message-panel-subtitle" id="conversationStudentEmail"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="85f6f1f0e1e0ebf1c5e0e8e4ece9abe6eae8">[email&#160;protected]</a></div>
                                 </div>
                                 <button onclick="closeConversation()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #999;">
                                     ✕
@@ -1402,14 +1402,29 @@
     .notification-badge {
         background: #DC3545;
         color: white;
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         font-weight: bold;
-        padding: 0.2rem 0.5rem;
-        border-radius: 10px;
+        padding: 0.15rem 0.4rem;
+        border-radius: 12px;
         margin-left: 0.5rem;
         display: inline-block;
-        min-width: 18px;
+        min-width: 20px;
+        height: 20px;
+        line-height: 20px;
         text-align: center;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.4);
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 2px 4px rgba(220, 53, 69, 0.4);
+        }
+        50% {
+            transform: scale(1.05);
+            box-shadow: 0 3px 6px rgba(220, 53, 69, 0.6);
+        }
     }
     
     .messaging-container {
@@ -1735,7 +1750,7 @@
         </div>
     </div>
 
-    <script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
         let currentUser = null;
         let allStudents = [];
 
@@ -3502,7 +3517,7 @@
             await loadMessages(studentId);
             
             // Mark as read
-            await markConversationAsRead(conversation.student_id);
+            await markConversationAsRead(conversationId);
             
             // Update conversations list
             await loadConversations();
@@ -3635,14 +3650,9 @@
         }
         
         // Mark conversation as read
-        async function markConversationAsRead(studentId) {
-            if (!studentId || Number.isNaN(Number(studentId))) {
-                console.warn('markConversationAsRead skipped: invalid studentId', studentId);
-                return;
-            }
-
+        async function markConversationAsRead(conversationId) {
             try {
-                await fetch(`/api/messages/conversation/${studentId}/read`, {
+                await fetch(`/api/messages/conversation/${conversationId}/read`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -3728,6 +3738,9 @@
         
         // Initialize when messages section is shown
         document.addEventListener('DOMContentLoaded', () => {
+            // Check for unread messages on page load
+            checkUnreadMessages();
+            
             // Initialize immediately if on messages page
             if (!document.getElementById('messagesSection').classList.contains('hidden')) {
                 initializeMessaging();
