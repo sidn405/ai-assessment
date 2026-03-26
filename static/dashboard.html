@@ -8791,20 +8791,33 @@
     function generateWordSearchQuestion(vocab) {
         if (wordSearchTimer) clearInterval(wordSearchTimer);
         
+        // Select words - prefer shorter words (3-8 letters) for better grid fit
         const puzzleWords = gameState.vocabulary
             .slice(gameState.round - 1, Math.min(gameState.round + 5, gameState.vocabulary.length))
             .map(v => v.word.toUpperCase())
-            .filter(w => w.length >= 3 && w.length <= 10);
+            .filter(w => w.length >= 3 && w.length <= 8)  // Reduced from 10 to 8
+            .slice(0, 6);  // Take first 6
         
+        // Fill remaining slots if needed
         while (puzzleWords.length < 6 && gameState.vocabulary.length > 0) {
             const randomWord = gameState.vocabulary[Math.floor(Math.random() * gameState.vocabulary.length)].word.toUpperCase();
-            if (!puzzleWords.includes(randomWord) && randomWord.length >= 3 && randomWord.length <= 10) {
+            if (!puzzleWords.includes(randomWord) && randomWord.length >= 3 && randomWord.length <= 8) {
                 puzzleWords.push(randomWord);
             }
         }
         
         const gridSize = 12;
-        const grid = generateWordSearchGrid(puzzleWords, gridSize);
+        const result = generateWordSearchGrid(puzzleWords, gridSize);
+        const grid = result.grid;
+        const placedWords = result.placedWords;
+        
+        // Validation: Ensure all words were actually placed
+        if (placedWords.length < puzzleWords.length) {
+            console.warn(`Only ${placedWords.length}/${puzzleWords.length} words placed:`, placedWords);
+            // Use only the words that were successfully placed
+            puzzleWords.length = 0;
+            puzzleWords.push(...placedWords);
+        }
         
         wordSearchFoundWords = [];
         wordSearchStartTime = Date.now();
@@ -8825,6 +8838,14 @@
                         <div style="font-size: 0.9rem; opacity: 0.9;">Found</div>
                         <div id="wordSearchFound" style="font-size: 2rem; font-weight: bold;">0/${puzzleWords.length}</div>
                     </div>
+                </div>
+                
+                <!-- Hint Button -->
+                <div style="text-align: center; margin-top: 1rem;">
+                    <button onclick="showWordSearchHint()" class="btn btn-secondary" 
+                            style="font-size: 1rem; padding: 0.75rem 1.5rem;">
+                        💡 Need a Hint?
+                    </button>
                 </div>
             </div>
             
@@ -8871,6 +8892,7 @@
     
     function generateWordSearchGrid(words, size) {
         const grid = Array(size).fill(null).map(() => Array(size).fill(''));
+        const placedWords = [];  // Track which words were actually placed
         
         // Force variety by trying each direction in sequence for different words
         const directions = [0, 1, 2, 3]; // H, V, Diag-down, Diag-up
@@ -8887,6 +8909,7 @@
                 const col = Math.floor(Math.random() * size);
                 if (canPlaceWord(grid, word, row, col, preferredDirection, size)) {
                     placeWord(grid, word, row, col, preferredDirection);
+                    placedWords.push(word);  // Track successful placement
                     placed = true;
                 }
             }
@@ -8899,9 +8922,15 @@
                     const col = Math.floor(Math.random() * size);
                     if (canPlaceWord(grid, word, row, col, direction, size)) {
                         placeWord(grid, word, row, col, direction);
+                        placedWords.push(word);  // Track successful placement
                         placed = true;
                     }
                 }
+            }
+            
+            // Log if word couldn't be placed
+            if (!placed) {
+                console.warn(`Could not place word: ${word}`);
             }
         });
         
@@ -8911,7 +8940,8 @@
                 if (grid[i][j] === '') grid[i][j] = letters[Math.floor(Math.random() * letters.length)];
             }
         }
-        return grid;
+        
+        return { grid, placedWords };
     }
     
     function canPlaceWord(grid, word, row, col, direction, size) {
@@ -8955,6 +8985,77 @@
         if (!isSelecting) return;
         wordSelectionCurrent = { row, col };
         highlightSelection();
+    }
+    
+    function showWordSearchHint() {
+        // Find unfound words
+        const unfoundWords = gameState.currentQuestion.words.filter(word => 
+            !gameState.currentQuestion.foundWords.has(word)
+        );
+        
+        if (unfoundWords.length === 0) return;
+        
+        // Pick a random unfound word
+        const hintWord = unfoundWords[Math.floor(Math.random() * unfoundWords.length)];
+        
+        // Find where this word is in the grid
+        const grid = gameState.currentQuestion.grid;
+        const gridSize = grid.length;
+        
+        // Search for the word in all directions
+        for (let row = 0; row < gridSize; row++) {
+            for (let col = 0; col < gridSize; col++) {
+                // Try all 4 directions
+                for (let direction = 0; direction < 4; direction++) {
+                    if (wordExistsAt(grid, hintWord, row, col, direction, gridSize)) {
+                        // Found it! Highlight the first letter
+                        const cells = document.querySelectorAll('.word-search-cell');
+                        const cell = Array.from(cells).find(c => 
+                            c.dataset.row == row && c.dataset.col == col
+                        );
+                        
+                        if (cell) {
+                            // Flash animation on first letter
+                            cell.style.background = '#FFD700'; // Gold
+                            cell.style.transform = 'scale(1.3)';
+                            cell.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)';
+                            
+                            setTimeout(() => {
+                                cell.style.background = '#f5f5f5';
+                                cell.style.transform = 'scale(1)';
+                                cell.style.boxShadow = '';
+                            }, 2000);
+                            
+                            // Show message
+                            const msg = document.createElement('div');
+                            msg.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); color: white; padding: 1.5rem 2rem; border-radius: 12px; font-size: 1.2rem; font-weight: 600; z-index: 10000;';
+                            msg.textContent = `💡 Hint: Look for "${hintWord}" starting here!`;
+                            document.body.appendChild(msg);
+                            setTimeout(() => msg.remove(), 3000);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    
+    function wordExistsAt(grid, word, row, col, direction, size) {
+        const len = word.length;
+        if (direction === 0 && col + len > size) return false;
+        if (direction === 1 && row + len > size) return false;
+        if (direction === 2 && (row + len > size || col + len > size)) return false;
+        if (direction === 3 && (row - len < -1 || col + len > size)) return false;
+        
+        for (let i = 0; i < len; i++) {
+            let r = row, c = col;
+            if (direction === 0) c += i;
+            else if (direction === 1) r += i;
+            else if (direction === 2) { r += i; c += i; }
+            else { r -= i; c += i; }
+            if (grid[r][c] !== word[i]) return false;
+        }
+        return true;
     }
     
     function endWordSelection() {
