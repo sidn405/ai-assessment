@@ -2523,6 +2523,36 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Word Search Game -->
+                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)'"
+                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow=''"
+                         onclick="startWordGame('word-search')">
+                        <div style="text-align: center;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🔍</div>
+                            <h2 style="color: var(--navy-primary); margin-bottom: 0.5rem;">Word Search</h2>
+                            <p style="color: #666; margin-bottom: 1rem;">Find vocabulary words hidden in the grid</p>
+                            <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; font-size: 0.9rem; font-weight: 600;">
+                                Timed Challenge
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Word Scramble Game -->
+                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)'"
+                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow=''"
+                         onclick="startWordGame('word-scramble')">
+                        <div style="text-align: center;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🎲</div>
+                            <h2 style="color: var(--navy-primary); margin-bottom: 0.5rem;">Word Scramble</h2>
+                            <p style="color: #666; margin-bottom: 1rem;">Drag and drop letters to unscramble words</p>
+                            <div style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; font-size: 0.9rem; font-weight: 600;">
+                                Speed Race
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Game Container (shown when game is active) -->
@@ -8348,7 +8378,9 @@
         const titles = {
             'word-match': '🎯 Word Match',
             'word-fits': '📝 Which Word Fits?',
-            'word-builder': '🔤 Word Builder'
+            'word-builder': '🔤 Word Builder',
+            'word-search': '🔍 Word Search',
+            'word-scramble': '🎲 Word Scramble'
         };
         document.getElementById('gameTitle').textContent = titles[gameType];
         
@@ -8533,6 +8565,12 @@
                 break;
             case 'word-builder':
                 generateWordBuilderQuestion(vocab);
+                break;
+            case 'word-search':
+                generateWordSearchQuestion(vocab);
+                break;
+            case 'word-scramble':
+                generateWordScrambleQuestion(vocab);
                 break;
         }
     }
@@ -8740,6 +8778,419 @@
             feedback.style.transition = 'opacity 0.3s, transform 0.3s';
             setTimeout(() => feedback.remove(), 300);
         }, 1700);
+    }
+
+    // ========================================
+    // WORD SEARCH GAME
+    // ========================================
+    
+    let wordSearchTimer = null;
+    let wordSearchStartTime = null;
+    let wordSearchFoundWords = [];
+    
+    function generateWordSearchQuestion(vocab) {
+        if (wordSearchTimer) clearInterval(wordSearchTimer);
+        
+        const puzzleWords = gameState.vocabulary
+            .slice(gameState.round - 1, Math.min(gameState.round + 5, gameState.vocabulary.length))
+            .map(v => v.word.toUpperCase())
+            .filter(w => w.length >= 3 && w.length <= 10);
+        
+        while (puzzleWords.length < 6 && gameState.vocabulary.length > 0) {
+            const randomWord = gameState.vocabulary[Math.floor(Math.random() * gameState.vocabulary.length)].word.toUpperCase();
+            if (!puzzleWords.includes(randomWord) && randomWord.length >= 3 && randomWord.length <= 10) {
+                puzzleWords.push(randomWord);
+            }
+        }
+        
+        const gridSize = 12;
+        const grid = generateWordSearchGrid(puzzleWords, gridSize);
+        
+        wordSearchFoundWords = [];
+        wordSearchStartTime = Date.now();
+        
+        gameState.currentQuestion = { words: puzzleWords, grid: grid, foundWords: new Set() };
+        
+        const html = `
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h2 style="font-size: 2.5rem; color: var(--navy-primary); margin-bottom: 0.5rem;">🔍 Find the Words!</h2>
+                <p style="color: #666; font-size: 1.1rem;">Click and drag to select words in any direction!</p>
+                
+                <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem 2rem; border-radius: 12px;">
+                        <div style="font-size: 0.9rem; opacity: 0.9;">Time</div>
+                        <div id="wordSearchTimer" style="font-size: 2rem; font-weight: bold;">0:00</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 1rem 2rem; border-radius: 12px;">
+                        <div style="font-size: 0.9rem; opacity: 0.9;">Found</div>
+                        <div id="wordSearchFound" style="font-size: 2rem; font-weight: bold;">0/${puzzleWords.length}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 2rem; max-width: 900px; margin: 0 auto;">
+                <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div id="wordSearchGrid" style="display: grid; grid-template-columns: repeat(${gridSize}, 1fr); gap: 2px; user-select: none;">
+                        ${grid.map((row, i) => row.map((letter, j) => `
+                            <div class="word-search-cell" data-row="${i}" data-col="${j}"
+                                 style="width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; 
+                                        background: #f5f5f5; border: 2px solid #ddd; border-radius: 4px; 
+                                        font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: all 0.2s;
+                                        color: var(--navy-primary);"
+                                 onmousedown="startWordSelection(${i}, ${j})"
+                                 onmouseenter="continueWordSelection(${i}, ${j})"
+                                 onmouseup="endWordSelection()">
+                                ${letter}
+                            </div>
+                        `).join('')).join('')}
+                    </div>
+                </div>
+                
+                <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 200px;">
+                    <h3 style="color: var(--navy-primary); margin-bottom: 1rem; font-size: 1.2rem;">Words to Find:</h3>
+                    <div id="wordSearchList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        ${puzzleWords.map(word => `
+                            <div id="word-${word}" style="padding: 0.75rem; background: #f5f5f5; border-radius: 8px; 
+                                                           font-weight: 600; color: var(--navy-primary); font-size: 1rem; transition: all 0.3s;">
+                                ${word}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('gamePlayArea').innerHTML = html;
+        wordSearchTimer = setInterval(() => {
+            const elapsed = (Date.now() - wordSearchStartTime) / 1000;
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = Math.floor(elapsed % 60);
+            document.getElementById('wordSearchTimer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }, 100);
+    }
+    
+    function generateWordSearchGrid(words, size) {
+        const grid = Array(size).fill(null).map(() => Array(size).fill(''));
+        words.forEach(word => {
+            let placed = false;
+            for (let attempts = 0; attempts < 50 && !placed; attempts++) {
+                const direction = Math.floor(Math.random() * 4);
+                const row = Math.floor(Math.random() * size);
+                const col = Math.floor(Math.random() * size);
+                if (canPlaceWord(grid, word, row, col, direction, size)) {
+                    placeWord(grid, word, row, col, direction);
+                    placed = true;
+                }
+            }
+        });
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        for (let i = 0; i < size; i++) {
+            for (let j = 0; j < size; j++) {
+                if (grid[i][j] === '') grid[i][j] = letters[Math.floor(Math.random() * letters.length)];
+            }
+        }
+        return grid;
+    }
+    
+    function canPlaceWord(grid, word, row, col, direction, size) {
+        const len = word.length;
+        if (direction === 0 && col + len > size) return false;
+        if (direction === 1 && row + len > size) return false;
+        if (direction === 2 && (row + len > size || col + len > size)) return false;
+        if (direction === 3 && (row - len < -1 || col + len > size)) return false;
+        for (let i = 0; i < len; i++) {
+            let r = row, c = col;
+            if (direction === 0) c += i;
+            else if (direction === 1) r += i;
+            else if (direction === 2) { r += i; c += i; }
+            else { r -= i; c += i; }
+            if (grid[r][c] !== '' && grid[r][c] !== word[i]) return false;
+        }
+        return true;
+    }
+    
+    function placeWord(grid, word, row, col, direction) {
+        for (let i = 0; i < word.length; i++) {
+            if (direction === 0) grid[row][col + i] = word[i];
+            else if (direction === 1) grid[row + i][col] = word[i];
+            else if (direction === 2) grid[row + i][col + i] = word[i];
+            else grid[row - i][col + i] = word[i];
+        }
+    }
+    
+    let wordSelectionStart = null;
+    let wordSelectionCurrent = null;
+    let isSelecting = false;
+    
+    function startWordSelection(row, col) {
+        isSelecting = true;
+        wordSelectionStart = { row, col };
+        wordSelectionCurrent = { row, col };
+        highlightSelection();
+    }
+    
+    function continueWordSelection(row, col) {
+        if (!isSelecting) return;
+        wordSelectionCurrent = { row, col };
+        highlightSelection();
+    }
+    
+    function endWordSelection() {
+        if (!isSelecting) return;
+        isSelecting = false;
+        const selectedWord = getSelectedWord();
+        if (selectedWord && gameState.currentQuestion.words.includes(selectedWord) && !gameState.currentQuestion.foundWords.has(selectedWord)) {
+            gameState.currentQuestion.foundWords.add(selectedWord);
+            const wordElement = document.getElementById(`word-${selectedWord}`);
+            if (wordElement) {
+                wordElement.style.background = 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)';
+                wordElement.style.color = 'white';
+                wordElement.style.textDecoration = 'line-through';
+            }
+            const selectedCells = getSelectedCells();
+            selectedCells.forEach(({row, col}) => {
+                const cell = Array.from(document.querySelectorAll('.word-search-cell')).find(c => c.dataset.row == row && c.dataset.col == col);
+                if (cell) {
+                    cell.classList.add('found');
+                    cell.style.background = 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)';
+                    cell.style.color = 'white';
+                }
+            });
+            document.getElementById('wordSearchFound').textContent = `${gameState.currentQuestion.foundWords.size}/${gameState.currentQuestion.words.length}`;
+            GameSounds.playSuccess();
+            if (gameState.currentQuestion.foundWords.size === gameState.currentQuestion.words.length) {
+                clearInterval(wordSearchTimer);
+                const timeElapsed = (Date.now() - wordSearchStartTime) / 1000;
+                const points = Math.round(100 + Math.max(0, 50 - Math.max(0, timeElapsed - 30)));
+                gameState.score += points;
+                gameState.streak++;
+                gameState.round++;
+                setTimeout(() => {
+                    document.getElementById('gamePlayArea').innerHTML = `
+                        <div style="text-align: center; padding: 3rem;">
+                            <div style="font-size: 5rem;">🎉</div>
+                            <h2 style="color: var(--navy-primary); margin: 1rem 0;">All Words Found!</h2>
+                            <div style="font-size: 2.5rem; font-weight: bold; color: #4facfe; margin: 1rem 0;">+${points} Points!</div>
+                            <p style="color: #666; font-size: 1.2rem; margin-bottom: 2rem;">Completed in ${timeElapsed.toFixed(1)} seconds</p>
+                            <button class="btn btn-primary" onclick="nextGameRound()" style="font-size: 1.2rem; padding: 1rem 2rem;">Continue →</button>
+                        </div>
+                    `;
+                }, 500);
+            }
+        }
+        clearSelection();
+    }
+    
+    function highlightSelection() {
+        clearSelection();
+        if (!wordSelectionStart || !wordSelectionCurrent) return;
+        const selectedCells = getSelectedCells();
+        selectedCells.forEach(({row, col}) => {
+            const cell = Array.from(document.querySelectorAll('.word-search-cell')).find(c => c.dataset.row == row && c.dataset.col == col);
+            if (cell && !cell.classList.contains('found')) {
+                cell.style.background = '#667eea';
+                cell.style.color = 'white';
+                cell.style.transform = 'scale(1.1)';
+            }
+        });
+    }
+    
+    function clearSelection() {
+        document.querySelectorAll('.word-search-cell').forEach(cell => {
+            if (!cell.classList.contains('found')) {
+                cell.style.background = '#f5f5f5';
+                cell.style.color = 'var(--navy-primary)';
+                cell.style.transform = 'scale(1)';
+            }
+        });
+    }
+    
+    function getSelectedCells() {
+        if (!wordSelectionStart || !wordSelectionCurrent) return [];
+        const { row: r1, col: c1 } = wordSelectionStart;
+        const { row: r2, col: c2 } = wordSelectionCurrent;
+        const dr = r2 - r1, dc = c2 - c1;
+        if (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc)) return [];
+        const steps = Math.max(Math.abs(dr), Math.abs(dc));
+        const stepR = dr === 0 ? 0 : dr / Math.abs(dr);
+        const stepC = dc === 0 ? 0 : dc / Math.abs(dc);
+        const cells = [];
+        for (let i = 0; i <= steps; i++) cells.push({ row: r1 + i * stepR, col: c1 + i * stepC });
+        return cells;
+    }
+    
+    function getSelectedWord() {
+        const cells = getSelectedCells();
+        if (cells.length === 0) return '';
+        const grid = gameState.currentQuestion.grid;
+        const word = cells.map(({row, col}) => grid[row][col]).join('');
+        if (gameState.currentQuestion.words.includes(word)) return word;
+        const reversed = word.split('').reverse().join('');
+        if (gameState.currentQuestion.words.includes(reversed)) return reversed;
+        return '';
+    }
+    
+    // ========================================
+    // WORD SCRAMBLE GAME
+    // ========================================
+    
+    let wordScrambleTimer = null;
+    let wordScrambleStartTime = null;
+    let draggedLetter = null;
+    
+    function generateWordScrambleQuestion(vocab) {
+        if (wordScrambleTimer) clearInterval(wordScrambleTimer);
+        const word = vocab.word.toUpperCase();
+        const definition = vocab.definition;
+        const letters = word.split('');
+        const scrambled = [...letters].sort(() => Math.random() - 0.5);
+        wordScrambleStartTime = Date.now();
+        gameState.currentQuestion = { word, letters, scrambled, definition, solved: [] };
+        
+        const html = `
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h2 style="font-size: 2.5rem; color: var(--navy-primary); margin-bottom: 0.5rem;">🎲 Unscramble the Word!</h2>
+                <p style="color: #666; font-size: 1.1rem; margin-bottom: 0.5rem;">Drag letters to form the word</p>
+                <p style="color: var(--navy-primary); font-size: 1rem; font-style: italic;">Hint: ${definition}</p>
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem 2rem; border-radius: 12px; display: inline-block; margin-top: 1rem;">
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Time</div>
+                    <div id="wordScrambleTimer" style="font-size: 2rem; font-weight: bold;">0:00</div>
+                </div>
+            </div>
+            
+            <div style="max-width: 700px; margin: 0 auto;">
+                <div style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 2rem;">
+                    <h3 style="color: var(--navy-primary); text-align: center; margin-bottom: 1rem;">Your Answer:</h3>
+                    <div id="answerArea" style="display: flex; justify-content: center; gap: 0.5rem; min-height: 80px; align-items: center; flex-wrap: wrap;">
+                        ${word.split('').map((_, i) => `
+                            <div class="letter-slot" data-position="${i}" ondrop="handleLetterDrop(event, ${i})" ondragover="handleDragOver(event)"
+                                 style="width: 60px; height: 80px; border: 3px dashed #ddd; border-radius: 8px; display: flex; align-items: center; 
+                                        justify-content: center; background: #f9f9f9; transition: all 0.2s;"></div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h3 style="color: var(--navy-primary); text-align: center; margin-bottom: 1rem;">Available Letters:</h3>
+                    <div id="scrambledArea" style="display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
+                        ${scrambled.map((letter, i) => `
+                            <div class="scrambled-letter" draggable="true" data-letter="${letter}" data-original-index="${i}"
+                                 ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)"
+                                 style="width: 60px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                        color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; 
+                                        font-size: 2rem; font-weight: bold; cursor: move; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: all 0.2s;">
+                                ${letter}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 2rem;">
+                    <button class="btn btn-primary" onclick="checkWordScrambleAnswer()" style="font-size: 1.2rem; padding: 1rem 2rem;">Check Answer</button>
+                    <button class="btn btn-secondary" onclick="resetWordScramble()" style="font-size: 1rem; padding: 0.75rem 1.5rem; margin-left: 1rem;">Reset</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('gamePlayArea').innerHTML = html;
+        wordScrambleTimer = setInterval(() => {
+            const elapsed = (Date.now() - wordScrambleStartTime) / 1000;
+            document.getElementById('wordScrambleTimer').textContent = `${Math.floor(elapsed / 60)}:${Math.floor(elapsed % 60).toString().padStart(2, '0')}`;
+        }, 100);
+    }
+    
+    function handleDragStart(event) {
+        draggedLetter = event.target;
+        event.target.style.opacity = '0.5';
+    }
+    
+    function handleDragEnd(event) {
+        event.target.style.opacity = '1';
+    }
+    
+    function handleDragOver(event) {
+        event.preventDefault();
+        event.currentTarget.style.borderColor = '#667eea';
+        event.currentTarget.style.background = '#e8eaf6';
+    }
+    
+    function handleLetterDrop(event, position) {
+        event.preventDefault();
+        const slot = event.currentTarget;
+        slot.style.borderColor = '#ddd';
+        slot.style.background = '#f9f9f9';
+        if (!draggedLetter) return;
+        const existingLetter = slot.querySelector('.placed-letter');
+        if (existingLetter) {
+            document.getElementById('scrambledArea').appendChild(existingLetter);
+            existingLetter.className = 'scrambled-letter';
+            existingLetter.setAttribute('draggable', 'true');
+        }
+        const letter = draggedLetter.cloneNode(true);
+        letter.className = 'placed-letter';
+        letter.setAttribute('draggable', 'true');
+        letter.ondragstart = handleDragStart;
+        letter.ondragend = handleDragEnd;
+        letter.dataset.position = position;
+        slot.innerHTML = '';
+        slot.appendChild(letter);
+        draggedLetter.remove();
+        draggedLetter = null;
+    }
+    
+    function resetWordScramble() {
+        document.querySelectorAll('.letter-slot').forEach(slot => {
+            const placedLetter = slot.querySelector('.placed-letter');
+            if (placedLetter) {
+                const letter = placedLetter.cloneNode(true);
+                letter.className = 'scrambled-letter';
+                letter.setAttribute('draggable', 'true');
+                letter.ondragstart = handleDragStart;
+                letter.ondragend = handleDragEnd;
+                document.getElementById('scrambledArea').appendChild(letter);
+                slot.innerHTML = '';
+            }
+        });
+    }
+    
+    function checkWordScrambleAnswer() {
+        const answer = Array.from(document.querySelectorAll('.letter-slot')).map(slot => {
+            const letter = slot.querySelector('.placed-letter');
+            return letter ? letter.dataset.letter : '';
+        }).join('');
+        const correctWord = gameState.currentQuestion.word;
+        if (answer === correctWord) {
+            clearInterval(wordScrambleTimer);
+            const timeElapsed = (Date.now() - wordScrambleStartTime) / 1000;
+            const points = Math.round(50 + (correctWord.length * 10) + Math.max(0, timeElapsed <= 10 ? 50 : 50 - (timeElapsed - 10) * 2));
+            gameState.score += points;
+            gameState.streak++;
+            gameState.round++;
+            GameSounds.playSuccess();
+            document.getElementById('gamePlayArea').innerHTML = `
+                <div style="text-align: center; padding: 3rem;">
+                    <div style="font-size: 5rem;">🎉</div>
+                    <h2 style="color: var(--navy-primary); margin: 1rem 0;">Correct!</h2>
+                    <div style="font-size: 3rem; font-weight: bold; color: #667eea; margin: 1rem 0;">${correctWord}</div>
+                    <div style="font-size: 2rem; font-weight: bold; color: #4facfe; margin: 1rem 0;">+${points} Points!</div>
+                    <p style="color: #666; font-size: 1.2rem; margin-bottom: 2rem;">Solved in ${timeElapsed.toFixed(1)} seconds</p>
+                    <button class="btn btn-primary" onclick="nextGameRound()" style="font-size: 1.2rem; padding: 1rem 2rem;">Continue →</button>
+                </div>
+            `;
+        } else {
+            GameSounds.playError();
+            const answerArea = document.getElementById('answerArea');
+            answerArea.style.animation = 'shake 0.5s';
+            setTimeout(() => answerArea.style.animation = '', 500);
+            const existingMsg = document.getElementById('scrambleErrorMsg');
+            if (existingMsg) existingMsg.remove();
+            const msg = document.createElement('div');
+            msg.id = 'scrambleErrorMsg';
+            msg.style.cssText = 'color: #DC3545; text-align: center; margin-top: 1rem; font-weight: 600; font-size: 1.1rem;';
+            msg.textContent = 'Not quite! Try again.';
+            document.getElementById('answerArea').parentElement.appendChild(msg);
+            setTimeout(() => msg.remove(), 2000);
+        }
     }
 
     function endGame() {
