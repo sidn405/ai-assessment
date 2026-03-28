@@ -8821,22 +8821,30 @@
                 ];
             }
             
-            // Select words - prefer shorter words (3-8 letters) for better grid fit
-            const puzzleWords = gameState.vocabulary
-                .slice(gameState.round - 1, Math.min(gameState.round + 5, gameState.vocabulary.length))
-                .map(v => v.word.toUpperCase())
-                .filter(w => w.length >= 3 && w.length <= 8)
-                .slice(0, 6);
-            
-            // Fill remaining slots if needed
-            let attempts = 0;
-            while (puzzleWords.length < 6 && gameState.vocabulary.length > 0 && attempts < 100) {
-                const randomWord = gameState.vocabulary[Math.floor(Math.random() * gameState.vocabulary.length)].word.toUpperCase();
-                if (!puzzleWords.includes(randomWord) && randomWord.length >= 3 && randomWord.length <= 8) {
-                    puzzleWords.push(randomWord);
-                }
-                attempts++;
+            // Initialize used words tracker if not exists
+            if (!gameState.usedWordSearchWords) {
+                gameState.usedWordSearchWords = new Set();
             }
+            
+            // Get available words (not used recently)
+            let availableWords = gameState.vocabulary
+                .filter(v => !gameState.usedWordSearchWords.has(v.word) && v.word.length >= 3 && v.word.length <= 8);
+            
+            // If not enough available words, reset the used list
+            if (availableWords.length < 6) {
+                console.log('Resetting used words pool');
+                gameState.usedWordSearchWords.clear();
+                availableWords = gameState.vocabulary.filter(v => v.word.length >= 3 && v.word.length <= 8);
+            }
+            
+            // Shuffle and take 6 words
+            availableWords.sort(() => Math.random() - 0.5);
+            const selectedWords = availableWords.slice(0, 6);
+            
+            // Mark these words as used
+            selectedWords.forEach(v => gameState.usedWordSearchWords.add(v.word));
+            
+            const puzzleWords = selectedWords.map(v => v.word.toUpperCase());
             
             // Use at least 3 words minimum (even if less than 6)
             if (puzzleWords.length < 3) {
@@ -9285,12 +9293,14 @@
             console.log('=== CHECK ANSWER DEBUG ===');
             console.log('Total slots:', slots.length);
             
-            const answer = Array.from(slots).map((slot, index) => {
+            const answerArray = Array.from(slots).map((slot, index) => {
                 const letter = slot.querySelector('.placed-letter');
                 const letterValue = letter && letter.dataset && letter.dataset.letter ? letter.dataset.letter : '';
                 console.log(`Slot ${index}:`, letterValue || '(empty)');
                 return letterValue;
-            }).join('');
+            });
+            
+            const answer = answerArray.join('');
             
             const correctWord = gameState.currentQuestion.word;
             
@@ -9299,10 +9309,11 @@
             console.log('Match:', answer === correctWord);
             console.log('Answer length:', answer.length);
             console.log('Correct length:', correctWord.length);
+            console.log('Has empty slots:', answerArray.includes(''));
             console.log('=========================');
             
-            // Check if answer is complete (all slots filled)
-            if (answer.length !== correctWord.length || answer.includes('')) {
+            // Check if answer is complete (all slots filled) - CHECK THE ARRAY, NOT THE STRING!
+            if (answer.length !== correctWord.length || answerArray.includes('')) {
                 // Not all letters placed
                 console.warn('Incomplete answer!');
                 if (GameSounds && GameSounds.playError) GameSounds.playError();
