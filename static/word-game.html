@@ -1,0 +1,407 @@
+// frontend_word_games_integration.js
+// Replace the existing word game functions in dashboard.html with these
+
+// ========================================
+// CONFIGURATION
+// ========================================
+const GAME_API_BASE = '/api/word-games';
+let gameStartTime = null;
+
+// ========================================
+// LOAD VOCABULARY FROM BACKEND
+// ========================================
+async function loadGameVocabulary() {
+    try {
+        showLoadingMessage('Loading vocabulary from your lessons...');
+        
+        const response = await fetch(`${GAME_API_BASE}/vocabulary`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load vocabulary');
+        }
+        
+        const data = await response.json();
+        gameState.vocabulary = data.vocabulary;
+        
+        console.log(`✓ Loaded ${data.count} words from lessons`);
+        
+        if (gameState.vocabulary.length < 10) {
+            alert('Complete more lessons to unlock more vocabulary for games!\nYou need at least 10 vocabulary words to play.');
+            exitGame();
+            return false;
+        }
+        
+        // Load used words for this game type
+        await loadUsedWords();
+        
+        hideLoadingMessage();
+        return true;
+        
+    } catch (error) {
+        console.error('Error loading vocabulary:', error);
+        hideLoadingMessage();
+        
+        // Show error to user
+        const retry = confirm('Failed to load vocabulary. Would you like to retry?');
+        if (retry) {
+            return await loadGameVocabulary();
+        } else {
+            exitGame();
+            return false;
+        }
+    }
+}
+
+// ========================================
+// LOAD USED WORDS
+// ========================================
+async function loadUsedWords() {
+    try {
+        const response = await fetch(
+            `${GAME_API_BASE}/used-words?game_type=${currentGame}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            }
+        );
+        
+        if (!response.ok) {
+            throw new Error('Failed to load used words');
+        }
+        
+        const data = await response.json();
+        gameState.usedWordSearchWords = new Set(data.used_words);
+        
+        console.log(`✓ ${data.count} words already used in ${currentGame}`);
+        
+        // Check if we need to reset (all words used)
+        const availableWords = gameState.vocabulary.filter(
+            v => !gameState.usedWordSearchWords.has(v.word.toLowerCase())
+        );
+        
+        if (availableWords.length === 0) {
+            console.log('All words used - resetting...');
+            await resetUsedWords();
+            gameState.usedWordSearchWords = new Set();
+        }
+        
+    } catch (error) {
+        console.error('Error loading used words:', error);
+        gameState.usedWordSearchWords = new Set();
+    }
+}
+
+// ========================================
+// RESET USED WORDS
+// ========================================
+async function resetUsedWords() {
+    try {
+        const response = await fetch(
+            `${GAME_API_BASE}/reset-used-words?game_type=${currentGame}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            }
+        );
+        
+        if (response.ok) {
+            console.log('✓ Used words reset - fresh start!');
+        }
+    } catch (error) {
+        console.error('Error resetting used words:', error);
+    }
+}
+
+// ========================================
+// MARK WORDS AS USED
+// ========================================
+async function markWordsAsUsed(words) {
+    try {
+        const response = await fetch(`${GAME_API_BASE}/mark-used`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_type: currentGame,
+                words: words.map(w => w.toLowerCase())
+            })
+        });
+        
+        if (response.ok) {
+            // Add to local set immediately
+            words.forEach(w => gameState.usedWordSearchWords.add(w.toLowerCase()));
+            console.log(`✓ Marked ${words.length} words as used`);
+        }
+    } catch (error) {
+        console.error('Error marking words as used:', error);
+    }
+}
+
+// ========================================
+// SAVE GAME COMPLETION
+// ========================================
+async function saveGameCompletion() {
+    try {
+        const timeSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
+        
+        const response = await fetch(`${GAME_API_BASE}/complete`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_type: currentGame,
+                score: gameState.score,
+                rounds_completed: gameState.round - 1,
+                time_seconds: timeSeconds
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save game');
+        }
+        
+        const data = await response.json();
+        
+        console.log('✓ Game saved successfully');
+        
+        // Show new badges if any
+        if (data.new_badges && data.new_badges.length > 0) {
+            showNewBadges(data.new_badges);
+        }
+        
+        // Reload user progress to update stats
+        await loadUserProgress();
+        
+    } catch (error) {
+        console.error('Error saving game:', error);
+        // Don't block user, just log the error
+    }
+}
+
+// ========================================
+// UPDATED WORD SEARCH FUNCTION
+// ========================================
+async function generateWordSearchQuestion(vocab) {
+    try {
+        if (wordSearchTimer) clearInterval(wordSearchTimer);
+        
+        // Get available words (not used yet)
+        let availableWords = gameState.vocabulary.filter(
+            v => !gameState.usedWordSearchWords.has(v.word.toLowerCase()) &&
+                 v.word.length >= 3 && 
+                 v.word.length <= 12
+        );
+        
+        // If less than 6 available, reset
+        if (availableWords.length < 6) {
+            console.log(`Only ${availableWords.length} available - resetting...`);
+            await resetUsedWords();
+            gameState.usedWordSearchWords = new Set();
+            availableWords = gameState.vocabulary.filter(
+                v => v.word.length >= 3 && v.word.length <= 12
+            );
+        }
+        
+        // Shuffle and select 6 words
+        availableWords.sort(() => Math.random() - 0.5);
+        const selectedWords = availableWords.slice(0, 6);
+        const puzzleWords = selectedWords.map(v => v.word.toUpperCase());
+        
+        console.log('Word Search puzzle words:', puzzleWords);
+        
+        // Mark these words as used in backend (async, don't wait)
+        markWordsAsUsed(puzzleWords);
+        
+        // Generate grid and display game
+        const gridSize = 12;
+        const grid = generateWordSearchGrid(puzzleWords, gridSize);
+        
+        wordSearchFoundWords = [];
+        wordSearchStartTime = Date.now();
+        
+        gameState.currentQuestion = { words: puzzleWords, grid: grid, foundWords: new Set() };
+        
+        // ... rest of existing HTML generation code ...
+        
+    } catch (error) {
+        console.error('Word Search Error:', error);
+        alert('Error loading Word Search game. Please try again.');
+        exitGame();
+    }
+}
+
+// ========================================
+// UPDATED END GAME FUNCTION
+// ========================================
+async function endGame() {
+    const percentage = Math.round((gameState.score / (gameState.totalRounds * 10)) * 100);
+    const grade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F';
+    
+    // 🎵 Play victory sound
+    GameSounds.playVictory();
+    
+    // 🎊 Create confetti
+    setTimeout(() => {
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => {
+                GameEffects.createConfetti(window.innerWidth * Math.random(), 100);
+            }, i * 200);
+        }
+    }, 300);
+    
+    // Save game completion to backend (async)
+    saveGameCompletion();
+    
+    const html = `
+        <div style="text-align: center;">
+            <div style="font-size: 5rem; margin-bottom: 1rem;">🏆</div>
+            <h2 style="color: var(--navy-primary); margin-bottom: 1rem;">Game Complete!</h2>
+            
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 16px; margin-bottom: 2rem;">
+                <div style="font-size: 4rem; font-weight: bold; margin-bottom: 0.5rem;" id="finalScore">0</div>
+                <div style="font-size: 1.2rem; opacity: 0.9;">Total Points</div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 12px;">
+                    <div style="font-size: 2rem; color: var(--navy-primary); font-weight: bold;">${percentage}%</div>
+                    <div style="color: #666;">Accuracy</div>
+                </div>
+                <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 12px;">
+                    <div style="font-size: 2rem; color: var(--navy-primary); font-weight: bold;">Grade ${grade}</div>
+                    <div style="color: #666;">Performance</div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="startWordGame('${currentGame}')">Play Again</button>
+                <button class="btn btn-secondary" onclick="exitGame()">Back to Games</button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('gamePlayArea').innerHTML = html;
+    
+    // Animate final score
+    setTimeout(() => {
+        const scoreElement = document.getElementById('finalScore');
+        if (scoreElement) {
+            GameEffects.animateScore(scoreElement, 0, gameState.score, 1500);
+        }
+    }, 100);
+}
+
+// ========================================
+// UPDATED START GAME FUNCTION
+// ========================================
+async function startWordGame(gameType) {
+    console.log('🎮 Starting game:', gameType);
+    currentGame = gameType;
+    gameStartTime = Date.now();
+    
+    // 🎵 Play game start sound
+    GameSounds.playGameStart();
+    
+    // Hide game selection, show game container
+    document.querySelectorAll('#wordgamesSection > div').forEach(div => {
+        if (!div.id) div.style.display = 'none';
+    });
+    document.getElementById('gameContainer').classList.remove('hidden');
+    
+    // Reset game state
+    gameState = {
+        score: 0,
+        round: 1,
+        totalRounds: 10,
+        streak: 0,
+        vocabulary: [],
+        usedWordSearchWords: new Set(),
+        currentQuestion: null
+    };
+    
+    // Set game title
+    const titles = {
+        'word-match': '🎯 Word Match',
+        'word-fits': '📝 Which Word Fits?',
+        'word-builder': '🔤 Word Builder',
+        'word-search': '🔍 Word Search',
+        'word-scramble': '🎲 Word Scramble'
+    };
+    document.getElementById('gameTitle').textContent = titles[gameType];
+    
+    // Load vocabulary from backend
+    const loaded = await loadGameVocabulary();
+    if (!loaded) {
+        return; // User cancelled or error
+    }
+    
+    // Start first round
+    nextGameRound();
+}
+
+// ========================================
+// HELPER FUNCTIONS
+// ========================================
+function showLoadingMessage(message) {
+    const container = document.getElementById('gamePlayArea');
+    if (container) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 3rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">⏳</div>
+                <p style="color: #666; font-size: 1.2rem;">${message}</p>
+            </div>
+        `;
+    }
+}
+
+function hideLoadingMessage() {
+    // Loading message will be replaced by game content
+}
+
+function showNewBadges(badgeTypes) {
+    // Show celebration for new badges
+    badgeTypes.forEach((type, index) => {
+        setTimeout(() => {
+            // Show badge notification
+            const badge = BADGES[type];
+            if (badge) {
+                showNotification(`🎉 New Badge: ${badge.name}!`, 'success');
+            }
+        }, index * 1000);
+    });
+}
+
+function showNotification(message, type = 'info') {
+    // Simple notification system
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#4CAF50' : '#2196F3'};
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}

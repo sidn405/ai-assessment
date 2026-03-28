@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 import sqlite3
@@ -9012,6 +9013,8 @@ try:
     app.mount("/static", StaticFiles(directory="static"), name="static")
 except:
     print("Warning: static directory not found")
+    
+app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
