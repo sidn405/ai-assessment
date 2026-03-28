@@ -2677,6 +2677,13 @@
                         <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Lessons Completed</div>
                     </div>
 
+                    <!-- Games Played - Yellow/Gold Gradient -->
+                    <div style="text-align: center; background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(247,151,30,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎮</div>
+                        <div style="font-size: 3.5rem; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);" id="progressGamesPlayed">0</div>
+                        <div style="color: white; font-weight: 600; font-size: 1.1rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">Games Played</div>
+                    </div>
+
                     <!-- Average Score - Purple Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #2281ee 0%, #0525dacc 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(102,126,234,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⭐</div>
@@ -6841,6 +6848,7 @@
                     
                     // Progress section (same values!)
                     'progressLessonsCompleted': stats.lessons,
+                    'progressGamesPlayed': localStorage.getItem('gamesPlayed') || '0',
                     'progressAvgScore': stats.avgScoreFormatted,
                     'progressReadingScore': Math.round(stats.avgScore) || '-',
                     'progressReadingLevel': stats.level,
@@ -8806,7 +8814,7 @@
             // Ensure we have vocabulary
             if (!gameState.vocabulary || gameState.vocabulary.length === 0) {
                 console.warn('No vocabulary loaded, using defaults');
-                // Use default fallback vocabulary
+                // Use expanded fallback vocabulary - 50 words
                 gameState.vocabulary = [
                     { word: 'happy', definition: 'feeling joy', sentence: 'She felt ____.' },
                     { word: 'brave', definition: 'showing courage', sentence: 'He was ____.' },
@@ -8817,7 +8825,47 @@
                     { word: 'patient', definition: 'able to wait', sentence: 'Be ____.' },
                     { word: 'honest', definition: 'telling truth', sentence: 'Stay ____.' },
                     { word: 'friendly', definition: 'kind to people', sentence: 'The ____ neighbor.' },
-                    { word: 'careful', definition: 'taking care', sentence: 'Be ____.' }
+                    { word: 'careful', definition: 'taking care', sentence: 'Be ____.' },
+                    { word: 'calm', definition: 'peaceful and quiet', sentence: 'Stay ____ during tests.' },
+                    { word: 'bold', definition: 'brave and confident', sentence: 'Be ____ in your choices.' },
+                    { word: 'gentle', definition: 'soft and kind', sentence: 'Be ____ with animals.' },
+                    { word: 'clever', definition: 'smart and quick', sentence: 'That was a ____ solution.' },
+                    { word: 'loyal', definition: 'faithful and true', sentence: 'A ____ friend stays close.' },
+                    { word: 'proud', definition: 'feeling pleased', sentence: 'She was ____ of her work.' },
+                    { word: 'fair', definition: 'treating equally', sentence: 'Be ____ to everyone.' },
+                    { word: 'wise', definition: 'having wisdom', sentence: 'The ____ owl gave advice.' },
+                    { word: 'neat', definition: 'clean and tidy', sentence: 'Keep your desk ____.' },
+                    { word: 'bright', definition: 'smart or shining', sentence: 'The ____ student excelled.' },
+                    { word: 'eager', definition: 'excited to do', sentence: 'She was ____ to learn.' },
+                    { word: 'shy', definition: 'nervous around people', sentence: 'The ____ child hid.' },
+                    { word: 'silly', definition: 'playfully funny', sentence: 'They told ____ jokes.' },
+                    { word: 'sad', definition: 'feeling unhappy', sentence: 'He felt ____ today.' },
+                    { word: 'glad', definition: 'feeling happy', sentence: 'I am ____ you came.' },
+                    { word: 'safe', definition: 'free from danger', sentence: 'Stay ____ at home.' },
+                    { word: 'warm', definition: 'having heat', sentence: 'The ____ sun shone.' },
+                    { word: 'cold', definition: 'having low heat', sentence: 'The ____ wind blew.' },
+                    { word: 'tall', definition: 'great height', sentence: 'The ____ tree grew.' },
+                    { word: 'short', definition: 'small height', sentence: 'The ____ path led home.' },
+                    { word: 'fast', definition: 'moving quickly', sentence: 'The ____ car raced.' },
+                    { word: 'slow', definition: 'not moving fast', sentence: 'The ____ turtle walked.' },
+                    { word: 'loud', definition: 'making much noise', sentence: 'The ____ music played.' },
+                    { word: 'quiet', definition: 'making little sound', sentence: 'Be ____ in class.' },
+                    { word: 'clean', definition: 'free from dirt', sentence: 'Wash your ____ hands.' },
+                    { word: 'dirty', definition: 'not clean', sentence: 'The ____ dishes piled up.' },
+                    { word: 'fresh', definition: 'new and clean', sentence: 'Breathe the ____ air.' },
+                    { word: 'old', definition: 'having lived long', sentence: 'The ____ man smiled.' },
+                    { word: 'young', definition: 'not old', sentence: 'The ____ child played.' },
+                    { word: 'big', definition: 'large in size', sentence: 'The ____ house stood.' },
+                    { word: 'small', definition: 'little in size', sentence: 'The ____ mouse ran.' },
+                    { word: 'new', definition: 'recently made', sentence: 'She wore ____ shoes.' },
+                    { word: 'nice', definition: 'pleasant and good', sentence: 'Have a ____ day.' },
+                    { word: 'good', definition: 'high quality', sentence: 'That was a ____ meal.' },
+                    { word: 'bad', definition: 'poor quality', sentence: 'The ____ weather came.' },
+                    { word: 'easy', definition: 'not difficult', sentence: 'The test was ____.' },
+                    { word: 'hard', definition: 'difficult to do', sentence: 'The puzzle was ____.' },
+                    { word: 'soft', definition: 'gentle to touch', sentence: 'The ____ pillow felt nice.' },
+                    { word: 'rough', definition: 'not smooth', sentence: 'The ____ surface scraped.' },
+                    { word: 'smooth', definition: 'even surface', sentence: 'The ____ road stretched.' }
                 ];
             }
             
@@ -9450,6 +9498,10 @@
         `;
         
         document.getElementById('gamePlayArea').innerHTML = html;
+        
+        // Track game completion
+        const gamesPlayed = parseInt(localStorage.getItem('gamesPlayed') || '0');
+        localStorage.setItem('gamesPlayed', (gamesPlayed + 1).toString());
         
         // Animate final score counting up
         setTimeout(() => {
