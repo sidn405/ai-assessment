@@ -2558,9 +2558,9 @@
                 <!-- Game Container (shown when game is active) -->
                 <div id="gameContainer" class="hidden">
                     <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 2px solid #eee;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 2px solid #eee; padding-right: 200px;">
                             <h2 id="gameTitle" style="color: var(--navy-primary); margin: 0;">Game Loading...</h2>
-                            <button class="btn btn-secondary" onclick="exitGame()">Exit Game</button>
+                            <button class="btn btn-secondary" onclick="exitGame()" style="white-space: nowrap;">Exit Game</button>
                         </div>
                         
                         <!-- Game Stats -->
@@ -8826,29 +8826,34 @@
                 gameState.usedWordSearchWords = new Set();
             }
             
-            // Get available words (not used recently)
-            let availableWords = gameState.vocabulary
-                .filter(v => !gameState.usedWordSearchWords.has(v.word) && v.word.length >= 3 && v.word.length <= 8);
+            // Filter vocabulary for appropriate word lengths
+            const suitableWords = gameState.vocabulary.filter(v => v.word.length >= 3 && v.word.length <= 8);
             
-            // If not enough available words, reset the used list
+            // Get available words (not used recently)
+            let availableWords = suitableWords.filter(v => !gameState.usedWordSearchWords.has(v.word));
+            
+            // If we don't have enough available words, reset and shuffle
             if (availableWords.length < 6) {
-                console.log('Resetting used words pool');
+                console.log('Resetting used words pool and shuffling');
                 gameState.usedWordSearchWords.clear();
-                availableWords = gameState.vocabulary.filter(v => v.word.length >= 3 && v.word.length <= 8);
+                
+                // Shuffle the entire vocabulary to get different order after reset
+                availableWords = [...suitableWords].sort(() => Math.random() - 0.5);
+            } else {
+                // Shuffle available words
+                availableWords = [...availableWords].sort(() => Math.random() - 0.5);
             }
             
-            // Shuffle and take 6 words
-            availableWords.sort(() => Math.random() - 0.5);
-            const selectedWords = availableWords.slice(0, 6);
+            // Take 6 words
+            const selectedWords = availableWords.slice(0, Math.min(6, availableWords.length));
             
             // Mark these words as used
             selectedWords.forEach(v => gameState.usedWordSearchWords.add(v.word));
             
             const puzzleWords = selectedWords.map(v => v.word.toUpperCase());
             
-            // Use at least 3 words minimum (even if less than 6)
+            // Fallback if still not enough words
             if (puzzleWords.length < 3) {
-                // Add more simple words as fallback
                 const simpleWords = ['HAPPY', 'BRAVE', 'SMART', 'KIND', 'STRONG', 'QUICK'];
                 while (puzzleWords.length < 6 && simpleWords.length > 0) {
                     const word = simpleWords.shift();
@@ -9358,7 +9363,7 @@
                     <div style="text-align: center; padding: 3rem;">
                         <div style="font-size: 5rem;">🎉</div>
                         <h2 style="color: var(--navy-primary); margin: 1rem 0;">Correct!</h2>
-                        <div style="font-size: 3rem; font-weight: bold; color: #667eea; margin: 1rem 0;">${correctWord}</div>
+                        <div style="font-size: 3rem; font-weight: bold; color: #667eea; margin: 1rem 0; white-space: nowrap;">${correctWord}</div>
                         <div style="font-size: 2rem; font-weight: bold; color: #4facfe; margin: 1rem 0;">+${points} Points!</div>
                         <p style="color: #666; font-size: 1.2rem; margin-bottom: 2rem;">Solved in ${timeElapsed.toFixed(1)} seconds</p>
                         <button class="btn btn-primary" onclick="nextGameRound()" style="font-size: 1.2rem; padding: 1rem 2rem;">Continue →</button>
