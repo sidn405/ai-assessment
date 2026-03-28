@@ -8118,6 +8118,8 @@
         playTransition() {
             this.init();
             const ctx = this.audioContext;
+            
+            // Sweep from low to high
             const oscillator = ctx.createOscillator();
             const gainNode = ctx.createGain();
             
@@ -8125,14 +8127,23 @@
             gainNode.connect(ctx.destination);
             
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(800, ctx.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.2);
+            oscillator.frequency.setValueAtTime(200, ctx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.2);
             
             gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
             
             oscillator.start(ctx.currentTime);
             oscillator.stop(ctx.currentTime + 0.2);
+        },
+        
+        // Aliases for new games
+        playSuccess() {
+            this.playCorrect();
+        },
+        
+        playError() {
+            this.playIncorrect();
         }
     };
     
@@ -8899,12 +8910,22 @@
         `;
         
         document.getElementById('gamePlayArea').innerHTML = html;
-        wordSearchTimer = setInterval(() => {
-            const elapsed = (Date.now() - wordSearchStartTime) / 1000;
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = Math.floor(elapsed % 60);
-            document.getElementById('wordSearchTimer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }, 100);
+        
+        // Start timer AFTER DOM has rendered
+        setTimeout(() => {
+            const timerElement = document.getElementById('wordSearchTimer');
+            if (timerElement) {
+                wordSearchTimer = setInterval(() => {
+                    const elapsed = (Date.now() - wordSearchStartTime) / 1000;
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = Math.floor(elapsed % 60);
+                    const timerEl = document.getElementById('wordSearchTimer');
+                    if (timerEl) {
+                        timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }, 100);
+            }
+        }, 10);
         } catch (error) {
             console.error('Word Search Error:', error);
             alert('Error loading Word Search game. Please try again or choose a different game.');
@@ -9022,12 +9043,22 @@
                     cell.style.color = 'white';
                 }
             });
-            document.getElementById('wordSearchFound').textContent = `${gameState.currentQuestion.foundWords.size}/${gameState.currentQuestion.words.length}`;
-            GameSounds.playSuccess();
+            const foundElement = document.getElementById('wordSearchFound');
+            if (foundElement) {
+                foundElement.textContent = `${gameState.currentQuestion.foundWords.size}/${gameState.currentQuestion.words.length}`;
+            }
+            
+            // Play sound safely
+            if (typeof GameSounds !== 'undefined' && GameSounds.playSuccess) {
+                GameSounds.playSuccess();
+            }
+            
             if (gameState.currentQuestion.foundWords.size === gameState.currentQuestion.words.length) {
                 // STOP TIMER IMMEDIATELY
-                clearInterval(wordSearchTimer);
-                wordSearchTimer = null;
+                if (wordSearchTimer) {
+                    clearInterval(wordSearchTimer);
+                    wordSearchTimer = null;
+                }
                 
                 const timeElapsed = (Date.now() - wordSearchStartTime) / 1000;
                 const points = Math.round(100 + Math.max(0, 50 - Math.max(0, timeElapsed - 30)));
