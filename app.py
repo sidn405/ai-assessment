@@ -5820,7 +5820,7 @@ async def get_game_vocabulary(user_id: int = Depends(get_current_user)):
             JOIN lesson_vocabulary lv ON v.id = lv.vocabulary_id
             JOIN user_lessons ul ON lv.lesson_id = ul.lesson_id
             WHERE ul.user_id = ? 
-            AND ul.completed = 1
+            AND ul.completed = true
             ORDER BY RANDOM()
             LIMIT 200
         """, (user_id,))
