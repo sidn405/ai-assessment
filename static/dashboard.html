@@ -6828,6 +6828,21 @@
                     throw new Error('Invalid response');
                 }
                 
+                // Try to load game stats from backend
+                let gamesPlayed = localStorage.getItem('gamesPlayed') || '0';
+                try {
+                    const gameStatsResponse = await fetch(`/api/word-games/stats`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (gameStatsResponse.ok) {
+                        const gameStats = await gameStatsResponse.json();
+                        gamesPlayed = gameStats.games_played || '0';
+                        console.log('✓ Loaded game stats from backend:', gameStats);
+                    }
+                } catch (error) {
+                    console.warn('Could not load game stats from backend, using localStorage:', error);
+                }
+                
                 // Extract values ONCE
                 const stats = {
                     lessons: data.stats.total_lessons || 0,
@@ -6835,7 +6850,8 @@
                     avgScoreFormatted: data.stats.average_score ? `${Math.round(data.stats.average_score)}%` : '-',
                     level: data.user?.reading_level || 'intermediate',
                     streak: data.stats.streak || 0,
-                    userName: data.user?.full_name || data.user?.email || 'Student'
+                    userName: data.user?.full_name || data.user?.email || 'Student',
+                    gamesPlayed: gamesPlayed
                 };
                 
                 // Update ALL elements at once (Overview + Progress + Sidebar)
@@ -6849,7 +6865,7 @@
                     
                     // Progress section (same values!)
                     'progressLessonsCompleted': stats.lessons,
-                    'progressGamesPlayed': localStorage.getItem('gamesPlayed') || '0',
+                    'progressGamesPlayed': stats.gamesPlayed,
                     'progressAvgScore': stats.avgScoreFormatted,
                     'progressReadingScore': Math.round(stats.avgScore) || '-',
                     'progressReadingLevel': stats.level,
@@ -8374,6 +8390,7 @@
     async function startWordGame(gameType) {
         console.log('🎮 Starting game:', gameType);
         currentGame = gameType;
+        gameStartTime = Date.now(); // Track when game started
         
         // 🎵 Play game start sound
         GameSounds.playGameStart();
@@ -8419,11 +8436,39 @@
     };
 
     async function loadGameVocabulary() {
-        // Get user's interests to generate appropriate vocabulary
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const interests = typeof user.interests === 'string' ? JSON.parse(user.interests) : (user.interests || []);
+        // Try to load vocabulary from backend first
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No auth token');
+            }
+            
+            const response = await fetch('/api/word-games/vocabulary', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load vocabulary from backend');
+            }
+            
+            const data = await response.json();
+            
+            if (data.vocabulary && data.vocabulary.length > 0) {
+                gameState.vocabulary = data.vocabulary;
+                console.log(`✓ Loaded ${data.count} words from your lessons`);
+                
+                // Load used words for this game
+                await loadUsedWordsFromBackend();
+                return;
+            }
+        } catch (error) {
+            console.warn('Backend vocabulary loading failed, using fallback:', error);
+        }
         
-        // Sample vocabulary based on reading level
+        // Fallback to hardcoded vocabulary if backend fails
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
         const level = user.reading_level || 'intermediate';
         
         // Expanded vocabulary list - 30 words per level
@@ -8545,6 +8590,85 @@
         // Mark these words as used
         gameState.vocabulary.forEach(v => usedWords.add(v.word));
     }
+
+    // ========================================
+    // BACKEND INTEGRATION HELPERS
+    // ========================================
+    
+    async function loadUsedWordsFromBackend() {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/word-games/used-words?game_type=${currentGame}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                gameState.usedWordSearchWords = new Set(data.used_words);
+                console.log(`✓ ${data.count} words already used in ${currentGame}`);
+            }
+        } catch (error) {
+            console.warn('Could not load used words from backend:', error);
+            gameState.usedWordSearchWords = new Set();
+        }
+    }
+    
+    async function markWordsAsUsedInBackend(words) {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch('/api/word-games/mark-used', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    game_type: currentGame,
+                    words: words.map(w => w.toLowerCase())
+                })
+            });
+            
+            // Add to local tracking too
+            words.forEach(w => {
+                if (gameState.usedWordSearchWords) {
+                    gameState.usedWordSearchWords.add(w.toLowerCase());
+                }
+            });
+        } catch (error) {
+            console.warn('Could not mark words in backend:', error);
+        }
+    }
+    
+    async function saveGameCompletionToBackend() {
+        try {
+            const token = localStorage.getItem('token');
+            const timeSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
+            
+            const response = await fetch('/api/word-games/complete', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    game_type: currentGame,
+                    score: gameState.score,
+                    rounds_completed: gameState.round - 1,
+                    time_seconds: timeSeconds
+                })
+            });
+            
+            if (response.ok) {
+                console.log('✓ Game saved to backend');
+                // Reload user progress
+                await loadUserProgress();
+            }
+        } catch (error) {
+            console.warn('Could not save game to backend:', error);
+        }
+    }
+    
+    let gameStartTime = null;
 
     function nextGameRound() {
         if (gameState.round > gameState.totalRounds) {
@@ -8903,6 +9027,9 @@
             
             const puzzleWords = selectedWords.map(v => v.word.toUpperCase());
             
+            // Save used words to backend (async, don't wait)
+            markWordsAsUsedInBackend(puzzleWords);
+            
             // Fallback if still not enough words
             if (puzzleWords.length < 3) {
                 const simpleWords = ['HAPPY', 'BRAVE', 'SMART', 'KIND', 'STRONG', 'QUICK'];
@@ -9211,6 +9338,9 @@
         wordScrambleStartTime = Date.now();
         gameState.currentQuestion = { word, letters, scrambled, definition, solved: [] };
         
+        // Track word in backend (async)
+        markWordsAsUsedInBackend([word]);
+        
         const html = `
             <div style="text-align: center; margin-bottom: 2rem;">
                 <h2 style="font-size: 2.5rem; color: var(--navy-primary); margin-bottom: 0.5rem;">🎲 Unscramble the Word!</h2>
@@ -9457,6 +9587,9 @@
         
         // 🎵 Play victory sound
         GameSounds.playVictory();
+        
+        // 💾 Save game completion to backend (async)
+        saveGameCompletionToBackend();
         
         // 🎊 Create massive confetti celebration
         setTimeout(() => {
