@@ -5820,7 +5820,7 @@ async def get_game_vocabulary(user_id: int = Depends(get_current_user)):
             JOIN lesson_vocabulary lv ON v.id = lv.vocabulary_id
             JOIN user_lessons ul ON lv.lesson_id = ul.lesson_id
             WHERE ul.user_id = ? 
-            AND ul.completed = IS true
+            AND ul.completed = true
             ORDER BY RANDOM()
             LIMIT 200
         """, (user_id,))
@@ -6017,9 +6017,7 @@ async def complete_game(
 
 @router.get("/stats")
 async def get_game_stats(user_id: int = Depends(get_current_user)):
-    """
-    Get user's game statistics for display on Progress page.
-    """
+    """Get user's game statistics"""
     conn = get_db()
     cursor = conn.cursor()
     
@@ -6032,7 +6030,7 @@ async def get_game_stats(user_id: int = Depends(get_current_user)):
                 COALESCE(MAX(score), 0) as high_score,
                 COALESCE(SUM(time_seconds), 0) as total_time
             FROM game_completions
-            WHERE user_id = ?
+            WHERE user_id = %s
         """, (user_id,))
         
         stats = cursor.fetchone()
@@ -6041,7 +6039,7 @@ async def get_game_stats(user_id: int = Depends(get_current_user)):
         cursor.execute("""
             SELECT game_type, score, rounds_completed, completed_at
             FROM game_completions
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY completed_at DESC
             LIMIT 10
         """, (user_id,))
@@ -6049,23 +6047,24 @@ async def get_game_stats(user_id: int = Depends(get_current_user)):
         recent = cursor.fetchall()
         
         return {
-            "games_played": stats["games_played"],
-            "total_score": stats["total_score"],
-            "avg_score": round(stats["avg_score"], 1),
-            "high_score": stats["high_score"],
-            "total_time_minutes": round(stats["total_time"] / 60, 1),
+            "games_played": stats["games_played"] if stats else 0,
+            "total_score": stats["total_score"] if stats else 0,
+            "avg_score": round(stats["avg_score"], 1) if stats else 0,
+            "high_score": stats["high_score"] if stats else 0,
+            "total_time_minutes": round(stats["total_time"] / 60, 1) if stats else 0,
             "recent_games": [
                 {
                     "game_type": row["game_type"],
                     "score": row["score"],
                     "rounds": row["rounds_completed"],
-                    "date": row["completed_at"]
+                    "date": row["completed_at"].isoformat() if hasattr(row["completed_at"], 'isoformat') else str(row["completed_at"])
                 }
                 for row in recent
-            ]
+            ] if recent else []
         }
         
     finally:
+        cursor.close()
         conn.close()
 
 
