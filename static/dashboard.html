@@ -8792,11 +8792,29 @@
         try {
             if (wordSearchTimer) clearInterval(wordSearchTimer);
             
+            // Ensure we have vocabulary
+            if (!gameState.vocabulary || gameState.vocabulary.length === 0) {
+                console.warn('No vocabulary loaded, using defaults');
+                // Use default fallback vocabulary
+                gameState.vocabulary = [
+                    { word: 'happy', definition: 'feeling joy', sentence: 'She felt ____.' },
+                    { word: 'brave', definition: 'showing courage', sentence: 'He was ____.' },
+                    { word: 'smart', definition: 'very intelligent', sentence: 'The ____ student.' },
+                    { word: 'kind', definition: 'caring about others', sentence: 'Be ____.' },
+                    { word: 'strong', definition: 'having power', sentence: 'The ____ athlete.' },
+                    { word: 'quick', definition: 'moving fast', sentence: 'The ____ rabbit.' },
+                    { word: 'patient', definition: 'able to wait', sentence: 'Be ____.' },
+                    { word: 'honest', definition: 'telling truth', sentence: 'Stay ____.' },
+                    { word: 'friendly', definition: 'kind to people', sentence: 'The ____ neighbor.' },
+                    { word: 'careful', definition: 'taking care', sentence: 'Be ____.' }
+                ];
+            }
+            
             // Select words - prefer shorter words (3-8 letters) for better grid fit
             const puzzleWords = gameState.vocabulary
                 .slice(gameState.round - 1, Math.min(gameState.round + 5, gameState.vocabulary.length))
                 .map(v => v.word.toUpperCase())
-                .filter(w => w.length >= 3 && w.length <= 8)  // Shorter words fit better
+                .filter(w => w.length >= 3 && w.length <= 8)
                 .slice(0, 6);
             
             // Fill remaining slots if needed
@@ -8809,13 +8827,19 @@
                 attempts++;
             }
             
-            // Ensure we have at least 3 words
+            // Use at least 3 words minimum (even if less than 6)
             if (puzzleWords.length < 3) {
-                console.error('Not enough words for Word Search');
-                alert('Not enough vocabulary words for Word Search. Please complete more lessons first!');
-                exitGame();
-                return;
+                // Add more simple words as fallback
+                const simpleWords = ['HAPPY', 'BRAVE', 'SMART', 'KIND', 'STRONG', 'QUICK'];
+                while (puzzleWords.length < 6 && simpleWords.length > 0) {
+                    const word = simpleWords.shift();
+                    if (!puzzleWords.includes(word)) {
+                        puzzleWords.push(word);
+                    }
+                }
             }
+            
+            console.log('Word Search puzzle words:', puzzleWords);
             
             const gridSize = 12;
             const grid = generateWordSearchGrid(puzzleWords, gridSize);
@@ -9211,7 +9235,20 @@
     
     function checkWordScrambleAnswer() {
         try {
+            // Validate gameState exists
+            if (!gameState || !gameState.currentQuestion || !gameState.currentQuestion.word) {
+                console.error('Game state not initialized properly');
+                alert('Game error. Please restart the game.');
+                return;
+            }
+            
             const slots = document.querySelectorAll('.letter-slot');
+            
+            if (!slots || slots.length === 0) {
+                console.error('No letter slots found');
+                alert('Game error. Please restart the game.');
+                return;
+            }
             
             // Debug: log all slots and their contents
             console.log('=== CHECK ANSWER DEBUG ===');
@@ -9219,7 +9256,7 @@
             
             const answer = Array.from(slots).map((slot, index) => {
                 const letter = slot.querySelector('.placed-letter');
-                const letterValue = letter ? letter.dataset.letter : '';
+                const letterValue = letter && letter.dataset && letter.dataset.letter ? letter.dataset.letter : '';
                 console.log(`Slot ${index}:`, letterValue || '(empty)');
                 return letterValue;
             }).join('');
@@ -9237,31 +9274,44 @@
             if (answer.length !== correctWord.length || answer.includes('')) {
                 // Not all letters placed
                 console.warn('Incomplete answer!');
-                GameSounds.playError();
+                if (GameSounds && GameSounds.playError) GameSounds.playError();
+                
                 const answerArea = document.getElementById('answerArea');
-                answerArea.style.animation = 'shake 0.5s';
-                setTimeout(() => answerArea.style.animation = '', 500);
+                if (answerArea) {
+                    answerArea.style.animation = 'shake 0.5s';
+                    setTimeout(() => answerArea.style.animation = '', 500);
+                }
+                
                 const existingMsg = document.getElementById('scrambleErrorMsg');
                 if (existingMsg) existingMsg.remove();
+                
                 const msg = document.createElement('div');
                 msg.id = 'scrambleErrorMsg';
                 msg.style.cssText = 'color: #DC3545; text-align: center; margin-top: 1rem; font-weight: 600; font-size: 1.1rem;';
                 msg.textContent = 'Please fill in all letters!';
-                document.getElementById('answerArea').parentElement.appendChild(msg);
-                setTimeout(() => msg.remove(), 2000);
+                const parentElement = document.getElementById('answerArea');
+                if (parentElement && parentElement.parentElement) {
+                    parentElement.parentElement.appendChild(msg);
+                    setTimeout(() => msg.remove(), 2000);
+                }
                 return;
             }
             
             if (answer === correctWord) {
                 console.log('CORRECT! Stopping timer and showing success...');
-                clearInterval(wordScrambleTimer);
-                wordScrambleTimer = null;
+                if (wordScrambleTimer) {
+                    clearInterval(wordScrambleTimer);
+                    wordScrambleTimer = null;
+                }
+                
                 const timeElapsed = (Date.now() - wordScrambleStartTime) / 1000;
                 const points = Math.round(50 + (correctWord.length * 10) + Math.max(0, timeElapsed <= 10 ? 50 : 50 - (timeElapsed - 10) * 2));
                 gameState.score += points;
                 gameState.streak++;
                 gameState.round++;
-                GameSounds.playSuccess();
+                
+                if (GameSounds && GameSounds.playSuccess) GameSounds.playSuccess();
+                
                 document.getElementById('gamePlayArea').innerHTML = `
                     <div style="text-align: center; padding: 3rem;">
                         <div style="font-size: 5rem;">🎉</div>
@@ -9274,22 +9324,32 @@
                 `;
             } else {
                 console.log('WRONG! Answer does not match.');
-                GameSounds.playError();
+                if (GameSounds && GameSounds.playError) GameSounds.playError();
+                
                 const answerArea = document.getElementById('answerArea');
-                answerArea.style.animation = 'shake 0.5s';
-                setTimeout(() => answerArea.style.animation = '', 500);
+                if (answerArea) {
+                    answerArea.style.animation = 'shake 0.5s';
+                    setTimeout(() => answerArea.style.animation = '', 500);
+                }
+                
                 const existingMsg = document.getElementById('scrambleErrorMsg');
                 if (existingMsg) existingMsg.remove();
+                
                 const msg = document.createElement('div');
                 msg.id = 'scrambleErrorMsg';
                 msg.style.cssText = 'color: #DC3545; text-align: center; margin-top: 1rem; font-weight: 600; font-size: 1.1rem;';
                 msg.textContent = `Not quite! You spelled: ${answer}`;
-                document.getElementById('answerArea').parentElement.appendChild(msg);
-                setTimeout(() => msg.remove(), 3000);
+                
+                const parentElement = document.getElementById('answerArea');
+                if (parentElement && parentElement.parentElement) {
+                    parentElement.parentElement.appendChild(msg);
+                    setTimeout(() => msg.remove(), 3000);
+                }
             }
         } catch (error) {
             console.error('Check Answer Error:', error);
-            alert('Error checking answer. Please try again.');
+            console.error('Error stack:', error.stack);
+            alert('Error checking answer: ' + error.message + '. Check console for details.');
         }
     }
 
