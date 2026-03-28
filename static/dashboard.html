@@ -803,6 +803,7 @@
             background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
             border-color: #f39c12;
             transform: scale(1.02);
+            opacity: 1 !important;  /* Override any locked opacity */
         }
 
         .badge-card.locked {
@@ -816,7 +817,7 @@
         }
 
         .badge-card.earned .badge-icon {
-            filter: none;
+            filter: none !important;  /* Remove grayscale for earned */
             animation: bounce 0.5s;
         }
 
@@ -8874,25 +8875,27 @@
                 gameState.usedWordSearchWords = new Set();
             }
             
-            // Filter vocabulary for appropriate word lengths
-            const suitableWords = gameState.vocabulary.filter(v => v.word.length >= 3 && v.word.length <= 8);
+            // Filter vocabulary for appropriate word lengths (3-12 letters for 12x12 grid)
+            const suitableWords = gameState.vocabulary.filter(v => v.word.length >= 3 && v.word.length <= 12);
             
             // Get available words (not used recently)
             let availableWords = suitableWords.filter(v => !gameState.usedWordSearchWords.has(v.word));
             
-            // If we don't have enough available words, reset and shuffle
-            if (availableWords.length < 6) {
-                console.log('Resetting used words pool and shuffling');
+            // Only reset if we've literally used all suitable words
+            if (availableWords.length === 0) {
+                console.log('All words used - resetting pool and shuffling');
                 gameState.usedWordSearchWords.clear();
-                
-                // Shuffle the entire vocabulary to get different order after reset
                 availableWords = [...suitableWords].sort(() => Math.random() - 0.5);
+            } else if (availableWords.length < 6) {
+                // If less than 6 available but not zero, fill from unused words
+                console.log(`Only ${availableWords.length} available, need 6 total`);
+                availableWords = [...availableWords].sort(() => Math.random() - 0.5);
             } else {
                 // Shuffle available words
                 availableWords = [...availableWords].sort(() => Math.random() - 0.5);
             }
             
-            // Take 6 words
+            // Take up to 6 words
             const selectedWords = availableWords.slice(0, Math.min(6, availableWords.length));
             
             // Mark these words as used
@@ -9222,11 +9225,11 @@
             <div style="max-width: 700px; margin: 0 auto;">
                 <div style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 2rem;">
                     <h3 style="color: var(--navy-primary); text-align: center; margin-bottom: 1rem;">Your Answer:</h3>
-                    <div id="answerArea" style="display: flex; justify-content: center; gap: 0.5rem; min-height: 80px; align-items: center; flex-wrap: wrap;">
+                    <div id="answerArea" style="display: flex; justify-content: center; gap: 0.5rem; min-height: 80px; align-items: center; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding: 0.5rem;">
                         ${word.split('').map((_, i) => `
                             <div class="letter-slot" data-position="${i}" ondrop="handleLetterDrop(event, ${i})" ondragover="handleDragOver(event)"
-                                 style="width: 60px; height: 80px; border: 3px dashed #ddd; border-radius: 8px; display: flex; align-items: center; 
-                                        justify-content: center; background: #f9f9f9; transition: all 0.2s;"></div>
+                                 style="min-width: ${Math.max(40, Math.min(60, 600 / word.length))}px; width: ${Math.max(40, Math.min(60, 600 / word.length))}px; height: 70px; border: 3px dashed #ddd; border-radius: 8px; display: flex; align-items: center; 
+                                        justify-content: center; background: #f9f9f9; transition: all 0.2s; flex-shrink: 0;"></div>
                         `).join('')}
                     </div>
                 </div>
@@ -9237,9 +9240,9 @@
                         ${scrambled.map((letter, i) => `
                             <div class="scrambled-letter" draggable="true" data-letter="${letter}" data-original-index="${i}"
                                  ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)"
-                                 style="width: 60px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                 style="min-width: ${Math.max(40, Math.min(60, 600 / word.length))}px; width: ${Math.max(40, Math.min(60, 600 / word.length))}px; height: 70px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                                         color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; 
-                                        font-size: 2rem; font-weight: bold; cursor: move; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: all 0.2s;">
+                                        font-size: ${Math.max(1.2, Math.min(2, 24 / Math.sqrt(word.length)))}rem; font-weight: bold; cursor: move; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: all 0.2s; flex-shrink: 0;">
                                 ${letter}
                             </div>
                         `).join('')}
