@@ -5802,67 +5802,20 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 
 @router.get("/vocabulary")
 async def get_game_vocabulary(user: dict = Depends(get_current_user)):
-    """
-    Get ALL vocabulary from user's completed lessons.
-    Returns 100+ words to ensure variety across many game rounds.
-    """
-    conn = get_db()
-    cursor = conn.cursor()
+    """Get vocabulary - SIMPLE TEST VERSION"""
     user_id = user['user_id']
-    try:
-        # Get vocabulary from user's completed lessons
-        cursor.execute("""
-            SELECT DISTINCT 
-                v.word,
-                v.definition,
-                v.example_sentence as sentence
-            FROM vocabulary v
-            JOIN lesson_vocabulary lv ON v.id = lv.vocabulary_id
-            JOIN user_lessons ul ON lv.lesson_id = ul.lesson_id
-            WHERE ul.user_id = ? 
-            AND ul.completed = true
-            ORDER BY RANDOM()
-            LIMIT 200
-        """, (user_id,))
-        
-        rows = cursor.fetchall()
-        
-        vocabulary = [
-            {
-                "word": row["word"],
-                "definition": row["definition"],
-                "sentence": row["sentence"]
-            }
-            for row in rows
-        ]
-        
-        # If user has less than 20 words, add some starter vocabulary
-        if len(vocabulary) < 20:
-            cursor.execute("""
-                SELECT word, definition, example_sentence as sentence
-                FROM vocabulary
-                WHERE difficulty = 'beginner'
-                ORDER BY RANDOM()
-                LIMIT ?
-            """, (20 - len(vocabulary),))
-            
-            starter_words = cursor.fetchall()
-            vocabulary.extend([
-                {
-                    "word": row["word"],
-                    "definition": row["definition"],
-                    "sentence": row["sentence"]
-                }
-                for row in starter_words
-            ])
-        
-        return {
-            "vocabulary": vocabulary,
-            "count": len(vocabulary)
+    
+    return {
+        "vocabulary": [
+            {"word": "test", "definition": "a test", "sentence": "This is a test."},
+            {"word": "hello", "definition": "greeting", "sentence": "Hello world."}
+        ],
+        "count": 2,
+        "debug": {
+            "user_id": user_id,
+            "message": "Simple test works!"
         }
-        
-    finally:
-        conn.close()
+    }
 
 
 @router.get("/used-words")
