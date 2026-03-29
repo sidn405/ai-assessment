@@ -5854,9 +5854,9 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
     cursor = conn.cursor()
     
     try:
-        # Pull directly from vocabulary_tracker - no joins needed!
+        # Query WITHOUT example_sentence
         cursor.execute("""
-            SELECT word, definition, example_sentence
+            SELECT word, definition
             FROM vocabulary_tracker
             ORDER BY RANDOM()
             LIMIT 200
@@ -5864,13 +5864,19 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
         
         rows = cursor.fetchall()
         vocabulary = [
-            {"word": row[0], "definition": row[1], "sentence": row[2]}
+            {
+                "word": row[0], 
+                "definition": row[1], 
+                "sentence": f"This is an example with {row[0].lower()}."  # Generate placeholder
+            }
             for row in rows
         ]
         
+        print(f"✓ Returning {len(vocabulary)} words")
         return {"vocabulary": vocabulary, "count": len(vocabulary)}
         
     except Exception as e:
+        print(f"❌ Vocabulary error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
