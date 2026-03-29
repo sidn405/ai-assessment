@@ -5847,53 +5847,30 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 
 @router.get("/vocabulary")
 async def get_game_vocabulary(user: dict = Depends(get_current_user)):
-    """Get vocabulary from user's completed lessons"""
-    
-    print("=" * 50)
-    print("🚨 VOCABULARY ENDPOINT HIT!")
-    print("=" * 50)
-    
+    """Get vocabulary for word games"""
     user_id = user['user_id']
-    print(f"🎮 User ID: {user_id}")
     
-    
-    user_id = user['user_id']
     conn = get_db()
     cursor = conn.cursor()
     
     try:
+        # Pull directly from vocabulary_tracker - no joins needed!
         cursor.execute("""
-            SELECT DISTINCT 
-                v.word,
-                v.definition,
-                v.example_sentence as sentence
-            FROM vocabulary_tracker vt
-            JOIN lesson_vocabulary lv ON v.id = lv.vocabulary_id
-            JOIN user_lessons ul ON lv.lesson_id = ul.lesson_id
-            WHERE ul.user_id = %s AND ul.completed = true
+            SELECT word, definition, example_sentence
+            FROM vocabulary_tracker
             ORDER BY RANDOM()
             LIMIT 200
-        """, (user_id,))
+        """)
         
         rows = cursor.fetchall()
-        vocabulary = [{"word": row[0], "definition": row[1], "sentence": row[2]} for row in rows]
-        
-        if len(vocabulary) < 20:
-            cursor.execute("""
-                SELECT word, definition, example_sentence
-                FROM vocabulary_tracker
-                WHERE difficulty = 'beginner'
-                ORDER BY RANDOM()
-                LIMIT %s
-            """, (20 - len(vocabulary),))
-            
-            starter_rows = cursor.fetchall()
-            vocabulary.extend([{"word": r[0], "definition": r[1], "sentence": r[2]} for r in starter_rows])
+        vocabulary = [
+            {"word": row[0], "definition": row[1], "sentence": row[2]}
+            for row in rows
+        ]
         
         return {"vocabulary": vocabulary, "count": len(vocabulary)}
         
     except Exception as e:
-        print(f"❌ Vocabulary error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
