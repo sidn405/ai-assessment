@@ -5803,6 +5803,14 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 @router.get("/vocabulary")
 async def get_game_vocabulary(user: dict = Depends(get_current_user)):
     """Get vocabulary from user's completed lessons"""
+    
+    print("=" * 50)
+    print("🚨 VOCABULARY ENDPOINT HIT!")
+    print("=" * 50)
+    
+    user_id = user['user_id']
+    print(f"🎮 User ID: {user_id}")
+    
     user_id = user['user_id']
     conn = get_db()
     cursor = conn.cursor()
