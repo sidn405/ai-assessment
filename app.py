@@ -5848,29 +5848,23 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 @router.get("/vocabulary")
 async def get_game_vocabulary(user: dict = Depends(get_current_user)):
     """Get vocabulary for word games"""
-    print("=" * 60)
-    print("🚨🚨🚨 VOCABULARY ENDPOINT ENTERED 🚨🚨🚨")
-    print("=" * 60)
-    
     user_id = user['user_id']
-    print(f"🎮 User ID: {user_id}")
+    print(f"🎮 Getting vocabulary for user {user_id}")
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        print("🎮 Executing SQL query with user filter...")
+        # Get ALL vocabulary regardless of user
         cursor.execute("""
             SELECT word, definition
             FROM vocabulary_tracker
-            WHERE user_id = %s
             ORDER BY RANDOM()
             LIMIT 200
-        """, (user_id,))
+        """)
         
-        print("🎮 Fetching results...")
         rows = cursor.fetchall()
-        print(f"🎮 Got {len(rows)} rows from database for user {user_id}")
+        print(f"🎮 Found {len(rows)} total words in vocabulary_tracker")
         
         vocabulary = [
             {
@@ -5881,13 +5875,11 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
             for row in rows
         ]
         
-        print(f"✅ SUCCESS: Returning {len(vocabulary)} words")
+        print(f"✅ Returning {len(vocabulary)} words")
         return {"vocabulary": vocabulary, "count": len(vocabulary)}
         
     except Exception as e:
-        print(f"❌❌❌ ERROR: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Vocabulary error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
