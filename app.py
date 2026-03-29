@@ -5801,14 +5801,14 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
 # ========================================
 
 @router.get("/vocabulary")
-async def get_game_vocabulary(user_id: int = Depends(get_current_user)):
+async def get_game_vocabulary(user: dict = Depends(get_current_user)):
     """
     Get ALL vocabulary from user's completed lessons.
     Returns 100+ words to ensure variety across many game rounds.
     """
     conn = get_db()
     cursor = conn.cursor()
-    #user_id = user['id']
+    user_id = user['user_id']
     try:
         # Get vocabulary from user's completed lessons
         cursor.execute("""
@@ -5876,7 +5876,7 @@ async def get_used_words(
     """
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['id']
+    user_id = user['user_id']
     try:
         cursor.execute("""
             SELECT word 
@@ -5909,7 +5909,7 @@ async def mark_words_used(
     """
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['id']
+    user_id = user['user_id']
     try:
         for word in request.words:
             cursor.execute("""
@@ -5943,7 +5943,7 @@ async def reset_used_words(
     """
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['id']
+    user_id = user['user_id']
     try:
         cursor.execute("""
             DELETE FROM game_used_words
@@ -5972,7 +5972,7 @@ async def complete_game(
     """
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['id']
+    user_id = user['user_id']
     try:
         # Insert game completion
         cursor.execute("""
@@ -6022,7 +6022,7 @@ async def get_game_stats(user: dict = Depends(get_current_user)):
     print(f"DEBUG user value: {user}")
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['id']
+    user_id = user['user_id']
     try:
         cursor.execute("""
             SELECT 
