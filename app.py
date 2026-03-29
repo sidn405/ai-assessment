@@ -322,13 +322,34 @@ def create_token(user_id: int, role: str) -> str:
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-def verify_token(token: str) -> dict:
+def verify_token(token: str):
+    """Verify JWT token and return payload"""
+    print(f"🔑 Verifying token...")
+    
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print(f"🔑 Decoded payload: {payload}")
+        
+        # Check if user_id exists
+        if 'user_id' not in payload:
+            print(f"❌ No user_id in payload")
+            raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+        
+        return payload
+        
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        print("❌ Token expired")
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError as e:
+        print(f"❌ Invalid token: {e}")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    except HTTPException:
+        raise  # Re-raise HTTPException
+    except Exception as e:
+        print(f"❌ Unexpected error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=401, detail=f"Token error: {str(e)}")
 
 def update_user_activity(user_id: int):
     """Update last_active timestamp"""
@@ -464,15 +485,39 @@ async def register(user: UserCreate):
         conn.close()
 
 def get_current_user(authorization: str = Header(None)) -> dict:
+    """Get current user from JWT token"""
+    print("=" * 50)
+    print("🔐 AUTH CHECK STARTED")
+    print(f"🔐 Authorization header present: {bool(authorization)}")
+    
     if not authorization:
+        print("❌ No authorization header")
         raise HTTPException(status_code=401, detail="Missing Authorization")
-
+    
+    print(f"🔐 Auth header: {authorization[:50]}...")
+    
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
+        print(f"❌ Invalid format: {len(parts)} parts, first={parts[0] if parts else 'none'}")
         raise HTTPException(status_code=401, detail="Invalid Authorization format")
-
-    payload = verify_token(parts[1])
-    return payload
+    
+    token = parts[1]
+    print(f"🔐 Token extracted: {token[:20]}...")
+    
+    try:
+        payload = verify_token(token)
+        print(f"✅ Token verified successfully")
+        print(f"✅ Payload: {payload}")
+        print("=" * 50)
+        return payload
+    except HTTPException as he:
+        print(f"❌ HTTPException in verify_token: {he.detail}")
+        print("=" * 50)
+        raise
+    except Exception as e:
+        print(f"❌ Unexpected error in verify_token: {type(e).__name__}: {e}")
+        print("=" * 50)
+        raise HTTPException(status_code=401, detail=f"Token verification failed: {str(e)}")
 
 
 def require_admin(user: dict = Depends(get_current_user)):
@@ -5810,6 +5855,7 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
     
     user_id = user['user_id']
     print(f"🎮 User ID: {user_id}")
+    
     
     user_id = user['user_id']
     conn = get_db()
