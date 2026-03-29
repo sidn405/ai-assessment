@@ -5808,7 +5808,7 @@ async def get_game_vocabulary(user_id: int = Depends(get_current_user)):
     """
     conn = get_db()
     cursor = conn.cursor()
-    
+    #user_id = user['id']
     try:
         # Get vocabulary from user's completed lessons
         cursor.execute("""
@@ -5868,7 +5868,7 @@ async def get_game_vocabulary(user_id: int = Depends(get_current_user)):
 @router.get("/used-words")
 async def get_used_words(
     game_type: str,
-    user_id: int = Depends(get_current_user)
+    user: dict = Depends(get_current_user)
 ):
     """
     Get words user has already seen in this game type.
@@ -5876,7 +5876,7 @@ async def get_used_words(
     """
     conn = get_db()
     cursor = conn.cursor()
-    
+    user_id = user['id']
     try:
         cursor.execute("""
             SELECT word 
@@ -5901,7 +5901,7 @@ async def get_used_words(
 @router.post("/mark-used")
 async def mark_words_used(
     request: MarkWordsUsedRequest,
-    user_id: int = Depends(get_current_user)
+    user: dict = Depends(get_current_user)
 ):
     """
     Mark words as used so they don't repeat immediately.
@@ -5909,7 +5909,7 @@ async def mark_words_used(
     """
     conn = get_db()
     cursor = conn.cursor()
-    
+    user_id = user['id']
     try:
         for word in request.words:
             cursor.execute("""
@@ -5935,7 +5935,7 @@ async def mark_words_used(
 @router.post("/reset-used-words")
 async def reset_used_words(
     game_type: str,
-    user_id: int = Depends(get_current_user)
+    user: dict = Depends(get_current_user)
 ):
     """
     Reset used words when all vocabulary has been seen.
@@ -5943,7 +5943,7 @@ async def reset_used_words(
     """
     conn = get_db()
     cursor = conn.cursor()
-    
+    user_id = user['id']
     try:
         cursor.execute("""
             DELETE FROM game_used_words
@@ -5964,7 +5964,7 @@ async def reset_used_words(
 @router.post("/complete")
 async def complete_game(
     request: CompleteGameRequest,
-    user_id: int = Depends(get_current_user)
+    user: dict = Depends(get_current_user)
 ):
     """
     Record game completion and update user statistics.
@@ -5972,7 +5972,7 @@ async def complete_game(
     """
     conn = get_db()
     cursor = conn.cursor()
-    
+    user_id = user['id']
     try:
         # Insert game completion
         cursor.execute("""
@@ -6016,11 +6016,11 @@ async def complete_game(
 
 
 @router.get("/stats")
-async def get_game_stats(user_id: int = Depends(get_current_user)):
+async def get_game_stats(user: dict = Depends(get_current_user)):
     """Get user's game statistics"""
     conn = get_db()
     cursor = conn.cursor()
-    
+    user_id = user['id']
     try:
         cursor.execute("""
             SELECT 
