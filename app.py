@@ -5859,17 +5859,18 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
     cursor = conn.cursor()
     
     try:
-        print("🎮 Executing SQL query...")
+        print("🎮 Executing SQL query with user filter...")
         cursor.execute("""
             SELECT word, definition
             FROM vocabulary_tracker
+            WHERE user_id = %s
             ORDER BY RANDOM()
             LIMIT 200
-        """)
+        """, (user_id,))
         
         print("🎮 Fetching results...")
         rows = cursor.fetchall()
-        print(f"🎮 Got {len(rows)} rows from database")
+        print(f"🎮 Got {len(rows)} rows from database for user {user_id}")
         
         vocabulary = [
             {
@@ -5885,7 +5886,6 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
         
     except Exception as e:
         print(f"❌❌❌ ERROR: {e}")
-        print(f"❌ Error type: {type(e).__name__}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
