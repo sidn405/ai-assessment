@@ -6018,6 +6018,8 @@ async def complete_game(
 @router.get("/stats")
 async def get_game_stats(user: dict = Depends(get_current_user)):
     """Get user's game statistics"""
+    print(f"DEBUG user type: {type(user)}")
+    print(f"DEBUG user value: {user}")
     conn = get_db()
     cursor = conn.cursor()
     user_id = user['id']
