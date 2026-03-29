@@ -5867,7 +5867,7 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
                 v.word,
                 v.definition,
                 v.example_sentence as sentence
-            FROM vocabulary v
+            FROM vocabulary_tracker vt
             JOIN lesson_vocabulary lv ON v.id = lv.vocabulary_id
             JOIN user_lessons ul ON lv.lesson_id = ul.lesson_id
             WHERE ul.user_id = %s AND ul.completed = true
@@ -5881,7 +5881,7 @@ async def get_game_vocabulary(user: dict = Depends(get_current_user)):
         if len(vocabulary) < 20:
             cursor.execute("""
                 SELECT word, definition, example_sentence
-                FROM vocabulary
+                FROM vocabulary_tracker
                 WHERE difficulty = 'beginner'
                 ORDER BY RANDOM()
                 LIMIT %s
