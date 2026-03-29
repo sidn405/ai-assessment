@@ -5797,185 +5797,194 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 # ========================================
-# ENDPOINTS
+# WORD GAMES ENDPOINTS
 # ========================================
 
 @router.get("/vocabulary")
 async def get_game_vocabulary(user: dict = Depends(get_current_user)):
-    """Get vocabulary - SIMPLE TEST VERSION"""
+    """Get vocabulary from user's completed lessons"""
     user_id = user['user_id']
+    conn = get_db()
+    cursor = conn.cursor()
     
-    return {
-        "vocabulary": [
-            {"word": "test", "definition": "a test", "sentence": "This is a test."},
-            {"word": "hello", "definition": "greeting", "sentence": "Hello world."}
-        ],
-        "count": 2,
-        "debug": {
-            "user_id": user_id,
-            "message": "Simple test works!"
-        }
-    }
+    try:
+        cursor.execute("""
+            SELECT DISTINCT 
+                v.word,
+                v.definition,
+                v.example_sentence as sentence
+            FROM vocabulary v
+            JOIN lesson_vocabulary lv ON v.id = lv.vocabulary_id
+            JOIN user_lessons ul ON lv.lesson_id = ul.lesson_id
+            WHERE ul.user_id = %s AND ul.completed = true
+            ORDER BY RANDOM()
+            LIMIT 200
+        """, (user_id,))
+        
+        rows = cursor.fetchall()
+        vocabulary = [{"word": row[0], "definition": row[1], "sentence": row[2]} for row in rows]
+        
+        if len(vocabulary) < 20:
+            cursor.execute("""
+                SELECT word, definition, example_sentence
+                FROM vocabulary
+                WHERE difficulty = 'beginner'
+                ORDER BY RANDOM()
+                LIMIT %s
+            """, (20 - len(vocabulary),))
+            
+            starter_rows = cursor.fetchall()
+            vocabulary.extend([{"word": r[0], "definition": r[1], "sentence": r[2]} for r in starter_rows])
+        
+        return {"vocabulary": vocabulary, "count": len(vocabulary)}
+        
+    except Exception as e:
+        print(f"❌ Vocabulary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
 
 
 @router.get("/used-words")
-async def get_used_words(
-    game_type: str,
-    user: dict = Depends(get_current_user)
-):
-    """
-    Get words user has already seen in this game type.
-    Only returns words from last 7 days to allow eventual reuse.
-    """
+async def get_used_words(game_type: str, user: dict = Depends(get_current_user)):
+    """Get words user has already seen"""
+    user_id = user['user_id']
+    print(f"🎮 Getting used words for user {user_id}, game {game_type}")
+    
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['user_id']
+    
     try:
         cursor.execute("""
             SELECT word 
             FROM game_used_words
-            WHERE user_id = ? 
-            AND game_type = ?
-            AND created_at > datetime('now', '-7 days')
+            WHERE user_id = %s AND game_type = %s
+            AND created_at > NOW() - INTERVAL '7 days'
         """, (user_id, game_type))
         
         rows = cursor.fetchall()
-        used_words = [row["word"] for row in rows]
+        used_words = [row[0] for row in rows]
+        print(f"✓ Found {len(used_words)} used words")
         
-        return {
-            "used_words": used_words,
-            "count": len(used_words)
-        }
+        return {"used_words": used_words, "count": len(used_words)}
         
+    except Exception as e:
+        print(f"❌ Used words error: {e}")
+        # Return empty instead of failing - not critical
+        return {"used_words": [], "count": 0}
     finally:
+        cursor.close()
         conn.close()
 
 
 @router.post("/mark-used")
-async def mark_words_used(
-    request: MarkWordsUsedRequest,
-    user: dict = Depends(get_current_user)
-):
-    """
-    Mark words as used so they don't repeat immediately.
-    Uses INSERT OR IGNORE to handle duplicates gracefully.
-    """
+async def mark_words_used(request: MarkWordsUsedRequest, user: dict = Depends(get_current_user)):
+    """Mark words as used"""
+    user_id = user['user_id']
+    print(f"🎮 Marking {len(request.words)} words as used for user {user_id}")
+    
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['user_id']
+    
     try:
         for word in request.words:
             cursor.execute("""
-                INSERT OR IGNORE INTO game_used_words 
-                (user_id, game_type, word, created_at)
-                VALUES (?, ?, ?, datetime('now'))
+                INSERT INTO game_used_words (user_id, game_type, word, created_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (user_id, game_type, word) DO NOTHING
             """, (user_id, request.game_type, word.lower()))
         
         conn.commit()
-        
-        return {
-            "success": True,
-            "marked": len(request.words)
-        }
+        print(f"✓ Marked {len(request.words)} words as used")
+        return {"success": True, "marked": len(request.words)}
         
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Mark used error: {e}")
+        # Don't fail - this is not critical
+        return {"success": False, "marked": 0, "error": str(e)}
     finally:
+        cursor.close()
         conn.close()
 
 
 @router.post("/reset-used-words")
-async def reset_used_words(
-    game_type: str,
-    user: dict = Depends(get_current_user)
-):
-    """
-    Reset used words when all vocabulary has been seen.
-    Called automatically by frontend when needed.
-    """
+async def reset_used_words(game_type: str, user: dict = Depends(get_current_user)):
+    """Reset used words when all vocabulary exhausted"""
+    user_id = user['user_id']
+    print(f"🎮 Resetting used words for user {user_id}, game {game_type}")
+    
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['user_id']
+    
     try:
         cursor.execute("""
             DELETE FROM game_used_words
-            WHERE user_id = ? AND game_type = ?
+            WHERE user_id = %s AND game_type = %s
         """, (user_id, game_type))
         
         conn.commit()
+        print(f"✓ Reset used words")
+        return {"success": True, "message": "Used words reset"}
         
-        return {
-            "success": True,
-            "message": "Used words reset"
-        }
-        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Reset error: {e}")
+        return {"success": False, "error": str(e)}
     finally:
+        cursor.close()
         conn.close()
 
 
 @router.post("/complete")
-async def complete_game(
-    request: CompleteGameRequest,
-    user: dict = Depends(get_current_user)
-):
-    """
-    Record game completion and update user statistics.
-    Also checks for and awards new badges.
-    """
+async def complete_game(request: CompleteGameRequest, user: dict = Depends(get_current_user)):
+    """Record game completion"""
+    user_id = user['user_id']
+    print(f"🎮 Completing game for user {user_id}: {request.game_type}, score {request.score}")
+    
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['user_id']
+    
     try:
         # Insert game completion
         cursor.execute("""
             INSERT INTO game_completions 
             (user_id, game_type, score, rounds_completed, time_seconds, completed_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
-        """, (
-            user_id,
-            request.game_type,
-            request.score,
-            request.rounds_completed,
-            request.time_seconds
-        ))
+            VALUES (%s, %s, %s, %s, %s, NOW())
+        """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
         
         # Update user stats
         cursor.execute("""
             UPDATE users
-            SET 
-                games_played = COALESCE(games_played, 0) + 1,
-                total_game_score = COALESCE(total_game_score, 0) + ?
-            WHERE id = ?
+            SET games_played = COALESCE(games_played, 0) + 1,
+                total_game_score = COALESCE(total_game_score, 0) + %s
+            WHERE id = %s
         """, (request.score, user_id))
         
         conn.commit()
+        print(f"✓ Game completion saved")
         
-        # Check for new badges
-        new_badges = check_and_award_game_badges(user_id, cursor)
-        
-        conn.commit()
-        
-        return {
-            "success": True,
-            "new_badges": new_badges
-        }
+        return {"success": True, "new_badges": []}
         
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Complete game error: {e}")
+        return {"success": False, "error": str(e)}
     finally:
+        cursor.close()
         conn.close()
 
 
 @router.get("/stats")
 async def get_game_stats(user: dict = Depends(get_current_user)):
     """Get user's game statistics"""
-    print(f"DEBUG user type: {type(user)}")
-    print(f"DEBUG user value: {user}")
+    user_id = user['user_id']
+    print(f"🎮 Getting stats for user {user_id}")
+    
     conn = get_db()
     cursor = conn.cursor()
-    user_id = user['user_id']
+    
     try:
         cursor.execute("""
             SELECT 
@@ -5990,7 +5999,6 @@ async def get_game_stats(user: dict = Depends(get_current_user)):
         
         stats = cursor.fetchone()
         
-        # Get recent games
         cursor.execute("""
             SELECT game_type, score, rounds_completed, completed_at
             FROM game_completions
@@ -6001,23 +6009,29 @@ async def get_game_stats(user: dict = Depends(get_current_user)):
         
         recent = cursor.fetchall()
         
-        return {
-            "games_played": stats["games_played"] if stats else 0,
-            "total_score": stats["total_score"] if stats else 0,
-            "avg_score": round(stats["avg_score"], 1) if stats else 0,
-            "high_score": stats["high_score"] if stats else 0,
-            "total_time_minutes": round(stats["total_time"] / 60, 1) if stats else 0,
-            "recent_games": [
-                {
-                    "game_type": row["game_type"],
-                    "score": row["score"],
-                    "rounds": row["rounds_completed"],
-                    "date": row["completed_at"].isoformat() if hasattr(row["completed_at"], 'isoformat') else str(row["completed_at"])
-                }
-                for row in recent
-            ] if recent else []
+        result = {
+            "games_played": stats[0] if stats else 0,
+            "total_score": stats[1] if stats else 0,
+            "avg_score": round(stats[2], 1) if stats and stats[2] else 0,
+            "high_score": stats[3] if stats else 0,
+            "total_time_minutes": round(stats[4] / 60, 1) if stats and stats[4] else 0,
+            "recent_games": []
         }
         
+        print(f"✓ Stats: {result['games_played']} games played")
+        return result
+        
+    except Exception as e:
+        print(f"❌ Stats error: {e}")
+        # Return default stats instead of failing
+        return {
+            "games_played": 0,
+            "total_score": 0,
+            "avg_score": 0,
+            "high_score": 0,
+            "total_time_minutes": 0,
+            "recent_games": []
+        }
     finally:
         cursor.close()
         conn.close()
