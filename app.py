@@ -5982,6 +5982,16 @@ async def complete_game(request: CompleteGameRequest, user: dict = Depends(get_c
     user_id = user['user_id']
     print(f"🎮 Completing game for user {user_id}: {request.game_type}, score {request.score}")
     
+    # DEBUG: Log what we received
+    print("=" * 60)
+    print("🎮 GAME COMPLETION REQUEST")
+    print(f"Raw request data: {request}")
+    print(f"game_type: {request.game_type}")
+    print(f"score: {request.score}")
+    print(f"rounds_completed: {request.rounds_completed}")
+    print(f"time_seconds: {request.time_seconds}")
+    print("=" * 60)
+    
     conn = get_db()
     cursor = conn.cursor()
     
