@@ -9045,12 +9045,19 @@
             console.log('Word Search puzzle words:', puzzleWords);
             
             const gridSize = 12;
-            const grid = generateWordSearchGrid(puzzleWords, gridSize);
+            const { grid, successfullyPlaced } = generateWordSearchGrid(puzzleWords, gridSize);
+
+            // Filter to only words that were actually placed
+            const actualWords = puzzleWords.filter(word => successfullyPlaced.includes(word));
+
+            console.log(`Grid generated: ${actualWords.length}/${puzzleWords.length} words placed successfully`);
+
+            // Use actualWords instead of puzzleWords for the rest of the game
             
             wordSearchFoundWords = [];
             wordSearchStartTime = Date.now();
             
-            gameState.currentQuestion = { words: puzzleWords, grid: grid, foundWords: new Set() };
+            gameState.currentQuestion = { words: actualWords, grid: grid, foundWords: new Set() };
         
         const html = `
             <div style="text-align: center; margin-bottom: 2rem;">
@@ -9064,7 +9071,7 @@
                     </div>
                     <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 1rem 2rem; border-radius: 12px;">
                         <div style="font-size: 0.9rem; opacity: 0.9;">Found</div>
-                        <div id="wordSearchFound" style="font-size: 2rem; font-weight: bold;">0/${puzzleWords.length}</div>
+                        <div id="wordSearchFound" style="font-size: 2rem; font-weight: bold;">0/${actualWords.length}</div>
                     </div>
                 </div>
             </div>
@@ -9090,7 +9097,7 @@
                 <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 200px;">
                     <h3 style="color: var(--navy-primary); margin-bottom: 1rem; font-size: 1.2rem;">Words to Find:</h3>
                     <div id="wordSearchList" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        ${puzzleWords.map(word => `
+                        ${actualWords.map(word => `
                             <div id="word-${word}" style="padding: 0.75rem; background: #f5f5f5; border-radius: 8px; 
                                                            font-weight: 600; color: var(--navy-primary); font-size: 1rem; transition: all 0.3s;">
                                 ${word}
@@ -9127,6 +9134,7 @@
     
     function generateWordSearchGrid(words, size) {
         const grid = Array(size).fill(null).map(() => Array(size).fill(''));
+        const successfullyPlaced = []; // ← Track which words actually got placed
         
         // Force variety by trying each direction in sequence for different words
         const directions = [0, 1, 2, 3]; // H, V, Diag-down, Diag-up
@@ -9159,8 +9167,17 @@
                     }
                 }
             }
+            
+            // Track success/failure
+            if (placed) {
+                successfullyPlaced.push(word);
+                console.log(`✓ Placed: ${word}`);
+            } else {
+                console.warn(`✗ Failed to place: ${word}`);
+            }
         });
         
+        // Fill empty spaces
         const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         for (let i = 0; i < size; i++) {
             for (let j = 0; j < size; j++) {
@@ -9168,7 +9185,7 @@
             }
         }
         
-        return grid;
+        return { grid, successfullyPlaced }; // ← Return both grid AND successful words
     }
     
     function canPlaceWord(grid, word, row, col, direction, size) {
