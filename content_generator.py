@@ -90,7 +90,7 @@ class ContentGenerator:
 {content}
 """
         resp = self.client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You rewrite reading passages to match an exact word range while keeping a narrative story style."},
                 {"role": "user", "content": prompt},
@@ -205,7 +205,7 @@ class ContentGenerator:
         try:
             # NEW API SYNTAX
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
@@ -394,7 +394,7 @@ class ContentGenerator:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4o",
                 messages=[
                     {
                         "role": "system",

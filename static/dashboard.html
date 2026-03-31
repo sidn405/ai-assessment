@@ -8933,7 +8933,7 @@
     let wordSearchStartTime = null;
     let wordSearchFoundWords = [];
     
-    function generateWordSearchQuestion(vocab) {
+    async function generateWordSearchQuestion(vocab) {
         try {
             if (wordSearchTimer) clearInterval(wordSearchTimer);
             
@@ -9006,10 +9006,30 @@
             // Get available words (not used recently)
             let availableWords = suitableWords.filter(v => !gameState.usedWordSearchWords.has(v.word));
             
-            // Only reset if we've literally used all suitable words
+            // NEW CODE - Reset backend too!
             if (availableWords.length === 0) {
-                console.log('All words used - resetting pool and shuffling');
+                console.log('All words used - resetting backend pool');
+                
+                // Reset backend tracking
+                await fetch('/api/word-games/reset-used-words?game_type=word-search', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                // Clear frontend tracking
                 gameState.usedWordSearchWords.clear();
+                
+                // Reload used words from backend (should be empty now)
+                const usedResponse = await fetch('/api/word-games/used-words?game_type=word-search', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const usedData = await usedResponse.json();
+                usedData.used_words.forEach(word => gameState.usedWordSearchWords.add(word));
+                
+                console.log('✓ Backend pool reset, used words cleared');
                 availableWords = [...suitableWords].sort(() => Math.random() - 0.5);
             } else if (availableWords.length < 6) {
                 // If less than 6 available but not zero, fill from unused words
