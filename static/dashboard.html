@@ -8640,32 +8640,28 @@
         }
     }
     
-    async function saveGameCompletionToBackend() {
+    async function saveGameCompletionToBackend(gameType, score, roundsCompleted, timeSeconds) {
         try {
-            const token = localStorage.getItem('token');
-            const timeSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
-            
             const response = await fetch('/api/word-games/complete', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    game_type: currentGame,
-                    score: gameState.score,
-                    rounds_completed: gameState.round - 1,
+                    game_type: gameType,
+                    score: score,
+                    rounds_completed: roundsCompleted,
                     time_seconds: timeSeconds
                 })
             });
             
             if (response.ok) {
                 console.log('✓ Game saved to backend');
-                // Reload user progress
-                await loadUserProgress();
+                loadAllStats();  // ✅ CORRECT - Refreshes all dashboard stats
             }
         } catch (error) {
-            console.warn('Could not save game to backend:', error);
+            console.error('Could not save game to backend:', error);
         }
     }
     
