@@ -6722,26 +6722,48 @@
                             </div>
                         </div>
                         
-                        <button 
-                            id="continue-learning-btn"
-                            class="btn btn-primary"
-                            style="
-                                font-size: 1.2rem;
-                                padding: 1rem 2.5rem;
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                border: none;
-                                color: white;
-                                font-weight: bold;
-                                cursor: pointer;
-                                border-radius: 12px;
-                                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-                                transition: all 0.3s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                        >
-                            Continue Learning 🚀
-                        </button>
+                        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                            <button 
+                                id="return-dashboard-btn"
+                                class="btn btn-secondary"
+                                style="
+                                    font-size: 1.2rem;
+                                    padding: 1rem 2rem;
+                                    background: white;
+                                    border: 2px solid #667eea;
+                                    color: #667eea;
+                                    font-weight: bold;
+                                    cursor: pointer;
+                                    border-radius: 12px;
+                                    transition: all 0.3s;
+                                "
+                                onmouseover="this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.transform='translateY(0)'"
+                            >
+                                Return to Dashboard 🏠
+                            </button>
+                            
+                            <button 
+                                id="continue-learning-btn"
+                                class="btn btn-primary"
+                                style="
+                                    font-size: 1.2rem;
+                                    padding: 1rem 2.5rem;
+                                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                    border: none;
+                                    color: white;
+                                    font-weight: bold;
+                                    cursor: pointer;
+                                    border-radius: 12px;
+                                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                                    transition: all 0.3s;
+                                "
+                                onmouseover="this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.transform='translateY(0)'"
+                            >
+                                Continue Learning 🚀
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -6762,9 +6784,21 @@
                 const content = modal.querySelector('div');
                 if (content) content.scrollTop = 0;
             }, 100);
-            
+
+            // ✅ SPEAK CONGRATULATORY MESSAGE
+            if (typeof speak === 'function') {
+                const congratsMessage = `${userName}, now that you have completed three lessons and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
+                speak(congratsMessage);
+            }
+                        
             // Add click handler
             document.getElementById('continue-learning-btn').addEventListener('click', closeEssayResultsAndContinue);
+
+            // ✅ ADD THIS:
+            const returnBtn = document.getElementById('return-dashboard-btn');
+            if (returnBtn) {
+                returnBtn.addEventListener('click', closeEssayResultsAndReturnDashboard);
+            }
         }
 
         function closeEssayResultsAndContinue() {
@@ -6798,6 +6832,41 @@
             showSection('lessons');
             
             // ✅ SCROLL TO TOP ON MOBILE
+            setTimeout(() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }, 400);
+        }
+
+        function closeEssayResultsAndReturnDashboard() {
+            const modal = document.getElementById('essay-results-modal');
+            
+            // Restore body scroll on mobile
+            if (window.innerWidth <= 768) {
+                const scrollY = document.body.style.top;
+                document.body.style.overflow = '';
+                document.body.style.position = '';
+                document.body.style.width = '';
+                document.body.style.top = '';
+                
+                if (scrollY) {
+                    window.scrollTo(0, parseInt(scrollY || '0') * -1);
+                }
+            }
+            
+            if (modal) {
+                modal.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => modal.remove(), 300);
+            }
+            
+            // Reload gamification data
+            if (typeof loadGamificationData === 'function') {
+                loadGamificationData();
+            }
+            
+            // Return to dashboard/overview
+            window.location.hash = '#overview';
+            showSection('overview');
+            
             setTimeout(() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }, 400);
@@ -9623,7 +9692,12 @@
         GameSounds.playVictory();
         
         // 💾 Save game completion to backend (async)
-        saveGameCompletionToBackend();
+        saveGameCompletionToBackend(
+            gameState.currentQuestion.type,
+            gameState.score,
+            gameState.round,
+            Math.floor((Date.now() - gameStartTime) / 1000)
+        );
         
         // 🎊 Create massive confetti celebration
         setTimeout(() => {
