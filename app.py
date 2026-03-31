@@ -219,7 +219,6 @@ class CompleteGameRequest(BaseModel):
     score: int
     rounds_completed: int
     time_seconds: int
-    unread_count: int
 
 # Database initialization
 def init_db():
