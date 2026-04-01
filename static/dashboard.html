@@ -9926,7 +9926,7 @@
         
         // 💾 Save game completion to backend (async)
         saveGameCompletionToBackend(
-            gameState.currentQuestion.type,
+            currentGame,
             gameState.score,
             gameState.round,
             Math.floor((Date.now() - gameStartTime) / 1000)
