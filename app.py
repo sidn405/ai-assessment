@@ -9001,18 +9001,23 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
         emotion = 'happy'
         
     elif context == 'milestone':
+        delay_seconds = 0
+        
         if lesson_number and lesson_number % 10 == 0:
             messages = [
                 f"Wow {first_name}! You've completed {lesson_number} lessons! That's incredible dedication!",
                 f"Amazing milestone, {first_name}! {lesson_number} lessons shows real commitment to learning!",
                 f"{first_name}, {lesson_number} lessons completed! You're unstoppable! Keep this momentum going!"
             ]
+            delay_seconds = 5
         else:
             messages = [
                 f"Great progress, {first_name}! Lesson {lesson_number} done! You're on a roll!",
                 f"Another lesson complete, {first_name}! That's lesson {lesson_number}! Keep it up!",
                 f"Excellent, {first_name}! Lesson {lesson_number} is behind you! Onward and upward!"
             ]
+            delay_seconds = 3  # Wait 3 seconds
+            
         emotion = 'celebrating'
     
     else:
@@ -9021,7 +9026,8 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
     
     return {
         'text': random.choice(messages),
-        'emotion': emotion
+        'emotion': emotion,
+        'delay_seconds': delay_seconds
     }
 
 # Mount static files

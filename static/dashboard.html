@@ -3715,59 +3715,70 @@
 
 
         async function showTutor(context, extra = {}) {
-          const token = localStorage.getItem('token');
-          if (!token) return;
-      
-          // ✅ Stop overlapping instructions (this fixes “cuts off after 2 words”)
-          if (context === 'instruction') {
-              const now = Date.now();
-      
-              // If we're already speaking an instruction OR one is currently fetching, ignore new triggers
-              if (tutorSpeaking || instructionInFlight) return;
-      
-              // If an instruction just ran a moment ago, ignore (double-trigger protection)
-              if (now - lastInstructionAt < 8000) return; // 8s window
-          }
-      
-          // ✅ Abort any in-flight request so late responses don’t restart speech
-          if (tutorAbort) tutorAbort.abort();
-          tutorAbort = new AbortController();
-          const myId = ++tutorReqId;
-      
-          const studentName = getStudentNameForTutor();
-      
-          if (context === 'instruction') instructionInFlight = true;
-      
-          try {
-              const res = await fetch('/api/tutor/message', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: tutorAbort.signal,
-              body: JSON.stringify({
-                  token,
-                  context,
-                  student_name: studentName,
-                  ...extra
-              })
-              });
-      
-              const data = await res.json();
-      
-              // Ignore stale responses
-              if (myId !== tutorReqId) return;
-      
-              // Greeting removed / empty message guard
-              if (!data?.message || !data.message.trim()) return;
-      
-              if (data?.success) {
-              if (context === 'instruction') lastInstructionAt = Date.now();
-              displayTutorMessage(data.message, data.emotion);
-              }
-          } catch (e) {
-              if (e.name !== 'AbortError') console.error('Tutor error:', e);
-          } finally {
-              if (context === 'instruction') instructionInFlight = false;
-          }
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            // ✅ Stop overlapping instructions (this fixes "cuts off after 2 words")
+            if (context === 'instruction') {
+                const now = Date.now();
+
+                // If we're already speaking an instruction OR one is currently fetching, ignore new triggers
+                if (tutorSpeaking || instructionInFlight) return;
+
+                // If an instruction just ran a moment ago, ignore (double-trigger protection)
+                if (now - lastInstructionAt < 8000) return; // 8s window
+            }
+
+            // ✅ Abort any in-flight request so late responses don't restart speech
+            if (tutorAbort) tutorAbort.abort();
+            tutorAbort = new AbortController();
+            const myId = ++tutorReqId;
+
+            const studentName = getStudentNameForTutor();
+
+            if (context === 'instruction') instructionInFlight = true;
+
+            try {
+                const res = await fetch('/api/tutor/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: tutorAbort.signal,
+                    body: JSON.stringify({
+                        token,
+                        context,
+                        student_name: studentName,
+                        ...extra
+                    })
+                });
+
+                const data = await res.json();
+
+                // Ignore stale responses
+                if (myId !== tutorReqId) return;
+
+                // Greeting removed / empty message guard
+                if (!data?.message || !data.message.trim()) return;
+
+                if (data?.success) {
+                    if (context === 'instruction') lastInstructionAt = Date.now();
+                    
+                    // ✅ ADD DELAY SUPPORT
+                    const delayMs = (data.delay_seconds || 0) * 1000;
+                    
+                    if (delayMs > 0) {
+                        console.log(`⏱️ Delaying tutor message by ${data.delay_seconds}s`);
+                        setTimeout(() => {
+                            displayTutorMessage(data.message, data.emotion);
+                        }, delayMs);
+                    } else {
+                        displayTutorMessage(data.message, data.emotion);
+                    }
+                }
+            } catch (e) {
+                if (e.name !== 'AbortError') console.error('Tutor error:', e);
+            } finally {
+                if (context === 'instruction') instructionInFlight = false;
+            }
         }
 
         let lastTutorStartAt = 0;
@@ -6192,8 +6203,9 @@
                 }
 
                 // milestone every 10 lessons
-                if (nextLessonNumber % 10 === 0) {
-                    setTimeout(() => showTutor('milestone', { lesson_number: nextLessonNumber }), 2500);
+                const completedLessons = nextLessonNumber - 1; // They just finished this lesson
+                if (completedLessons % 10 === 0) {
+                    setTimeout(() => showTutor('milestone', { lesson_number: completedLessons }), 2500);
                 }
                 } catch (e) {
                 console.warn('Tutor trigger failed:', e);
@@ -6607,7 +6619,11 @@
 
         function showEssayResults(data) {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
-            const userName = user.name || 'there';
+    
+            // ✅ USE SAME PATTERN AS playVoiceNavigation
+            const userName = user.full_name ? user.full_name.split(' ')[0] : 'there';
+            
+            console.log('🔍 userName:', userName);
             
             const evaluation = data.evaluation;
             const pointsAwarded = data.points_awarded;
@@ -6790,7 +6806,7 @@
             if (typeof displayTutorMessage === 'function') {
                 const congratsMessage = `${userName}, now that you have completed three lessons and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
                 displayTutorMessage(congratsMessage, 'excited');
-                console.log('✅ Tutor speech triggered');
+                console.log('✅ Tutor speech triggered with name:', userName);
             } else {
                 console.warn('❌ displayTutorMessage not available');
             }
