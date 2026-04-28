@@ -6,7 +6,7 @@ import json
 import os
 from typing import List, Dict, Optional
 from readability import analyze_readability
-
+import re
 
 class ContentGenerator:
     def __init__(self, api_key=None):
@@ -18,36 +18,84 @@ class ContentGenerator:
         # NEW API - Create client
         self.client = OpenAI(api_key=self.api_key)
         
+    def _get_cultural_context_guidance(self, age, grade_band):
+        """
+        Provides age-appropriate cultural context guidance
+        """
+        contexts = {
+            'elementary': {
+                'settings': ['playground', 'classroom', 'community center', 'library', 'park', 'corner store'],
+                'characters': ['students', 'teachers', 'parents', 'grandparents', 'librarians', 'coaches'],
+                'themes': ['friendship', 'learning', 'helping others', 'trying new things', 'community'],
+                'avoid': ['Keep it simple and positive', 'No complex social issues', 'Focus on everyday experiences']
+            },
+            'middle': {
+                'settings': ['school', 'community center', 'basketball court', 'tech lab', 'after-school program', 'local business'],
+                'characters': ['students', 'mentors', 'coaches', 'small business owners', 'community leaders', 'older siblings'],
+                'themes': ['discovering talents', 'overcoming challenges', 'leadership', 'innovation', 'community service'],
+                'avoid': ['Avoid trauma', 'No criminal justice references', 'Focus on growth and potential']
+            },
+            'high': {
+                'settings': ['high school', 'internships', 'community college', 'local businesses', 'volunteer programs', 'STEM programs'],
+                'characters': ['students', 'mentors', 'entrepreneurs', 'professionals', 'college students', 'counselors'],
+                'themes': ['career exploration', 'college prep', 'leadership', 'social justice', 'entrepreneurship', 'identity'],
+                'avoid': ['Respectful of complex realities', 'Focus on agency and empowerment', 'No deficit narratives']
+            },
+            'adult': {
+                'settings': ['workplace', 'community organizations', 'professional settings', 'entrepreneurship', 'continuing education'],
+                'characters': ['professionals', 'entrepreneurs', 'community leaders', 'working parents', 'returning students'],
+                'themes': ['career advancement', 'community building', 'economic mobility', 'lifelong learning', 'giving back'],
+                'avoid': ['Acknowledge challenges without dwelling', 'Focus on resilience and success', 'Asset-based approach']
+            }
+        }
+        
+        # Map grade to category
+        if grade_band in ['pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th', 'elementary']:
+            category = 'elementary'
+        elif grade_band in ['6th', '7th', '8th', 'middle']:
+            category = 'middle'
+        elif grade_band in ['9th', '10th', '11th', '12th', 'high']:
+            category = 'high'
+        else:
+            category = 'adult'
+        
+        return contexts.get(category, contexts['elementary'])
+    
+    
+        
     def _rewrite_passage_to_word_range(self, title, content, topic, difficulty_level, word_count_min, word_count_max, target_words):
         prompt = f"""
-Rewrite the passage below into a NEW VERSION that is BETWEEN {word_count_min} and {word_count_max} words
-(aim for about {target_words} words).
+        Rewrite the passage below into a NEW VERSION.
 
-Hard rules:
-- Keep it a STORY (narrative), not an explanation/definition.
-- Keep the same topic focus: {topic}
-- Keep difficulty level: {difficulty_level}
-- Same main character(s) and setting, but you may add 1-2 new details to reach the word count naturally.
-- No headings, no bullet points.
+        HARD WORD COUNT RULE:
+        - The "content" field MUST be EXACTLY {target_words} words (content only).
+        - Count words by splitting on spaces.
+        - Before responding, self-check and adjust until exactly {target_words}.
 
-Return ONLY valid JSON with:
-{{
-  "title": "{title}",
-  "content": "...",
-  "key_concepts": ["...", "...", "..."],
-  "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
-}}
+        Hard rules:
+        - Keep it a STORY (narrative), not an explanation/definition.
+        - Keep the same topic focus: {topic}
+        - Keep difficulty level: {difficulty_level}
+        - No headings, no bullet points.
 
-PASSAGE TO REWRITE:
+        Return ONLY valid JSON with:
+        {{
+        "title": "{title}",
+        "content": "...",
+        "key_concepts": ["...", "...", "..."],
+        "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
+        }}
+
+        PASSAGE TO REWRITE:
 {content}
 """
         resp = self.client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You rewrite reading passages to match an exact word range while keeping a narrative story style."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.5,
+            temperature=0.25,
             max_tokens=2500,
             timeout=60
         )
@@ -58,89 +106,162 @@ PASSAGE TO REWRITE:
             txt = txt.split("```")[1].split("```")[0].strip()
         return json.loads(txt)
     
-    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests):
+    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests, age=None, grade_band=None):
         """Generate educational passage using GPT-4 with dynamic word count"""
         
         # Calculate target from range
         import random
-        target_words = random.randint(word_count_min, word_count_max)
+        target_words = (word_count_min + word_count_max) // 2
+        
+        # Build enhanced prompt
+        prompt = f"""
+        Generate an engaging reading passage for a student:
+        
+        Student Profile:
+        - Age: {age} years old
+        - Grade Level: {grade_band}
+        - Reading Difficulty: {difficulty_level}
+        - Interests: {', '.join(user_interests) if user_interests else 'general topics'}
+        - Topic: {topic}
+        
+        Requirements:
+        - Word count: approximately {target_words} words
+        - Use age-appropriate vocabulary for a {age}-year-old in {grade_band}
+        - Make it engaging and relatable to their interests
+        - Include vivid details and clear structure
+        - Difficulty level: {difficulty_level}
+        
+        The passage should be educational but fun, matching their grade level expectations.
+        """
+        
+        # Add after line 69
+        cultural_context = self._get_cultural_context_guidance(age, grade_band)
+        
+        # Include in prompt
+        prompt += f"""
+        
+        CULTURAL CONTEXT FOR THIS AGE/GRADE:
+        Settings to use: {', '.join(cultural_context['settings'])}
+        Characters to include: {', '.join(cultural_context['characters'])}
+        Appropriate themes: {', '.join(cultural_context['themes'])}
+        What to avoid: {', '.join(cultural_context['avoid'])}
+        """
         
         # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
-        prompt = f"""Write a SHORT STORY (narrative) about {topic}.
-    Difficulty Level: {difficulty_level}
-    Word Count: Between {word_count_min} and {word_count_max} words (aim for approximately {target_words} words)
+        prompt = f"""Write a SHORT STORY (narrative) about {topic} featuring African American characters.
 
-    IMPORTANT: 
-    - Focus ONLY on {topic}
-    - Do NOT try to combine with other topics
-    - Make it engaging and age-appropriate
-    - Use clear, accessible language
-
-    CRITICAL - VOCABULARY EXTRACTION:
-    - Identify ALL potentially challenging words in the passage
-    - Include words that a {difficulty_level} reader might not know
-    - For each word, provide a simple, age-appropriate definition
-    - Include at least 5-8 vocabulary words (more for longer passages)
-    - Look for: academic terms, technical words, advanced vocabulary, subject-specific jargon
-    - Examples: "phenomenon", "transformation", "immersive", "gratification", "tangible", "palpable", etc.
-    
-    Hard rules:
-    - This MUST be a story with a character, setting, and a small plot (beginning → problem → resolution)
-    - Do NOT write an article, definition, or history lesson
-    - Do NOT explain the topic directly; SHOW the topic through what happens in the story
-    - Include at least one line of dialogue
-    - Keep it realistic/relatable and age-appropriate
-
-    Generate a passage that explores {topic} in an interesting way.
-
-    Return your response as a JSON object with this exact structure:
-    {{
-        "title": "Specific title about {topic}",
-        "content": "The full passage text (approximately {target_words} words, focused on {topic})",
-        "key_concepts": ["concept1", "concept2", "concept3"],
-        "vocabulary_words": [
-            {{"word": "challenging_word1", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word2", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word3", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word4", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word5", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word6", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word7", "definition": "simple, clear definition"}},
-            {{"word": "challenging_word8", "definition": "simple, clear definition"}}
-        ]
-    }}
-
-    VOCABULARY GUIDELINES BY LEVEL:
-    - elementary: Words at 4th-6th grade level (5-7 words minimum)
-    - intermediate: Words at 7th-9th grade level (6-8 words minimum)
-    - high_school: College-prep vocabulary (7-10 words minimum)
-    - adult: Advanced academic vocabulary (8-12 words minimum)"""
+        Student Profile:
+        - Age: {age} years old
+        - Grade Level: {grade_band}
+        - Reading Difficulty: {difficulty_level}
+        - Interests: {', '.join(user_interests) if user_interests else 'general topics'}
+        
+        CULTURAL CONTEXT:
+        - Set in an urban community (city neighborhood, public spaces)
+        - Feature authentic Black characters with realistic names
+        - Show positive community interactions and support
+        - Include cultural elements (music, food, celebrations, traditions)
+        - Demonstrate resilience and success
+        
+        HARD WORD COUNT RULE:
+        - The "content" field MUST be EXACTLY {target_words} words.
+        - Count words by splitting on spaces.
+        - Before you respond, self-check the word count and adjust until it is exactly {target_words}.
+        
+        STORY STRUCTURE:
+        - Character: African American protagonist facing a relatable challenge
+        - Setting: Urban neighborhood, school, community center, park, library, etc.
+        - Plot: Beginning → problem/challenge → resolution through creativity/effort/community
+        - Include at least one line of dialogue
+        - Show positive outcome and growth
+        - NO criminal justice, violence, or trauma content
+        - Focus on strengths, not struggles with poverty
+        
+        TOPIC FOCUS: {topic}
+        - Stay focused on this topic only
+        - Make it educational but engaging
+        - Connect to their real-world experiences
+        - Show how the topic matters in their community
+        
+        AGE-APPROPRIATE VOCABULARY:
+        - Use {difficulty_level} level vocabulary
+        - Include challenging academic words they can learn
+        - Define any cultural references they might not know
+        
+        Return your response as a JSON object:
+        {{
+            "title": "Engaging title about {topic}",
+            "content": "The full story (EXACTLY {target_words} words)",
+            "key_concepts": ["concept1", "concept2", "concept3"],
+            "vocabulary_words": [
+                {{"word": "challenging_word1", "definition": "simple, clear definition"}},
+                {{"word": "challenging_word2", "definition": "simple, clear definition"}},
+                ... (minimum 5-10 words based on difficulty level)
+            ]
+        }}
+        
+        REMINDER: This story should feel real and relatable to an African American student from an urban community. Focus on positive experiences, community strength, and educational growth."""
         
         try:
             # NEW API SYNTAX
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert educational content creator. 
-
-    CRITICAL VOCABULARY INSTRUCTION:
-    Extract ALL words from your passage that might be challenging for the target reading level. 
-    Don't limit yourself to just 2-3 words - identify EVERY word that a student might need help understanding.
-    A good passage should have AT LEAST 5-10 vocabulary words, more for longer passages.
-
-    Examples of words to include:
-    - Elementary: "ecosystem", "gravity", "nutrient", "habitat", "diverse"
-    - Intermediate: "phenomenon", "inevitable", "perspective", "substantial", "comprehensive"  
-    - High School: "culmination", "juxtaposition", "paradigm", "synthesis", "nuance"
-    - Adult: "epistemology", "hegemony", "empirical", "ubiquitous", "pragmatic"
-
-    Focus on ONE topic at a time. Do not blend multiple topics together."""
+                        "content": """You are an expert educational content creator specializing in culturally relevant, trauma-informed content for African American students from underserved communities.
+                        
+                        CRITICAL CULTURAL GUIDELINES:
+                        1. **Authentic Representation**: 
+                           - Use diverse Black characters with authentic names and experiences
+                           - Include positive role models from the community (teachers, coaches, entrepreneurs, artists)
+                           - Show families with different structures (single parents, grandparents, extended family)
+                           - Represent urban/neighborhood settings authentically and positively
+                        
+                        2. **TRAUMA-INFORMED - AVOID**:
+                           - Police encounters or criminal justice system references
+                           - Violence, gangs, or crime as plot elements
+                           - Poverty as a defining characteristic (it's context, not identity)
+                           - Deficit narratives or stereotypes
+                           - Drug-related content
+                        
+                        3. **EMPOWERING THEMES**:
+                           - Community strength and mutual support
+                           - Overcoming challenges through creativity and resilience
+                           - Cultural pride and heritage
+                           - Educational and career success
+                           - Arts, music, sports as pathways
+                           - Entrepreneurship and innovation
+                           - STEM and creative fields
+                        
+                        4. **RELATABLE CONTEXTS**:
+                           - Urban neighborhoods, public transportation, corner stores
+                           - Community centers, parks, libraries, churches
+                           - Barbershops, hair salons, family gatherings
+                           - Basketball courts, community gardens
+                           - Local heroes and mentors
+                           - Music (hip-hop, R&B), art, fashion, sports culture
+                        
+                        5. **VOCABULARY EXTRACTION**:
+                           Extract ALL challenging words from your passage. A good passage should have AT LEAST 5-10 vocabulary words.
+                           
+                           Examples by level:
+                           - Elementary: "ecosystem", "gravity", "nutrient", "habitat", "diverse"
+                           - Intermediate: "phenomenon", "inevitable", "perspective", "substantial", "comprehensive"  
+                           - High School: "culmination", "juxtaposition", "paradigm", "synthesis", "nuance"
+                           - Adult: "epistemology", "hegemony", "empirical", "ubiquitous", "pragmatic"
+                        
+                        STORY REQUIREMENTS:
+                        - Focus on ONE topic at a time
+                        - Include a character, setting, and plot (beginning → problem → resolution)
+                        - Make it engaging and age-appropriate
+                        - Show positive outcomes through effort, creativity, or community support
+                        - Include at least one line of dialogue
+                        - NO articles, definitions, or lectures - tell a STORY"""
                     },
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.8,
+                temperature=0.35,
                 max_tokens=2500,
                 timeout=60
             )
@@ -184,73 +305,44 @@ PASSAGE TO REWRITE:
             
             # Analyze readability
             from readability import analyze_readability
+
+            # Analyze readability
             readability = analyze_readability(passage_data['content'])
-            
-            def _rewrite_passage_to_word_range(self, title, content, topic, difficulty_level, word_count_min, word_count_max, target_words):
-                prompt = f"""
-            Rewrite the passage below into a NEW VERSION that is BETWEEN {word_count_min} and {word_count_max} words
-            (aim for about {target_words} words).
-
-            Return ONLY valid JSON with:
-            {{
-            "title": "{title}",
-            "content": "...",
-            "key_concepts": ["...", "...", "..."],
-            "vocabulary_words": [{{"word":"...","definition":"..."}}, ...]
-            }}
-
-            PASSAGE TO REWRITE:
-            {content}
-            """
-                resp = self.client.chat.completions.create(
-                    model="gpt-4-turbo-preview",
-                    messages=[
-                        {"role": "system", "content": "You rewrite reading passages to match an exact word range while keeping a narrative story style."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.5,
-                    max_tokens=2500,
-                    timeout=60
-                )
-                txt = resp.choices[0].message.content
-                if "```json" in txt:
-                    txt = txt.split("```json")[1].split("```")[0].strip()
-                elif "```" in txt:
-                    txt = txt.split("```")[1].split("```")[0].strip()
-                return json.loads(txt)   
-            
             wc = readability['word_count']
+
+            # If out of range, do up to 2 rewrite passes (MUCH faster than 6 new generations)
             if wc < word_count_min or wc > word_count_max:
-                passage_data = self._rewrite_passage_to_word_range(
-                    title=passage_data.get("title", f"{topic}"),
-                    content=passage_data["content"],
-                    topic=topic,
-                    difficulty_level=difficulty_level,
-                    word_count_min=word_count_min,
-                    word_count_max=word_count_max,
-                    target_words=target_words
+                print(f"⚠️ Out of range on first draft: wc={wc}. Rewriting to fit...")
+
+                for rewrite_attempt in range(1, 3):  # 2 rewrites max
+                    passage_data = self._rewrite_passage_to_word_range(
+                        title=passage_data.get("title", f"{topic}"),
+                        content=passage_data["content"],
+                        topic=topic,
+                        difficulty_level=difficulty_level,
+                        word_count_min=word_count_min,
+                        word_count_max=word_count_max,
+                        target_words=target_words
+                    )
+                    readability = analyze_readability(passage_data['content'])
+                    wc = readability['word_count']
+                    print(f"✍️ Rewrite attempt {rewrite_attempt}: wc={wc}")
+
+                    if word_count_min <= wc <= word_count_max:
+                        break
+
+            # (Optional but recommended) Re-check vocab after rewrite because rewrite often returns fewer vocab words
+            vocab_words = passage_data.get('vocabulary_words', [])
+            vocab_count = len(vocab_words)
+            required_min = min_vocab.get(difficulty_level, 5)
+
+            if vocab_count < required_min:
+                passage_data['vocabulary_words'] = self._extract_additional_vocabulary(
+                    passage_data['content'],
+                    vocab_words,
+                    difficulty_level,
+                    required_min
                 )
-                readability = analyze_readability(passage_data['content'])
-                
-            
-            # Add metadata
-            passage_data.update({
-                "source": "AI",
-                "topic_tags": [topic],
-                "word_count": readability['word_count'],
-                "readability_score": readability['flesch_kincaid_grade'],
-                "flesch_ease": readability['flesch_reading_ease'],
-                "difficulty_level": difficulty_level,
-                "estimated_minutes": readability['estimated_minutes'],
-                "actual_difficulty": readability['difficulty_level'],
-                "grade_band": readability['grade_band'],
-                "target_word_range": f"{word_count_min}-{word_count_max}",
-                "vocabulary_count": len(passage_data['vocabulary_words'])
-            })
-            
-            print(f"✅ Generated passage: '{passage_data['title']}'")
-            print(f"✅ Word count: {readability['word_count']} (target: {word_count_min}-{word_count_max})")
-            print(f"✅ Vocabulary words: {len(passage_data['vocabulary_words'])}")
             
             return passage_data
             
@@ -302,7 +394,7 @@ PASSAGE TO REWRITE:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
@@ -366,72 +458,234 @@ PASSAGE TO REWRITE:
             ],
             "vocabulary_count": 3
         }
-            
-    def generate_comprehension_questions(self, passage_text, passage_title, num_questions=3):
-        """Generate comprehension questions using GPT-4"""
         
-        prompt = f"""Based on the following passage, create {num_questions} comprehension questions.
-
-Passage Title: {passage_title}
-
-Passage:
-{passage_text}
-
-Generate questions that test understanding at different levels (recall, inference, analysis).
-
-Return your response as a JSON array with this exact structure:
-[
-    {{
-        "question": "Question text here?",
-        "type": "main_idea|detail|inference|vocabulary",
+            
+    def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4, allow_fill_blank: bool = True):
+        """
+        Generate comprehension questions with optional fill-in-blank
+        
+        Args:
+            passage_text: The passage content
+            passage_title: Title of the passage  
+            num_questions: Number of questions (default 4)
+            allow_fill_blank: If True, mix MC and fill-in-blank. If False, MC only.
+        """
+        
+        if allow_fill_blank:
+            # Mix of question types for lessons
+            type_instruction = """
+    Generate EXACTLY {num_questions} comprehension questions with this distribution:
+    - 2-3 multiple choice questions
+    - 1-2 fill-in-the-blank questions
+    
+    QUESTION TYPES:
+    1. MULTIPLE CHOICE: Standard 4-option questions
+    2. FILL-IN-THE-BLANK: Questions where user types a word or short phrase
+    
+    REQUIREMENTS FOR FILL-IN-BLANK:
+    - Provide "accept_answers" array with variations (lowercase)
+    - Keep answers SHORT (1-3 words max)
+    - Example: "accept_answers": ["library", "public library", "the library"]
+    """
+            json_example = """[
+    {
+        "question": "What is the main topic?",
+        "type": "multiple_choice",
         "options": ["Option A", "Option B", "Option C", "Option D"],
-        "correct_answer": "The correct option text",
+        "correct_answer": "Option A",
         "explanation": "Why this is correct",
-        "difficulty": 1-3
-    }}
-]"""
-
+        "difficulty": 1
+    },
+    {
+        "question": "The story takes place in a __________.",
+        "type": "fill_in_blank",
+        "correct_answer": "library",
+        "accept_answers": ["library", "public library", "the library"],
+        "explanation": "The passage mentions they met at the library",
+        "difficulty": 2
+    }
+    ]"""
+        else:
+            # Only multiple choice for assessments
+            type_instruction = """
+    Generate EXACTLY {num_questions} MULTIPLE CHOICE questions.
+    
+    REQUIREMENTS:
+    - ALL questions must be multiple choice with 4 options
+    - NO fill-in-the-blank questions
+    - Ensure only ONE correct answer per question
+    """
+            json_example = """[
+    {
+        "question": "What is the main topic?",
+        "type": "multiple_choice",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correct_answer": "Option A",
+        "explanation": "Why this is correct",
+        "difficulty": 1
+    }
+    ]"""
+        
+        prompt = f"""
+    You are an expert educator creating comprehension questions for a reading passage.
+    
+    PASSAGE TITLE: {passage_title}
+    
+    PASSAGE:
+    {passage_text}
+    
+    {type_instruction.format(num_questions=num_questions)}
+    
+    Return as JSON array:
+    {json_example}
+    
+    IMPORTANT:
+    - Vary difficulty (easier questions first)
+    - Cover different aspects of the passage
+    - Make questions age-appropriate
+    - Test different comprehension skills
+    """
+    
         try:
-            # NEW API SYNTAX
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4o-mini",
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at creating educational assessment questions."
-                    },
+                    {"role": "system", "content": "You are an expert educator creating engaging comprehension questions."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=1000,
-                timeout=60
+                max_tokens=2000
             )
             
-            content = response.choices[0].message.content
+            content = response.choices[0].message.content.strip()
             
-            # Extract JSON
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            
-            questions = json.loads(content)
-            # ========== ADD THIS SECTION ==========
-            # Shuffle options for each question to randomize correct answer position
-            import random
-            for q in questions:
-                if 'options' in q and isinstance(q['options'], list):
-                    # Shuffle the options
-                    random.shuffle(q['options'])
-            # =====================================
-            
-            return questions
-            
+            # Extract JSON from response
+            import re
+            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+            if json_match:
+                import json
+                questions = json.loads(json_match.group())
+                
+                # Validate and normalize questions
+                validated = []
+                for q in questions[:num_questions]:
+                    # If allow_fill_blank=False, force all to multiple choice
+                    if not allow_fill_blank:
+                        q['type'] = 'multiple_choice'
+                        q.pop('accept_answers', None)
+                    else:
+                        # Normalize type names
+                        if q.get('type') in ['fill_in_blank', 'fill-in-blank', 'fill_blank']:
+                            q['type'] = 'fill_in_blank'
+                        else:
+                            q['type'] = 'multiple_choice'
+                    
+                    # Ensure required fields exist
+                    if q['type'] == 'fill_in_blank':
+                        # Ensure accept_answers exists
+                        if 'accept_answers' not in q:
+                            base = q['correct_answer'].lower().strip()
+                            q['accept_answers'] = [base, f"the {base}", f"a {base}"]
+                        # Remove options field if present
+                        q.pop('options', None)
+                    else:
+                        # Multiple choice - ensure options exist
+                        if 'options' not in q or len(q['options']) < 4:
+                            q['options'] = [
+                                q.get('correct_answer', 'Option A'),
+                                "Option B",
+                                "Option C", 
+                                "Option D"
+                            ]
+                    
+                    validated.append(q)
+                
+                question_types = "mixed" if allow_fill_blank else "MC only"
+                print(f"✓ Generated {len(validated)} questions ({question_types})")
+                return validated
+                
+            else:
+                raise ValueError("Could not find JSON in response")
+                
         except Exception as e:
             print(f"Error generating questions: {e}")
             import traceback
             traceback.print_exc()
-            return self._get_fallback_questions()
+            
+            # Fallback questions based on allow_fill_blank
+            if allow_fill_blank:
+                # Mix of MC and fill-in-blank
+                return [
+                    {
+                        "question": "What is the main idea of this passage?",
+                        "type": "multiple_choice",
+                        "options": ["A story about the topic", "A science experiment", "A history lesson", "A cooking recipe"],
+                        "correct_answer": "A story about the topic",
+                        "explanation": "The passage discusses this main theme.",
+                        "difficulty": 1
+                    },
+                    {
+                        "question": f"Fill in the blank: This passage is about __________.",
+                        "type": "fill_in_blank",
+                        "correct_answer": passage_title.lower() if passage_title else "the topic",
+                        "accept_answers": [passage_title.lower() if passage_title else "the topic", "the story", "this topic"],
+                        "explanation": "The passage focuses on this subject.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "What challenge or situation is described?",
+                        "type": "multiple_choice",
+                        "options": ["A problem to solve", "A celebration", "A vacation", "A test"],
+                        "correct_answer": "A problem to solve",
+                        "explanation": "The passage describes a challenge.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "The main character wanted to __________.",
+                        "type": "fill_in_blank",
+                        "correct_answer": "achieve a goal",
+                        "accept_answers": ["achieve a goal", "reach a goal", "accomplish something", "succeed"],
+                        "explanation": "The passage shows the character working toward something.",
+                        "difficulty": 2
+                    }
+                ][:num_questions]
+            else:
+                # All multiple choice
+                return [
+                    {
+                        "question": "What is the main idea of this passage?",
+                        "type": "multiple_choice",
+                        "options": ["A story about the topic", "A science experiment", "A history lesson", "A cooking recipe"],
+                        "correct_answer": "A story about the topic",
+                        "explanation": "The passage discusses this main theme.",
+                        "difficulty": 1
+                    },
+                    {
+                        "question": "What challenge or situation is described?",
+                        "type": "multiple_choice",
+                        "options": ["A problem to solve", "A celebration", "A vacation", "A test"],
+                        "correct_answer": "A problem to solve",
+                        "explanation": "The passage describes a challenge.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "What did the main character want to achieve?",
+                        "type": "multiple_choice",
+                        "options": ["To accomplish a goal", "To give up", "To run away", "To do nothing"],
+                        "correct_answer": "To accomplish a goal",
+                        "explanation": "The passage shows the character working toward something.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "What was the result of the character's efforts?",
+                        "type": "multiple_choice",
+                        "options": ["They made a positive impact", "They gave up completely", "Nothing changed", "They moved away"],
+                        "correct_answer": "They made a positive impact",
+                        "explanation": "The passage shows positive outcomes.",
+                        "difficulty": 2
+                    }
+                ][:num_questions]
+        
     
     def _extract_topics(self, main_topic, interests):
         """Extract relevant topic tags"""

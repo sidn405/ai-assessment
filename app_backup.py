@@ -1,16 +1,19 @@
 # Achieve 365 Reading Rewards
 # AI-Powered Adaptive Learning System
 
-from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks, Header
+from fastapi import FastAPI, APIRouter,  HTTPException, Depends, Request, BackgroundTasks, Header
+from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 import sqlite3
 import psycopg2
 import psycopg2.extras
 import bcrypt
+import os
 import jwt
 from datetime import datetime, timedelta, timezone
 import openai
@@ -30,6 +33,7 @@ from content_generator import ContentGenerator
 
 # Initialize FastAPI
 app = FastAPI(title="Achieve 365 - Phase 2")
+router = APIRouter(prefix="/api/word-games", tags=["word-games"])
 
 # CORS middleware
 app.add_middleware(
@@ -44,6 +48,9 @@ app.add_middleware(
 SECRET_KEY = os.getenv("SECRET_KEY", "achieve-365-reading-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 openai.api_key = OPENAI_API_KEY
+ALGORITHM = "HS256"
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -67,8 +74,7 @@ password_reset_tokens = {}
 print(f"Using {'PostgreSQL' if USE_POSTGRES else 'SQLite'} database")
 print(f"OpenAI API {'configured' if OPENAI_API_KEY else 'NOT configured'}")
 
-# Add this near the top with your other configurations
-SECRET_KEY = "your-secret-key-here"  # Use the same key you use for login tokens
+
 
 def validate_token(token):
     """Validate JWT token and return user data"""
@@ -172,6 +178,47 @@ class AcceptInviteReq(BaseModel):
 class AdminInviteActionRequest(BaseModel):
     # optional note for auditing/logging if you want
     note: Optional[str] = None
+    
+class SendMessageRequest(BaseModel):
+    recipient_id: int
+    content: str
+ 
+class SendToTeacherRequest(BaseModel):
+    content: str
+ 
+class MessageResponse(BaseModel):
+    id: int
+    sender_id: int
+    sender_type: str
+    sender_name: str
+    recipient_id: int
+    recipient_type: str
+    content: str
+    read: bool
+    created_at: datetime
+ 
+class ConversationResponse(BaseModel):
+    id: int
+    student_id: int
+    student_name: str
+    student_email: Optional[str]
+    last_message: Optional[str]
+    last_message_time: Optional[datetime]
+    
+class VocabularyWord(BaseModel):
+    word: str
+    definition: str
+    sentence: str
+
+class MarkWordsUsedRequest(BaseModel):
+    game_type: str
+    words: List[str]
+
+class CompleteGameRequest(BaseModel):
+    game_type: str
+    score: int
+    rounds_completed: int
+    time_seconds: int
 
 # Database initialization
 def init_db():
@@ -274,13 +321,34 @@ def create_token(user_id: int, role: str) -> str:
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-def verify_token(token: str) -> dict:
+def verify_token(token: str):
+    """Verify JWT token and return payload"""
+    print(f"🔑 Verifying token...")
+    
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print(f"🔑 Decoded payload: {payload}")
+        
+        # Check if user_id exists
+        if 'user_id' not in payload:
+            print(f"❌ No user_id in payload")
+            raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+        
+        return payload
+        
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        print("❌ Token expired")
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError as e:
+        print(f"❌ Invalid token: {e}")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    except HTTPException:
+        raise  # Re-raise HTTPException
+    except Exception as e:
+        print(f"❌ Unexpected error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=401, detail=f"Token error: {str(e)}")
 
 def update_user_activity(user_id: int):
     """Update last_active timestamp"""
@@ -416,16 +484,50 @@ async def register(user: UserCreate):
         conn.close()
 
 def get_current_user(authorization: str = Header(None)) -> dict:
+    """Get current user from JWT token"""
+    print("=" * 50)
+    print("🔐 AUTH CHECK STARTED")
+    print(f"🔐 Authorization header present: {bool(authorization)}")
+    
     if not authorization:
+        print("❌ No authorization header")
         raise HTTPException(status_code=401, detail="Missing Authorization")
+    
+    print(f"🔐 Auth header: {authorization[:50]}...")
+    
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
+        print(f"❌ Invalid format: {len(parts)} parts, first={parts[0] if parts else 'none'}")
         raise HTTPException(status_code=401, detail="Invalid Authorization format")
-    return verify_token(parts[1])
+    
+    token = parts[1]
+    print(f"🔐 Token extracted: {token[:20]}...")
+    
+    try:
+        payload = verify_token(token)
+        print(f"✅ Token verified successfully")
+        print(f"✅ Payload: {payload}")
+        print("=" * 50)
+        return payload
+    except HTTPException as he:
+        print(f"❌ HTTPException in verify_token: {he.detail}")
+        print("=" * 50)
+        raise
+    except Exception as e:
+        print(f"❌ Unexpected error in verify_token: {type(e).__name__}: {e}")
+        print("=" * 50)
+        raise HTTPException(status_code=401, detail=f"Token verification failed: {str(e)}")
+
 
 def require_admin(user: dict = Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def require_user(user: dict = Depends(get_current_user)):
+    if user.get("role") not in ("student", "user"):
+        raise HTTPException(status_code=403, detail="Student access required")
     return user
 
 @app.post("/api/login")
@@ -1857,6 +1959,399 @@ async def check_tables():
             "error": str(e),
             "status": "error"
         }
+        
+@app.get("/api/messages/conversations")
+async def get_admin_conversations(current_user: dict = Depends(require_admin)):
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+
+        query = """
+            WITH last_messages AS (
+                SELECT
+                    CASE
+                        WHEN sender_type = 'student' THEN sender_id
+                        ELSE recipient_id
+                    END AS student_id,
+                    content AS last_message,
+                    created_at AS last_message_time,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY CASE
+                            WHEN sender_type = 'student' THEN sender_id
+                            ELSE recipient_id
+                        END
+                        ORDER BY created_at DESC
+                    ) AS rn
+                FROM messages
+                WHERE
+                    (sender_type = 'admin' AND sender_id = %s)
+                    OR
+                    (recipient_type = 'admin' AND recipient_id = %s)
+            ),
+            unread_counts AS (
+                SELECT
+                    sender_id AS student_id,
+                    COUNT(*) AS unread_count
+                FROM messages
+                WHERE recipient_type = 'admin'
+                  AND recipient_id = %s
+                  AND sender_type = 'student'
+                  AND read = FALSE
+                GROUP BY sender_id
+            )
+            SELECT
+                u.id AS student_id,
+                u.full_name AS student_name,
+                u.email AS student_email,
+                lm.last_message,
+                lm.last_message_time,
+                COALESCE(uc.unread_count, 0) AS unread_count
+            FROM users u
+            LEFT JOIN last_messages lm
+                ON lm.student_id = u.id AND lm.rn = 1
+            LEFT JOIN unread_counts uc
+                ON uc.student_id = u.id
+            WHERE u.role = 'student'
+              AND (
+                    lm.student_id IS NOT NULL
+                    OR EXISTS (
+                        SELECT 1
+                        FROM messages m
+                        WHERE
+                            (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
+                            OR
+                            (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
+                  )
+              )
+            ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
+        """
+
+        admin_id = current_user["user_id"]
+        cursor.execute(query, (admin_id, admin_id, admin_id, admin_id, admin_id))
+        conversations = cursor.fetchall()
+        conn.close()
+
+        return {
+            "conversations": [
+                {
+                    "student_id": c["student_id"],
+                    "student_name": c["student_name"],
+                    "student_email": c["student_email"],
+                    "last_message": c["last_message"],
+                    "last_message_time": c["last_message_time"],
+                    "unread_count": c["unread_count"],
+                }
+                for c in conversations
+            ]
+        }
+
+    except Exception as e:
+        print(f"Error loading conversations: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load conversations: {str(e)}")
+ 
+ 
+@app.get("/api/messages/conversation/{student_id}")
+async def get_conversation_messages(
+    student_id: int,
+    current_user: dict = Depends(require_admin)
+):
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+
+        query = """
+            SELECT
+                m.id,
+                m.sender_id,
+                m.sender_type,
+                CASE
+                    WHEN m.sender_type = 'admin' THEN
+                        (SELECT full_name FROM users WHERE id = m.sender_id AND role = 'admin')
+                    ELSE
+                        (SELECT full_name FROM users WHERE id = m.sender_id AND role = 'student')
+                END AS sender_name,
+                m.recipient_id,
+                m.recipient_type,
+                m.content,
+                m.read,
+                m.created_at
+            FROM messages m
+            WHERE
+                (m.sender_id = %s AND m.sender_type = 'admin' AND m.recipient_id = %s AND m.recipient_type = 'student')
+                OR
+                (m.sender_id = %s AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = 'admin')
+            ORDER BY m.created_at ASC
+        """
+
+        admin_id = current_user["user_id"]
+        cursor.execute(query, (admin_id, student_id, student_id, admin_id))
+        messages = cursor.fetchall()
+
+        mark_read_query = """
+            UPDATE messages
+            SET read = TRUE
+            WHERE sender_id = %s
+              AND sender_type = 'student'
+              AND recipient_id = %s
+              AND recipient_type = 'admin'
+              AND read = FALSE
+        """
+        cursor.execute(mark_read_query, (student_id, admin_id))
+        conn.commit()
+        conn.close()
+
+        return {"messages": [dict(m) for m in messages]}
+
+    except Exception as e:
+        print(f"Error loading messages: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load messages: {str(e)}")
+ 
+ 
+@app.post("/api/messages/send")
+async def send_message_to_student(
+    request: SendMessageRequest,
+    current_user: dict = Depends(require_admin)
+):
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+
+        cursor.execute(
+            "SELECT id FROM users WHERE id = %s AND role = 'student'",
+            (request.recipient_id,)
+        )
+        student = cursor.fetchone()
+
+        if not student:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        query = """
+            INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
+            VALUES (%s, 'admin', %s, 'student', %s)
+            RETURNING id, created_at
+        """
+
+        admin_id = current_user["user_id"]
+        cursor.execute(query, (admin_id, request.recipient_id, request.content))
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
+
+        return {
+            "success": True,
+            "message_id": result["id"],
+            "created_at": result["created_at"]
+        }
+
+    except Exception as e:
+        print(f"Error sending message: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
+ 
+ 
+@app.post("/api/messages/conversation/{student_id}/read")
+async def mark_conversation_as_read(
+    student_id: int,
+    current_user: dict = Depends(require_admin)
+):
+    """Mark all messages from a student to this admin as read"""
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+
+        cursor.execute(
+            """
+            UPDATE messages
+            SET read = TRUE, updated_at = NOW()
+            WHERE sender_id = %s
+              AND sender_type = 'student'
+              AND recipient_id = %s
+              AND recipient_type = 'admin'
+              AND read = FALSE
+            """,
+            (student_id, current_user["user_id"])
+        )
+
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    except Exception as e:
+        print(f"Error marking as read: {e}")
+        traceback.print_exc()
+        return {"success": False}
+ 
+ 
+# ========================================
+# STUDENT ENDPOINTS
+# ========================================
+ 
+@app.get("/api/messages/my-conversation")
+async def get_student_conversation(current_user: dict = Depends(require_user)):
+    """Get student's conversation with their teacher"""
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+        
+        # Find the admin (teacher)
+        cursor.execute(
+            "SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+        )
+        admin = cursor.fetchone()
+        
+        if not admin:
+            conn.close()
+            return {
+                "messages": [],
+                "teacher_name": "Your Teacher",
+                "teacher_id": None
+            }
+        
+        # Get all messages
+        query = """
+            SELECT 
+                m.id,
+                m.sender_id,
+                m.sender_type,
+                m.content,
+                m.read,
+                m.created_at
+            FROM messages m
+            WHERE 
+                (m.sender_id = %s AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = 'admin')
+                OR
+                (m.sender_id = %s AND m.sender_type = 'admin' AND m.recipient_id = %s AND m.recipient_type = 'student')
+            ORDER BY m.created_at ASC
+        """
+        
+        student_id = current_user['user_id']
+        admin_id = admin['id']
+        cursor.execute(query, (student_id, admin_id, admin_id, student_id))
+        messages = cursor.fetchall()
+        conn.close()
+        
+        return {
+            "messages": [dict(m) for m in messages],
+            "teacher_name": admin['name'],
+            "teacher_id": admin['id']
+        }
+        
+    except Exception as e:
+        print(f"Error loading student conversation: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load conversation: {str(e)}")
+ 
+ 
+@app.post("/api/messages/send-to-teacher")
+async def send_message_to_teacher(
+    request: SendToTeacherRequest,
+    current_user: dict = Depends(require_user)
+):
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+
+        cursor.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
+        admin = cursor.fetchone()
+
+        if not admin:
+            conn.close()
+            raise HTTPException(status_code=404, detail="No administrator found")
+
+        query = """
+            INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
+            VALUES (%s, 'student', %s, 'admin', %s)
+            RETURNING id, created_at
+        """
+
+        student_id = current_user["user_id"]
+        cursor.execute(query, (student_id, admin["id"], request.content))
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
+
+        return {
+            "success": True,
+            "message_id": result["id"],
+            "created_at": result["created_at"]
+        }
+
+    except Exception as e:
+        print(f"Error sending message to teacher: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
+ 
+ 
+@app.post("/api/messages/mark-read")
+async def mark_student_messages_as_read(current_user: dict = Depends(require_user)):
+    """Mark all messages sent to student as read"""
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+        
+        cursor.execute(
+            """UPDATE messages
+               SET read = TRUE, updated_at = NOW()
+               WHERE 
+                   recipient_id = %s
+                   AND recipient_type = 'student'
+                   AND NOT read""",
+            (current_user['user_id'],)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"Error marking messages as read: {e}")
+        traceback.print_exc()
+        return {"success": False}
+ 
+ 
+# ========================================
+# SHARED ENDPOINT
+# ========================================
+ 
+@app.get("/api/messages/unread-count")
+async def get_unread_message_count(current_user: dict = Depends(get_current_user)):
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+
+        user_id = current_user["user_id"]
+        role = current_user["role"]
+
+        if role == "admin":
+            cursor.execute("""
+                SELECT COUNT(*) AS unread_count
+                FROM messages
+                WHERE recipient_id = %s
+                  AND recipient_type = 'admin'
+                  AND read = FALSE
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT COUNT(*) AS unread_count
+                FROM messages
+                WHERE recipient_id = %s
+                  AND recipient_type = 'student'
+                  AND read = FALSE
+            """, (user_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        return {"success": True, "unread_count": row["unread_count"] if row else 0}
+
+    except Exception as e:
+        print(f"Error getting unread count: {e}")
+        traceback.print_exc()
+        return {"success": False, "unread_count": 0}
 
 # ============================================
 # PHASE 2: ONBOARDING ENDPOINTS
@@ -5345,6 +5840,316 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
+# ========================================
+# WORD GAMES ENDPOINTS
+# ========================================
+
+@router.get("/vocabulary")
+async def get_game_vocabulary(user: dict = Depends(get_current_user)):
+    """Get vocabulary for word games"""
+    user_id = user['user_id']
+    print(f"🎮 Getting vocabulary for user {user_id}")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Get ALL vocabulary regardless of user
+        cursor.execute("""
+            SELECT word, definition
+            FROM vocabulary_tracker
+            ORDER BY RANDOM()
+            LIMIT 200
+        """)
+        
+        rows = cursor.fetchall()
+        print(f"🎮 Found {len(rows)} total words in vocabulary_tracker")
+        
+        vocabulary = [
+            {
+                "word": row[0], 
+                "definition": row[1], 
+                "sentence": f"Example sentence with {row[0].lower()}."
+            }
+            for row in rows
+        ]
+        
+        print(f"✅ Returning {len(vocabulary)} words")
+        return {"vocabulary": vocabulary, "count": len(vocabulary)}
+        
+    except Exception as e:
+        print(f"❌ Vocabulary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+@router.get("/used-words")
+async def get_used_words(game_type: str, user: dict = Depends(get_current_user)):
+    """Get words user has already seen"""
+    user_id = user['user_id']
+    print(f"🎮 Getting used words for user {user_id}, game {game_type}")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT word 
+            FROM game_used_words
+            WHERE user_id = %s AND game_type = %s
+            AND created_at > NOW() - INTERVAL '7 days'
+        """, (user_id, game_type))
+        
+        rows = cursor.fetchall()
+        used_words = [row[0] for row in rows]
+        print(f"✓ Found {len(used_words)} used words")
+        
+        return {"used_words": used_words, "count": len(used_words)}
+        
+    except Exception as e:
+        print(f"❌ Used words error: {e}")
+        # Return empty instead of failing - not critical
+        return {"used_words": [], "count": 0}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/mark-used")
+async def mark_words_used(request: MarkWordsUsedRequest, user: dict = Depends(get_current_user)):
+    """Mark words as used"""
+    user_id = user['user_id']
+    print(f"🎮 Marking {len(request.words)} words as used for user {user_id}")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        for word in request.words:
+            cursor.execute("""
+                INSERT INTO game_used_words (user_id, game_type, word, created_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (user_id, game_type, word) DO NOTHING
+            """, (user_id, request.game_type, word.lower()))
+        
+        conn.commit()
+        print(f"✓ Marked {len(request.words)} words as used")
+        return {"success": True, "marked": len(request.words)}
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Mark used error: {e}")
+        # Don't fail - this is not critical
+        return {"success": False, "marked": 0, "error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/reset-used-words")
+async def reset_used_words(game_type: str, user: dict = Depends(get_current_user)):
+    """Reset used words when all vocabulary exhausted"""
+    user_id = user['user_id']
+    print(f"🎮 Resetting used words for user {user_id}, game {game_type}")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            DELETE FROM game_used_words
+            WHERE user_id = %s AND game_type = %s
+        """, (user_id, game_type))
+        
+        conn.commit()
+        print(f"✓ Reset used words")
+        return {"success": True, "message": "Used words reset"}
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Reset error: {e}")
+        return {"success": False, "error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/complete")
+async def complete_game(request: CompleteGameRequest, user: dict = Depends(get_current_user)):
+    """Record game completion"""
+    user_id = user['user_id']
+    print(f"🎮 Completing game for user {user_id}: {request.game_type}, score {request.score}")
+    
+    # DEBUG: Log what we received
+    print("=" * 60)
+    print("🎮 GAME COMPLETION REQUEST")
+    print(f"Raw request data: {request}")
+    print(f"game_type: {request.game_type}")
+    print(f"score: {request.score}")
+    print(f"rounds_completed: {request.rounds_completed}")
+    print(f"time_seconds: {request.time_seconds}")
+    print("=" * 60)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Insert game completion
+        cursor.execute("""
+            INSERT INTO game_completions 
+            (user_id, game_type, score, rounds_completed, time_seconds, completed_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+        """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
+        
+        # Update user stats
+        cursor.execute("""
+            UPDATE users
+            SET games_played = COALESCE(games_played, 0) + 1,
+                total_game_score = COALESCE(total_game_score, 0) + %s
+            WHERE id = %s
+        """, (request.score, user_id))
+        
+        conn.commit()
+        print(f"✓ Game completion saved")
+        
+        return {"success": True, "new_badges": []}
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Complete game error: {e}")
+        return {"success": False, "error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/stats")
+async def get_game_stats(user: dict = Depends(get_current_user)):
+    """Get user's game statistics"""
+    user_id = user['user_id']
+    print(f"🎮 Getting stats for user {user_id}")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as games_played,
+                COALESCE(SUM(score), 0) as total_score,
+                COALESCE(AVG(score), 0) as avg_score,
+                COALESCE(MAX(score), 0) as high_score,
+                COALESCE(SUM(time_seconds), 0) as total_time
+            FROM game_completions
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        stats = cursor.fetchone()
+        
+        cursor.execute("""
+            SELECT game_type, score, rounds_completed, completed_at
+            FROM game_completions
+            WHERE user_id = %s
+            ORDER BY completed_at DESC
+            LIMIT 10
+        """, (user_id,))
+        
+        recent = cursor.fetchall()
+        
+        result = {
+            "games_played": stats[0] if stats else 0,
+            "total_score": stats[1] if stats else 0,
+            "avg_score": round(stats[2], 1) if stats and stats[2] else 0,
+            "high_score": stats[3] if stats else 0,
+            "total_time_minutes": round(stats[4] / 60, 1) if stats and stats[4] else 0,
+            "recent_games": []
+        }
+        
+        print(f"✓ Stats: {result['games_played']} games played")
+        return result
+        
+    except Exception as e:
+        print(f"❌ Stats error: {e}")
+        # Return default stats instead of failing
+        return {
+            "games_played": 0,
+            "total_score": 0,
+            "avg_score": 0,
+            "high_score": 0,
+            "total_time_minutes": 0,
+            "recent_games": []
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ========================================
+# HELPER FUNCTIONS
+# ========================================
+
+def check_and_award_game_badges(user_id: int, cursor) -> List[str]:
+    """
+    Check if user has earned any new game-related badges.
+    Returns list of newly awarded badge types.
+    """
+    new_badges = []
+    
+    # Get user's game stats
+    cursor.execute("""
+        SELECT COUNT(*) as games_played
+        FROM game_completions
+        WHERE user_id = ?
+    """, (user_id,))
+    
+    games_played = cursor.fetchone()["games_played"]
+    
+    # Badge: First Game (1 game)
+    if games_played == 1:
+        cursor.execute("""
+            INSERT OR IGNORE INTO user_badges (user_id, badge_type, earned_at)
+            VALUES (?, 'first_game', datetime('now'))
+        """, (user_id,))
+        if cursor.rowcount > 0:
+            new_badges.append('first_game')
+    
+    # Badge: Game Enthusiast (10 games)
+    if games_played == 10:
+        cursor.execute("""
+            INSERT OR IGNORE INTO user_badges (user_id, badge_type, earned_at)
+            VALUES (?, 'game_enthusiast', datetime('now'))
+        """, (user_id,))
+        if cursor.rowcount > 0:
+            new_badges.append('game_enthusiast')
+    
+    # Badge: Game Master (50 games)
+    if games_played == 50:
+        cursor.execute("""
+            INSERT OR IGNORE INTO user_badges (user_id, badge_type, earned_at)
+            VALUES (?, 'game_master', datetime('now'))
+        """, (user_id,))
+        if cursor.rowcount > 0:
+            new_badges.append('game_master')
+    
+    # Badge: Perfect Score (score >= 500 in one game)
+    cursor.execute("""
+        SELECT MAX(score) as max_score
+        FROM game_completions
+        WHERE user_id = ?
+    """, (user_id,))
+    
+    max_score = cursor.fetchone()["max_score"]
+    if max_score and max_score >= 500:
+        cursor.execute("""
+            INSERT OR IGNORE INTO user_badges (user_id, badge_type, earned_at)
+            VALUES (?, 'perfect_score', datetime('now'))
+        """, (user_id,))
+        if cursor.rowcount > 0:
+            new_badges.append('perfect_score')
+    
+    return new_badges
+
     
 @app.get("/api/test-openai")
 async def test_openai():
@@ -8196,18 +9001,23 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
         emotion = 'happy'
         
     elif context == 'milestone':
+        delay_seconds = 0
+        
         if lesson_number and lesson_number % 10 == 0:
             messages = [
                 f"Wow {first_name}! You've completed {lesson_number} lessons! That's incredible dedication!",
                 f"Amazing milestone, {first_name}! {lesson_number} lessons shows real commitment to learning!",
                 f"{first_name}, {lesson_number} lessons completed! You're unstoppable! Keep this momentum going!"
             ]
+            delay_seconds = 5
         else:
             messages = [
                 f"Great progress, {first_name}! Lesson {lesson_number} done! You're on a roll!",
                 f"Another lesson complete, {first_name}! That's lesson {lesson_number}! Keep it up!",
                 f"Excellent, {first_name}! Lesson {lesson_number} is behind you! Onward and upward!"
             ]
+            delay_seconds = 3  # Wait 3 seconds
+            
         emotion = 'celebrating'
     
     else:
@@ -8216,7 +9026,8 @@ def generate_tutor_message(context, student_name, score=None, lesson_number=None
     
     return {
         'text': random.choice(messages),
-        'emotion': emotion
+        'emotion': emotion,
+        'delay_seconds': delay_seconds
     }
 
 # Mount static files
@@ -8224,6 +9035,8 @@ try:
     app.mount("/static", StaticFiles(directory="static"), name="static")
 except:
     print("Warning: static directory not found")
+    
+app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn

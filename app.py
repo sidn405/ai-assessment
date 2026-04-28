@@ -5598,10 +5598,42 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         print(f"✓ Difficulty: {difficulty}")
         print(f"✓ Word count range: {word_count_min}-{word_count_max} words")
 
-        # Step 6: Select topic
-        print("Step 6: Selecting topic...")
-        topic = random.choice(available_interests)
-        print(f"✓ Selected topic: {topic}")
+        # Step 6: Select topic with ROTATION (not random)
+        print("Step 6: Selecting topic with rotation...")
+        
+        # ✅ Get last used interest index for rotation
+        last_index = user.get('last_interest_index') or 0
+        
+        # ✅ Rotate through interests instead of random selection
+        current_index = last_index % len(interests)
+        topic = interests[current_index]
+        
+        # ✅ Update index for next lesson
+        next_index = (current_index + 1) % len(interests)
+        
+        print(f"✓ Selected topic: {topic} (interest {current_index + 1}/{len(interests)})")
+        print(f"✓ Next lesson will use: {interests[next_index]}")
+        
+        # ✅ Save the updated index back to database
+        conn_update = get_db()
+        cursor_update = get_cursor(conn_update)
+        try:
+            if USE_POSTGRES:
+                cursor_update.execute(
+                    "UPDATE users SET last_interest_index = %s WHERE id = %s",
+                    (next_index, user_id)
+                )
+            else:
+                cursor_update.execute(
+                    "UPDATE users SET last_interest_index = ? WHERE id = ?",
+                    (next_index, user_id)
+                )
+            conn_update.commit()
+            print(f"✓ Updated last_interest_index to {next_index}")
+        except Exception as e:
+            print(f"Warning: Could not update interest index: {e}")
+        finally:
+            conn_update.close()
 
         # Done with DB reads
         conn.close()
@@ -5633,7 +5665,9 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 difficulty_level=difficulty,
                 word_count_min=word_count_min,
                 word_count_max=word_count_max,
-                user_interests=interests
+                user_interests=[picked_topic],  # ✅ Only pass the selected topic, not all interests
+                age=user.get('age'),
+                grade_band=user.get('grade_band') or 'elementary'
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
@@ -6162,8 +6196,11 @@ async def test_openai():
         result = content_generator.generate_passage(
             topic="reading",
             difficulty_level="beginner", 
-            target_words=50,
-            user_interests=["reading"]
+            word_count_min=40,
+            word_count_max=60,
+            user_interests=["reading"],
+            age=8,
+            grade_band="elementary"
         )
         
         return {
@@ -6256,7 +6293,9 @@ async def debug_lesson_generation(token: str):
             difficulty_level="intermediate",
             word_count_min=75,   # ✅ target_words - 25
             word_count_max=125,  # ✅ target_words + 25
-            user_interests=interests
+            user_interests=[topic],  # ✅ Only selected topic
+            age=user.get('age') or 10,
+            grade_band=user.get('grade_band') or 'elementary'
         )
         
         debug_info["details"]["passage_generated"] = True

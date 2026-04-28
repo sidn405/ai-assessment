@@ -6229,6 +6229,11 @@
 
                 // milestone every 10 lessons
                 const completedLessons = nextLessonNumber - 1; // They just finished this lesson
+                console.log('🎯 Milestone check:', { 
+                    nextLessonNumber, 
+                    completedLessons, 
+                    shouldCelebrate: completedLessons % 10 === 0 
+                });
                 if (completedLessons % 10 === 0) {
                     setTimeout(() => showTutor('milestone', { lesson_number: completedLessons }), 2500);
                 }
@@ -8904,42 +8909,6 @@
         document.getElementById('gamePlayArea').innerHTML = html;
     }
 
-    function generateWordTowerQuestion(vocab) {
-        const word = vocab.word;
-        const scrambled = word.split('').sort(() => Math.random() - 0.5).join('');
-        
-        gameState.currentQuestion = {
-            word: word,
-            correctAnswer: word,
-            hint: vocab.definition,
-            vocab: vocab  // Store for repeat avoidance
-        };
-        
-        const html = `
-            <div style="text-align: center; margin-bottom: 2rem;">
-                <div style="background: #f8f9fa; padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
-                    <h2 style="font-size: 2.5rem; color: var(--navy-primary); letter-spacing: 10px; font-family: monospace;">
-                        ${scrambled.toUpperCase()}
-                    </h2>
-                </div>
-                <p style="color: #666; font-size: 1.1rem; margin-bottom: 0.5rem;">Hint:</p>
-                <p style="color: var(--navy-primary); font-size: 1.2rem; font-weight: 500;">${vocab.definition}</p>
-            </div>
-            <div style="max-width: 400px; margin: 0 auto;">
-                <input type="text" id="wordBuilderInput" 
-                       placeholder="Type the unscrambled word..."
-                       style="width: 100%; padding: 1rem; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 8px; text-align: center; text-transform: lowercase; margin-bottom: 1rem;"
-                       onkeyup="if(event.key==='Enter') checkWordBuilderAnswer()">
-                <button class="btn btn-primary" onclick="checkWordBuilderAnswer()" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
-                    Submit Answer
-                </button>
-            </div>
-        `;
-        
-        document.getElementById('gamePlayArea').innerHTML = html;
-        setTimeout(() => document.getElementById('wordTowerInput').focus(), 100);
-    }
-
     function checkWordMatchAnswer(selected) {
         const correct = selected === gameState.currentQuestion.correctAnswer;
         handleGameAnswer(correct);
@@ -9468,7 +9437,15 @@
         if (gameState.currentQuestion.words.includes(reversed)) return reversed;
         return '';
     }
-
+    
+    // ========================================
+    // WORD SCRAMBLE GAME
+    // ========================================
+    
+    let wordScrambleTimer = null;
+    let wordScrambleStartTime = null;
+    let draggedLetter = null;
+    
     // ========== WORD TOWER GAME ==========
     
     function generateWordTowerQuestion(vocab) {
@@ -9480,8 +9457,10 @@
             .slice(0, 3)
             .map(v => v.definition);
         
-        const options = [vocab.definition, ...distractors].sort(() => Math.random() - 0.5);
-        const correctIndex = options.indexOf(vocab.definition);
+        // ✅ PROPERLY RANDOMIZE: Put correct answer at random position
+        const options = [...distractors];
+        const correctIndex = Math.floor(Math.random() * 4); // 0-3
+        options.splice(correctIndex, 0, vocab.definition); // Insert at random position
         
         // Initialize tower state if first round
         if (!gameState.towerHeight) {
@@ -9656,14 +9635,6 @@
             setTimeout(() => feedback.remove(), 300);
         }, 1500);
     }
-    
-    // ========================================
-    // WORD SCRAMBLE GAME
-    // ========================================
-    
-    let wordScrambleTimer = null;
-    let wordScrambleStartTime = null;
-    let draggedLetter = null;
     
     function generateWordScrambleQuestion(vocab) {
         if (wordScrambleTimer) clearInterval(wordScrambleTimer);
