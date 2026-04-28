@@ -2977,7 +2977,11 @@ async def submit_reading_feedback(request: Request):
         )
     
     result = cursor.fetchone()
-    word_count = result['word_count'] if USE_POSTGRES else result[0]
+    # ✅ Handle both dict and tuple results
+    if isinstance(result, dict):
+        word_count = result['word_count']
+    else:
+        word_count = result[0] if result else 0
     
     # Update user stats
     if USE_POSTGRES:
@@ -8977,6 +8981,9 @@ async def get_tutor_message(request: Request):
 
 def generate_tutor_message(context, student_name, score=None, lesson_number=None):
     """Generate personalized tutor messages optimized for text-to-speech"""
+    
+    # ✅ Initialize delay_seconds for all code paths
+    delay_seconds = 0
     
     # Get first name only for more natural speech
     first_name = student_name.split()[0] if student_name and student_name != 'there' else student_name
