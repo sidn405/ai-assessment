@@ -1,7 +1,7 @@
 import psycopg2
 import os
 
-# Your database URL
+# Your database URL removed
 DATABASE_URL = ""
 
 # SQL migration
