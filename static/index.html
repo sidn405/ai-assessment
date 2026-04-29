@@ -1177,6 +1177,16 @@
              <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">This helps us match content to your reading level and adapt lessons as you progress</small>
             </div>
 
+          <div class="form-group">
+            <label for="registerSchool">School</label>
+            <select id="registerSchool" required style="width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; font-family: inherit; background-color: white; cursor: pointer; appearance: none; background-image: url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'%3E%3Cpath fill=\'%23667eea\' d=\'M6 9L1 4h10z\'/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 16px center; padding-right: 45px;">
+              <option value="" disabled selected>Select your school...</option>
+              <option value="McMain">Mc Main</option>
+              <option value="Columbia">Columbia</option>
+            </select>
+            <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Select the school you attend</small>
+          </div>
+
           <!-- role forced to student -->
           <input type="hidden" id="registerRole" value="student">
 
@@ -1588,6 +1598,7 @@
             // Get grade level and derive age_band and reading_level
             const gradeLevel = document.getElementById('registerGradeLevel').value;
             const age = parseInt(document.getElementById('registerAge').value, 10);  // ADD THIS LINE
+            const school = document.getElementById('registerSchool').value;
 
             if (!gradeLevel) {
                 errorDiv.textContent = 'Please select your grade level';
@@ -1599,6 +1610,13 @@
             // Validate age
             if (!age || age < 3 || age > 100) {
                 errorDiv.textContent = 'Please enter a valid age (3-100)';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Validate school
+            if (!school) {
+                errorDiv.textContent = 'Please select your school';
                 errorDiv.style.display = 'block';
                 return;
             }
@@ -1618,7 +1636,8 @@
                         age,
                         age_band,
                         grade_band: gradeLevel,
-                        reading_level
+                        reading_level,
+                        school
                     })
                 });
 

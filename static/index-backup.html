@@ -357,13 +357,30 @@
         }
         
         .modal-content {
-            background: var(--white);
-            padding: 3rem;
-            border-radius: 12px;
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
             max-width: 500px;
             width: 90%;
             position: relative;
-            animation: slideDown 0.3s ease-out;
+            margin: 20px auto;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Add smooth scrolling */
+        .modal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+        
+        .modal-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
         }
         
         @keyframes slideDown {
@@ -696,6 +713,17 @@
                 width: 95% !important;
                 max-width: 95% !important;
                 margin: 1rem auto !important;
+            }
+
+            @media (max-height: 700px) {
+               .modal-content {
+                   padding: 1.5rem;
+                   max-height: 95vh;
+               }
+               
+               .form-group {
+                   margin-bottom: 1rem;
+               }
             }
             
             /* Font size adjustments */
@@ -1114,12 +1142,40 @@
                 <i class="fas fa-eye" id="registerConfirmPassword-icon"></i>
             </button>
           </div>
-
+         
           <div class="form-group" id="ageFieldWrapper">
             <label for="registerAge">Age</label>
             <input type="number" id="registerAge" min="5" max="100"
                 placeholder="Enter your age" style="width: 100%;">
           </div>
+
+          <div class="form-group">
+             <label for="registerGradeLevel">
+               Grade Level
+               <span style="color: #9e9e9e; font-weight: 400; font-size: 13px;">(helps us personalize your experience)</span>
+             </label>
+             <select id="registerGradeLevel" required style="width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; font-family: inherit; background-color: white; cursor: pointer; appearance: none; background-image: url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'%3E%3Cpath fill=\'%23667eea\' d=\'M6 9L1 4h10z\'/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 16px center; padding-right: 45px;">
+               <option value="" disabled selected>Select your grade level...</option>
+               <option value="pre-k">Pre-K (Ages 3-5)</option>
+               <option value="kindergarten">Kindergarten (Ages 5-6)</option>
+               <option value="1st">1st Grade (Ages 6-7)</option>
+               <option value="2nd">2nd Grade (Ages 7-8)</option>
+               <option value="3rd">3rd Grade (Ages 8-9)</option>
+               <option value="4th">4th Grade (Ages 9-10)</option>
+               <option value="5th">5th Grade (Ages 10-11)</option>
+               <option value="6th">6th Grade (Ages 11-12)</option>
+               <option value="7th">7th Grade (Ages 12-13)</option>
+               <option value="8th">8th Grade (Ages 13-14)</option>
+               <option value="9th">9th Grade / High School Freshman (Ages 14-15)</option>
+               <option value="10th">10th Grade / High School Sophomore (Ages 15-16)</option>
+               <option value="11th">11th Grade / High School Junior (Ages 16-17)</option>
+               <option value="12th">12th Grade / High School Senior (Ages 17-18)</option>
+               <option value="adult">Adult (18+)</option>
+               <option value="college">College Student</option>
+               <option value="professional">Working Professional</option>
+             </select>
+             <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">This helps us match content to your reading level and adapt lessons as you progress</small>
+            </div>
 
           <!-- role forced to student -->
           <input type="hidden" id="registerRole" value="student">
@@ -1182,18 +1238,6 @@
         </div>
     </div>
     <script>
-
-        function ensureAgeVisibleForRegister() {
-          const ageWrap = document.getElementById('ageFieldWrapper');
-          const ageInput = document.getElementById('registerAge');
-          if (!ageWrap || !ageInput) return;
-      
-          ageWrap.style.display = 'block';
-          ageInput.required = true;
-        }
-
-        ensureAgeVisibleForRegister();
-
 
         function togglePassword(inputId) {
             const input = document.getElementById(inputId);
@@ -1284,6 +1328,35 @@
             }
         };
 
+        // ========================================
+        // AUDIO UNLOCK FOR DASHBOARD WELCOME
+        // ========================================
+
+        function unlockAudioForDashboard() {
+            try {
+                console.log('🔓 Attempting to unlock audio...');
+                
+                // Create a very short silent audio (base64 encoded silent WAV)
+                const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+                silentAudio.volume = 0.01; // Almost silent
+                
+                const playPromise = silentAudio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('✅ Audio unlocked for dashboard');
+                            sessionStorage.setItem('audioUnlocked', 'true');
+                        })
+                        .catch(err => {
+                            console.log('⚠️ Could not unlock audio:', err.message);
+                        });
+                }
+            } catch (error) {
+                console.log('⚠️ Audio unlock failed:', error.message);
+            }
+        }
+
         // Login Form Handler
         document.addEventListener('DOMContentLoaded', function() {
             const loginForm = document.getElementById('loginForm');
@@ -1291,6 +1364,10 @@
             if (loginForm) {
                 loginForm.addEventListener('submit', async function(e) {
                     e.preventDefault();
+                    
+                    // 🔑 UNLOCK AUDIO FIRST (before redirect)
+                    unlockAudioForDashboard();
+                    
                     console.log('Login form submitted');
                     
                     const email = document.getElementById('loginEmail').value;
@@ -1316,17 +1393,37 @@
                         const data = await response.json();
                         console.log('Login response data:', data);
                         
+                        async function playLoginChime() {
+                          const a = new Audio('/static/sounds/login.mp3');
+                          a.volume = 0.5;
+                          a.preload = 'auto';
+                          try {
+                              await a.play();                       // ✅ allowed because this is inside the user submit click
+                              await new Promise(res => (a.onended = res));
+                              console.log('✅ Login chime played');
+                          } catch (e) {
+                              console.log('⚠️ Login chime could not play:', e?.message || e);
+                          }
+                        }
+
                         if (data.success) {
-                            console.log('✅ Login successful');
-                            localStorage.setItem('token', data.token);
-                            localStorage.setItem('user', JSON.stringify(data.user));
-                            
-                            if (data.user.role === 'admin') {
-                                window.location.href = '/admin-dashboard';
-                            } else {
-                                window.location.href = '/dashboard';
-                            }
-                        } else {
+                          console.log('✅ Login successful');
+                          localStorage.setItem('token', data.token);
+                          localStorage.setItem('user', JSON.stringify(data.user));
+                          sessionStorage.setItem('justLoggedIn', 'true'); // dashboard can still greet
+                          localStorage.setItem('justLoggedIn', 'true');
+                          localStorage.setItem('loginTimestamp', Date.now().toString());
+
+                          // ✅ PLAY CHIME HERE (before redirect)
+                          await playLoginChime();
+
+                          if (data.user.role === 'admin') {
+                              window.location.href = '/admin-dashboard';
+                          } else {
+                              window.location.href = '/dashboard';
+                          }
+                        }
+                        else {
                             console.log('❌ Login failed:', data.detail);
                             if (errorDiv) {
                                 errorDiv.textContent = data.detail || 'Login failed';
@@ -1412,6 +1509,53 @@
             // Don't auto-open login on homepage
         })
 
+        // Grade level mapping functions
+        function getAgeBandFromGrade(gradeLevel) {
+            const ageBandMap = {
+                'pre-k': 'pre-k',
+                'kindergarten': 'elementary',
+                '1st': 'elementary',
+                '2nd': 'elementary',
+                '3rd': 'elementary',
+                '4th': 'elementary',
+                '5th': 'elementary',
+                '6th': 'middle',
+                '7th': 'middle',
+                '8th': 'middle',
+                '9th': 'high',
+                '10th': 'high',
+                '11th': 'high',
+                '12th': 'high',
+                'adult': 'adult',
+                'college': 'adult',
+                'professional': 'adult'
+            };
+            return ageBandMap[gradeLevel] || 'adult';
+        }
+
+        function getReadingLevelFromGrade(gradeLevel) {
+            const readingLevelMap = {
+                'pre-k': 'beginner',
+                'kindergarten': 'beginner',
+                '1st': 'beginner',
+                '2nd': 'beginner',
+                '3rd': 'beginner',
+                '4th': 'intermediate',
+                '5th': 'intermediate',
+                '6th': 'intermediate',
+                '7th': 'intermediate',
+                '8th': 'intermediate',
+                '9th': 'advanced',
+                '10th': 'advanced',
+                '11th': 'advanced',
+                '12th': 'advanced',
+                'adult': 'advanced',
+                'college': 'advanced',
+                'professional': 'advanced'
+            };
+            return readingLevelMap[gradeLevel] || 'intermediate';
+        }
+
         // Register form handler - UPDATE THE ERROR HANDLING
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1441,32 +1585,26 @@
                 return;
             }
 
-            // Age is only required for students
-            let age = null;
-            let age_band = null;
+            // Get grade level and derive age_band and reading_level
+            const gradeLevel = document.getElementById('registerGradeLevel').value;
+            const age = parseInt(document.getElementById('registerAge').value, 10);  // ADD THIS LINE
 
-            if (role === 'student') {
-                age = parseInt(document.getElementById('registerAge').value, 10);
-
-                if (!age || age < 5 || age > 100) {
-                    errorDiv.textContent = 'Please enter a valid age (5-100)';
-                    errorDiv.style.display = 'block';
-                    return;
-                }
-
-                // Determine age band
-                if (age >= 5 && age <= 10) {
-                    age_band = 'child';
-                } else if (age >= 11 && age <= 13) {
-                    age_band = 'preteen';
-                } else if (age >= 14 && age <= 17) {
-                    age_band = 'teen';
-                } else if (age >= 18 && age <= 25) {
-                    age_band = 'young_adult';
-                } else {
-                    age_band = 'adult';
-                }
+            if (!gradeLevel) {
+                errorDiv.textContent = 'Please select your grade level';
+                errorDiv.style.display = 'block';
+                return;
             }
+
+            // ADD THIS VALIDATION:
+            // Validate age
+            if (!age || age < 3 || age > 100) {
+                errorDiv.textContent = 'Please enter a valid age (3-100)';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            const age_band = getAgeBandFromGrade(gradeLevel);
+            const reading_level = getReadingLevelFromGrade(gradeLevel);
 
             try {
                 const response = await fetch('/api/register', {
@@ -1478,22 +1616,33 @@
                         password,
                         role,
                         age,
-                        age_band
+                        age_band,
+                        grade_band: gradeLevel,
+                        reading_level
                     })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
+                    // Clear any stale localStorage data
+                    localStorage.clear();
+                    
+                    // Set new user data
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('justLoggedIn', 'true');  // Mark as just logged in
+                    localStorage.setItem('loginTimestamp', Date.now().toString());
+                    
+                    // Redirect to dashboard
                     window.location.href = (data.user.role === 'admin') ? '/admin-dashboard' : '/dashboard';
                 } else {
                     errorDiv.textContent = data.detail || 'Registration failed';
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                errorDiv.textContent = 'An error occurred. Please try again.';
+                console.error('Registration error:', error);
+                errorDiv.textContent = 'Error: ' + (error.message || 'Please try again');
                 errorDiv.style.display = 'block';
             }
         });
