@@ -6343,16 +6343,52 @@ async def debug_lesson_generation(token: str):
 
 @app.get("/api/admin/students")
 async def get_all_students(admin=Depends(require_admin)):
+    """Get students - filtered by admin's school"""
     
     conn = get_db()
     cursor = get_cursor(conn)
-    cursor.execute(
-        """SELECT id, email, full_name, level_estimate, total_passages_read, 
-        comprehension_score, last_active, created_at, school, 
-        grade_band, reading_level
-        FROM users WHERE role = 'student'
-        ORDER BY created_at DESC"""
-    )
+    
+    # Get admin's school
+    admin_id = admin.get('user_id')
+    if USE_POSTGRES:
+        cursor.execute("SELECT school FROM users WHERE id = %s", (admin_id,))
+    else:
+        cursor.execute("SELECT school FROM users WHERE id = ?", (admin_id,))
+    
+    admin_row = cursor.fetchone()
+    admin_school = admin_row[0] if admin_row else None
+    
+    # Filter students by admin's school
+    if admin_school:
+        # School-specific admin - only show their school's students
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT id, email, full_name, level_estimate, total_passages_read, 
+                   comprehension_score, last_active, created_at, school, 
+                   grade_band, reading_level
+                   FROM users WHERE role = 'student' AND school = %s
+                   ORDER BY created_at DESC""",
+                (admin_school,)
+            )
+        else:
+            cursor.execute(
+                """SELECT id, email, full_name, level_estimate, total_passages_read, 
+                   comprehension_score, last_active, created_at, school, 
+                   grade_band, reading_level
+                   FROM users WHERE role = 'student' AND school = ?
+                   ORDER BY created_at DESC""",
+                (admin_school,)
+            )
+    else:
+        # Super admin - show all students
+        cursor.execute(
+            """SELECT id, email, full_name, level_estimate, total_passages_read, 
+               comprehension_score, last_active, created_at, school, 
+               grade_band, reading_level
+               FROM users WHERE role = 'student'
+               ORDER BY school, created_at DESC"""
+        )
+    
     students = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
