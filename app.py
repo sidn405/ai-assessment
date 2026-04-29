@@ -469,7 +469,8 @@ async def register(user: UserCreate):
                 "age": user.age,                    # ADD THIS
                 "age_band": user.age_band,
                 "grade_band": user.grade_band,      # ADD THIS
-                "reading_level": user.reading_level # ADD THIS
+                "reading_level": user.reading_level, # ADD THIS
+                "school": user.school
             }
         }
  
