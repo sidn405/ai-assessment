@@ -6585,13 +6585,24 @@ async def delete_student(student_id: int, admin=Depends(require_admin)):
         # Delete related data (order matters!)
         # CRITICAL: Delete tables with foreign key references FIRST
                 
-        # Step 1: Delete admin_alerts first (references essays)
+        # Step 1: Delete admin_alerts first (references essays via essay_id)
         try:
-            cursor.execute(
-                "DELETE FROM admin_alerts WHERE student_id=%s" if USE_POSTGRES
-                else "DELETE FROM admin_alerts WHERE student_id=?",
-                (student_id,)
-            )
+            if USE_POSTGRES:
+                cursor.execute(
+                    """DELETE FROM admin_alerts 
+                    WHERE essay_id IN (
+                        SELECT id FROM user_essays WHERE user_id = %s
+                    )""",
+                    (student_id,)
+                )
+            else:
+                cursor.execute(
+                    """DELETE FROM admin_alerts 
+                    WHERE essay_id IN (
+                        SELECT id FROM user_essays WHERE user_id = ?
+                    )""",
+                    (student_id,)
+                )
             conn.commit()
             print(f"✓ Deleted from admin_alerts")
         except Exception as e:
