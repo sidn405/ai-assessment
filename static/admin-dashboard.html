@@ -2927,7 +2927,7 @@
                 closeDeleteModal();
                 alert(`Student ${name} deleted successfully`);
                 await loadStudents();
-                loadDashboardStats();
+                loadAnalytics();
                 
             } catch (error) {
                 alert(`Error: ${error.message}`);

@@ -6347,9 +6347,10 @@ async def get_all_students(admin=Depends(require_admin)):
     cursor = get_cursor(conn)
     cursor.execute(
         """SELECT id, email, full_name, level_estimate, total_passages_read, 
-           comprehension_score, last_active, created_at 
-           FROM users WHERE role = 'student'
-           ORDER BY created_at DESC"""
+        comprehension_score, last_active, created_at, school, 
+        grade_band, reading_level
+        FROM users WHERE role = 'student'
+        ORDER BY created_at DESC"""
     )
     students = [dict(row) for row in cursor.fetchall()]
     conn.close()
