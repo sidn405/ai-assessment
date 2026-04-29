@@ -175,6 +175,7 @@ class InviteAdminReq(BaseModel):
 class AcceptInviteReq(BaseModel):
     token: str = Field(..., min_length=10)
     password: str = Field(..., min_length=6)
+    school: Optional[str] = None
     
 class AdminInviteActionRequest(BaseModel):
     # optional note for auditing/logging if you want
@@ -7600,8 +7601,8 @@ async def accept_admin_invite(body: AcceptInviteReq):
             user_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
             if USE_POSTGRES:
                 cur.execute(
-                    "UPDATE users SET role='admin', password_hash=%s WHERE id=%s",
-                    (password_hash, user_id)
+                    "UPDATE users SET role='admin', password_hash=%s, school=%s WHERE id=%s",
+                    (password_hash, body.school, user_id)
                 )
             else:
                 cur.execute(
@@ -7612,10 +7613,10 @@ async def accept_admin_invite(body: AcceptInviteReq):
             # Create new admin user
             if USE_POSTGRES:
                 cur.execute("""
-                  INSERT INTO users (email, full_name, password_hash, role, created_at)
-                  VALUES (%s, %s, %s, 'admin', NOW())
+                  INSERT INTO users (email, full_name, password_hash, role, school, created_at)
+                  VALUES (%s, %s, %s, 'admin', %s, NOW())
                   RETURNING id
-                """, (email, "Administrator", password_hash))
+                """, (email, "Administrator", password_hash, body.school))
                 row = cur.fetchone()
                 # ✅ FIX: Handle both dict and tuple
                 user_id = row["id"] if isinstance(row, Mapping) else row[0]
