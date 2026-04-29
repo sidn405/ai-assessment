@@ -3520,7 +3520,10 @@
             document.getElementById('activeConversation').style.display = 'flex';
             
             // Load student info
-            const convo = conversations.find(c => c.id === conversationId);
+            ${convo.student_id === currentConversationId ? 'active' : ''}
+            onclick="openConversation(${convo.student_id}, ${convo.student_id})"
+
+            const convo = conversations.find(c => c.student_id === conversationId);
             if (convo) {
                 document.getElementById('conversationStudentName').textContent = convo.student_name;
                 document.getElementById('conversationStudentEmail').textContent = convo.student_email || '';
