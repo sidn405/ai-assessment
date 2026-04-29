@@ -6356,7 +6356,12 @@ async def get_all_students(admin=Depends(require_admin)):
         cursor.execute("SELECT school FROM users WHERE id = ?", (admin_id,))
     
     admin_row = cursor.fetchone()
-    admin_school = admin_row[0] if admin_row else None
+    if admin_row:
+        # Handle both dict and tuple
+        from collections.abc import Mapping
+        admin_school = admin_row["school"] if isinstance(admin_row, Mapping) else admin_row[0]
+    else:
+        admin_school = None
     
     # Filter students by admin's school
     if admin_school:
