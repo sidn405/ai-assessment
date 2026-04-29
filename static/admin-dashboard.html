@@ -28,7 +28,11 @@
     <meta name="mobile-web-app-capable" content="yes">
     
     <title>Achieve 365 - Admin Dashboard</title>
-    
+
+    <script>
+        // Disable Cloudflare email decode
+        window.CFDoNotTrack = true;
+    </script>   
     
     <!-- Custom Styles for this page -->
     <style>
@@ -2904,6 +2908,11 @@
         function closeDeleteModal() {
             document.getElementById('deleteStudentModal').classList.remove('active');
             studentToDelete = null;
+            
+            // Reset button state
+            const btn = document.getElementById('confirmDeleteBtn');
+            btn.disabled = false;
+            btn.textContent = 'Delete';
         }
 
         async function deleteStudent() {
