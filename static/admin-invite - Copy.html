@@ -176,19 +176,6 @@
         </button>
       </div>
 
-      <div class="form-group">
-        <label for="school">School Assignment</label>
-        <select id="school" required style="width: 100%; padding: 0.875rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; font-family: inherit; background-color: white; cursor: pointer;">
-          <option value="" disabled selected>Select your school...</option>
-          <option value="McMain">Mc Main</option>
-          <option value="Columbia">Columbia</option>
-          <option value="">Super Admin (All Schools)</option>
-        </select>
-        <small style="display: block; margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
-          Select your school to manage only those students, or choose Super Admin to manage all schools.
-        </small>
-      </div>
-
       <button type="submit" class="btn">Activate Admin Account</button>
     </form>
 
@@ -236,7 +223,6 @@
 
       const newPassword = document.getElementById('newPassword').value;
       const confirmPassword = document.getElementById('confirmPassword').value;
-      const school = document.getElementById('school').value;
       const errorDiv = document.getElementById('error');
       const successDiv = document.getElementById('success');
       const submitBtn = e.target.querySelector('button.btn');
@@ -250,8 +236,6 @@
         return;
       }
 
-      // Note: school can be empty string for Super Admin, so we don't validate it as required
-
       submitBtn.disabled = true;
       submitBtn.textContent = 'Activating...';
 
@@ -261,8 +245,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             token: token,
-            password: newPassword,
-            school: school || null  // Send null for Super Admin (empty string)
+            password: newPassword
           })
         });
 
