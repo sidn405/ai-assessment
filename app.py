@@ -2211,73 +2211,133 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
         else:
             admin_school = None
  
-        # Build school filter
-        school_filter = ""
+        # Build query based on whether admin has a school
         if admin_school:
-            school_filter = f"AND u.school = '{admin_school}'"
- 
-        query = f"""
-            WITH last_messages AS (
-                SELECT
-                    CASE
-                        WHEN sender_type = 'student' THEN sender_id
-                        ELSE recipient_id
-                    END AS student_id,
-                    content AS last_message,
-                    created_at AS last_message_time,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY CASE
+            # School-specific admin - filter by school
+            query = """
+                WITH last_messages AS (
+                    SELECT
+                        CASE
                             WHEN sender_type = 'student' THEN sender_id
                             ELSE recipient_id
-                        END
-                        ORDER BY created_at DESC
-                    ) AS rn
-                FROM messages
-                WHERE
-                    (sender_type = 'admin' AND sender_id = %s)
-                    OR
-                    (recipient_type = 'admin' AND recipient_id = %s)
-            ),
-            unread_counts AS (
+                        END AS student_id,
+                        content AS last_message,
+                        created_at AS last_message_time,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY CASE
+                                WHEN sender_type = 'student' THEN sender_id
+                                ELSE recipient_id
+                            END
+                            ORDER BY created_at DESC
+                        ) AS rn
+                    FROM messages
+                    WHERE
+                        (sender_type = 'admin' AND sender_id = %s)
+                        OR
+                        (recipient_type = 'admin' AND recipient_id = %s)
+                ),
+                unread_counts AS (
+                    SELECT
+                        sender_id AS student_id,
+                        COUNT(*) AS unread_count
+                    FROM messages
+                    WHERE recipient_type = 'admin'
+                      AND recipient_id = %s
+                      AND sender_type = 'student'
+                      AND read = FALSE
+                    GROUP BY sender_id
+                )
                 SELECT
-                    sender_id AS student_id,
-                    COUNT(*) AS unread_count
-                FROM messages
-                WHERE recipient_type = 'admin'
-                  AND recipient_id = %s
-                  AND sender_type = 'student'
-                  AND read = FALSE
-                GROUP BY sender_id
-            )
-            SELECT
-                u.id AS student_id,
-                u.full_name AS student_name,
-                u.email AS student_email,
-                lm.last_message,
-                lm.last_message_time,
-                COALESCE(uc.unread_count, 0) AS unread_count
-            FROM users u
-            LEFT JOIN last_messages lm
-                ON lm.student_id = u.id AND lm.rn = 1
-            LEFT JOIN unread_counts uc
-                ON uc.student_id = u.id
-            WHERE u.role = 'student'
-              {school_filter}
-              AND (
-                    lm.student_id IS NOT NULL
-                    OR EXISTS (
-                        SELECT 1
-                        FROM messages m
-                        WHERE
-                            (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
-                            OR
-                            (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
+                    u.id AS student_id,
+                    u.full_name AS student_name,
+                    u.email AS student_email,
+                    lm.last_message,
+                    lm.last_message_time,
+                    COALESCE(uc.unread_count, 0) AS unread_count
+                FROM users u
+                LEFT JOIN last_messages lm
+                    ON lm.student_id = u.id AND lm.rn = 1
+                LEFT JOIN unread_counts uc
+                    ON uc.student_id = u.id
+                WHERE u.role = 'student'
+                  AND u.school = %s
+                  AND (
+                        lm.student_id IS NOT NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM messages m
+                            WHERE
+                                (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
+                                OR
+                                (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
+                      )
                   )
-              )
-            ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
-        """
- 
-        cursor.execute(query, (admin_id, admin_id, admin_id, admin_id, admin_id))
+                ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
+            """
+            cursor.execute(query, (admin_id, admin_id, admin_id, admin_school, admin_id, admin_id))
+        else:
+            # Super admin - no school filter
+            query = """
+                WITH last_messages AS (
+                    SELECT
+                        CASE
+                            WHEN sender_type = 'student' THEN sender_id
+                            ELSE recipient_id
+                        END AS student_id,
+                        content AS last_message,
+                        created_at AS last_message_time,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY CASE
+                                WHEN sender_type = 'student' THEN sender_id
+                                ELSE recipient_id
+                            END
+                            ORDER BY created_at DESC
+                        ) AS rn
+                    FROM messages
+                    WHERE
+                        (sender_type = 'admin' AND sender_id = %s)
+                        OR
+                        (recipient_type = 'admin' AND recipient_id = %s)
+                ),
+                unread_counts AS (
+                    SELECT
+                        sender_id AS student_id,
+                        COUNT(*) AS unread_count
+                    FROM messages
+                    WHERE recipient_type = 'admin'
+                      AND recipient_id = %s
+                      AND sender_type = 'student'
+                      AND read = FALSE
+                    GROUP BY sender_id
+                )
+                SELECT
+                    u.id AS student_id,
+                    u.full_name AS student_name,
+                    u.email AS student_email,
+                    lm.last_message,
+                    lm.last_message_time,
+                    COALESCE(uc.unread_count, 0) AS unread_count
+                FROM users u
+                LEFT JOIN last_messages lm
+                    ON lm.student_id = u.id AND lm.rn = 1
+                LEFT JOIN unread_counts uc
+                    ON uc.student_id = u.id
+                WHERE u.role = 'student'
+                  AND (
+                        lm.student_id IS NOT NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM messages m
+                            WHERE
+                                (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
+                                OR
+                                (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
+                      )
+                  )
+                ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
+            """
+            cursor.execute(query, (admin_id, admin_id, admin_id, admin_id, admin_id))
+        
         conversations = cursor.fetchall()
         conn.close()
  
