@@ -133,6 +133,7 @@ class UserCreate(BaseModel):
     age_band: Optional[str] = None
     grade_band: Optional[str] = None      # NEW: Student's grade level
     reading_level: Optional[str] = None   # NEW: Initial reading difficulty
+    school: Optional[str] = None
         
 class UserLogin(BaseModel):
     email: str
