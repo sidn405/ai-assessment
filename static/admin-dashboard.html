@@ -28,11 +28,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     
     <title>Achieve 365 - Admin Dashboard</title>
-
-    <script>
-        // Disable Cloudflare email decode
-        window.CFDoNotTrack = true;
-    </script>   
+    
     
     <!-- Custom Styles for this page -->
     <style>
@@ -931,7 +927,6 @@
                                 <tr>
                                     <th>Name</th>
                                     <th>Email</th>
-                                    <th>School</th>
                                     <th>Reading Level</th>
                                     <th>Joined</th>
                                     <th>Status</th>
@@ -2908,11 +2903,6 @@
         function closeDeleteModal() {
             document.getElementById('deleteStudentModal').classList.remove('active');
             studentToDelete = null;
-            
-            // Reset button state
-            const btn = document.getElementById('confirmDeleteBtn');
-            btn.disabled = false;
-            btn.textContent = 'Delete';
         }
 
         async function deleteStudent() {
@@ -2936,7 +2926,7 @@
                 closeDeleteModal();
                 alert(`Student ${name} deleted successfully`);
                 await loadStudents();
-                loadAnalytics();
+                loadDashboardStats();
                 
             } catch (error) {
                 alert(`Error: ${error.message}`);
@@ -3133,12 +3123,10 @@
                     `<span class="badge badge-warning">Pending</span>`;
                 
                 const joinDate = new Date(student.created_at).toLocaleDateString();
-                const school = student.school || 'Not specified';
                 
                 tr.innerHTML = `
                     <td><strong>${student.full_name}</strong></td>
                     <td>${student.email}</td>
-                    <td><span class="badge badge-primary">${school}</span></td>
                     <td>${levelBadge}</td>
                     <td>${joinDate}</td>
                     <td><span class="badge badge-success">Active</span></td>
@@ -3173,8 +3161,7 @@
                     const query = e.target.value.toLowerCase();
                     const filtered = allStudents.filter(s => 
                         s.full_name.toLowerCase().includes(query) ||
-                        s.email.toLowerCase().includes(query) ||
-                        (s.school && s.school.toLowerCase().includes(query))
+                        s.email.toLowerCase().includes(query)
                     );
                     renderStudentsTable(filtered);
                 });
@@ -3483,8 +3470,8 @@
             }
             
             container.innerHTML = convos.map(convo => `
-                <div class="conversation-item ${convo.id === currentConversationId ? 'active' : ''} ${convo.unread_count > 0 ? 'unread' : ''}"
-                     onclick="openConversation(${convo.student_id}, ${convo.id})">
+                <div class="conversation-item ${convo.student_id === currentConversationId ? 'active' : ''} ${convo.unread_count > 0 ? 'unread' : ''}"
+                     onclick="openConversation(${convo.student_id}, ${convo.student_id})">
                     <div class="conversation-header">
                         <div class="conversation-name">${convo.student_name}</div>
                         <div class="conversation-time">${formatMessageTime(convo.last_message_time)}</div>
@@ -3520,9 +3507,6 @@
             document.getElementById('activeConversation').style.display = 'flex';
             
             // Load student info
-            ${convo.student_id === currentConversationId ? 'active' : ''}
-            onclick="openConversation(${convo.student_id}, ${convo.student_id})"
-
             const convo = conversations.find(c => c.student_id === conversationId);
             if (convo) {
                 document.getElementById('conversationStudentName').textContent = convo.student_name;
