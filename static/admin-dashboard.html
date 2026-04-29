@@ -1560,16 +1560,16 @@
     }
     
     .message-bubble.sent .message-content {
-        background: var(--navy-primary);
+        background: #2A398A;  /* Darker navy for admin */
         color: white;
         border-bottom-right-radius: 4px;
     }
     
     .message-bubble.received .message-content {
-        background: white;
+        background: #E8F0FE;  /* Light blue for student */
         color: #333;
         border-bottom-left-radius: 4px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #D2E3FC;
     }
     
     .message-meta {
@@ -3561,7 +3561,6 @@
         // Display messages
         function displayMessages(messages) {
             const container = document.getElementById('messagesContainer');
-            const adminId = JSON.parse(localStorage.getItem('user') || '{}').id;
             
             if (!messages || messages.length === 0) {
                 container.innerHTML = `
@@ -3574,7 +3573,8 @@
             }
             
             container.innerHTML = messages.map(msg => {
-                const isSent = msg.sender_id === adminId;
+                // Use sender_type to determine if admin sent it
+                const isSent = msg.sender_type === 'admin';
                 return `
                     <div class="message-bubble ${isSent ? 'sent' : 'received'}">
                         <div class="message-content">
