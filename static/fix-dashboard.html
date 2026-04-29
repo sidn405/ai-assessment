@@ -401,31 +401,6 @@
             }
         }
 
-        @keyframes blockDrop {
-            from {
-                opacity: 0;
-                transform: translateY(-20px) scale(0.8);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        @keyframes feedbackPop {
-            0% {
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.5);
-            }
-            50% {
-                transform: translate(-50%, -50%) scale(1.1);
-            }
-            100% {
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1);
-            }
-        }
-
         @keyframes slideDown {
             from {
                 opacity: 0;
@@ -2535,17 +2510,17 @@
                         </div>
                     </div>
 
-                    <!-- Word Tower Game -->
+                    <!-- Word Builder Game -->
                     <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
                          onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)'"
                          onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow=''"
-                         onclick="startWordGame('word-tower')">
+                         onclick="startWordGame('word-builder')">
                         <div style="text-align: center;">
-                            <div style="font-size: 4rem; margin-bottom: 1rem;">🗼</div>
-                            <h2 style="color: var(--navy-primary); margin-bottom: 0.5rem;">Word Tower</h2>
-                            <p style="color: #666; margin-bottom: 1rem;">Build your tower by matching words to definitions</p>
-                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; font-size: 0.9rem; font-weight: 600;">
-                                Strategic
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🔤</div>
+                            <h2 style="color: var(--navy-primary); margin-bottom: 0.5rem;">Word Builder</h2>
+                            <p style="color: #666; margin-bottom: 1rem;">Unscramble letters to build vocabulary words</p>
+                            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; font-size: 0.9rem; font-weight: 600;">
+                                Brain Teaser
                             </div>
                         </div>
                     </div>
@@ -3439,9 +3414,9 @@
                     });
                 }
 
-                // ⭐ FIX: Use hasCompletedAssessment instead of simple check
+                // ⭐ FIX: Use hasCompletedAssessment and pass user data
                 const hasAssessment = hasCompletedAssessment(data);
-                updateAssessmentStatus(hasAssessment);
+                updateAssessmentStatus(hasAssessment, data.user);
 
             } catch (error) {
                 console.error('Error loading dashboard:', error);
@@ -3449,7 +3424,7 @@
         }
 
         // Update assessment UI state
-        function updateAssessmentStatus(isCompleted) {
+        function updateAssessmentStatus(isCompleted, userData = null) {
             const gettingStarted = document.getElementById('gettingStarted');
             const continueLearning = document.getElementById('continueLearning');
             
@@ -3460,14 +3435,41 @@
             
             // ✅ Check BOTH assessments before showing Continue Learning
             const hasInterests = hasCompletedAssessment();
-            const hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true';
+            
+            // Check reading assessment completion multiple ways (Safari/Firefox compatible)
+            let hasCompletedReading = false;
+            
+            // Method 1: Check localStorage flag
+            const readingFlag = localStorage.getItem('hasCompletedReadingAssessment');
+            if (readingFlag === 'true' || readingFlag === true) {
+                hasCompletedReading = true;
+            }
+            
+            // Method 2: Check if user has a reading_level (most reliable)
+            if (userData && userData.reading_level && userData.reading_level !== 'unknown') {
+                hasCompletedReading = true;
+            }
+            
+            // Method 3: Check stored user data
+            if (!hasCompletedReading) {
+                try {
+                    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+                    if (storedUser.reading_level && storedUser.reading_level !== 'unknown') {
+                        hasCompletedReading = true;
+                    }
+                } catch (e) {
+                    console.warn('Error parsing stored user data:', e);
+                }
+            }
+            
             const bothComplete = hasInterests && hasCompletedReading;
             
             console.log('🔍 updateAssessmentStatus check:', {
                 hasInterests,
                 hasCompletedReading,
                 bothComplete,
-                isCompletedParam: isCompleted
+                isCompletedParam: isCompleted,
+                userDataProvided: !!userData
             });
             
             // Only show "Continue Learning" if BOTH assessments are complete
@@ -6229,11 +6231,6 @@
 
                 // milestone every 10 lessons
                 const completedLessons = nextLessonNumber - 1; // They just finished this lesson
-                console.log('🎯 Milestone check:', { 
-                    nextLessonNumber, 
-                    completedLessons, 
-                    shouldCelebrate: completedLessons % 10 === 0 
-                });
                 if (completedLessons % 10 === 0) {
                     setTimeout(() => showTutor('milestone', { lesson_number: completedLessons }), 2500);
                 }
@@ -8909,6 +8906,42 @@
         document.getElementById('gamePlayArea').innerHTML = html;
     }
 
+    function generateWordTowerQuestion(vocab) {
+        const word = vocab.word;
+        const scrambled = word.split('').sort(() => Math.random() - 0.5).join('');
+        
+        gameState.currentQuestion = {
+            word: word,
+            correctAnswer: word,
+            hint: vocab.definition,
+            vocab: vocab  // Store for repeat avoidance
+        };
+        
+        const html = `
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <div style="background: #f8f9fa; padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                    <h2 style="font-size: 2.5rem; color: var(--navy-primary); letter-spacing: 10px; font-family: monospace;">
+                        ${scrambled.toUpperCase()}
+                    </h2>
+                </div>
+                <p style="color: #666; font-size: 1.1rem; margin-bottom: 0.5rem;">Hint:</p>
+                <p style="color: var(--navy-primary); font-size: 1.2rem; font-weight: 500;">${vocab.definition}</p>
+            </div>
+            <div style="max-width: 400px; margin: 0 auto;">
+                <input type="text" id="wordBuilderInput" 
+                       placeholder="Type the unscrambled word..."
+                       style="width: 100%; padding: 1rem; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 8px; text-align: center; text-transform: lowercase; margin-bottom: 1rem;"
+                       onkeyup="if(event.key==='Enter') checkWordBuilderAnswer()">
+                <button class="btn btn-primary" onclick="checkWordBuilderAnswer()" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                    Submit Answer
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('gamePlayArea').innerHTML = html;
+        setTimeout(() => document.getElementById('wordTowerInput').focus(), 100);
+    }
+
     function checkWordMatchAnswer(selected) {
         const correct = selected === gameState.currentQuestion.correctAnswer;
         handleGameAnswer(correct);
@@ -9446,196 +9479,6 @@
     let wordScrambleStartTime = null;
     let draggedLetter = null;
     
-    // ========== WORD TOWER GAME ==========
-    
-    function generateWordTowerQuestion(vocab) {
-        // Create 4 options: 1 correct + 3 wrong definitions
-        const allVocab = gameState.vocabulary;
-        const distractors = allVocab
-            .filter(v => v.word !== vocab.word)
-            .sort(() => Math.random() - 0.5)
-            .slice(0, 3)
-            .map(v => v.definition);
-        
-        // ✅ PROPERLY RANDOMIZE: Put correct answer at random position
-        const options = [...distractors];
-        const correctIndex = Math.floor(Math.random() * 4); // 0-3
-        options.splice(correctIndex, 0, vocab.definition); // Insert at random position
-        
-        // Initialize tower state if first round
-        if (!gameState.towerHeight) {
-            gameState.towerHeight = 0;
-            gameState.maxTowerHeight = 0;
-        }
-        
-        gameState.currentQuestion = {
-            word: vocab.word,
-            correctAnswer: vocab.definition,
-            correctIndex: correctIndex,
-            options: options
-        };
-        
-        const html = `
-            <div style="display: flex; gap: 2rem; max-width: 1200px; margin: 0 auto;">
-                <!-- Tower Visualization -->
-                <div style="flex: 0 0 180px;">
-                    <div style="text-align: center; margin-bottom: 1rem; font-weight: bold; color: #667eea; font-size: 1.1rem;">
-                        🗼 Your Tower
-                    </div>
-                    <div style="text-align: center; margin-bottom: 0.5rem; font-size: 1.5rem; font-weight: bold; color: #1e3a5f;">
-                        ${gameState.towerHeight} 📦
-                    </div>
-                    <div id="towerContainer" style="
-                        height: 350px;
-                        display: flex;
-                        flex-direction: column-reverse;
-                        align-items: center;
-                        border-bottom: 4px solid #1e3a5f;
-                        padding: 0.5rem;
-                        background: linear-gradient(to top, #e8f4f8 0%, transparent 100%);
-                        border-radius: 8px 8px 0 0;
-                        position: relative;
-                    "></div>
-                    <div style="text-align: center; margin-top: 0.5rem; color: #666; font-size: 0.85rem;">
-                        Best: ${gameState.maxTowerHeight} 🏆
-                    </div>
-                </div>
-                
-                <!-- Question Area -->
-                <div style="flex: 1;">
-                    <div style="text-align: center; margin-bottom: 2rem;">
-                        <p style="color: #666; font-size: 1.1rem; margin-bottom: 1rem;">Match this word to its definition:</p>
-                        <h2 style="
-                            font-size: 2.5rem;
-                            color: white;
-                            padding: 1.5rem;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            border-radius: 12px;
-                            margin-bottom: 2rem;
-                            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-                        ">${vocab.word.toUpperCase()}</h2>
-                    </div>
-                    <div style="display: grid; gap: 1rem;">
-                        ${options.map((option, index) => `
-                            <button class="game-option" onclick="checkWordTowerAnswer(${index})" style="text-align: left; padding: 1.5rem;">
-                                <div style="font-weight: 600; color: #667eea; margin-bottom: 0.5rem; font-size: 0.9rem;">
-                                    Option ${String.fromCharCode(65 + index)}
-                                </div>
-                                ${option}
-                            </button>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('gamePlayArea').innerHTML = html;
-        renderTower();
-    }
-    
-    function renderTower() {
-        const container = document.getElementById('towerContainer');
-        if (!container) return;
-        
-        container.innerHTML = '';
-        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
-        
-        for (let i = 0; i < gameState.towerHeight; i++) {
-            const block = document.createElement('div');
-            block.style.cssText = `
-                width: 70px;
-                height: 25px;
-                background: ${colors[i % colors.length]};
-                margin: 2px 0;
-                border-radius: 4px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                animation: blockDrop 0.3s ease;
-            `;
-            container.appendChild(block);
-        }
-    }
-    
-    function checkWordTowerAnswer(selectedIndex) {
-        const options = gameState.currentQuestion.options;
-        const correctIndex = gameState.currentQuestion.correctIndex;
-        const allButtons = document.querySelectorAll('.game-option');
-        
-        // Disable all buttons
-        allButtons.forEach(btn => btn.disabled = true);
-        
-        if (selectedIndex === correctIndex) {
-            // Correct!
-            allButtons[selectedIndex].style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
-            allButtons[selectedIndex].style.color = 'white';
-            allButtons[selectedIndex].style.borderColor = '#11998e';
-            
-            // Add block
-            gameState.towerHeight++;
-            gameState.maxTowerHeight = Math.max(gameState.maxTowerHeight, gameState.towerHeight);
-            gameState.score += 50;
-            gameState.streak++;
-            
-            GameSounds.playSuccess();
-            renderTower();
-            
-            // Show feedback
-            showWordTowerFeedback('Correct! +1 Block 📦', 'success');
-            
-        } else {
-            // Wrong!
-            allButtons[selectedIndex].style.background = 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
-            allButtons[selectedIndex].style.color = 'white';
-            
-            // Show correct
-            allButtons[correctIndex].style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
-            allButtons[correctIndex].style.color = 'white';
-            
-            // Remove block
-            if (gameState.towerHeight > 0) {
-                gameState.towerHeight--;
-                renderTower();
-                showWordTowerFeedback('Wrong! -1 Block 💔', 'error');
-            } else {
-                showWordTowerFeedback('Wrong! No blocks to remove', 'error');
-            }
-            
-            gameState.streak = 0;
-            GameSounds.playError();
-        }
-        
-        // Next round
-        setTimeout(() => {
-            gameState.round++;
-            nextGameRound();
-        }, 2000);
-    }
-    
-    function showWordTowerFeedback(message, type) {
-        const feedback = document.createElement('div');
-        feedback.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 1.5rem 2.5rem;
-            background: ${type === 'success' ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' : 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)'};
-            color: white;
-            font-size: 1.5rem;
-            font-weight: bold;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-            z-index: 10000;
-            animation: feedbackPop 0.5s ease;
-        `;
-        feedback.textContent = message;
-        document.body.appendChild(feedback);
-        
-        setTimeout(() => {
-            feedback.style.animation = 'fadeOut 0.3s ease';
-            setTimeout(() => feedback.remove(), 300);
-        }, 1500);
-    }
-    
     function generateWordScrambleQuestion(vocab) {
         if (wordScrambleTimer) clearInterval(wordScrambleTimer);
         const word = vocab.word.toUpperCase();
@@ -9897,7 +9740,7 @@
         
         // 💾 Save game completion to backend (async)
         saveGameCompletionToBackend(
-            currentGame,
+            gameState.currentQuestion.type,
             gameState.score,
             gameState.round,
             Math.floor((Date.now() - gameStartTime) / 1000)
