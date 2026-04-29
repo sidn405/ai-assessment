@@ -6603,7 +6603,8 @@ async def delete_student(student_id: int, admin=Depends(require_admin)):
             "difficulty_adjustments", # user_id → users (maybe)
             "assessments",          # user_id → users (maybe)
             "discussions",          # user_id → users (maybe)
-            "admin_alerts"          # student_id → users (maybe)
+            "admin_alerts",          # student_id → users (maybe)
+            "reading_level_history" # user_id → users (NEW - for reading level tracking)
         ]
         
         for table in tables_to_clean:
