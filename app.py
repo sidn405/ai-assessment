@@ -6583,6 +6583,22 @@ async def delete_student(student_id: int, admin=Depends(require_admin)):
         name = student["full_name"] if hasattr(student, "keys") else student[0]
         
         # Delete related data (order matters!)
+        # CRITICAL: Delete tables with foreign key references FIRST
+                
+        # Step 1: Delete admin_alerts first (references essays)
+        try:
+            cursor.execute(
+                "DELETE FROM admin_alerts WHERE student_id=%s" if USE_POSTGRES
+                else "DELETE FROM admin_alerts WHERE student_id=?",
+                (student_id,)
+            )
+            conn.commit()
+            print(f"✓ Deleted from admin_alerts")
+        except Exception as e:
+            conn.rollback()
+            print(f"⚠️ Skipping admin_alerts: {e}")
+
+        # Step 2: Now delete other tables in correct order
         tables_to_clean = [
             # Tables referencing user_sessions
             "timeout_events",       # session_id → user_sessions
@@ -6593,19 +6609,18 @@ async def delete_student(student_id: int, admin=Depends(require_admin)):
             "user_sessions",        # user_id → users
             "placement_attempts",   # user_id → users
             "weekly_goals",         # user_id → users
-            "user_badges",          # user_id → users (probably)
-            "user_essays",          # user_id → users
+            "user_badges",          # user_id → users
+            "user_essays",          # user_id → users (NOW SAFE after admin_alerts deleted)
             "user_points",          # user_id → users
             "user_streaks",         # user_id → users
             "points_history",       # user_id → users
             "progress",             # user_id → users
             "vocabulary_tracker",   # user_id → users
-            "writing_exercises",    # user_id → users (maybe)
-            "difficulty_adjustments", # user_id → users (maybe)
-            "assessments",          # user_id → users (maybe)
-            "discussions",          # user_id → users (maybe)
-            "admin_alerts",          # student_id → users (maybe)
-            "reading_level_history" # user_id → users (NEW - for reading level tracking)
+            "writing_exercises",    # user_id → users
+            "difficulty_adjustments", # user_id → users
+            "assessments",          # user_id → users
+            "discussions",          # user_id → users
+            "reading_level_history" # user_id → users
         ]
         
         for table in tables_to_clean:
