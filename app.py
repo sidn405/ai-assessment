@@ -2211,9 +2211,9 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
         else:
             admin_school = None
  
-        # Build query based on whether admin has a school
+        # Build query to show ALL students from admin's school
         if admin_school:
-            # School-specific admin - filter by school
+            # School-specific admin - show all students from their school
             query = """
                 WITH last_messages AS (
                     SELECT
@@ -2261,22 +2261,13 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
                     ON uc.student_id = u.id
                 WHERE u.role = 'student'
                   AND u.school = %s
-                  AND (
-                        lm.student_id IS NOT NULL
-                        OR EXISTS (
-                            SELECT 1
-                            FROM messages m
-                            WHERE
-                                (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
-                                OR
-                                (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
-                      )
-                  )
-                ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
+                ORDER BY 
+                    lm.last_message_time DESC NULLS LAST, 
+                    u.full_name ASC
             """
-            cursor.execute(query, (admin_id, admin_id, admin_id, admin_school, admin_id, admin_id))
+            cursor.execute(query, (admin_id, admin_id, admin_id, admin_school))
         else:
-            # Super admin - no school filter
+            # Super admin - show all students from all schools
             query = """
                 WITH last_messages AS (
                     SELECT
@@ -2323,20 +2314,12 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
                 LEFT JOIN unread_counts uc
                     ON uc.student_id = u.id
                 WHERE u.role = 'student'
-                  AND (
-                        lm.student_id IS NOT NULL
-                        OR EXISTS (
-                            SELECT 1
-                            FROM messages m
-                            WHERE
-                                (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
-                                OR
-                                (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
-                      )
-                  )
-                ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
+                ORDER BY 
+                    u.school ASC NULLS LAST,
+                    lm.last_message_time DESC NULLS LAST, 
+                    u.full_name ASC
             """
-            cursor.execute(query, (admin_id, admin_id, admin_id, admin_id, admin_id))
+            cursor.execute(query, (admin_id, admin_id, admin_id))
         
         conversations = cursor.fetchall()
         conn.close()
@@ -2359,7 +2342,6 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
         print(f"Error loading conversations: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to load conversations: {str(e)}")
- 
  
 # ========================================
 # STUDENT ENDPOINTS
