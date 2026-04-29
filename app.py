@@ -2346,32 +2346,61 @@ async def send_message_to_teacher(
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-
-        cursor.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
-        admin = cursor.fetchone()
-
+        student_id = current_user["user_id"]
+        
+        # Get student's school
+        cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
+        student_row = cursor.fetchone()
+        if student_row:
+            from collections.abc import Mapping
+            student_school = student_row["school"] if isinstance(student_row, Mapping) else student_row[0]
+        else:
+            student_school = None
+        
+        # Find admin from student's school (SAME LOGIC as my-conversation)
+        if student_school:
+            # Try to find school-specific admin first
+            cursor.execute(
+                "SELECT id FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
+                (student_school,)
+            )
+            admin = cursor.fetchone()
+            
+            # If no school-specific admin, fall back to super admin
+            if not admin:
+                cursor.execute(
+                    "SELECT id FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                )
+                admin = cursor.fetchone()
+        else:
+            # Student has no school, find any admin
+            cursor.execute(
+                "SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+            )
+            admin = cursor.fetchone()
+ 
         if not admin:
             conn.close()
             raise HTTPException(status_code=404, detail="No administrator found")
-
+ 
         query = """
             INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
             VALUES (%s, 'student', %s, 'admin', %s)
             RETURNING id, created_at
         """
-
-        student_id = current_user["user_id"]
-        cursor.execute(query, (student_id, admin["id"], request.content))
+ 
+        admin_id = admin["id"] if isinstance(admin, Mapping) else admin[0]
+        cursor.execute(query, (student_id, admin_id, request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
-
+ 
         return {
             "success": True,
             "message_id": result["id"],
             "created_at": result["created_at"]
         }
-
+ 
     except Exception as e:
         print(f"Error sending message to teacher: {e}")
         traceback.print_exc()
