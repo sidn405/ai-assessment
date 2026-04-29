@@ -2489,8 +2489,13 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     if not content_generator:
         raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
     
-    # NEW: Smart topic selection based on age and interests
-    topic = select_age_appropriate_topic(interest_tags, age, grade_band)
+    # Rotate through interests for variety in reading assessment
+    if interest_tags and len(interest_tags) > 0:
+        # Use passage count to rotate through interests
+        interest_index = total_read % len(interest_tags)
+        topic = interest_tags[interest_index]
+    else:
+        topic = select_age_appropriate_topic(interest_tags, age, grade_band)
     
     # NEW: Better difficulty mapping based on grade and challenge
     difficulty = calculate_difficulty(grade_band, level_estimate, challenge)
