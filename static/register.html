@@ -341,6 +341,20 @@
             </div>
 
             <div class="form-group">
+                <label for="school">School</label>
+                <select 
+                    id="school" 
+                    name="school" 
+                    required
+                >
+                    <option value="" disabled selected>Select your school...</option>
+                    <option value="McMain">Mc Main</option>
+                    <option value="Columbia">Columbia</option>
+                </select>
+                <small>Select the school you attend</small>
+            </div>
+
+            <div class="form-group">
                 <label for="email">Email Address</label>
                 <input 
                     type="email" 
@@ -559,6 +573,7 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const gradeLevel = document.getElementById('gradeLevel').value;
+            const school = document.getElementById('school').value;
             
             // Get age band and reading level from grade
             const ageBand = getAgeBandFromGrade(gradeLevel);
@@ -575,7 +590,8 @@
                         role: 'student',
                         age_band: ageBand,
                         grade_band: gradeLevel,
-                        reading_level: readingLevel
+                        reading_level: readingLevel,
+                        school: school
                     })
                 });
                 
