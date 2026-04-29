@@ -2262,12 +2262,38 @@ async def get_student_conversation(current_user: dict = Depends(require_user)):
     try:
         conn = get_db()
         cursor = get_cursor(conn)
+        student_id = current_user['user_id']
         
-        # Find the admin (teacher)
-        cursor.execute(
-            "SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
-        )
-        admin = cursor.fetchone()
+        # Get student's school
+        cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
+        student_row = cursor.fetchone()
+        if student_row:
+            from collections.abc import Mapping
+            student_school = student_row["school"] if isinstance(student_row, Mapping) else student_row[0]
+        else:
+            student_school = None
+        
+        # Find admin from student's school, or super admin (school=NULL)
+        if student_school:
+            # Try to find school-specific admin first
+            cursor.execute(
+                "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
+                (student_school,)
+            )
+            admin = cursor.fetchone()
+            
+            # If no school-specific admin, fall back to super admin
+            if not admin:
+                cursor.execute(
+                    "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                )
+                admin = cursor.fetchone()
+        else:
+            # Student has no school, find any admin
+            cursor.execute(
+                "SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+            )
+            admin = cursor.fetchone()
         
         if not admin:
             conn.close()
@@ -2294,16 +2320,16 @@ async def get_student_conversation(current_user: dict = Depends(require_user)):
             ORDER BY m.created_at ASC
         """
         
-        student_id = current_user['user_id']
-        admin_id = admin['id']
+        admin_id = admin['id'] if isinstance(admin, Mapping) else admin[0]
         cursor.execute(query, (student_id, admin_id, admin_id, student_id))
         messages = cursor.fetchall()
         conn.close()
         
+        admin_name = admin['name'] if isinstance(admin, Mapping) else admin[1]
         return {
             "messages": [dict(m) for m in messages],
-            "teacher_name": admin['name'],
-            "teacher_id": admin['id']
+            "teacher_name": admin_name,
+            "teacher_id": admin_id
         }
         
     except Exception as e:
