@@ -578,6 +578,8 @@
             // Get age band and reading level from grade
             const ageBand = getAgeBandFromGrade(gradeLevel);
             const readingLevel = getReadingLevelFromGrade(gradeLevel);
+
+            // Added school
             
             try {
                 const response = await fetch('/api/register', {
