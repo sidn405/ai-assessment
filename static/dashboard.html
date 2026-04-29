@@ -3441,7 +3441,7 @@
 
                 // ⭐ FIX: Use hasCompletedAssessment instead of simple check
                 const hasAssessment = hasCompletedAssessment(data);
-                updateAssessmentStatus(hasAssessment);
+                updateAssessmentStatus(hasAssessment, data.user);
 
             } catch (error) {
                 console.error('Error loading dashboard:', error);
