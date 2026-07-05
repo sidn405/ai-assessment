@@ -241,6 +241,7 @@ def init_db():
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS total_passages_read INTEGER DEFAULT 0")
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS comprehension_score REAL DEFAULT 0")
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP")
+            cursor.execute("ALTER TABLE passages ADD COLUMN IF NOT EXISTS image_url TEXT")
             conn.commit()
         except:
             conn.rollback()
@@ -1727,7 +1728,8 @@ async def run_migration(request: Request):
                 created_by INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                metadata TEXT
+                metadata TEXT,
+                image_url TEXT
             )
         """)
         results.append("✓ passages table created")
@@ -2497,43 +2499,70 @@ async def onboard_interests(request: Request):
     # Combine interests and topics
     all_interests = list(set(interests + topics))
     
-    # Determine initial level estimate based on age
-    level_map = {
-        "18-24": "intermediate",
-        "25-34": "intermediate",
-        "35-44": "intermediate",
-        "45+": "intermediate",
-        "under-18": "beginner"
-    }
-    level_estimate = level_map.get(age_band, "intermediate")
+    # ROOT CAUSE FIX: this endpoint used to ALWAYS overwrite grade_band and
+    # level_estimate using a coarse age_band map (e.g. "under-18" -> grade_band
+    # "high"). That clobbered the precise grade_band/reading_level a student
+    # already gave at registration (pre-k, kindergarten, 1st...12th, etc.),
+    # which is how a 5-year-old registered as "pre-k" could end up with
+    # grade_band="high" after this step ran - producing college-level stories.
+    #
+    # Fix: only derive grade_band/level_estimate from the coarse age_band map
+    # if the student doesn't already have a precise grade_band on file.
+    conn = get_db()
+    cursor = get_cursor(conn)
     
-    # Determine grade band
-    grade_map = {
-        "under-18": "high",
-        "18-24": "adult",
-        "25-34": "adult",
-        "35-44": "adult",
-        "45+": "adult"
-    }
-    grade_band = grade_map.get(age_band, "adult")
+    if USE_POSTGRES:
+        cursor.execute("SELECT grade_band, reading_level, age_band FROM users WHERE id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT grade_band, reading_level, age_band FROM users WHERE id = ?", (user_id,))
+    existing = cursor.fetchone()
+    
+    existing_grade_band = existing['grade_band'] if existing else None
+    existing_reading_level = existing['reading_level'] if existing else None
+    existing_age_band = existing['age_band'] if existing else None
+    
+    if existing_grade_band:
+        # Trust the precise value captured at registration.
+        grade_band = existing_grade_band
+        level_estimate = existing_reading_level or 'intermediate'
+    else:
+        # No grade_band on file (e.g. legacy account) - fall back to the
+        # coarse age_band mapping as a best-effort default.
+        level_map = {
+            "18-24": "intermediate",
+            "25-34": "intermediate",
+            "35-44": "intermediate",
+            "45+": "intermediate",
+            "under-18": "beginner"
+        }
+        level_estimate = level_map.get(age_band, "intermediate")
+        
+        grade_map = {
+            "under-18": "high",
+            "18-24": "adult",
+            "25-34": "adult",
+            "35-44": "adult",
+            "45+": "adult"
+        }
+        grade_band = grade_map.get(age_band, "adult")
+    
+    # Don't blank out a more specific age_band that was already on file.
+    final_age_band = existing_age_band or age_band
     
     # Update user profile
-    conn = get_db()
-    cursor = conn.cursor()
-    
     if USE_POSTGRES:
         cursor.execute(
             """UPDATE users 
                SET interest_tags = %s, age_band = %s, level_estimate = %s, grade_band = %s, last_active = NOW()
                WHERE id = %s""",
-            (json.dumps(all_interests), age_band, level_estimate, grade_band, user_id)
+            (json.dumps(all_interests), final_age_band, level_estimate, grade_band, user_id)
         )
     else:
         cursor.execute(
             """UPDATE users 
                SET interest_tags = ?, age_band = ?, level_estimate = ?, grade_band = ?, last_active = CURRENT_TIMESTAMP
                WHERE id = ?""",
-            (json.dumps(all_interests), age_band, level_estimate, grade_band, user_id)
+            (json.dumps(all_interests), final_age_band, level_estimate, grade_band, user_id)
         )
     
     conn.commit()
@@ -2635,14 +2664,26 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         )
         print(f"✓ Passage generated: {passage_data['title']}")
         
+        # Generate an illustration for younger students only (cost-gated by grade band).
+        image_url = None
+        if content_generator.is_young_learner(grade_band):
+            print(f"🎨 Generating illustration for young learner (grade_band={grade_band})...")
+            image_url = content_generator.generate_story_image(
+                title=passage_data.get('title', ''),
+                content=passage_data.get('content', ''),
+                topic=topic,
+                grade_band=grade_band
+            )
+            print(f"✓ Illustration generated: {bool(image_url)}")
+        
         # Save to database
         if USE_POSTGRES:
             print(f"Saving passage to database...")
             cursor.execute(
                 """INSERT INTO passages 
                 (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
-                    difficulty_level, estimated_minutes, approved, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                    difficulty_level, estimated_minutes, approved, created_by, image_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (passage_data['title'], 
                 passage_data['content'], 
                 passage_data.get('source', 'AI Generated'),
@@ -2652,7 +2693,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                 passage_data.get('flesch_ease'),
                 passage_data.get('difficulty_level', difficulty),
                 passage_data.get('estimated_minutes', 2),
-                True, 1)
+                True, 1, image_url)
             )
             result = cursor.fetchone()
             passage_id = result['id']
@@ -2661,8 +2702,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             cursor.execute(
                 """INSERT INTO passages 
                 (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                    difficulty_level, estimated_minutes, approved, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    difficulty_level, estimated_minutes, approved, created_by, image_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (passage_data['title'], 
                 passage_data['content'], 
                 passage_data.get('source', 'AI Generated'),
@@ -2672,7 +2713,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                 passage_data.get('flesch_ease'),
                 passage_data.get('difficulty_level', difficulty),
                 passage_data.get('estimated_minutes', 2),
-                True, 1)
+                True, 1, image_url)
             )
             passage_id = cursor.lastrowid
         
@@ -2736,6 +2777,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             "estimated_minutes": passage_data.get('estimated_minutes', 2),
             "difficulty_level": passage_data.get('difficulty_level', difficulty),
             "vocabulary": passage_data.get('vocabulary_words', []),
+            "image_url": image_url,
             "questions": questions,
             "is_first_passage": total_read == 0,
             "personalized_for": {

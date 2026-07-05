@@ -451,6 +451,66 @@
             margin-bottom: 1rem;
         }
         
+        /* Placement test setup progress bar */
+        .placement-progress {
+            background: var(--white);
+            border-radius: 8px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .placement-progress-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.6rem;
+            font-weight: 600;
+            color: var(--navy-dark);
+            font-size: 0.95rem;
+        }
+        
+        .placement-progress-track {
+            width: 100%;
+            height: 10px;
+            background: var(--light-gray);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        
+        .placement-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gold-accent), var(--navy-light));
+            border-radius: 999px;
+            transition: width 0.5s ease;
+        }
+        
+        .placement-progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-gray);
+        }
+        
+        .placement-progress-steps span.step-done {
+            color: var(--success);
+            font-weight: 600;
+        }
+        
+        /* Story illustration for younger students */
+        .story-image-wrap {
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .story-image-wrap img {
+            max-width: 100%;
+            max-height: 360px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+        }
+        
         @media (max-width: 768px) {
             .container {
                 padding: 1rem;
@@ -724,6 +784,22 @@
     </div>
 
     <div class="container">
+        <!-- Placement Test Setup Progress -->
+        <div id="placementProgressContainer" class="placement-progress hidden">
+            <div class="placement-progress-label">
+                <span>📋 Reading Placement Test</span>
+                <span id="placementProgressText">Passage 1 of 3</span>
+            </div>
+            <div class="placement-progress-track">
+                <div id="placementProgressFill" class="placement-progress-fill" style="width: 0%;"></div>
+            </div>
+            <div class="placement-progress-steps">
+                <span id="placementStep1">Passage 1</span>
+                <span id="placementStep2">Passage 2</span>
+                <span id="placementStep3">Passage 3</span>
+            </div>
+        </div>
+
         <!-- Loading State -->
         <div id="loadingState" class="loading">
             <div class="spinner"></div>
@@ -739,6 +815,9 @@
             </div>
 
             <div class="passage-card">
+                <div id="storyImageWrap" class="story-image-wrap hidden">
+                    <img id="storyImage" src="" alt="Story illustration">
+                </div>
                 <div class="passage-meta">
                     <div>
                         <h1 class="passage-title" id="passageTitle"></h1>
@@ -838,6 +917,34 @@
             scores: JSON.parse(sessionStorage.getItem('placementScores') || '[]'),
             feedbacks: JSON.parse(sessionStorage.getItem('placementFeedbacks') || '[]')
         };
+
+        const PLACEMENT_TOTAL_PASSAGES = 3;
+
+        function updatePlacementProgressBar() {
+            const container = document.getElementById('placementProgressContainer');
+            if (!isPlacementTest) {
+                container.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+
+            const completed = Math.min(placementTestProgress.passagesCompleted, PLACEMENT_TOTAL_PASSAGES);
+            const currentStep = Math.min(completed + 1, PLACEMENT_TOTAL_PASSAGES);
+            const pct = (completed / PLACEMENT_TOTAL_PASSAGES) * 100;
+
+            document.getElementById('placementProgressFill').style.width = `${pct}%`;
+            document.getElementById('placementProgressText').textContent =
+                completed >= PLACEMENT_TOTAL_PASSAGES
+                    ? 'Complete! 🎉'
+                    : `Passage ${currentStep} of ${PLACEMENT_TOTAL_PASSAGES}`;
+
+            for (let i = 1; i <= PLACEMENT_TOTAL_PASSAGES; i++) {
+                const stepEl = document.getElementById(`placementStep${i}`);
+                if (!stepEl) continue;
+                stepEl.textContent = i <= completed ? `✓ Passage ${i}` : `Passage ${i}`;
+                stepEl.classList.toggle('step-done', i <= completed);
+            }
+        }
 
         console.log('📊 Placement test mode:', isPlacementTest);
         if (isPlacementTest) {
@@ -1371,6 +1478,7 @@
                 return;
             }
 
+            updatePlacementProgressBar();
             startTime = Date.now();
             await loadPassage(token);
         });
@@ -1422,6 +1530,16 @@
             document.getElementById('estimatedTime').textContent = data.estimated_minutes;
             document.getElementById('difficultyLevel').textContent = data.difficulty_level;
             
+            // Story illustration (younger students only - backend decides whether
+            // one was generated for this passage's grade band)
+            const storyImageWrap = document.getElementById('storyImageWrap');
+            if (data.image_url) {
+                document.getElementById('storyImage').src = data.image_url;
+                storyImageWrap.classList.remove('hidden');
+            } else {
+                storyImageWrap.classList.add('hidden');
+            }
+            
             // Format passage content
             const paragraphs = data.content.split('\n\n').filter(p => p.trim());
             document.getElementById('passageContent').innerHTML = paragraphs
@@ -1429,6 +1547,7 @@
                 .join('');
 
             // Display vocabulary if available
+            const vocabularyBox = document.getElementById('vocabularyBox');
             if (data.vocabulary && data.vocabulary.length > 0) {
                 const vocabList = data.vocabulary.map(v => `
                     <div class="vocab-item">
@@ -1437,7 +1556,9 @@
                 `).join('');
                 
                 document.getElementById('vocabularyList').innerHTML = vocabList;
-                document.getElementById('vocabularyBox').classList.remove('hidden');
+                vocabularyBox.classList.remove('hidden');
+            } else {
+                vocabularyBox.classList.add('hidden');
             }
 
             // Display questions
@@ -1675,6 +1796,8 @@
                     
                     sessionStorage.setItem('placementPassagesCompleted', placementTestProgress.passagesCompleted.toString());
                     sessionStorage.setItem('placementFeedbacks', JSON.stringify(placementTestProgress.feedbacks));
+                    
+                    updatePlacementProgressBar();
                     
                     console.log(`📊 Placement test: ${placementTestProgress.passagesCompleted}/3 passages completed`);
                     
