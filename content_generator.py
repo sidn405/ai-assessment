@@ -399,19 +399,20 @@ class ContentGenerator:
             # it's not needed here - the story text is already on the page.
             snippet = (content or '')[:300]
             image_prompt = (
-                f"A warm, friendly children's storybook illustration. "
-                f"Story title: '{title}'. Topic: {topic}. "
-                f"Scene inspired by: {snippet} "
-                f"Style: simple flat-color storybook art, bright and cheerful, "
-                f"no text or letters anywhere in the image, single clear scene, "
-                f"safe and appropriate for young children."
+                f"Children's picture book illustration in the style of a modern Pixar storybook. "
+                f"Warm, soft lighting. Rich colors with depth and texture — not flat. "
+                f"Story: '{title}'. Scene: {snippet} "
+                f"Characters should be expressive and cute with rounded features. "
+                f"Lush detailed background with natural elements. "
+                f"No text, no letters, no words anywhere in the image. "
+                f"Safe and joyful, appropriate for ages 4-8."
             )
 
             response = self.client.images.generate(
-                model="gpt-image-1-mini",
-                prompt=image_prompt,
-                size="1024x1024",
-                quality="low",
+                model="gpt-image-1",        # upgrade from mini
+                prompt=image_prompt,         # improved prompt above
+                size="1536x1024",           # landscape instead of square
+                quality="medium",            # upgrade from low
                 n=1
             )
 
