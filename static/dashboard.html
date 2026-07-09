@@ -1399,30 +1399,20 @@
             position: relative;
         }
 
-        .main-content.onboarding-locked::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: rgba(255, 255, 255, 0.55);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            z-index: 10;
-            border-radius: 8px;
-            pointer-events: all;
-        }
-
-        /* Getting Started card floats above the blur */
-        .main-content.onboarding-locked #overviewSection .card:first-of-type {
-            position: relative;
-            z-index: 20;
-            box-shadow: 0 8px 32px rgba(42, 57, 138, 0.18);
-        }
-
-        /* Progress grid muted behind blur */
-        .main-content.onboarding-locked .progress-grid {
-            filter: blur(2px);
+        /* Blur specific sections, NOT the whole container */
+        .main-content.onboarding-locked .progress-grid,
+        .main-content.onboarding-locked #rewardsMotivationCard {
+            filter: blur(3px);
             opacity: 0.5;
             pointer-events: none;
+            user-select: none;
+        }
+
+        /* Getting Started card always fully visible and interactive */
+        #gettingStarted,
+        #continueLearning {
+            position: relative;
+            z-index: 20;
         }
 
         /* Locked nav links */
