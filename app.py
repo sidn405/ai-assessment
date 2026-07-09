@@ -438,19 +438,19 @@ async def register(user: UserCreate):
     try:
         if USE_POSTGRES:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level, school)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, FALSE) RETURNING id""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, user.reading_level, user.school)
+                 user.age, user.age_band, user.grade_band, user.school)
             )
             result = cursor.fetchone()
             user_id = result["id"] if isinstance(result, dict) else result[0]
         else:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level, school) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, user.reading_level, user.school)
+                 user.age, user.age_band, user.grade_band, user.school)
             )
             user_id = cursor.lastrowid
  
@@ -1562,10 +1562,10 @@ async def update_reading_level(request: Request):
                 VALUES (%s, %s, %s, %s)
             """, (user_id, previous_level, new_level, score))
             
-            # Update user's current level
+            # Update user's current level and mark placement as complete
             cursor.execute("""
                 UPDATE users 
-                SET reading_level = %s, level_estimate = %s
+                SET reading_level = %s, level_estimate = %s, placement_completed = TRUE
                 WHERE id = %s
             """, (new_level, new_level, user_id))
         else:
@@ -1577,7 +1577,7 @@ async def update_reading_level(request: Request):
             
             cursor.execute("""
                 UPDATE users 
-                SET reading_level = ?, level_estimate = ?
+                SET reading_level = ?, level_estimate = ?, placement_completed = 1
                 WHERE id = ?
             """, (new_level, new_level, user_id))
         
@@ -4739,7 +4739,9 @@ async def get_student_progress(token: str):
         if USE_POSTGRES:
             cursor.execute(
                 """SELECT u.id, u.full_name, u.email, u.reading_level, 
-                          COALESCE(us.current_streak, 0) as current_streak
+                          COALESCE(us.current_streak, 0) as current_streak,
+                          COALESCE(u.placement_completed, FALSE) as placement_completed,
+                          u.interests
                    FROM users u
                    LEFT JOIN user_streaks us ON u.id = us.user_id
                    WHERE u.id = %s""",
@@ -4748,7 +4750,9 @@ async def get_student_progress(token: str):
         else:
             cursor.execute(
                 """SELECT u.id, u.full_name, u.email, u.reading_level, 
-                          COALESCE(us.current_streak, 0) as current_streak
+                          COALESCE(us.current_streak, 0) as current_streak,
+                          COALESCE(u.placement_completed, 0) as placement_completed,
+                          u.interests
                    FROM users u
                    LEFT JOIN user_streaks us ON u.id = us.user_id
                    WHERE u.id = ?""",
@@ -4767,7 +4771,9 @@ async def get_student_progress(token: str):
                 'full_name': user_row['full_name'],
                 'email': user_row['email'],
                 'reading_level': user_row['reading_level'],
-                'current_streak': user_row['current_streak']
+                'current_streak': user_row['current_streak'],
+                'placement_completed': bool(user_row['placement_completed']),
+                'interests': user_row['interests']
             }
         else:
             user_info = {
@@ -4775,7 +4781,9 @@ async def get_student_progress(token: str):
                 'full_name': user_row[1],
                 'email': user_row[2],
                 'reading_level': user_row[3],
-                'current_streak': user_row[4]
+                'current_streak': user_row[4],
+                'placement_completed': bool(user_row[5]),
+                'interests': user_row[6]
             }
         # ============================================
         

@@ -3549,46 +3549,40 @@
                 return;
             }
             
-            // ✅ Check BOTH assessments before showing Continue Learning
-            const hasInterests = hasCompletedAssessment();
-            
-            // Check reading assessment completion multiple ways (Safari/Firefox compatible)
-            let hasCompletedReading = false;
-            
-            // Method 1: Check localStorage flag
-            const readingFlag = localStorage.getItem('hasCompletedReadingAssessment');
-            if (readingFlag === 'true' || readingFlag === true) {
-                hasCompletedReading = true;
-            }
-            
-            // Method 2: Check if user has a reading_level (most reliable)
-            if (userData && userData.reading_level && userData.reading_level !== 'unknown') {
-                hasCompletedReading = true;
-            }
-            
-            // Method 3: Check stored user data
-            if (!hasCompletedReading) {
+            // Step 1: Interest assessment — check interests from API data (most reliable)
+            // Fall back to localStorage flag for backwards compatibility
+            let hasInterests = false;
+            if (userData && userData.interests) {
                 try {
-                    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-                    if (storedUser.reading_level && storedUser.reading_level !== 'unknown') {
-                        hasCompletedReading = true;
-                    }
-                } catch (e) {
-                    console.warn('Error parsing stored user data:', e);
-                }
+                    const parsed = typeof userData.interests === 'string'
+                        ? JSON.parse(userData.interests) : userData.interests;
+                    hasInterests = Array.isArray(parsed) && parsed.length > 0;
+                } catch(e) {}
             }
-            
+            if (!hasInterests) hasInterests = hasCompletedAssessment(null);
+
+            // Step 2: Placement test — use the dedicated placement_completed flag from API.
+            // DO NOT use reading_level — it gets set at registration from grade/age
+            // and doesn't mean the student actually sat the placement test.
+            let hasCompletedReading = false;
+            if (userData && userData.placement_completed === true) {
+                hasCompletedReading = true;
+                localStorage.setItem('hasCompletedReadingAssessment', 'true');
+            } else {
+                // Fall back to localStorage for users who completed before this flag existed
+                hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true';
+            }
+
             const bothComplete = hasInterests && hasCompletedReading;
             
             console.log('🔍 updateAssessmentStatus check:', {
                 hasInterests,
                 hasCompletedReading,
                 bothComplete,
-                isCompletedParam: isCompleted,
+                placement_completed: userData?.placement_completed,
                 userDataProvided: !!userData
             });
             
-            // Only show "Continue Learning" if BOTH assessments are complete
             if (bothComplete) {
                 gettingStarted.classList.add('hidden');
                 continueLearning.classList.remove('hidden');
@@ -3599,7 +3593,6 @@
                 console.log('📝 At least one assessment incomplete - showing Getting Started');
             }
 
-            // Apply or remove the dashboard lock
             applyOnboardingLock(hasInterests, hasCompletedReading);
         }
 
