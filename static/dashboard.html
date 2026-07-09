@@ -1394,6 +1394,87 @@
             display: block;
         }
 
+        /* ========== ONBOARDING LOCK SYSTEM ========== */
+        .main-content.onboarding-locked {
+            position: relative;
+        }
+
+        .main-content.onboarding-locked::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 10;
+            border-radius: 8px;
+            pointer-events: all;
+        }
+
+        /* Getting Started card floats above the blur */
+        .main-content.onboarding-locked #overviewSection .card:first-of-type {
+            position: relative;
+            z-index: 20;
+            box-shadow: 0 8px 32px rgba(42, 57, 138, 0.18);
+        }
+
+        /* Progress grid muted behind blur */
+        .main-content.onboarding-locked .progress-grid {
+            filter: blur(2px);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* Locked nav links */
+        .nav-link.nav-locked {
+            opacity: 0.38;
+            cursor: not-allowed;
+            pointer-events: none;
+            position: relative;
+        }
+
+        .nav-link.nav-locked::after {
+            content: '🔒';
+            position: absolute;
+            right: 1rem;
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* Onboarding top banner */
+        #onboardingBanner {
+            display: none;
+            background: linear-gradient(135deg, var(--navy-primary), #4a56af);
+            color: white;
+            padding: 0.85rem 1.5rem;
+            text-align: center;
+            font-size: 0.95rem;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        #onboardingBanner.visible { display: block; }
+
+        #onboardingBanner .banner-steps {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.4rem;
+            font-size: 0.88rem;
+            font-weight: 400;
+            opacity: 0.92;
+        }
+
+        #onboardingBanner .banner-step.done {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
         /* ========== TOUCH-FRIENDLY IMPROVEMENTS ========== */
         @media (hover: none) and (pointer: coarse) {
             /* Larger tap targets for touch devices */
@@ -2155,7 +2236,17 @@
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
 
-        <main class="main-content">
+        <main class="main-content" id="mainContent">
+            <!-- Onboarding lock banner — hidden once both steps complete -->
+            <div id="onboardingBanner">
+                <div>🎯 Complete these two steps to unlock your full dashboard</div>
+                <div class="banner-steps">
+                    <span class="banner-step" id="bannerStep1">📝 Step 1: Take the Interest Assessment</span>
+                    <span style="opacity:0.5;">→</span>
+                    <span class="banner-step" id="bannerStep2">📊 Step 2: Complete the Reading Level Test</span>
+                </div>
+            </div>
+
             <!-- Overview Section -->
             <div id="overviewSection">
                 <div class="header">
@@ -2208,7 +2299,7 @@
                         <div class="alert alert-success">
                             <strong>✅ Assessment complete!</strong><br>
                             Your lessons are now personalized to your interests and reading level.<br>
-                            <span style="opacity: 0.9; font-size: 0.95em;">Ready to start your learning journey? Click below to explore your customized lessons!</span>
+                            <span style="opacity: 0.9; font-size: 0.95em;">Ready to start your learning journey? Click the Continue Learning button below to explore your customized lessons!</span>
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="showSection('lessons', event)">
@@ -3506,6 +3597,60 @@
                 gettingStarted.classList.remove('hidden');
                 continueLearning.classList.add('hidden');
                 console.log('📝 At least one assessment incomplete - showing Getting Started');
+            }
+
+            // Apply or remove the dashboard lock
+            applyOnboardingLock(hasInterests, hasCompletedReading);
+        }
+
+        /**
+         * Lock/unlock the dashboard based on onboarding completion.
+         * - Blurs everything except the Getting Started card
+         * - Locks sidebar nav links (except Overview & Logout)
+         * - Shows/hides the top banner with step status
+         */
+        function applyOnboardingLock(hasInterests, hasCompletedReading) {
+            const mainContent = document.getElementById('mainContent');
+            const banner = document.getElementById('onboardingBanner');
+            const step1El = document.getElementById('bannerStep1');
+            const step2El = document.getElementById('bannerStep2');
+            const bothComplete = hasInterests && hasCompletedReading;
+
+            // Nav links that should stay accessible during onboarding
+            const alwaysUnlocked = ['overview'];
+
+            // All nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                const onclick = link.getAttribute('onclick') || '';
+                const isAlwaysUnlocked = alwaysUnlocked.some(s => onclick.includes(`'${s}'`) || onclick.includes(`"${s}"`));
+
+                if (bothComplete || isAlwaysUnlocked) {
+                    link.classList.remove('nav-locked');
+                } else {
+                    link.classList.add('nav-locked');
+                }
+            });
+
+            if (bothComplete) {
+                mainContent.classList.remove('onboarding-locked');
+                banner.classList.remove('visible');
+            } else {
+                mainContent.classList.add('onboarding-locked');
+                banner.classList.add('visible');
+
+                // Update step status in banner
+                if (step1El) {
+                    step1El.textContent = hasInterests
+                        ? '✅ Step 1: Interest Assessment'
+                        : '📝 Step 1: Take the Interest Assessment';
+                    step1El.classList.toggle('done', hasInterests);
+                }
+                if (step2El) {
+                    step2El.textContent = hasCompletedReading
+                        ? '✅ Step 2: Reading Level Test'
+                        : '📊 Step 2: Complete the Reading Level Test';
+                    step2El.classList.toggle('done', hasCompletedReading);
+                }
             }
         }
 
@@ -7135,6 +7280,9 @@
                 const continueLearning = document.getElementById('continueLearning');
                 if (continueLearning) continueLearning.classList.add('hidden');
             }
+
+            // Keep lock in sync
+            applyOnboardingLock(hasInterests, hasCompletedReading);
         }
 
         async function saveWeeklyGoal(event) {

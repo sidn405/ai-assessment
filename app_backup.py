@@ -133,6 +133,7 @@ class UserCreate(BaseModel):
     age_band: Optional[str] = None
     grade_band: Optional[str] = None      # NEW: Student's grade level
     reading_level: Optional[str] = None   # NEW: Initial reading difficulty
+    school: Optional[str] = None
         
 class UserLogin(BaseModel):
     email: str
@@ -174,6 +175,7 @@ class InviteAdminReq(BaseModel):
 class AcceptInviteReq(BaseModel):
     token: str = Field(..., min_length=10)
     password: str = Field(..., min_length=6)
+    school: Optional[str] = None
     
 class AdminInviteActionRequest(BaseModel):
     # optional note for auditing/logging if you want
@@ -435,19 +437,19 @@ async def register(user: UserCreate):
     try:
         if USE_POSTGRES:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level, school)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, user.reading_level)
+                 user.age, user.age_band, user.grade_band, user.reading_level, user.school)
             )
             result = cursor.fetchone()
             user_id = result["id"] if isinstance(result, dict) else result[0]
         else:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, reading_level, school) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, user.reading_level)
+                 user.age, user.age_band, user.grade_band, user.reading_level, user.school)
             )
             user_id = cursor.lastrowid
  
@@ -469,7 +471,8 @@ async def register(user: UserCreate):
                 "age": user.age,                    # ADD THIS
                 "age_band": user.age_band,
                 "grade_band": user.grade_band,      # ADD THIS
-                "reading_level": user.reading_level # ADD THIS
+                "reading_level": user.reading_level, # ADD THIS
+                "school": user.school
             }
         }
  
@@ -1959,97 +1962,6 @@ async def check_tables():
             "error": str(e),
             "status": "error"
         }
-        
-@app.get("/api/messages/conversations")
-async def get_admin_conversations(current_user: dict = Depends(require_admin)):
-    try:
-        conn = get_db()
-        cursor = get_cursor(conn)
-
-        query = """
-            WITH last_messages AS (
-                SELECT
-                    CASE
-                        WHEN sender_type = 'student' THEN sender_id
-                        ELSE recipient_id
-                    END AS student_id,
-                    content AS last_message,
-                    created_at AS last_message_time,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY CASE
-                            WHEN sender_type = 'student' THEN sender_id
-                            ELSE recipient_id
-                        END
-                        ORDER BY created_at DESC
-                    ) AS rn
-                FROM messages
-                WHERE
-                    (sender_type = 'admin' AND sender_id = %s)
-                    OR
-                    (recipient_type = 'admin' AND recipient_id = %s)
-            ),
-            unread_counts AS (
-                SELECT
-                    sender_id AS student_id,
-                    COUNT(*) AS unread_count
-                FROM messages
-                WHERE recipient_type = 'admin'
-                  AND recipient_id = %s
-                  AND sender_type = 'student'
-                  AND read = FALSE
-                GROUP BY sender_id
-            )
-            SELECT
-                u.id AS student_id,
-                u.full_name AS student_name,
-                u.email AS student_email,
-                lm.last_message,
-                lm.last_message_time,
-                COALESCE(uc.unread_count, 0) AS unread_count
-            FROM users u
-            LEFT JOIN last_messages lm
-                ON lm.student_id = u.id AND lm.rn = 1
-            LEFT JOIN unread_counts uc
-                ON uc.student_id = u.id
-            WHERE u.role = 'student'
-              AND (
-                    lm.student_id IS NOT NULL
-                    OR EXISTS (
-                        SELECT 1
-                        FROM messages m
-                        WHERE
-                            (m.sender_type = 'admin' AND m.sender_id = %s AND m.recipient_id = u.id)
-                            OR
-                            (m.sender_type = 'student' AND m.sender_id = u.id AND m.recipient_id = %s)
-                  )
-              )
-            ORDER BY lm.last_message_time DESC NULLS LAST, u.full_name ASC
-        """
-
-        admin_id = current_user["user_id"]
-        cursor.execute(query, (admin_id, admin_id, admin_id, admin_id, admin_id))
-        conversations = cursor.fetchall()
-        conn.close()
-
-        return {
-            "conversations": [
-                {
-                    "student_id": c["student_id"],
-                    "student_name": c["student_name"],
-                    "student_email": c["student_email"],
-                    "last_message": c["last_message"],
-                    "last_message_time": c["last_message_time"],
-                    "unread_count": c["unread_count"],
-                }
-                for c in conversations
-            ]
-        }
-
-    except Exception as e:
-        print(f"Error loading conversations: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to load conversations: {str(e)}")
- 
  
 @app.get("/api/messages/conversation/{student_id}")
 async def get_conversation_messages(
@@ -2059,7 +1971,28 @@ async def get_conversation_messages(
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-
+        admin_id = current_user["user_id"]
+        
+        # Get admin's school
+        cursor.execute("SELECT school FROM users WHERE id = %s", (admin_id,))
+        admin_row = cursor.fetchone()
+        if admin_row:
+            from collections.abc import Mapping
+            admin_school = admin_row["school"] if isinstance(admin_row, Mapping) else admin_row[0]
+        else:
+            admin_school = None
+        
+        # Verify student belongs to admin's school (if admin has a school)
+        if admin_school:
+            cursor.execute(
+                "SELECT id FROM users WHERE id = %s AND role = 'student' AND school = %s",
+                (student_id, admin_school)
+            )
+            student = cursor.fetchone()
+            if not student:
+                conn.close()
+                raise HTTPException(status_code=403, detail="You can only message students from your school")
+ 
         query = """
             SELECT
                 m.id,
@@ -2083,11 +2016,10 @@ async def get_conversation_messages(
                 (m.sender_id = %s AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = 'admin')
             ORDER BY m.created_at ASC
         """
-
-        admin_id = current_user["user_id"]
+ 
         cursor.execute(query, (admin_id, student_id, student_id, admin_id))
         messages = cursor.fetchall()
-
+ 
         mark_read_query = """
             UPDATE messages
             SET read = TRUE
@@ -2100,9 +2032,9 @@ async def get_conversation_messages(
         cursor.execute(mark_read_query, (student_id, admin_id))
         conn.commit()
         conn.close()
-
+ 
         return {"messages": [dict(m) for m in messages]}
-
+ 
     except Exception as e:
         print(f"Error loading messages: {e}")
         traceback.print_exc()
@@ -2117,73 +2049,208 @@ async def send_message_to_student(
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-
-        cursor.execute(
-            "SELECT id FROM users WHERE id = %s AND role = 'student'",
-            (request.recipient_id,)
-        )
+        admin_id = current_user["user_id"]
+        
+        # Get admin's school
+        cursor.execute("SELECT school FROM users WHERE id = %s", (admin_id,))
+        admin_row = cursor.fetchone()
+        if admin_row:
+            from collections.abc import Mapping
+            admin_school = admin_row["school"] if isinstance(admin_row, Mapping) else admin_row[0]
+        else:
+            admin_school = None
+        
+        # Verify student exists and belongs to admin's school (if admin has a school)
+        if admin_school:
+            cursor.execute(
+                "SELECT id FROM users WHERE id = %s AND role = 'student' AND school = %s",
+                (request.recipient_id, admin_school)
+            )
+        else:
+            cursor.execute(
+                "SELECT id FROM users WHERE id = %s AND role = 'student'",
+                (request.recipient_id,)
+            )
+        
         student = cursor.fetchone()
-
+ 
         if not student:
             conn.close()
-            raise HTTPException(status_code=404, detail="Student not found")
-
+            if admin_school:
+                raise HTTPException(status_code=403, detail="You can only message students from your school")
+            else:
+                raise HTTPException(status_code=404, detail="Student not found")
+ 
         query = """
             INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
             VALUES (%s, 'admin', %s, 'student', %s)
             RETURNING id, created_at
         """
-
-        admin_id = current_user["user_id"]
+ 
         cursor.execute(query, (admin_id, request.recipient_id, request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
-
+ 
         return {
             "success": True,
             "message_id": result["id"],
             "created_at": result["created_at"]
         }
-
+ 
     except Exception as e:
         print(f"Error sending message: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
  
  
-@app.post("/api/messages/conversation/{student_id}/read")
-async def mark_conversation_as_read(
-    student_id: int,
-    current_user: dict = Depends(require_admin)
-):
-    """Mark all messages from a student to this admin as read"""
+@app.get("/api/messages/conversations")
+async def get_admin_conversations(current_user: dict = Depends(require_admin)):
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-
-        cursor.execute(
-            """
-            UPDATE messages
-            SET read = TRUE, updated_at = NOW()
-            WHERE sender_id = %s
-              AND sender_type = 'student'
-              AND recipient_id = %s
-              AND recipient_type = 'admin'
-              AND read = FALSE
-            """,
-            (student_id, current_user["user_id"])
-        )
-
-        conn.commit()
-        conn.close()
-        return {"success": True}
-
-    except Exception as e:
-        print(f"Error marking as read: {e}")
-        traceback.print_exc()
-        return {"success": False}
+        admin_id = current_user["user_id"]
+        
+        # Get admin's school
+        cursor.execute("SELECT school FROM users WHERE id = %s", (admin_id,))
+        admin_row = cursor.fetchone()
+        if admin_row:
+            from collections.abc import Mapping
+            admin_school = admin_row["school"] if isinstance(admin_row, Mapping) else admin_row[0]
+        else:
+            admin_school = None
  
+        # Build query to show ALL students from admin's school
+        if admin_school:
+            # School-specific admin - show all students from their school
+            query = """
+                WITH last_messages AS (
+                    SELECT
+                        CASE
+                            WHEN sender_type = 'student' THEN sender_id
+                            ELSE recipient_id
+                        END AS student_id,
+                        content AS last_message,
+                        created_at AS last_message_time,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY CASE
+                                WHEN sender_type = 'student' THEN sender_id
+                                ELSE recipient_id
+                            END
+                            ORDER BY created_at DESC
+                        ) AS rn
+                    FROM messages
+                    WHERE
+                        (sender_type = 'admin' AND sender_id = %s)
+                        OR
+                        (recipient_type = 'admin' AND recipient_id = %s)
+                ),
+                unread_counts AS (
+                    SELECT
+                        sender_id AS student_id,
+                        COUNT(*) AS unread_count
+                    FROM messages
+                    WHERE recipient_type = 'admin'
+                      AND recipient_id = %s
+                      AND sender_type = 'student'
+                      AND read = FALSE
+                    GROUP BY sender_id
+                )
+                SELECT
+                    u.id AS student_id,
+                    u.full_name AS student_name,
+                    u.email AS student_email,
+                    lm.last_message,
+                    lm.last_message_time,
+                    COALESCE(uc.unread_count, 0) AS unread_count
+                FROM users u
+                LEFT JOIN last_messages lm
+                    ON lm.student_id = u.id AND lm.rn = 1
+                LEFT JOIN unread_counts uc
+                    ON uc.student_id = u.id
+                WHERE u.role = 'student'
+                  AND u.school = %s
+                ORDER BY 
+                    lm.last_message_time DESC NULLS LAST, 
+                    u.full_name ASC
+            """
+            cursor.execute(query, (admin_id, admin_id, admin_id, admin_school))
+        else:
+            # Super admin - show all students from all schools
+            query = """
+                WITH last_messages AS (
+                    SELECT
+                        CASE
+                            WHEN sender_type = 'student' THEN sender_id
+                            ELSE recipient_id
+                        END AS student_id,
+                        content AS last_message,
+                        created_at AS last_message_time,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY CASE
+                                WHEN sender_type = 'student' THEN sender_id
+                                ELSE recipient_id
+                            END
+                            ORDER BY created_at DESC
+                        ) AS rn
+                    FROM messages
+                    WHERE
+                        (sender_type = 'admin' AND sender_id = %s)
+                        OR
+                        (recipient_type = 'admin' AND recipient_id = %s)
+                ),
+                unread_counts AS (
+                    SELECT
+                        sender_id AS student_id,
+                        COUNT(*) AS unread_count
+                    FROM messages
+                    WHERE recipient_type = 'admin'
+                      AND recipient_id = %s
+                      AND sender_type = 'student'
+                      AND read = FALSE
+                    GROUP BY sender_id
+                )
+                SELECT
+                    u.id AS student_id,
+                    u.full_name AS student_name,
+                    u.email AS student_email,
+                    lm.last_message,
+                    lm.last_message_time,
+                    COALESCE(uc.unread_count, 0) AS unread_count
+                FROM users u
+                LEFT JOIN last_messages lm
+                    ON lm.student_id = u.id AND lm.rn = 1
+                LEFT JOIN unread_counts uc
+                    ON uc.student_id = u.id
+                WHERE u.role = 'student'
+                ORDER BY 
+                    u.school ASC NULLS LAST,
+                    lm.last_message_time DESC NULLS LAST, 
+                    u.full_name ASC
+            """
+            cursor.execute(query, (admin_id, admin_id, admin_id))
+        
+        conversations = cursor.fetchall()
+        conn.close()
+ 
+        return {
+            "conversations": [
+                {
+                    "student_id": c["student_id"],
+                    "student_name": c["student_name"],
+                    "student_email": c["student_email"],
+                    "last_message": c["last_message"],
+                    "last_message_time": c["last_message_time"],
+                    "unread_count": c["unread_count"],
+                }
+                for c in conversations
+            ]
+        }
+ 
+    except Exception as e:
+        print(f"Error loading conversations: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load conversations: {str(e)}")
  
 # ========================================
 # STUDENT ENDPOINTS
@@ -2195,12 +2262,38 @@ async def get_student_conversation(current_user: dict = Depends(require_user)):
     try:
         conn = get_db()
         cursor = get_cursor(conn)
+        student_id = current_user['user_id']
         
-        # Find the admin (teacher)
-        cursor.execute(
-            "SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
-        )
-        admin = cursor.fetchone()
+        # Get student's school
+        cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
+        student_row = cursor.fetchone()
+        if student_row:
+            from collections.abc import Mapping
+            student_school = student_row["school"] if isinstance(student_row, Mapping) else student_row[0]
+        else:
+            student_school = None
+        
+        # Find admin from student's school, or super admin (school=NULL)
+        if student_school:
+            # Try to find school-specific admin first
+            cursor.execute(
+                "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
+                (student_school,)
+            )
+            admin = cursor.fetchone()
+            
+            # If no school-specific admin, fall back to super admin
+            if not admin:
+                cursor.execute(
+                    "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                )
+                admin = cursor.fetchone()
+        else:
+            # Student has no school, find any admin
+            cursor.execute(
+                "SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+            )
+            admin = cursor.fetchone()
         
         if not admin:
             conn.close()
@@ -2227,16 +2320,16 @@ async def get_student_conversation(current_user: dict = Depends(require_user)):
             ORDER BY m.created_at ASC
         """
         
-        student_id = current_user['user_id']
-        admin_id = admin['id']
+        admin_id = admin['id'] if isinstance(admin, Mapping) else admin[0]
         cursor.execute(query, (student_id, admin_id, admin_id, student_id))
         messages = cursor.fetchall()
         conn.close()
         
+        admin_name = admin['name'] if isinstance(admin, Mapping) else admin[1]
         return {
             "messages": [dict(m) for m in messages],
-            "teacher_name": admin['name'],
-            "teacher_id": admin['id']
+            "teacher_name": admin_name,
+            "teacher_id": admin_id
         }
         
     except Exception as e:
@@ -2253,32 +2346,61 @@ async def send_message_to_teacher(
     try:
         conn = get_db()
         cursor = get_cursor(conn)
-
-        cursor.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
-        admin = cursor.fetchone()
-
+        student_id = current_user["user_id"]
+        
+        # Get student's school
+        cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
+        student_row = cursor.fetchone()
+        if student_row:
+            from collections.abc import Mapping
+            student_school = student_row["school"] if isinstance(student_row, Mapping) else student_row[0]
+        else:
+            student_school = None
+        
+        # Find admin from student's school (SAME LOGIC as my-conversation)
+        if student_school:
+            # Try to find school-specific admin first
+            cursor.execute(
+                "SELECT id FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
+                (student_school,)
+            )
+            admin = cursor.fetchone()
+            
+            # If no school-specific admin, fall back to super admin
+            if not admin:
+                cursor.execute(
+                    "SELECT id FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                )
+                admin = cursor.fetchone()
+        else:
+            # Student has no school, find any admin
+            cursor.execute(
+                "SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+            )
+            admin = cursor.fetchone()
+ 
         if not admin:
             conn.close()
             raise HTTPException(status_code=404, detail="No administrator found")
-
+ 
         query = """
             INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
             VALUES (%s, 'student', %s, 'admin', %s)
             RETURNING id, created_at
         """
-
-        student_id = current_user["user_id"]
-        cursor.execute(query, (student_id, admin["id"], request.content))
+ 
+        admin_id = admin["id"] if isinstance(admin, Mapping) else admin[0]
+        cursor.execute(query, (student_id, admin_id, request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
-
+ 
         return {
             "success": True,
             "message_id": result["id"],
             "created_at": result["created_at"]
         }
-
+ 
     except Exception as e:
         print(f"Error sending message to teacher: {e}")
         traceback.print_exc()
@@ -2487,8 +2609,13 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     if not content_generator:
         raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
     
-    # NEW: Smart topic selection based on age and interests
-    topic = select_age_appropriate_topic(interest_tags, age, grade_band)
+    # Rotate through interests for variety in reading assessment
+    if interest_tags and len(interest_tags) > 0:
+        # Use passage count to rotate through interests
+        interest_index = total_read % len(interest_tags)
+        topic = interest_tags[interest_index]
+    else:
+        topic = select_age_appropriate_topic(interest_tags, age, grade_band)
     
     # NEW: Better difficulty mapping based on grade and challenge
     difficulty = calculate_difficulty(grade_band, level_estimate, challenge)
@@ -2977,7 +3104,11 @@ async def submit_reading_feedback(request: Request):
         )
     
     result = cursor.fetchone()
-    word_count = result['word_count'] if USE_POSTGRES else result[0]
+    # ✅ Handle both dict and tuple results
+    if isinstance(result, dict):
+        word_count = result['word_count']
+    else:
+        word_count = result[0] if result else 0
     
     # Update user stats
     if USE_POSTGRES:
@@ -5598,10 +5729,42 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         print(f"✓ Difficulty: {difficulty}")
         print(f"✓ Word count range: {word_count_min}-{word_count_max} words")
 
-        # Step 6: Select topic
-        print("Step 6: Selecting topic...")
-        topic = random.choice(available_interests)
-        print(f"✓ Selected topic: {topic}")
+        # Step 6: Select topic with ROTATION (not random)
+        print("Step 6: Selecting topic with rotation...")
+        
+        # ✅ Get last used interest index for rotation
+        last_index = user.get('last_interest_index') or 0
+        
+        # ✅ Rotate through interests instead of random selection
+        current_index = last_index % len(interests)
+        topic = interests[current_index]
+        
+        # ✅ Update index for next lesson
+        next_index = (current_index + 1) % len(interests)
+        
+        print(f"✓ Selected topic: {topic} (interest {current_index + 1}/{len(interests)})")
+        print(f"✓ Next lesson will use: {interests[next_index]}")
+        
+        # ✅ Save the updated index back to database
+        conn_update = get_db()
+        cursor_update = get_cursor(conn_update)
+        try:
+            if USE_POSTGRES:
+                cursor_update.execute(
+                    "UPDATE users SET last_interest_index = %s WHERE id = %s",
+                    (next_index, user_id)
+                )
+            else:
+                cursor_update.execute(
+                    "UPDATE users SET last_interest_index = ? WHERE id = ?",
+                    (next_index, user_id)
+                )
+            conn_update.commit()
+            print(f"✓ Updated last_interest_index to {next_index}")
+        except Exception as e:
+            print(f"Warning: Could not update interest index: {e}")
+        finally:
+            conn_update.close()
 
         # Done with DB reads
         conn.close()
@@ -5633,7 +5796,9 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 difficulty_level=difficulty,
                 word_count_min=word_count_min,
                 word_count_max=word_count_max,
-                user_interests=interests
+                user_interests=[picked_topic],  # ✅ Only pass the selected topic, not all interests
+                age=user.get('age'),
+                grade_band=user.get('grade_band') or 'elementary'
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
@@ -6162,8 +6327,11 @@ async def test_openai():
         result = content_generator.generate_passage(
             topic="reading",
             difficulty_level="beginner", 
-            target_words=50,
-            user_interests=["reading"]
+            word_count_min=40,
+            word_count_max=60,
+            user_interests=["reading"],
+            age=8,
+            grade_band="elementary"
         )
         
         return {
@@ -6256,7 +6424,9 @@ async def debug_lesson_generation(token: str):
             difficulty_level="intermediate",
             word_count_min=75,   # ✅ target_words - 25
             word_count_max=125,  # ✅ target_words + 25
-            user_interests=interests
+            user_interests=[topic],  # ✅ Only selected topic
+            age=user.get('age') or 10,
+            grade_band=user.get('grade_band') or 'elementary'
         )
         
         debug_info["details"]["passage_generated"] = True
@@ -6292,15 +6462,57 @@ async def debug_lesson_generation(token: str):
 
 @app.get("/api/admin/students")
 async def get_all_students(admin=Depends(require_admin)):
+    """Get students - filtered by admin's school"""
     
     conn = get_db()
     cursor = get_cursor(conn)
-    cursor.execute(
-        """SELECT id, email, full_name, level_estimate, total_passages_read, 
-           comprehension_score, last_active, created_at 
-           FROM users WHERE role = 'student'
-           ORDER BY created_at DESC"""
-    )
+    
+    # Get admin's school
+    admin_id = admin.get('user_id')
+    if USE_POSTGRES:
+        cursor.execute("SELECT school FROM users WHERE id = %s", (admin_id,))
+    else:
+        cursor.execute("SELECT school FROM users WHERE id = ?", (admin_id,))
+    
+    admin_row = cursor.fetchone()
+    if admin_row:
+        # Handle both dict and tuple
+        from collections.abc import Mapping
+        admin_school = admin_row["school"] if isinstance(admin_row, Mapping) else admin_row[0]
+    else:
+        admin_school = None
+    
+    # Filter students by admin's school
+    if admin_school:
+        # School-specific admin - only show their school's students
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT id, email, full_name, level_estimate, total_passages_read, 
+                   comprehension_score, last_active, created_at, school, 
+                   grade_band, reading_level
+                   FROM users WHERE role = 'student' AND school = %s
+                   ORDER BY created_at DESC""",
+                (admin_school,)
+            )
+        else:
+            cursor.execute(
+                """SELECT id, email, full_name, level_estimate, total_passages_read, 
+                   comprehension_score, last_active, created_at, school, 
+                   grade_band, reading_level
+                   FROM users WHERE role = 'student' AND school = ?
+                   ORDER BY created_at DESC""",
+                (admin_school,)
+            )
+    else:
+        # Super admin - show all students
+        cursor.execute(
+            """SELECT id, email, full_name, level_estimate, total_passages_read, 
+               comprehension_score, last_active, created_at, school, 
+               grade_band, reading_level
+               FROM users WHERE role = 'student'
+               ORDER BY school, created_at DESC"""
+        )
+    
     students = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
@@ -6532,6 +6744,33 @@ async def delete_student(student_id: int, admin=Depends(require_admin)):
         name = student["full_name"] if hasattr(student, "keys") else student[0]
         
         # Delete related data (order matters!)
+        # CRITICAL: Delete tables with foreign key references FIRST
+                
+        # Step 1: Delete admin_alerts first (references essays via essay_id)
+        try:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """DELETE FROM admin_alerts 
+                    WHERE essay_id IN (
+                        SELECT id FROM user_essays WHERE user_id = %s
+                    )""",
+                    (student_id,)
+                )
+            else:
+                cursor.execute(
+                    """DELETE FROM admin_alerts 
+                    WHERE essay_id IN (
+                        SELECT id FROM user_essays WHERE user_id = ?
+                    )""",
+                    (student_id,)
+                )
+            conn.commit()
+            print(f"✓ Deleted from admin_alerts")
+        except Exception as e:
+            conn.rollback()
+            print(f"⚠️ Skipping admin_alerts: {e}")
+
+        # Step 2: Now delete other tables in correct order
         tables_to_clean = [
             # Tables referencing user_sessions
             "timeout_events",       # session_id → user_sessions
@@ -6542,18 +6781,18 @@ async def delete_student(student_id: int, admin=Depends(require_admin)):
             "user_sessions",        # user_id → users
             "placement_attempts",   # user_id → users
             "weekly_goals",         # user_id → users
-            "user_badges",          # user_id → users (probably)
-            "user_essays",          # user_id → users
+            "user_badges",          # user_id → users
+            "user_essays",          # user_id → users (NOW SAFE after admin_alerts deleted)
             "user_points",          # user_id → users
             "user_streaks",         # user_id → users
             "points_history",       # user_id → users
             "progress",             # user_id → users
             "vocabulary_tracker",   # user_id → users
-            "writing_exercises",    # user_id → users (maybe)
-            "difficulty_adjustments", # user_id → users (maybe)
-            "assessments",          # user_id → users (maybe)
-            "discussions",          # user_id → users (maybe)
-            "admin_alerts"          # student_id → users (maybe)
+            "writing_exercises",    # user_id → users
+            "difficulty_adjustments", # user_id → users
+            "assessments",          # user_id → users
+            "discussions",          # user_id → users
+            "reading_level_history" # user_id → users
         ]
         
         for table in tables_to_clean:
@@ -7522,8 +7761,8 @@ async def accept_admin_invite(body: AcceptInviteReq):
             user_id = existing["id"] if isinstance(existing, Mapping) else existing[0]
             if USE_POSTGRES:
                 cur.execute(
-                    "UPDATE users SET role='admin', password_hash=%s WHERE id=%s",
-                    (password_hash, user_id)
+                    "UPDATE users SET role='admin', password_hash=%s, school=%s WHERE id=%s",
+                    (password_hash, body.school, user_id)
                 )
             else:
                 cur.execute(
@@ -7534,10 +7773,10 @@ async def accept_admin_invite(body: AcceptInviteReq):
             # Create new admin user
             if USE_POSTGRES:
                 cur.execute("""
-                  INSERT INTO users (email, full_name, password_hash, role, created_at)
-                  VALUES (%s, %s, %s, 'admin', NOW())
+                  INSERT INTO users (email, full_name, password_hash, role, school, created_at)
+                  VALUES (%s, %s, %s, 'admin', %s, NOW())
                   RETURNING id
-                """, (email, "Administrator", password_hash))
+                """, (email, "Administrator", password_hash, body.school))
                 row = cur.fetchone()
                 # ✅ FIX: Handle both dict and tuple
                 user_id = row["id"] if isinstance(row, Mapping) else row[0]
@@ -8938,6 +9177,9 @@ async def get_tutor_message(request: Request):
 
 def generate_tutor_message(context, student_name, score=None, lesson_number=None):
     """Generate personalized tutor messages optimized for text-to-speech"""
+    
+    # ✅ Initialize delay_seconds for all code paths
+    delay_seconds = 0
     
     # Get first name only for more natural speech
     first_name = student_name.split()[0] if student_name and student_name != 'there' else student_name

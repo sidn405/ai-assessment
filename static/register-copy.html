@@ -3,612 +3,1857 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - Achieve 365</title>
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Student Dashboard - Achieve 365 Reading Rewards</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="description" content="Achieve 365 - Personalized reading assessment and learning platform">
+    <meta name="theme-color" content="#1e3a5f">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/graphics/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/graphics/favicon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/graphics/logo.png">
+    <link rel="shortcut icon" href="/static/graphics/favicon.png">
+    
+    <!-- iOS Web App Capable -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="white-translucent">
+    <meta name="apple-mobile-web-app-title" content="Achieve 365">
+    
+    <!-- Android -->
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- AWS SDK -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1691.0.min.js"></script>
+    
+    <title>Achieve 365</title>
+    
+    <!-- Main Styles -->
+    <!--<link rel="stylesheet" href="/static/styles.css">-->
+    
+    <!-- Responsive Styles -->
+    <!--<link rel="stylesheet" href="/static/responsive.css">-->
+    
+    <!-- Custom Styles for this page -->
     <style>
+        /* Page-specific styles go here */
+    </style>
+</head>
+    <style>
+        :root {
+            --navy-primary: #2A398A;
+            --navy-dark: #191f4e;
+            --navy-light: #4a56af;
+            --gold-accent: #D4AF37;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --medium-gray: #E0E0E0;
+            --text-gray: #333333;
+            --success: #28A745;
+            --danger: #DC3545;
+            --warning: #FFC107;
+        }
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            font-family: 'Open Sans', sans-serif;
+            background: var(--light-bg);
+            color: var(--text-primary);
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+        }
+        
+        .header h1 {
+            font-family: 'Merriweather', serif;
+            font-size: 1.8rem;
+        }
+        
+        .back-btn {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .back-btn:hover {
+            background: #C49B2E;
+        }
+        
+        .passage-card {
+            background: var(--white);
+            padding: 2.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .passage-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--light-bg);
+        }
+        
+        .passage-title {
+            font-family: 'Merriweather', serif;
+            font-size: 1.8rem;
+            color: var(--navy-primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .passage-info {
+            display: flex;
+            gap: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .passage-info span {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .audio-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+        }
+        
+        .btn-primary {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .btn-primary:hover {
+            background: var(--navy-dark);
+        }
+        
+        .btn-secondary {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+        }
+        
+        .btn-secondary:hover {
+            background: #C49B2E;
+        }
+        
+        .btn-icon {
+            background: none;
+            border: 1px solid var(--text-secondary);
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+            font-size: 1.2rem;
+        }
+        
+        .btn-icon:hover {
+            border-color: var(--navy-primary);
+            color: var(--navy-primary);
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .speed-control input {
+            width: 100px;
+        }
+        
+        .passage-text {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            margin: 2rem 0;
+            color: var(--text-primary);
+        }
+        
+        .passage-text p {
+            margin-bottom: 1rem;
+        }
+        
+        .highlighted-word {
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-weight: 600;
+        }
+        
+        .vocabulary-box {
+            background: var(--navy-primary);
+            color: var(--white);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+        
+        .vocabulary-box h3 {
+            color: var(--gold-accent);
+            margin-bottom: 1rem;
+        }
+        
+        .vocab-item {
+            margin-bottom: 1rem;
+        }
+        
+        .vocab-word {
+            font-weight: 700;
+            color: var(--gold-accent);
+        }
+        
+        .quiz-section {
+            background: var(--white);
+            padding: 2.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-top: 2rem;
+        }
+        
+        .quiz-section h2 {
+            font-family: 'Merriweather', serif;
+            color: var(--navy-primary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .question {
+            background: var(--light-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .question-text {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            font-size: 1.05rem;
+        }
+        
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .option {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            background: var(--white);
+            border: 2px solid transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .option:hover {
+            border-color: var(--navy-primary);
+        }
+        
+        .option input[type="radio"] {
+            margin-right: 0.75rem;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .option.correct {
+            border-color: var(--success);
+            background: #E8F5E9;
+        }
+        
+        .option.incorrect {
+            border-color: var(--error);
+            background: #FFEBEE;
+        }
+
+        /* Fill-in-the-blank styles */
+        .fill-blank-input {
+            margin-top: 0.5rem;
+        }
+
+        .fill-blank-input input[type="text"] {
+            width: 100%;
+            max-width: 400px;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .fill-blank-input input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .fill-blank-input input[type="text"].correct {
+            border-color: var(--success);
+            background: #E8F5E9;
+        }
+
+        .fill-blank-input input[type="text"].incorrect {
+            border-color: var(--error);
+            background: #FFEBEE;
+        }
+
+        .fill-blank-input input[type="text"]:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        .feedback-section {
+            background: var(--white);
+            padding: 2.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-top: 2rem;
+        }
+        
+        .feedback-section h2 {
+            font-family: 'Merriweather', serif;
+            color: var(--navy-primary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .feedback-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .feedback-btn {
+            flex: 1;
+            min-width: 150px;
+            padding: 1rem 2rem;
+            border: 2px solid var(--navy-primary);
+            background: var(--white);
+            color: var(--navy-primary);
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .feedback-btn:hover {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .feedback-btn.selected {
+            background: var(--navy-primary);
+            color: var(--white);
+        }
+        
+        .score-display {
+            background: var(--success);
+            color: var(--white);
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            margin: 2rem 0;
+        }
+        
+        .score-display h2 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .score-message {
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        
+        .spinner {
+            border: 4px solid var(--light-bg);
+            border-top: 4px solid var(--navy-primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .first-passage-badge {
+            display: inline-block;
+            background: var(--gold-accent);
+            color: var(--navy-dark);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .passage-meta {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            
+            .controls {
+                width: 100%;
+            }
+            
+            .feedback-buttons {
+                flex-direction: column;
+            }
+            
+            .feedback-btn {
+                width: 100%;
+            }
+        }
+        
+        /* ============================================
+        AI TUTOR AVATAR STYLES
+        ============================================ */
+
+        .ai-tutor {
+            position: fixed;
+            bottom: 1.25rem;
+            right: 1.25rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+            z-index: 100000;
+            transform: translateY(140%);
+            opacity: 0;
+            transition: transform 0.45s ease, opacity 0.45s ease;
+        }
+
+        .ai-tutor.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .ai-tutor.hidden { display: none; }    
+        /* Avatar Face */
+        .tutor-avatar {
+            width: 120px;
+            height: 120px;
+            background-image: url('static/graphics/tutor.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
-        }
-
-        .register-container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            width: 100%;
-            max-width: 500px;
-            padding: 40px;
-        }
-
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .logo h1 {
-            color: #667eea;
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .logo p {
-            color: #757575;
-            font-size: 16px;
-        }
-
-        h2 {
-            color: #333;
-            font-size: 28px;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #757575;
-            margin-bottom: 30px;
-            font-size: 15px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .form-group label .optional {
-            color: #9e9e9e;
-            font-weight: 400;
-            font-size: 13px;
-        }
-
-        .form-group input[type="email"],
-        .form-group input[type="text"],
-        .form-group select {
-            width: 100%;
-            padding: 14px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: all 0.3s;
-            font-family: inherit;
-            background-color: white;
-        }
-
-        .form-group select {
-            cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23667eea' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 16px center;
-            padding-right: 45px;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-        }
-
-        .form-group select option {
-            padding: 10px;
-        }
-
-        .password-field-wrapper {
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+            border: 4px solid white;
+            animation: none;
+        }    
+           
+        /* emotion mouths */
+        .mouth.happy { border-bottom-width: 5px; }
+        .mouth.encouraging { border-bottom-width: 4px; width: 26px; }
+        .mouth.celebrating { border-bottom-width: 6px; width: 30px; }    
+        .tutor-speech-bubble{
+            background: #fff;
+            border-radius: 14px;
+            padding: 12px 14px;
+            max-width: 360px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+            border: 1px solid rgba(0,0,0,0.06);
             position: relative;
-            display: flex;
-            align-items: center;
-        }
-
-        .password-field-wrapper input {
-            width: 100%;
-            padding: 14px 50px 14px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-
-        .password-field-wrapper input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-        }
-
-        .password-field-wrapper.error input {
-            border-color: #f44336;
-        }
-
-        .password-toggle-btn {
+        }    
+        .tutor-speech-bubble::before{
+            content: "";
             position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
+            right: -12px;
+            bottom: 20px;
+            border-left: 12px solid #fff;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+        }    
+        .speech-text { font-weight: 600; line-height: 1.35; }    
+        .speech-continue{
+            margin-top: 10px;
+            border: none;
+            border-radius: 10px;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-weight: 700;
+        }    
+        .tutor-close, .tutor-mute{
+            position: absolute;
+            top: -10px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #e0e0e0;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+        }    
+        .tutor-close { 
+            right: -10px; color: #e74c3c;
+        }    
+        .tutor-mute {
+            left: -10px;
+        }
+
+        /* Notification System */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+        }
+
+        .notification {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            transform: translateX(120%);
+            animation: slideIn 0.4s ease forwards;
+            position: relative;
+        }
+
+        .notification.success {
+            border-left: 4px solid #10b981;
+        }
+
+        .notification.info {
+            border-left: 4px solid #3b82f6;
+        }
+
+        .notification.warning {
+            border-left: 4px solid #f59e0b;
+        }
+
+        .notification-icon {
+            font-size: 28px;
+            flex-shrink: 0;
+        }
+
+        .notification-content {
+            flex: 1;
+        }
+
+        .notification-title {
+            font-weight: 600;
+            color: var(--navy-primary);
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+
+        .notification-message {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .notification-close {
             background: none;
             border: none;
+            font-size: 20px;
+            color: var(--text-secondary);
             cursor: pointer;
-            padding: 14px 16px;
-            color: #9e9e9e;
-            font-size: 18px;
-            transition: color 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .password-toggle-btn:hover {
-            color: #667eea;
-        }
-
-        .password-toggle-btn:focus {
-            outline: none;
-            color: #667eea;
-        }
-
-        .form-group small {
-            display: block;
-            margin-top: 6px;
-            color: #757575;
-            font-size: 13px;
-        }
-
-        .password-strength {
-            margin-top: 8px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .password-strength.weak { color: #f44336; }
-        .password-strength.medium { color: #ff9800; }
-        .password-strength.strong { color: #4caf50; }
-
-        .error-message {
-            color: #f44336;
-            font-size: 13px;
-            margin-top: 6px;
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
-            border-left: 4px solid;
-        }
-
-        .alert.error {
-            background: #ffebee;
-            color: #c62828;
-            border-color: #c62828;
-        }
-
-        .alert.success {
-            background: #e8f5e9;
-            color: #2e7d32;
-            border-color: #2e7d32;
-        }
-
-        .alert.show {
-            display: block;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.3s;
-            margin-top: 24px;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .btn:disabled {
+            padding: 0;
+            line-height: 1;
             opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
+            transition: opacity 0.2s;
         }
 
-        .signin-link {
-            text-align: center;
-            margin-top: 24px;
-            color: #757575;
-            font-size: 15px;
+        .notification-close:hover {
+            opacity: 1;
         }
 
-        .signin-link a {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
-            transition: color 0.3s;
+        .notification-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
         }
 
-        .signin-link a:hover {
-            color: #764ba2;
-            text-decoration: underline;
+        .notification-buttons button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
-        @media (max-width: 480px) {
-            .register-container {
-                padding: 30px 20px;
+        .notification-buttons .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .notification-buttons .btn-primary:hover {
+            background: var(--accent-purple);
+        }
+
+        .notification-buttons .btn-secondary {
+            background: #e5e7eb;
+            color: var(--text-primary);
+        }
+
+        .notification-buttons .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        @keyframes slideIn {
+            to {
+                transform: translateX(0);
             }
-            
-            .logo h1 {
-                font-size: 28px;
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
             }
-            
-            h2 {
-                font-size: 24px;
+            to {
+                transform: translateX(120%);
+                opacity: 0;
             }
+        }
+
+        .notification.hiding {
+            animation: slideOut 0.3s ease forwards;
         }
     </style>
 </head>
 <body>
-    <div class="register-container">
-        <div class="logo">
-            <h1>📚 ACHIEVE 365</h1>
-            <p>Every day, a step forward</p>
+
+    <!-- AI Tutor Avatar -->
+    <div id="aiTutor" class="ai-tutor hidden">
+        <div class="tutor-avatar">
+            <!-- Avatar image set via CSS background-image: tutor.jpg -->
+        </div>
+        <div class="tutor-speech-bubble">
+            <div class="speech-text" id="tutorMessage"></div>
+            <button class="speech-continue" id="continueBtntutor" onclick="hideTutor()">
+                Got it! ✓
+            </button>
+        </div>
+        <button class="tutor-close" onclick="hideTutor()">✕</button>
+        <button class="tutor-mute" id="muteButton" onclick="toggleMute()">
+            <span id="muteIcon">🔊</span>
+        </button>
+    </div>
+
+    <div class="header">
+        <h1>📖 Reading Practice</h1>
+        
+    </div>
+
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loadingState" class="loading">
+            <div class="spinner"></div>
+            <p>Loading your personalized passage...</p>
         </div>
 
-        <h2>Create Account</h2>
-        <p class="subtitle">Start your learning journey today</p>
-
-        <div class="alert error" id="alert-message"></div>
-
-        <form id="registerForm" onsubmit="handleRegister(event)">
-            <div class="form-group">
-                <label for="fullName">Full Name</label>
-                <input 
-                    type="text" 
-                    id="fullName" 
-                    name="fullName" 
-                    required 
-                    placeholder="John Doe"
-                    autocomplete="name"
-                >
+        <!-- Passage Display -->
+        <div id="passageSection" class="hidden">
+            <div id="firstPassageBadge" class="hidden">
+                <div class="first-passage-badge">
+                    🎉 Your First Passage - You've Got This!
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="gradeLevel">
-                    Grade Level
-                    <span class="optional">(helps us personalize your experience)</span>
-                </label>
-                <select 
-                    id="gradeLevel" 
-                    name="gradeLevel" 
-                    required
-                >
-                    <option value="" disabled selected>Select your grade level...</option>
-                    <option value="pre-k">Pre-K (Ages 3-5)</option>
-                    <option value="kindergarten">Kindergarten (Ages 5-6)</option>
-                    <option value="1st">1st Grade (Ages 6-7)</option>
-                    <option value="2nd">2nd Grade (Ages 7-8)</option>
-                    <option value="3rd">3rd Grade (Ages 8-9)</option>
-                    <option value="4th">4th Grade (Ages 9-10)</option>
-                    <option value="5th">5th Grade (Ages 10-11)</option>
-                    <option value="6th">6th Grade (Ages 11-12)</option>
-                    <option value="7th">7th Grade (Ages 12-13)</option>
-                    <option value="8th">8th Grade (Ages 13-14)</option>
-                    <option value="9th">9th Grade / High School Freshman (Ages 14-15)</option>
-                    <option value="10th">10th Grade / High School Sophomore (Ages 15-16)</option>
-                    <option value="11th">11th Grade / High School Junior (Ages 16-17)</option>
-                    <option value="12th">12th Grade / High School Senior (Ages 17-18)</option>
-                    <option value="adult">Adult (18+)</option>
-                    <option value="college">College Student</option>
-                    <option value="professional">Working Professional</option>
-                </select>
-                <small>This helps us match content to your reading level and adapt lessons as you progress</small>
+            <div class="passage-card">
+                <div class="passage-meta">
+                    <div>
+                        <h1 class="passage-title" id="passageTitle"></h1>
+                        <div class="passage-info">
+                            <span>📊 <span id="wordCount"></span> words</span>
+                            <span>⏱️ <span id="estimatedTime"></span> min read</span>
+                            <span>📈 Level: <span id="difficultyLevel"></span></span>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <div class="audio-controls">
+                            <button class="btn btn-icon" onclick="readAloud()" title="Read aloud">
+                                🔊
+                            </button>
+                            <button class="btn btn-icon" onclick="pauseReading()" title="Pause">
+                                ⏸️
+                            </button>
+                            <button class="btn btn-icon" onclick="stopReading()" title="Stop">
+                                ⏹️
+                            </button>
+                        </div>
+                        <div class="speed-control">
+                            <label>Speed:</label>
+                            <input type="range" id="readingSpeed" min="0.5" max="1.5" step="0.1" value="1">
+                            <span id="speedValue">1.0x</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="passage-text" id="passageContent"></div>
+
+                <div id="vocabularyBox" class="vocabulary-box hidden">
+                    <h3>📚 Key Vocabulary</h3>
+                    <div id="vocabularyList"></div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="email">Email Address</label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    required 
-                    placeholder="you@example.com"
-                    autocomplete="email"
-                >
+            <!-- Comprehension Quiz -->
+            <div id="quizSection" class="quiz-section">
+                <h2>Check Your Understanding</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    Answer these questions to see how well you understood the passage.
+                </p>
+                <div id="questionsList"></div>
+                <button class="btn btn-primary" onclick="submitAnswers()" style="margin-top: 1rem;">
+                    Submit Answers
+                </button>
             </div>
 
-            <div class="form-group">
-                <label for="password">Password</label>
-                <div class="password-field-wrapper">
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        required 
-                        placeholder="Create a strong password"
-                        autocomplete="new-password"
-                        minlength="8"
-                        oninput="checkPasswordStrength()"
-                    >
-                    <button 
-                        type="button" 
-                        class="password-toggle-btn" 
-                        onclick="togglePassword('password')"
-                        aria-label="Toggle password visibility"
-                        title="Show/Hide password"
-                    >
-                        <i class="fas fa-eye" id="password-icon"></i>
+            <!-- Score Display -->
+            <div id="scoreDisplay" class="score-display hidden">
+                <h2 id="scorePercent"></h2>
+                <p class="score-message" id="scoreMessage"></p>
+                <button class="btn btn-secondary" onclick="showFeedbackSection()">
+                    Continue
+                </button>
+            </div>
+
+            <!-- Feedback Section -->
+            <div id="feedbackSection" class="feedback-section hidden">
+                <h2>How was this passage for you?</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    Your feedback helps us find the perfect reading level for you.
+                </p>
+                <div class="feedback-buttons">
+                    <button class="feedback-btn" onclick="submitFeedback('too_easy')">
+                        😊 Too Easy<br>
+                        <small>I'd like something harder</small>
+                    </button>
+                    <button class="feedback-btn" onclick="submitFeedback('just_right')">
+                        👍 Just Right<br>
+                        <small>Perfect for my level</small>
+                    </button>
+                    <button class="feedback-btn" onclick="submitFeedback('too_hard')">
+                        🤔 Challenging<br>
+                        <small>Let's try something easier</small>
                     </button>
                 </div>
-                <small>Minimum 8 characters, include uppercase, lowercase, and numbers</small>
-                <div id="password-strength" class="password-strength"></div>
             </div>
-
-            <div class="form-group">
-                <label for="confirmPassword">Confirm Password</label>
-                <div class="password-field-wrapper" id="confirmPassword-wrapper">
-                    <input 
-                        type="password" 
-                        id="confirmPassword" 
-                        name="confirmPassword" 
-                        required 
-                        placeholder="Re-enter your password"
-                        autocomplete="new-password"
-                        oninput="validatePasswordMatch()"
-                    >
-                    <button 
-                        type="button" 
-                        class="password-toggle-btn" 
-                        onclick="togglePassword('confirmPassword')"
-                        aria-label="Toggle confirm password visibility"
-                        title="Show/Hide password"
-                    >
-                        <i class="fas fa-eye" id="confirmPassword-icon"></i>
-                    </button>
-                </div>
-                <span class="error-message" id="confirmPassword-error">Passwords do not match</span>
-            </div>
-
-            <button type="submit" class="btn" id="registerBtn">
-                Create Account
-            </button>
-        </form>
-
-        <div class="signin-link">
-            Already have an account? <a href="/login">Sign in</a>
         </div>
     </div>
 
+    <!-- Notification System -->
+    <div id="notificationContainer" class="notification-container"></div>
+
     <script>
-        function togglePassword(inputId) {
-            const input = document.getElementById(inputId);
-            const icon = document.getElementById(inputId + '-icon');
-            
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
-            } else {
-                input.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
-            }
+        let currentPassage = null;
+        let currentQuestions = [];
+        let sessionId = null;
+        let startTime = null;
+        let utterance = null;
+
+        // Placement test tracking
+        let isPlacementTest = sessionStorage.getItem('isPlacementTest') === 'true';
+        let placementTestProgress = {
+            passagesCompleted: parseInt(sessionStorage.getItem('placementPassagesCompleted') || '0'),
+            scores: JSON.parse(sessionStorage.getItem('placementScores') || '[]'),
+            feedbacks: JSON.parse(sessionStorage.getItem('placementFeedbacks') || '[]')
+        };
+
+        console.log('📊 Placement test mode:', isPlacementTest);
+        if (isPlacementTest) {
+            console.log('Progress:', placementTestProgress);
         }
 
-        function checkPasswordStrength() {
-            const password = document.getElementById('password').value;
-            const strengthDiv = document.getElementById('password-strength');
+        // ============================================
+        // NOTIFICATION SYSTEM
+        // ============================================
+
+        function showNotification(options) {
+            const {
+                type = 'info',
+                icon = '📢',
+                title = '',
+                message = '',
+                duration = 4000,
+                buttons = null
+            } = options;
+
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+
+            const iconSpan = `<div class="notification-icon">${icon}</div>`;
+            const titleDiv = title ? `<div class="notification-title">${title}</div>` : '';
+            const messageDiv = `<div class="notification-message">${message}</div>`;
             
-            if (password.length === 0) {
-                strengthDiv.textContent = '';
+            let buttonsHtml = '';
+            if (buttons && buttons.length > 0) {
+                buttonsHtml = '<div class="notification-buttons">';
+                buttons.forEach(btn => {
+                    buttonsHtml += `<button class="${btn.className || 'btn-primary'}" onclick="${btn.action}">${btn.text}</button>`;
+                });
+                buttonsHtml += '</div>';
+            }
+
+            notification.innerHTML = `
+                ${iconSpan}
+                <div class="notification-content">
+                    ${titleDiv}
+                    ${messageDiv}
+                    ${buttonsHtml}
+                </div>
+                <button class="notification-close" onclick="this.parentElement.remove()">✕</button>
+            `;
+
+            container.appendChild(notification);
+
+            // Auto-remove after duration (if no buttons)
+            if (!buttons && duration > 0) {
+                setTimeout(() => {
+                    notification.classList.add('hiding');
+                    setTimeout(() => notification.remove(), 300);
+                }, duration);
+            }
+
+            return notification;
+        }
+
+        function showSuccess(title, message, duration = 4000) {
+            return showNotification({
+                type: 'success',
+                icon: '✅',
+                title,
+                message,
+                duration
+            });
+        }
+
+        function showInfo(title, message, duration = 4000) {
+            return showNotification({
+                type: 'info',
+                icon: '💡',
+                title,
+                message,
+                duration
+            });
+        }
+
+        function showConfirm(title, message, onConfirm, onCancel) {
+            return showNotification({
+                type: 'info',
+                icon: '❓',
+                title,
+                message,
+                duration: 0,
+                buttons: [
+                    {
+                        text: 'Yes',
+                        className: 'btn-primary',
+                        action: `(function() { ${onConfirm}(); document.querySelector('.notification').remove(); })()`
+                    },
+                    {
+                        text: 'No',
+                        className: 'btn-secondary',
+                        action: onCancel ? `(function() { ${onCancel}(); document.querySelector('.notification').remove(); })()` : `document.querySelector('.notification').remove()`
+                    }
+                ]
+            });
+        }
+
+        // ============================================
+        // AMAZON POLLY TTS CONFIGURATION
+        // ============================================
+
+        let polly = null;
+        let currentAudio = null;
+        let awsReady = false;
+
+        const TUTOR_VOICE = {
+            voiceId: 'Danielle',
+            engine: 'generative'
+        };
+
+        // Load AWS SDK dynamically (if not already loaded)
+        (function loadAWSSDK() {
+            if (typeof AWS !== 'undefined' && AWS.Polly) {
+                console.log('✅ AWS SDK already loaded for reading');
+                initializePolly();
                 return;
             }
             
-            let strength = 0;
-            
-            if (password.length >= 8) strength++;
-            if (password.length >= 12) strength++;
-            if (/[a-z]/.test(password)) strength++;
-            if (/[A-Z]/.test(password)) strength++;
-            if (/[0-9]/.test(password)) strength++;
-            if (/[^a-zA-Z0-9]/.test(password)) strength++;
-            
-            if (strength <= 2) {
-                strengthDiv.textContent = '❌ Weak password';
-                strengthDiv.className = 'password-strength weak';
-            } else if (strength <= 4) {
-                strengthDiv.textContent = '⚠️ Medium password';
-                strengthDiv.className = 'password-strength medium';
-            } else {
-                strengthDiv.textContent = '✅ Strong password';
-                strengthDiv.className = 'password-strength strong';
-            }
-        }
+            console.log('📥 Loading AWS SDK for reading page...');
+            // SDK already loaded in head, just initialize
+            setTimeout(initializePolly, 100);
+        })();
 
-        function validatePasswordMatch() {
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
-            const errorMessage = document.getElementById('confirmPassword-error');
-            const wrapper = document.getElementById('confirmPassword-wrapper');
-            
-            if (confirmPassword.length === 0) {
-                errorMessage.classList.remove('show');
-                wrapper.classList.remove('error');
-                return true;
-            }
-            
-            if (password !== confirmPassword) {
-                errorMessage.classList.add('show');
-                wrapper.classList.add('error');
-                return false;
-            } else {
-                errorMessage.classList.remove('show');
-                wrapper.classList.remove('error');
-                return true;
-            }
-        }
-
-        function showAlert(message, type = 'error') {
-            const alertDiv = document.getElementById('alert-message');
-            alertDiv.textContent = message;
-            alertDiv.className = `alert ${type} show`;
-            
-            setTimeout(() => {
-                alertDiv.classList.remove('show');
-            }, 5000);
-        }
-
-        // Map grade level to age band for backend
-        function getAgeBandFromGrade(gradeLevel) {
-            const ageBandMap = {
-                'pre-k': 'pre-k',
-                'kindergarten': 'elementary',
-                '1st': 'elementary',
-                '2nd': 'elementary',
-                '3rd': 'elementary',
-                '4th': 'elementary',
-                '5th': 'elementary',
-                '6th': 'middle',
-                '7th': 'middle',
-                '8th': 'middle',
-                '9th': 'high',
-                '10th': 'high',
-                '11th': 'high',
-                '12th': 'high',
-                'adult': 'adult',
-                'college': 'adult',
-                'professional': 'adult'
-            };
-            return ageBandMap[gradeLevel] || 'adult';
-        }
-
-        // Map grade level to reading difficulty preference
-        function getReadingLevelFromGrade(gradeLevel) {
-            const readingLevelMap = {
-                'pre-k': 'beginner',
-                'kindergarten': 'beginner',
-                '1st': 'beginner',
-                '2nd': 'beginner',
-                '3rd': 'beginner',
-                '4th': 'intermediate',
-                '5th': 'intermediate',
-                '6th': 'intermediate',
-                '7th': 'intermediate',
-                '8th': 'intermediate',
-                '9th': 'advanced',
-                '10th': 'advanced',
-                '11th': 'advanced',
-                '12th': 'advanced',
-                'adult': 'advanced',
-                'college': 'advanced',
-                'professional': 'advanced'
-            };
-            return readingLevelMap[gradeLevel] || 'intermediate';
-        }
-
-        async function handleRegister(event) {
-            event.preventDefault();
-            
-            // Validate password match
-            if (!validatePasswordMatch()) {
-                showAlert('Passwords do not match', 'error');
+        // Initialize Polly when AWS SDK is fully loaded
+        function initializePolly() {
+            if (typeof AWS === 'undefined') {
+                console.log('⏳ Waiting for AWS object...');
+                setTimeout(initializePolly, 200);
                 return;
             }
             
-            const btn = document.getElementById('registerBtn');
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Creating Account...';
+            if (!AWS.Polly) {
+                console.log('⏳ Waiting for AWS.Polly...');
+                setTimeout(initializePolly, 200);
+                return;
+            }
+
+            try {
+                console.log('🔧 Configuring AWS Polly for reading page...');
+                
+                AWS.config.region = 'us-east-1';
+                AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+                    IdentityPoolId: 'us-east-1:013556af-498b-4458-966d-5c2c48197abf'
+                });
+
+                polly = new AWS.Polly();
+
+                AWS.config.credentials.get(function(err) {
+                    if (err) {
+                        console.error('❌ AWS Credentials error:', err);
+                        awsReady = false;
+                    } else {
+                        console.log('✅ AWS Polly ready for reading tutor!');
+                        awsReady = true;
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error initializing Polly:', error);
+                awsReady = false;
+            }
+        }
+
+        // ============================================
+        // AI VOICE TUTOR (GLOBAL - DEFINE ONCE)
+        // ============================================
+
+        let tutorMuted = JSON.parse(localStorage.getItem('tutorMuted') || 'false');
+        const tutorSynth = window.speechSynthesis;
+        let tutorVoice = null;
+
+        // track last quiz score so milestone logic can use it
+        let lastQuizScore = null;
+
+        // avoid stacking timers each time a new passage loads
+        let tutorIntroTimers = [];
+        let encouragementIntervalId = null;
+
+        function getStudentNameForTutor() {
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            return user.full_name || user.name || localStorage.getItem('studentName') || 'there';
+        } catch {
+            return localStorage.getItem('studentName') || 'there';
+        }
+        }
+
+        function initTutorVoice() {
+        const voices = tutorSynth.getVoices();
+        if (!voices || voices.length === 0) return;
+
+        tutorVoice =
+            voices.find(v => /en-US/i.test(v.lang) && /Google|Female|Samantha/i.test(v.name)) ||
+            voices.find(v => /en-US/i.test(v.lang)) ||
+            voices.find(v => /^en/i.test(v.lang)) ||
+            voices[0];
+        }
+
+        if (typeof tutorSynth !== 'undefined' && tutorSynth.onvoiceschanged !== undefined) {
+        tutorSynth.onvoiceschanged = initTutorVoice;
+        }
+        initTutorVoice();
+
+        function setTutorVisible(visible) {
+            const tutor = document.getElementById('aiTutor');
+            if (!tutor) return;
             
-            const fullName = document.getElementById('fullName').value;
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const gradeLevel = document.getElementById('gradeLevel').value;
+            if (visible) {
+                tutor.classList.remove('hidden');
+                // Trigger animation after display is set
+                setTimeout(() => {
+                    tutor.classList.add('show');
+                }, 10);
+            } else {
+                tutor.classList.remove('show');
+                // Hide after animation completes
+                setTimeout(() => {
+                    tutor.classList.add('hidden');
+                }, 450);
+            }
+        }
+
+        async function showTutor(context, additionalData = {}) {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // stop any current speech to avoid overlap
+        if (tutorSynth.speaking) tutorSynth.cancel();
+
+        setTutorVisible(true);
+
+        try {
+            const response = await fetch('/api/tutor/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token,
+                context,
+                student_name: getStudentNameForTutor(),
+                ...additionalData, // ✅ FIX (was ".additionalData")
+            }),
+            });
+
+            const data = await response.json();
+
+            if (data && data.success) {
+            displayTutorMessage(data.message, data.emotion);
+            speakTutor(data.message, data.emotion);
+            } else {
+            console.warn('Tutor response not successful:', data);
+            displayTutorMessage("Let's do great work together!", 'happy');
+            speakTutor("Let's do great work together!", 'happy');
+            }
+        } catch (err) {
+            console.error('Error getting tutor message:', err);
+            displayTutorMessage("Let's do great work together!", 'happy');
+            speakTutor("Let's do great work together!", 'happy');
+        }
+        }
+
+        function displayTutorMessage(message, emotion = 'happy') {
+            const tutor = document.getElementById('aiTutor');
+            const messageEl = document.getElementById('tutorMessage');
+
+            if (!tutor || !messageEl) return;
+
+            tutor.classList.remove('hidden');
+            messageEl.textContent = message;
+        }
+
+        function speakTutor(text, emotion = 'happy') {
+            if (tutorMuted) {
+                console.log('🔇 Tutor is muted');
+                return;
+            }
             
-            // Get age band and reading level from grade
-            const ageBand = getAgeBandFromGrade(gradeLevel);
-            const readingLevel = getReadingLevelFromGrade(gradeLevel);
+            const cleanText = String(text).replace(/<[^>]*>/g, '');
+            console.log('🎤 Reading tutor attempting to speak:', cleanText.substring(0, 50));
+            console.log('🔍 Polly status - awsReady:', awsReady, 'polly:', !!polly);
+            
+            // CRITICAL: ONLY use AWS Polly - NEVER browser voice
+            if (awsReady && polly) {
+                console.log('✅ Using AWS Polly Danielle voice');
+                speakWithPolly(cleanText, emotion);
+            } else {
+                console.log('⏳ AWS Polly not ready, waiting 500ms and retrying...');
+                // Keep waiting until Polly is ready
+                setTimeout(() => {
+                    console.log('🔄 Retrying speakTutor...');
+                    speakTutor(text, emotion);
+                }, 500);
+            }
+        }
+
+        // Speak with AWS Polly
+        async function speakWithPolly(text, emotion = 'happy') {
+            if (!text || !text.trim()) return;
+            
+            // Stop any currently playing audio
+            if (currentAudio) {
+                try {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                } catch (e) {
+                    console.warn('Could not stop current audio:', e);
+                }
+                currentAudio = null;
+            }
             
             try {
-                const response = await fetch('/api/register', {
+                console.log('🔊 Synthesizing with Polly (Danielle voice)...');
+                
+                const params = {
+                    Text: text,
+                    OutputFormat: 'mp3',
+                    VoiceId: TUTOR_VOICE.voiceId,
+                    Engine: TUTOR_VOICE.engine,
+                    LanguageCode: 'en-US'
+                };
+                
+                const data = await polly.synthesizeSpeech(params).promise();
+                
+                console.log('✅ Polly synthesis complete');
+                
+                const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                currentAudio = new Audio(audioUrl);
+                
+                currentAudio.onended = () => {
+                    console.log('🎵 Reading tutor finished speaking');
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                currentAudio.onerror = (e) => {
+                    console.error('❌ Audio playback error:', e);
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                };
+                
+                await currentAudio.play();
+                console.log('✅ Reading tutor speaking with Danielle voice!');
+                
+            } catch (error) {
+                console.error('❌ Polly error:', error);
+                fallbackToWebSpeech(text, emotion);
+            }
+        }
+
+        // Fallback to browser speech if Polly fails
+        function fallbackToWebSpeech(text, emotion = 'happy') {
+            if (!('speechSynthesis' in window)) return;
+            
+            console.log('🔄 Using browser speech synthesis');
+            
+            initTutorVoice();
+            
+            const u = new SpeechSynthesisUtterance(text);
+            
+            // Tone tweaks based on emotion
+            if (emotion === 'celebrating') {
+                u.rate = 1.05;
+                u.pitch = 1.2;
+            } else if (emotion === 'encouraging') {
+                u.rate = 0.95;
+                u.pitch = 1.05;
+            } else {
+                u.rate = 0.95;
+                u.pitch = 1.1;
+            }
+            u.volume = 1.0;
+            
+            if (tutorVoice) u.voice = tutorVoice;
+            
+            tutorSynth.speak(u);
+        }
+
+        function hideTutor() {
+            setTutorVisible(false);
+            
+            // Stop browser speech synthesis
+            tutorSynth.cancel();
+            
+            // Stop AWS Polly audio
+            if (currentAudio) {
+                try {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                } catch (e) {
+                    console.warn('Could not stop Polly audio:', e);
+                }
+                currentAudio = null;
+            }
+        }
+
+        function toggleMute() {
+            tutorMuted = !tutorMuted;
+            localStorage.setItem('tutorMuted', JSON.stringify(tutorMuted));
+
+            const muteIcon = document.getElementById('muteIcon');
+            if (muteIcon) muteIcon.textContent = tutorMuted ? '🔇' : '🔊';
+
+            if (tutorMuted) {
+                // Stop browser speech
+                tutorSynth.cancel();
+                
+                // Stop AWS Polly audio
+                if (currentAudio) {
+                    try {
+                        currentAudio.pause();
+                        currentAudio.currentTime = 0;
+                    } catch (e) {
+                        console.warn('Could not stop Polly audio:', e);
+                    }
+                    currentAudio = null;
+                }
+            }
+        }
+
+        // Lesson intro: greeting then instruction (matches your expected behavior)
+        function runTutorLessonIntro() {
+        tutorIntroTimers.forEach(clearTimeout);
+        tutorIntroTimers = [];
+
+        tutorIntroTimers.push(setTimeout(() => showTutor('greeting'), 800));
+        tutorIntroTimers.push(setTimeout(() => showTutor('instruction'), 5800));
+        }
+
+        // Wait for AWS Polly to be ready, then show tutor
+        function waitForPollyThenShowTutor() {
+            let attempts = 0;
+            const maxAttempts = 30; // Wait up to 6 seconds
+            
+            function checkAndShow() {
+                attempts++;
+                
+                console.log(`🔍 Polly check #${attempts}: awsReady=${awsReady}, polly=${!!polly}`);
+                
+                if (awsReady && polly) {
+                    console.log('✅ AWS Polly confirmed ready, showing tutor with Danielle voice');
+                    // Extra delay to ensure Polly is fully initialized
+                    setTimeout(() => {
+                        runTutorLessonIntro();
+                    }, 500);
+                } else if (attempts < maxAttempts) {
+                    console.log(`⏳ Waiting for AWS Polly... (attempt ${attempts}/${maxAttempts})`);
+                    setTimeout(checkAndShow, 200);
+                } else {
+                    console.error('❌ AWS Polly timeout after 6 seconds - this should not happen!');
+                    console.error('awsReady:', awsReady);
+                    console.error('polly:', polly);
+                    console.error('AWS:', typeof AWS);
+                    console.error('AWS.Polly:', typeof AWS?.Polly);
+                    // Don't show tutor at all if Polly isn't ready
+                }
+            }
+            
+            checkAndShow();
+        }
+        // Optional: random encouragement while reading
+        function startEncouragementTimerOnce() {
+        if (encouragementIntervalId) return;
+
+        encouragementIntervalId = setInterval(() => {
+            const tutor = document.getElementById('aiTutor');
+            if (tutor && !tutor.classList.contains('hidden')) return;
+
+            if (Math.random() > 0.7) {
+            showTutor('encouragement');
+            }
+        }, 120000);
+        }
+
+        function handleTutorAfterScore(score) {
+        const s = Number(score) || 0;
+        lastQuizScore = s;
+
+        if (s >= 80) {
+            showTutor('success', { score: s });
+        } else if (s < 60) {
+            showTutor('struggle', { score: s });
+        } else {
+            showTutor('success', { score: s }); // “encouraging” variant comes from backend
+        }
+        }
+
+        // Milestone: every 10 lessons (uses backend tutor context "milestone") :contentReference[oaicite:2]{index=2}
+        async function maybeShowMilestone() {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            // if you already have this endpoint on dashboard, reuse it
+            const resp = await fetch(`/api/student/progress?token=${encodeURIComponent(token)}`);
+            const data = await resp.json();
+
+            const totalLessons =
+            data?.progress?.total_lessons ??
+            data?.stats?.total_lessons ??
+            data?.total_lessons;
+
+            const n = Number(totalLessons);
+            if (!Number.isFinite(n) || n <= 0) return;
+
+            if (n % 10 === 0) {
+            setTimeout(() => {
+                showTutor('milestone', { lesson_number: n, score: lastQuizScore ?? undefined });
+            }, 1200);
+            }
+        } catch (e) {
+            console.warn('Milestone check failed:', e);
+        }
+        }
+
+
+        // Update speed display
+        document.getElementById('readingSpeed').addEventListener('input', function(e) {
+            document.getElementById('speedValue').textContent = e.target.value + 'x';
+        });
+
+        // Load passage on page load
+        window.addEventListener('load', async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+
+            startTime = Date.now();
+            await loadPassage(token);
+        });
+
+        async function loadPassage(token, challenge = 'appropriate') {
+            try {
+                const response = await fetch(`/api/read/sample?token=${token}&challenge=${challenge}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load passage');
+                }
+
+                const data = await response.json();
+                currentPassage = data;
+                currentQuestions = data.questions;
+                sessionId = data.session_id;
+
+                displayPassage(data);
+                
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('passageSection').classList.remove('hidden');
+
+                // ✅ Only show tutor intro for normal lessons, NOT during placement test
+                if (!isPlacementTest) {
+                    waitForPollyThenShowTutor();
+                    startEncouragementTimerOnce();
+                } else {
+                    console.log('📊 Placement test mode - skipping tutor intro');
+                }
+
+                // Show badge only on actual first passage (not in placement test)
+                if (data.is_first_passage && !isPlacementTest && placementTestProgress.passagesCompleted === 0) {
+                    document.getElementById('firstPassageBadge').classList.remove('hidden');
+                } else {
+                    document.getElementById('firstPassageBadge').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error loading passage:', error);
+                document.getElementById('loadingState').innerHTML = `
+                    <p style="color: var(--error);">Unable to load passage. Please try again.</p>
+                    <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+                `;
+            }
+        }
+
+        function displayPassage(data) {
+            document.getElementById('passageTitle').textContent = data.title;
+            document.getElementById('wordCount').textContent = data.word_count;
+            document.getElementById('estimatedTime').textContent = data.estimated_minutes;
+            document.getElementById('difficultyLevel').textContent = data.difficulty_level;
+            
+            // Format passage content
+            const paragraphs = data.content.split('\n\n').filter(p => p.trim());
+            document.getElementById('passageContent').innerHTML = paragraphs
+                .map(p => `<p>${p.trim()}</p>`)
+                .join('');
+
+            // Display vocabulary if available
+            if (data.vocabulary && data.vocabulary.length > 0) {
+                const vocabList = data.vocabulary.map(v => `
+                    <div class="vocab-item">
+                        <span class="vocab-word">${v.word}</span>: ${v.definition}
+                    </div>
+                `).join('');
+                
+                document.getElementById('vocabularyList').innerHTML = vocabList;
+                document.getElementById('vocabularyBox').classList.remove('hidden');
+            }
+
+            // Display questions
+            displayQuestions(data.questions);
+        }
+
+        function displayQuestions(questions) {
+            const questionsList = document.getElementById('questionsList');
+            
+            if (!questions || questions.length === 0) {
+                questionsList.innerHTML = '<p>No questions available.</p>';
+                return;
+            }
+            
+            questionsList.innerHTML = questions.map((q, index) => {
+                if (!q) return '';
+                
+                const questionText = q.question || 'Question';
+                
+                // Check if this is a fill-in-blank question
+                const isFillBlank = (
+                    q.type === 'fill_in_blank' || 
+                    q.type === 'fill-in-blank' ||
+                    q.type === 'fill_blank' ||
+                    questionText.includes('__________')
+                );
+                
+                if (isFillBlank) {
+                    // Fill-in-blank: text input
+                    return `
+                        <div class="question" data-question-id="${index}" data-type="fill_in_blank">
+                            <div class="question-text">
+                                ${index + 1}. ${questionText}
+                            </div>
+                            <div class="fill-blank-input">
+                                <input 
+                                    type="text" 
+                                    name="question${index}" 
+                                    placeholder="Type your answer here..."
+                                    data-correct="${q.correct_answer || ''}"
+                                    data-accept='${JSON.stringify(q.accept_answers || [q.correct_answer]).replace(/'/g, "&#39;")}'
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                />
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Multiple choice: radio buttons
+                    const options = q.options || [q.correct_answer || 'Option 1', 'Option 2', 'Option 3', 'Option 4'];
+                    return `
+                        <div class="question" data-question-id="${index}" data-type="multiple_choice">
+                            <div class="question-text">
+                                ${index + 1}. ${questionText}
+                            </div>
+                            <div class="options">
+                                ${options.map((option, optIndex) => `
+                                    <label class="option">
+                                        <input type="radio" name="question${index}" value="${option}" data-correct="${option === q.correct_answer}">
+                                        <span>${option}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        async function submitAnswers() {
+            const token = localStorage.getItem('token');
+            const answers = [];
+            let allAnswered = true;
+
+            currentQuestions.forEach((q, index) => {
+                const questionDiv = document.querySelector(`[data-question-id="${index}"]`);
+                const questionType = questionDiv.getAttribute('data-type');
+                
+                let isCorrect = false;
+                let selectedAnswer = '';
+                
+                if (questionType === 'fill_in_blank') {
+                    // Fill-in-the-blank question
+                    const input = questionDiv.querySelector('input[type="text"]');
+                    const userAnswer = (input.value || '').trim().toLowerCase();
+                    
+                    if (!userAnswer) {
+                        allAnswered = false;
+                        return;
+                    }
+                    
+                    selectedAnswer = input.value;
+                    
+                    // Get accepted answers
+                    const acceptAnswers = JSON.parse(input.getAttribute('data-accept') || '[]');
+                    const correctAnswer = input.getAttribute('data-correct').toLowerCase();
+                    
+                    // Check if answer matches any accepted variation
+                    isCorrect = acceptAnswers.some(acc => 
+                        userAnswer === acc.toLowerCase().trim()
+                    ) || userAnswer === correctAnswer;
+                    
+                    // Visual feedback
+                    if (isCorrect) {
+                        input.classList.add('correct');
+                        input.classList.remove('incorrect');
+                    } else {
+                        input.classList.add('incorrect');
+                        input.classList.remove('correct');
+                    }
+                    input.disabled = true;
+                    
+                } else {
+                    // Multiple choice question
+                    const selected = questionDiv.querySelector('input[type="radio"]:checked');
+                    
+                    if (!selected) {
+                        allAnswered = false;
+                        return;
+                    }
+                    
+                    selectedAnswer = selected.value;
+                    isCorrect = selected.dataset.correct === 'true';
+                    
+                    // Visual feedback
+                    const options = questionDiv.querySelectorAll('input[type="radio"]');
+                    options.forEach(opt => {
+                        if (opt.dataset.correct === 'true') {
+                            opt.parentElement.classList.add('correct');
+                        } else if (opt.checked && opt.dataset.correct !== 'true') {
+                            opt.parentElement.classList.add('incorrect');
+                        }
+                        opt.disabled = true;
+                    });
+                }
+                
+                answers.push({
+                    question: q.question,
+                    selected_answer: selectedAnswer,
+                    correct_answer: q.correct_answer,
+                    is_correct: isCorrect
+                });
+            });
+
+            if (!allAnswered) {
+                showNotification({
+                    type: 'warning',
+                    icon: '⚠️',
+                    title: 'Incomplete Quiz',
+                    message: 'Please answer all questions before submitting.',
+                    duration: 3000
+                });
+                return;
+            }
+
+            // Submit to backend
+            try {
+                const response = await fetch('/api/read/comprehension', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        email, 
-                        password, 
-                        full_name: fullName,
-                        role: 'student',
-                        age_band: ageBand,
-                        grade_band: gradeLevel,
-                        reading_level: readingLevel
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        session_id: sessionId,
+                        answers: answers
+                    })
+                });
+
+                const result = await response.json();
+                
+                // Show score
+                document.getElementById('scorePercent').textContent = `${result.score}%`;
+                document.getElementById('scoreMessage').textContent = result.message;
+
+                // Track score for placement test
+                if (isPlacementTest) {
+                    placementTestProgress.scores.push(result.score);
+                    sessionStorage.setItem('placementScores', JSON.stringify(placementTestProgress.scores));
+                    console.log('📊 Placement test scores so far:', placementTestProgress.scores);
+                }
+
+                handleTutorAfterScore(result.score);
+
+                document.getElementById('scoreDisplay').classList.remove('hidden');
+                document.getElementById('quizSection').querySelector('button').classList.add('hidden');
+                
+            } catch (error) {
+                console.error('Error submitting answers:', error);
+                showNotification({
+                    type: 'warning',
+                    icon: '❌',
+                    title: 'Submission Error',
+                    message: 'Failed to submit answers. Please try again.',
+                    duration: 4000
+                });
+            }
+        }
+
+        function showFeedbackSection() {
+            document.getElementById('scoreDisplay').classList.add('hidden');
+            document.getElementById('feedbackSection').classList.remove('hidden');
+            document.getElementById('feedbackSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function submitFeedback(feedback) {
+            const token = localStorage.getItem('token');
+            const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+
+            // Visual feedback
+            document.querySelectorAll('.feedback-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            event.target.closest('.feedback-btn').classList.add('selected');
+
+            try {
+                await fetch('/api/read/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        session_id: sessionId,
+                        feedback: feedback,
+                        time_spent: timeSpent,
+                        completed: true
+                    })
+                });
+
+                // Handle placement test flow
+                if (isPlacementTest) {
+                    placementTestProgress.passagesCompleted++;
+                    placementTestProgress.feedbacks.push(feedback);
+                    
+                    sessionStorage.setItem('placementPassagesCompleted', placementTestProgress.passagesCompleted.toString());
+                    sessionStorage.setItem('placementFeedbacks', JSON.stringify(placementTestProgress.feedbacks));
+                    
+                    console.log(`📊 Placement test: ${placementTestProgress.passagesCompleted}/3 passages completed`);
+                    
+                    if (placementTestProgress.passagesCompleted >= 3) {
+                        // Calculate reading level
+                        const avgScore = placementTestProgress.scores.reduce((a, b) => a + b, 0) / placementTestProgress.scores.length;
+                        const avgDifficulty = calculateAvgDifficulty(placementTestProgress.feedbacks);
+                        const readingLevel = determineReadingLevel(avgScore, avgDifficulty);
+                        
+                        console.log('✅ Placement test complete!');
+                        console.log('Average score:', avgScore);
+                        console.log('Calculated level:', readingLevel);
+                        
+                        // Save reading level
+                        await saveReadingLevel(token, readingLevel, avgScore);
+                        
+                        // Clear placement test data
+                        sessionStorage.removeItem('isPlacementTest');
+                        sessionStorage.removeItem('placementPassagesCompleted');
+                        sessionStorage.removeItem('placementScores');
+                        sessionStorage.removeItem('placementFeedbacks');
+                        
+                        // Show completion notification and auto-redirect
+                        showSuccess(
+                            'Placement Test Complete! 🎉',
+                            `Your reading level: <strong>${readingLevel.toUpperCase()}</strong><br>Average score: ${avgScore.toFixed(0)}%<br><br>Returning to dashboard...`,
+                            5000
+                        );
+                        
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 5000);
+                    } else {
+                        // Passages 1 & 2: Just show progress and auto-load next
+                        showSuccess(
+                            `Passage ${placementTestProgress.passagesCompleted}/3 Complete! 🎯`,
+                            'Loading your next passage...',
+                            2000
+                        );
+                        
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    }
+                } else {
+                    // Normal lesson flow - give choice to continue or go back
+                    maybeShowMilestone();
+
+                    setTimeout(() => {
+                        showNotification({
+                            type: 'success',
+                            icon: '🎉',
+                            title: 'Great Job!',
+                            message: 'Ready for another passage?',
+                            duration: 0,
+                            buttons: [
+                                {
+                                    text: 'Yes, Continue',
+                                    className: 'btn-primary',
+                                    action: 'location.reload'
+                                },
+                                {
+                                    text: 'Back to Dashboard',
+                                    className: 'btn-secondary',
+                                    action: "window.location.href='/dashboard'"
+                                }
+                            ]
+                        });
+                    }, 2000);
+                }
+
+            } catch (error) {
+                console.error('Error submitting feedback:', error);
+                showInfo('Feedback Recorded', 'Click OK to continue.');
+                
+                setTimeout(() => {
+                    if (isPlacementTest && placementTestProgress.passagesCompleted < 3) {
+                        location.reload();
+                    } else {
+                        window.location.href = '/dashboard';
+                    }
+                }, 2000);
+            }
+        }
+
+        function calculateAvgDifficulty(feedbacks) {
+            const difficultyScores = feedbacks.map(f => {
+                if (f === 'too_easy') return 1;
+                if (f === 'just_right') return 2;
+                if (f === 'too_hard') return 3;
+                return 2;
+            });
+            return difficultyScores.reduce((a, b) => a + b, 0) / difficultyScores.length;
+        }
+
+        function determineReadingLevel(avgScore, avgDifficulty) {
+            // High score + too easy = move up
+            if (avgScore >= 80 && avgDifficulty < 1.5) return 'advanced';
+            // Good score + just right = current level appropriate  
+            if (avgScore >= 70 && avgDifficulty >= 1.5 && avgDifficulty <= 2.5) return 'intermediate';
+            // Lower score or too hard = beginner
+            if (avgScore < 70 || avgDifficulty > 2.5) return 'beginner';
+            // Default
+            return 'intermediate';
+        }
+
+        async function saveReadingLevel(token, level, score) {
+            try {
+                const response = await fetch('/api/reading-level/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        level: level,
+                        score: Math.round(score)
                     })
                 });
                 
-                const data = await response.json();
+                const result = await response.json();
+                console.log('✅ Reading level saved to database:', result);
                 
-                if (response.ok && data.success) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('user', JSON.stringify(data.user));
-                    showAlert('Account created successfully! Redirecting...', 'success');
-                    
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1000);
-                } else {
-                    showAlert(data.detail || 'Registration failed', 'error');
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                }
+                // Update local storage with BOTH fields to match database
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                user.reading_level = level;
+                user.level_estimate = level;  // Match database field
+                localStorage.setItem('user', JSON.stringify(user));
+                console.log('✅ localStorage updated with reading level:', level);
+                
+                // Clear any assessment flags that might trigger modals
+                localStorage.removeItem('needsReadingAssessment');
+                localStorage.removeItem('assessmentRequired');
+                sessionStorage.removeItem('showAssessmentModal');
+                console.log('✅ Cleared assessment requirement flags');
+                
+                // ✅ Set reading assessment completion flag
+                localStorage.setItem('hasCompletedReadingAssessment', 'true');
+                console.log('✅ Set reading assessment completion flag');
+                
+                // ✅ Reset voice navigation so "both complete" message plays on dashboard
+                const playedMessages = JSON.parse(localStorage.getItem('voiceNavigationPlayed') || '{}');
+                playedMessages.bothComplete = false;
+                localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
+                console.log('✅ Reset voice navigation for dashboard');
+                
             } catch (error) {
-                console.error('Registration error:', error);
-                showAlert('Registration failed. Please check your connection and try again.', 'error');
-                btn.disabled = false;
-                btn.textContent = originalText;
+                console.error('❌ Error saving reading level:', error);
             }
         }
 
-        // Check if already logged in
-        window.addEventListener('DOMContentLoaded', () => {
-            const token = localStorage.getItem('token');
-            if (token) {
-                window.location.href = '/dashboard';
+        // Text-to-Speech Functions
+        function readAloud() {
+            const text = document.getElementById('passageContent').textContent;
+            const speed = document.getElementById('readingSpeed').value;
+
+            if (utterance) {
+                speechSynthesis.cancel();
             }
-        });
+
+            utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = parseFloat(speed);
+            utterance.pitch = 1;
+            utterance.volume = 1;
+
+            speechSynthesis.speak(utterance);
+        }
+
+        function pauseReading() {
+            if (speechSynthesis.speaking && !speechSynthesis.paused) {
+                speechSynthesis.pause();
+            } else {
+                speechSynthesis.resume();
+            }
+        }
+
+        function stopReading() {
+            speechSynthesis.cancel();
+        }
     </script>
 </body>
 </html>

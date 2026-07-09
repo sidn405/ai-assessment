@@ -147,14 +147,20 @@ class ContentGenerator:
         What to avoid: {', '.join(cultural_context['avoid'])}
         """
         
-        # ========== UPDATED PROMPT WITH COMPREHENSIVE VOCABULARY ==========
+        # ========== UPDATED PROMPT WITH SINGLE INTEREST FOCUS ==========
         prompt = f"""Write a SHORT STORY (narrative) about {topic} featuring African American characters.
 
         Student Profile:
         - Age: {age} years old
         - Grade Level: {grade_band}
         - Reading Difficulty: {difficulty_level}
-        - Interests: {', '.join(user_interests) if user_interests else 'general topics'}
+        - PRIMARY INTEREST/TOPIC: {topic}
+        
+        IMPORTANT - TOPIC FOCUS:
+        - Focus ONLY on {topic}
+        - Do NOT combine with other interests or topics
+        - Provide variety by exploring different aspects/subtopics within {topic}
+        - Make it fresh and engaging - avoid repetitive storylines
         
         CULTURAL CONTEXT:
         - Set in an urban community (city neighborhood, public spaces)

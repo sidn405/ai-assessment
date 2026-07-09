@@ -2208,7 +2208,7 @@
                         <div class="alert alert-success">
                             <strong>✅ Assessment complete!</strong><br>
                             Your lessons are now personalized to your interests and reading level.<br>
-                            <span style="opacity: 0.9; font-size: 0.95em;">Ready to start your learning journey? Click below to explore your customized lessons!</span>
+                            <span style="opacity: 0.9; font-size: 0.95em;">Ready to start your learning journey? Click the Continue Learning button below to explore your customized lessons!</span>
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="showSection('lessons', event)">
@@ -3441,7 +3441,7 @@
 
                 // ⭐ FIX: Use hasCompletedAssessment instead of simple check
                 const hasAssessment = hasCompletedAssessment(data);
-                updateAssessmentStatus(hasAssessment);
+                updateAssessmentStatus(hasAssessment, data.user);
 
             } catch (error) {
                 console.error('Error loading dashboard:', error);
@@ -3449,7 +3449,7 @@
         }
 
         // Update assessment UI state
-        function updateAssessmentStatus(isCompleted) {
+        function updateAssessmentStatus(isCompleted, userData = null) {
             const gettingStarted = document.getElementById('gettingStarted');
             const continueLearning = document.getElementById('continueLearning');
             
@@ -3460,14 +3460,41 @@
             
             // ✅ Check BOTH assessments before showing Continue Learning
             const hasInterests = hasCompletedAssessment();
-            const hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true';
+            
+            // Check reading assessment completion multiple ways (Safari/Firefox compatible)
+            let hasCompletedReading = false;
+            
+            // Method 1: Check localStorage flag
+            const readingFlag = localStorage.getItem('hasCompletedReadingAssessment');
+            if (readingFlag === 'true' || readingFlag === true) {
+                hasCompletedReading = true;
+            }
+            
+            // Method 2: Check if user has a reading_level (most reliable)
+            if (userData && userData.reading_level && userData.reading_level !== 'unknown') {
+                hasCompletedReading = true;
+            }
+            
+            // Method 3: Check stored user data
+            if (!hasCompletedReading) {
+                try {
+                    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+                    if (storedUser.reading_level && storedUser.reading_level !== 'unknown') {
+                        hasCompletedReading = true;
+                    }
+                } catch (e) {
+                    console.warn('Error parsing stored user data:', e);
+                }
+            }
+            
             const bothComplete = hasInterests && hasCompletedReading;
             
             console.log('🔍 updateAssessmentStatus check:', {
                 hasInterests,
                 hasCompletedReading,
                 bothComplete,
-                isCompletedParam: isCompleted
+                isCompletedParam: isCompleted,
+                userDataProvided: !!userData
             });
             
             // Only show "Continue Learning" if BOTH assessments are complete
