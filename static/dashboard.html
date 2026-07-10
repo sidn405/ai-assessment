@@ -1436,17 +1436,24 @@
             display: none;
             background: linear-gradient(135deg, var(--navy-primary), #4a56af);
             color: white;
-            padding: 0.85rem 1.5rem;
+            padding: 0.75rem 1.5rem;
             text-align: center;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             font-weight: 600;
-            position: sticky;
+            position: fixed;
             top: 0;
-            z-index: 50;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            left: 166px; /* clear the sidebar width */
+            right: 0;
+            z-index: 200;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
 
         #onboardingBanner.visible { display: block; }
+
+        /* Push main content down when banner is visible so it doesn't overlap */
+        .main-content.onboarding-locked {
+            padding-top: 72px;
+        }
 
         #onboardingBanner .banner-steps {
             display: flex;
@@ -2226,17 +2233,17 @@
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
 
-        <main class="main-content" id="mainContent">
-            <!-- Onboarding lock banner — hidden once both steps complete -->
-            <div id="onboardingBanner">
-                <div>🎯 Complete these two steps to unlock your full dashboard</div>
-                <div class="banner-steps">
-                    <span class="banner-step" id="bannerStep1">📝 Step 1: Take the Interest Assessment</span>
-                    <span style="opacity:0.5;">→</span>
-                    <span class="banner-step" id="bannerStep2">📊 Step 2: Complete the Reading Level Test</span>
-                </div>
+        <!-- Onboarding lock banner (fixed position, outside scroll area) -->
+        <div id="onboardingBanner">
+            <div>🎯 Complete these two steps to unlock your full dashboard</div>
+            <div class="banner-steps">
+                <span class="banner-step" id="bannerStep1">📝 Step 1: Take the Interest Assessment</span>
+                <span style="opacity:0.5;">→</span>
+                <span class="banner-step" id="bannerStep2">📊 Step 2: Complete the Reading Level Test</span>
             </div>
+        </div>
 
+        <main class="main-content" id="mainContent">
             <!-- Overview Section -->
             <div id="overviewSection">
                 <div class="header">
@@ -3814,15 +3821,26 @@
             // Track which navigation messages have been played
             const playedMessages = JSON.parse(localStorage.getItem('voiceNavigationPlayed') || '{}');
             
-            // Check assessment completion status
-            const hasInterests = localStorage.getItem('hasCompletedInterestAssessment') === 'true' || 
-                                 localStorage.getItem('assessmentCompleted') === 'true' ||
-                                 (user.interests && user.interests.length > 0);
-            
-            // ✅ FIX: Check for actual completion flag, not just presence of reading_level
-            // reading_level might be a default value, we need explicit completion confirmation
+            // Check interest assessment completion.
+            // Priority: explicit flag > assessmentCompleted flag > interests array in user object.
+            // user.interests may be a JSON string (stored from API) or an array - handle both.
+            let hasInterests = localStorage.getItem('hasCompletedInterestAssessment') === 'true' ||
+                               localStorage.getItem('assessmentCompleted') === 'true';
+            if (!hasInterests && user.interests) {
+                try {
+                    const parsed = typeof user.interests === 'string'
+                        ? JSON.parse(user.interests) : user.interests;
+                    hasInterests = Array.isArray(parsed) && parsed.length > 0;
+                } catch(e) {
+                    hasInterests = typeof user.interests === 'string' && user.interests.length > 2;
+                }
+            }
+
+            // Check reading/placement test completion.
+            // Use placement_completed flag - NOT reading_level which is set at registration.
             const hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true' ||
-                                       localStorage.getItem('readingAssessmentCompleted') === 'true';
+                                       localStorage.getItem('readingAssessmentCompleted') === 'true' ||
+                                       user.placement_completed === true;
             
             console.log('Voice Navigation Check:', {
                 hasInterests,
@@ -7096,6 +7114,25 @@
                 
                 const data = await response.json();
                 console.log('Stats data received:', data);
+
+                // Keep localStorage user object in sync with latest API data.
+                // placement_completed and interests come from /api/student/progress
+                // (added in v2.2) — merge them into the stored user object so that
+                // playVoiceNavigation and other localStorage-based checks stay accurate.
+                if (data.user) {
+                    try {
+                        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+                        const merged = {
+                            ...storedUser,
+                            placement_completed: data.user.placement_completed ?? storedUser.placement_completed,
+                            interests: data.user.interests ?? storedUser.interests,
+                            reading_level: data.user.reading_level ?? storedUser.reading_level
+                        };
+                        localStorage.setItem('user', JSON.stringify(merged));
+                    } catch(e) {
+                        console.warn('Could not sync user data to localStorage:', e);
+                    }
+                }
 
                 toggleAssessmentCTA(data);
                 
