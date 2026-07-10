@@ -8996,15 +8996,15 @@ async def check_essay_due(token: str):
         
         print(f"✓ User {user_id} has completed {total_essays} essays")
         
-        # Essay is due every 3 lessons
-        expected_essays = total_lessons // 3
+        # Essay is due every 2 lessons
+        expected_essays = total_lessons // 2
         essay_due = (total_lessons > 0 and 
-                     total_lessons % 3 == 0 and 
+                     total_lessons % 2 == 0 and 
                      total_essays < expected_essays)
         
         print(f"✓ Essay due: {essay_due}")
         
-        # If essay is due, get last 3 lessons from passages table
+        # If essay is due, get last 2 lessons from passages table
         recent_lessons = []
         if essay_due:
             try:
@@ -9016,7 +9016,7 @@ async def check_essay_due(token: str):
                            WHERE sl.user_id = %s 
                            AND sl.completion_status = 'completed'
                            ORDER BY sl.completed_at DESC
-                           LIMIT 3""",
+                           LIMIT 2""",
                         (user_id,)
                     )
                 else:
@@ -9027,7 +9027,7 @@ async def check_essay_due(token: str):
                            WHERE sl.user_id = ? 
                            AND sl.completion_status = 'completed'
                            ORDER BY sl.completed_at DESC
-                           LIMIT 3""",
+                           LIMIT 2""",
                         (user_id,)
                     )
                 
@@ -9047,10 +9047,10 @@ async def check_essay_due(token: str):
                 import traceback
                 traceback.print_exc()
         
-        # If we still don't have 3 lessons, use generic placeholders
-        if essay_due and len(recent_lessons) < 3:
+        # If we still don't have 2 lessons, use generic placeholders
+        if essay_due and len(recent_lessons) < 2:
             print(f"⚠ Only found {len(recent_lessons)} lessons, using placeholders")
-            while len(recent_lessons) < 3:
+            while len(recent_lessons) < 2:
                 recent_lessons.append({
                     'id': len(recent_lessons),
                     'title': f'Recent Lesson {len(recent_lessons) + 1}',
