@@ -227,31 +227,305 @@ def init_db():
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE)
         cursor = conn.cursor()
-        
-        # Original tables (simplified - assume migration ran)
-        # Users, assessments, lessons, progress tables exist
-        
-        # Ensure new columns exist in users table
+
         try:
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS age_band VARCHAR(20)")
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS grade_band VARCHAR(20)")
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS interest_tags TEXT")
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS level_estimate VARCHAR(20)")
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS words_per_session INTEGER DEFAULT 0")
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS total_passages_read INTEGER DEFAULT 0")
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS comprehension_score REAL DEFAULT 0")
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP")
-            cursor.execute("ALTER TABLE passages ADD COLUMN IF NOT EXISTS image_url TEXT")
+            # ================================================================
+            # CORE TABLES — safe to run on every startup (IF NOT EXISTS)
+            # ================================================================
+
+            # Users
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    full_name VARCHAR(255) NOT NULL,
+                    role VARCHAR(50) DEFAULT 'student',
+                    age INTEGER,
+                    age_band VARCHAR(20),
+                    grade_band VARCHAR(20),
+                    grade_level VARCHAR(50),
+                    reading_level VARCHAR(50),
+                    interests TEXT,
+                    interest_tags TEXT,
+                    level_estimate VARCHAR(20),
+                    school VARCHAR(255),
+                    words_per_session INTEGER DEFAULT 0,
+                    total_passages_read INTEGER DEFAULT 0,
+                    comprehension_score REAL DEFAULT 0,
+                    last_active TIMESTAMP,
+                    profile_photo TEXT,
+                    placement_completed BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             conn.commit()
-        except:
+            print("✓ users table ready")
+
+            # Passages
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS passages (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    source VARCHAR(50) NOT NULL,
+                    topic_tags TEXT,
+                    word_count INTEGER NOT NULL,
+                    readability_score REAL,
+                    flesch_ease REAL,
+                    difficulty_level VARCHAR(20),
+                    estimated_minutes INTEGER,
+                    approved BOOLEAN DEFAULT FALSE,
+                    created_by INTEGER,
+                    image_url TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    metadata TEXT
+                )
+            """)
+            conn.commit()
+            print("✓ passages table ready")
+
+            # Passage questions
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS passage_questions (
+                    id SERIAL PRIMARY KEY,
+                    passage_id INTEGER REFERENCES passages(id) ON DELETE CASCADE,
+                    question_text TEXT NOT NULL,
+                    question_type VARCHAR(50),
+                    correct_answer TEXT NOT NULL,
+                    options TEXT,
+                    explanation TEXT,
+                    difficulty INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ passage_questions table ready")
+
+            # Session logs
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS session_logs (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    passage_id INTEGER REFERENCES passages(id),
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    completion_status VARCHAR(20),
+                    time_spent_seconds INTEGER,
+                    feedback VARCHAR(20),
+                    comprehension_score REAL,
+                    answers TEXT,
+                    notes TEXT
+                )
+            """)
+            conn.commit()
+            print("✓ session_logs table ready")
+
+            # User sessions (login tracking)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    ended_at TIMESTAMP,
+                    session_end TIMESTAMP,
+                    duration_seconds INTEGER,
+                    status VARCHAR(20) DEFAULT 'active',
+                    pages_visited TEXT
+                )
+            """)
+            conn.commit()
+            print("✓ user_sessions table ready")
+
+            # User streaks
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_streaks (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) UNIQUE,
+                    current_streak INTEGER DEFAULT 0,
+                    longest_streak INTEGER DEFAULT 0,
+                    last_activity_date DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ user_streaks table ready")
+
+            # Messages
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    id SERIAL PRIMARY KEY,
+                    sender_id INTEGER REFERENCES users(id),
+                    recipient_id INTEGER REFERENCES users(id),
+                    recipient_type VARCHAR(20) DEFAULT 'student',
+                    subject VARCHAR(255),
+                    body TEXT,
+                    read BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ messages table ready")
+
+            # Writing exercises
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS writing_exercises (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    passage_id INTEGER REFERENCES passages(id),
+                    prompt TEXT NOT NULL,
+                    user_response TEXT NOT NULL,
+                    ai_feedback TEXT,
+                    score REAL,
+                    revised_response TEXT,
+                    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    revision_submitted_at TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ writing_exercises table ready")
+
+            # Vocabulary tracker
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS vocabulary_tracker (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    word VARCHAR(100) NOT NULL,
+                    definition TEXT,
+                    encountered_count INTEGER DEFAULT 1,
+                    mastered BOOLEAN DEFAULT FALSE,
+                    context_passage_id INTEGER REFERENCES passages(id),
+                    first_encountered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_reviewed TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ vocabulary_tracker table ready")
+
+            # Discussions
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS discussions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    passage_id INTEGER REFERENCES passages(id),
+                    message_role VARCHAR(20) NOT NULL,
+                    message_content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ discussions table ready")
+
+            # Game completions
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS game_completions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    game_type VARCHAR(50),
+                    score INTEGER DEFAULT 0,
+                    rounds_completed INTEGER DEFAULT 0,
+                    words_practiced INTEGER DEFAULT 0,
+                    time_seconds INTEGER DEFAULT 0,
+                    time_spent_seconds INTEGER DEFAULT 0,
+                    difficulty VARCHAR(20),
+                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ game_completions table ready")
+
+            # Reading level history
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS reading_level_history (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    previous_level VARCHAR(50),
+                    new_level VARCHAR(50),
+                    score INTEGER,
+                    test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ reading_level_history table ready")
+
+            # Activity log
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS activity_log (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    session_id INTEGER,
+                    activity_type VARCHAR(50),
+                    activity_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ activity_log table ready")
+
+            # ================================================================
+            # INDEXES
+            # ================================================================
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_difficulty ON passages(difficulty_level)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_passages_approved ON passages(approved)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_questions_passage ON passage_questions(passage_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_user ON session_logs(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_passage ON session_logs(passage_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id)")
+            conn.commit()
+            print("✓ indexes ready")
+
+            # ================================================================
+            # COLUMN MIGRATIONS — add any columns missing from older installs
+            # Safe to run repeatedly (IF NOT EXISTS / try-except per column)
+            # ================================================================
+            migrations = [
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS age INTEGER",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS age_band VARCHAR(20)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS grade_band VARCHAR(20)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS grade_level VARCHAR(50)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS interests TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS interest_tags TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS level_estimate VARCHAR(20)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS school VARCHAR(255)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS words_per_session INTEGER DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_passages_read INTEGER DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS comprehension_score REAL DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS placement_completed BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE passages ADD COLUMN IF NOT EXISTS image_url TEXT",
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS recipient_type VARCHAR(20) DEFAULT 'student'",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_end TIMESTAMP",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
+                "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS rounds_completed INTEGER DEFAULT 0",
+                "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS time_seconds INTEGER DEFAULT 0",
+            ]
+            for sql in migrations:
+                try:
+                    cursor.execute(sql)
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+
+            print("✓ column migrations complete")
+            print("✅ Database initialization complete")
+
+        except Exception as e:
             conn.rollback()
-        
+            print(f"❌ Database initialization error: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            conn.close()
+
     else:
         conn = sqlite3.connect(DATABASE, timeout=30.0)
         conn.execute('PRAGMA journal_mode=WAL')
         cursor = get_cursor(conn)
         
-        # Create all tables for SQLite (for local development)
+        # Create all tables for SQLite (local development)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -259,33 +533,191 @@ def init_db():
                 password_hash TEXT NOT NULL,
                 full_name TEXT NOT NULL,
                 role TEXT NOT NULL,
-                reading_level TEXT,
-                interests TEXT,
+                age INTEGER,
                 age_band TEXT,
                 grade_band TEXT,
+                grade_level TEXT,
+                reading_level TEXT,
+                interests TEXT,
                 interest_tags TEXT,
                 level_estimate TEXT,
+                school TEXT,
                 words_per_session INTEGER DEFAULT 0,
                 total_passages_read INTEGER DEFAULT 0,
                 comprehension_score REAL DEFAULT 0,
                 last_active TIMESTAMP,
+                profile_photo TEXT,
+                placement_completed INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        
-        # ADD YOUR NEW TABLE HERE:
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS passages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                source TEXT NOT NULL,
+                topic_tags TEXT,
+                word_count INTEGER NOT NULL,
+                readability_score REAL,
+                flesch_ease REAL,
+                difficulty_level TEXT,
+                estimated_minutes INTEGER,
+                approved INTEGER DEFAULT 0,
+                created_by INTEGER,
+                image_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                metadata TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS passage_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                passage_id INTEGER REFERENCES passages(id) ON DELETE CASCADE,
+                question_text TEXT NOT NULL,
+                question_type TEXT,
+                correct_answer TEXT NOT NULL,
+                options TEXT,
+                explanation TEXT,
+                difficulty INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS session_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                passage_id INTEGER REFERENCES passages(id),
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                completion_status TEXT,
+                time_spent_seconds INTEGER,
+                feedback TEXT,
+                comprehension_score REAL,
+                answers TEXT,
+                notes TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ended_at TIMESTAMP,
+                session_end TIMESTAMP,
+                duration_seconds INTEGER,
+                status TEXT DEFAULT 'active',
+                pages_visited TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_streaks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE REFERENCES users(id),
+                current_streak INTEGER DEFAULT 0,
+                longest_streak INTEGER DEFAULT 0,
+                last_activity_date DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id INTEGER REFERENCES users(id),
+                recipient_id INTEGER REFERENCES users(id),
+                recipient_type TEXT DEFAULT 'student',
+                subject TEXT,
+                body TEXT,
+                read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS writing_exercises (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                passage_id INTEGER REFERENCES passages(id),
+                prompt TEXT NOT NULL,
+                user_response TEXT NOT NULL,
+                ai_feedback TEXT,
+                score REAL,
+                revised_response TEXT,
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                revision_submitted_at TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vocabulary_tracker (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                word TEXT NOT NULL,
+                definition TEXT,
+                encountered_count INTEGER DEFAULT 1,
+                mastered INTEGER DEFAULT 0,
+                context_passage_id INTEGER REFERENCES passages(id),
+                first_encountered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_reviewed TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS discussions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                passage_id INTEGER REFERENCES passages(id),
+                message_role TEXT NOT NULL,
+                message_content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_completions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                game_type TEXT,
+                score INTEGER DEFAULT 0,
+                rounds_completed INTEGER DEFAULT 0,
+                words_practiced INTEGER DEFAULT 0,
+                time_seconds INTEGER DEFAULT 0,
+                time_spent_seconds INTEGER DEFAULT 0,
+                difficulty TEXT,
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS reading_level_history (
-                id SERIAL PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER REFERENCES users(id),
-                previous_level VARCHAR(50),
-                new_level VARCHAR(50),
+                previous_level TEXT,
+                new_level TEXT,
                 score INTEGER,
                 test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Create admin
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                session_id INTEGER,
+                activity_type TEXT,
+                activity_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create default admin for local dev
         admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
         try:
             cursor.execute(
@@ -294,9 +726,10 @@ def init_db():
             )
         except sqlite3.IntegrityError:
             pass
-    
-    conn.commit()
-    conn.close()
+
+        conn.commit()
+        conn.close()
+        print("✅ SQLite database initialized")
 
 init_db()
 
