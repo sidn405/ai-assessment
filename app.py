@@ -3155,8 +3155,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
             num_questions=4, 
-            allow_fill_blank=False  # ✅ No fill-in-blank
-            
+            allow_fill_blank=False,  # ✅ No fill-in-blank
+            vocabulary_words=passage_data.get('vocabulary_words', [])
         )
         
         # Save questions
@@ -6322,6 +6322,19 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         topic = picked_topic or topic
         passage_data = normalize_passage(passage_data, topic, difficulty)
 
+        # Generate illustration for younger students (same logic as /api/read/sample)
+        lesson_image_url = None
+        lesson_grade_band = user.get('grade_band', '')
+        if content_generator.is_young_learner(lesson_grade_band):
+            print(f"🎨 Generating illustration for young learner (grade_band={lesson_grade_band})...")
+            lesson_image_url = content_generator.generate_story_image(
+                title=passage_data.get('title', ''),
+                content=passage_data.get('content', ''),
+                topic=topic,
+                grade_band=lesson_grade_band
+            )
+            print(f"✓ Illustration generated: {bool(lesson_image_url)}")
+
         # Step 8: Save passage
         print("Step 8: Saving passage to database...")
         conn = get_db()
@@ -6332,8 +6345,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 cursor.execute(
                     """INSERT INTO passages
                        (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                        difficulty_level, estimated_minutes, approved, created_by)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        difficulty_level, estimated_minutes, approved, created_by, image_url)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        RETURNING id""",
                     (
                         passage_data.get('title'),
@@ -6346,7 +6359,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                         passage_data.get('difficulty_level', difficulty),
                         passage_data.get('estimated_minutes'),
                         True,
-                        user_id
+                        user_id,
+                        lesson_image_url
                     )
                 )
                 result = cursor.fetchone()
@@ -6355,8 +6369,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 cursor.execute(
                     """INSERT INTO passages
                        (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                        difficulty_level, estimated_minutes, approved, created_by)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        difficulty_level, estimated_minutes, approved, created_by, image_url)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         passage_data.get('title'),
                         passage_data.get('content'),
@@ -6368,7 +6382,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                         passage_data.get('difficulty_level', difficulty),
                         passage_data.get('estimated_minutes'),
                         True,
-                        user_id
+                        user_id,
+                        lesson_image_url
                     )
                 )
                 lesson_id = cursor.lastrowid
@@ -6389,7 +6404,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 passage_text=passage_data.get('content', ''),
                 passage_title=passage_data.get('title', topic),
                 num_questions=4, 
-                allow_fill_blank=True  # ✅ Include fill-in-blank
+                allow_fill_blank=True,  # ✅ Include fill-in-blank
+                vocabulary_words=passage_data.get('vocabulary_words', [])
             )
             print(f"✓ Generated {len(questions)} questions")
         except Exception as q_error:
@@ -6469,6 +6485,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             'word_count': passage_data.get('word_count', 0),
             'key_points': passage_data.get('key_concepts', []),
             'vocabulary': passage_data.get('vocabulary_words', []),
+            'image_url': lesson_image_url,
             'questions': questions
         }
 
