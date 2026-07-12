@@ -760,6 +760,74 @@ def init_db():
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_essays (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                essay_number INTEGER DEFAULT 1,
+                lesson_count INTEGER,
+                essay_text TEXT NOT NULL,
+                word_count INTEGER DEFAULT 0,
+                comprehension_level TEXT,
+                comprehension_score INTEGER DEFAULT 0,
+                difficulty_recommendation TEXT,
+                ai_feedback TEXT,
+                lesson_ids TEXT,
+                lesson_topics TEXT,
+                needs_admin_review INTEGER DEFAULT 0,
+                points_awarded INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS difficulty_adjustments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                essay_id INTEGER REFERENCES user_essays(id),
+                previous_level TEXT,
+                new_level TEXT,
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                essay_id INTEGER REFERENCES user_essays(id),
+                alert_type TEXT,
+                priority TEXT DEFAULT 'normal',
+                message TEXT,
+                details TEXT,
+                resolved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # SQLite column migrations — ADD any columns missing from older local DBs
+        sqlite_migrations = [
+            "ALTER TABLE users ADD COLUMN essay_word_count_requirement INTEGER DEFAULT 25",
+            "ALTER TABLE users ADD COLUMN word_count_min INTEGER DEFAULT 50",
+            "ALTER TABLE users ADD COLUMN word_count_max INTEGER DEFAULT 75",
+            "ALTER TABLE users ADD COLUMN last_interest_index INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN placement_completed INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN interests TEXT",
+            "ALTER TABLE user_sessions ADD COLUMN session_end TIMESTAMP",
+            "ALTER TABLE user_sessions ADD COLUMN status TEXT DEFAULT 'active'",
+            "ALTER TABLE user_sessions ADD COLUMN last_activity TIMESTAMP",
+            "ALTER TABLE passages ADD COLUMN image_url TEXT",
+            "ALTER TABLE messages ADD COLUMN recipient_type TEXT DEFAULT 'student'",
+            "ALTER TABLE game_completions ADD COLUMN rounds_completed INTEGER DEFAULT 0",
+            "ALTER TABLE game_completions ADD COLUMN time_seconds INTEGER DEFAULT 0",
+        ]
+        for sql in sqlite_migrations:
+            try:
+                cursor.execute(sql)
+            except Exception:
+                pass  # Column already exists — safe to ignore
+
         # Create default admin for local dev
         admin_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
         try:
