@@ -6925,18 +6925,23 @@
                         
                         ${levelChanged ? `
                             <div style="
-                                background: #e7f3ff;
-                                border: 2px solid #667eea;
+                                background: ${evaluation.difficulty_recommendation === 'step_back' ? '#fff3cd' : '#e7f3ff'};
+                                border: 2px solid ${evaluation.difficulty_recommendation === 'step_back' ? '#ffc107' : '#667eea'};
                                 padding: 1.5rem;
                                 border-radius: 12px;
                                 margin-bottom: 2rem;
                             ">
-                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">
+                                    ${evaluation.difficulty_recommendation === 'step_back' ? '📚' : '🎉'}
+                                </div>
                                 <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.5rem; font-size: 1.2rem;">
-                                    Level Up!
+                                    ${evaluation.difficulty_recommendation === 'step_back' ? 'Adjusting Your Level' : 'Level Up!'}
                                 </div>
                                 <div style="color: #666;">
-                                    You're now at <strong>${newLevel}</strong> level!
+                                    ${evaluation.difficulty_recommendation === 'step_back'
+                                        ? `We're moving you to <strong>${newLevel}</strong> level so you can build a stronger foundation.`
+                                        : `You're now at <strong>${newLevel}</strong> level!`
+                                    }
                                 </div>
                             </div>
                         ` : ''}
@@ -6955,6 +6960,42 @@
                                 ${evaluation.feedback}
                             </div>
                         </div>
+
+                        ${evaluation.strengths && evaluation.strengths.length > 0 ? `
+                            <div style="
+                                background: #f0fff4;
+                                border-left: 4px solid #28A745;
+                                padding: 1.25rem 1.5rem;
+                                border-radius: 0 12px 12px 0;
+                                margin-bottom: 1.25rem;
+                                text-align: left;
+                            ">
+                                <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.75rem;">
+                                    ✅ What You Did Well
+                                </div>
+                                <ul style="margin: 0; padding-left: 1.25rem; color: #444; line-height: 1.8;">
+                                    ${evaluation.strengths.map(s => `<li>${s}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+
+                        ${evaluation.areas_for_improvement && evaluation.areas_for_improvement.length > 0 ? `
+                            <div style="
+                                background: #fff8f0;
+                                border-left: 4px solid #ffc107;
+                                padding: 1.25rem 1.5rem;
+                                border-radius: 0 12px 12px 0;
+                                margin-bottom: 2rem;
+                                text-align: left;
+                            ">
+                                <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.75rem;">
+                                    💡 Next Time, Try This
+                                </div>
+                                <ul style="margin: 0; padding-left: 1.25rem; color: #444; line-height: 1.8;">
+                                    ${evaluation.areas_for_improvement.map(a => `<li>${a}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
                         
                         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
                             <button 
