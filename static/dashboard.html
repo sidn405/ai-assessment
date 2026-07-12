@@ -2548,6 +2548,12 @@
                             <span>📝 <span id="lessonWords" style="font-weight: 600;"></span> words</span>
                         </div>
                     </div>
+
+                    <!-- Story illustration for younger students -->
+                    <div id="lessonImageWrap" class="hidden" style="text-align: center; margin-bottom: 1.5rem;">
+                        <img id="lessonImage" src="" alt="Story illustration"
+                             style="max-width: 100%; max-height: 380px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.12);">
+                    </div>
                     
                     <div id="lessonText" style="font-size: 1.1rem; line-height: 1.8; margin-bottom: 2rem;"></div>
                     
@@ -5965,6 +5971,15 @@
                 }
                 const wordsEl = document.getElementById('lessonWords');
                 if (wordsEl) wordsEl.textContent = wordCount;
+
+                // Story illustration (young learners only — backend decides per grade band)
+                const lessonImageWrap = document.getElementById('lessonImageWrap');
+                if (lesson.image_url && lessonImageWrap) {
+                    document.getElementById('lessonImage').src = lesson.image_url;
+                    lessonImageWrap.classList.remove('hidden');
+                } else if (lessonImageWrap) {
+                    lessonImageWrap.classList.add('hidden');
+                }
                 
                 // Display content
                 const contentEl = document.getElementById('lessonText');
