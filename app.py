@@ -463,6 +463,44 @@ def init_db():
             conn.commit()
             print("✓ activity_log table ready")
 
+            # User essays
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_essays (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    essay_number INTEGER DEFAULT 1,
+                    lesson_count INTEGER,
+                    essay_text TEXT NOT NULL,
+                    word_count INTEGER DEFAULT 0,
+                    comprehension_level VARCHAR(20),
+                    comprehension_score INTEGER DEFAULT 0,
+                    difficulty_recommendation VARCHAR(20),
+                    ai_feedback TEXT,
+                    lesson_ids TEXT,
+                    lesson_topics TEXT,
+                    needs_admin_review BOOLEAN DEFAULT FALSE,
+                    points_awarded INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ user_essays table ready")
+
+            # Difficulty adjustments
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS difficulty_adjustments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    essay_id INTEGER REFERENCES user_essays(id),
+                    previous_level VARCHAR(50),
+                    new_level VARCHAR(50),
+                    reason TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ difficulty_adjustments table ready")
+
             # ================================================================
             # INDEXES
             # ================================================================
@@ -501,6 +539,11 @@ def init_db():
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS rounds_completed INTEGER DEFAULT 0",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS time_seconds INTEGER DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS essay_word_count_requirement INTEGER DEFAULT 25",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_min INTEGER DEFAULT 50",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_max INTEGER DEFAULT 75",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_interest_index INTEGER DEFAULT 0",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
             ]
             for sql in migrations:
                 try:
@@ -8676,26 +8719,17 @@ async def submit_essay(request: Request):
         if points_awarded > 0:
             award_points(user_id, points_awarded, f'Comprehension essay #{essay_number}', 'essay')
         
-        # Handle difficulty adjustment
+        # Handle difficulty adjustment — AI is sole decision maker
         new_level = current_level
         if evaluation['difficulty_recommendation'] == 'advance':
             new_level = get_next_difficulty_level(current_level)
-            update_user_difficulty(user_id, new_level, essay_id, 'Strong comprehension - advancing')
-        elif evaluation['difficulty_recommendation'] == 'support_needed':
-            # Stay at current level but create admin alert
-            create_admin_alert(
-                user_id=user_id,
-                essay_id=essay_id,
-                alert_type='student_needs_help',
-                priority='high',
-                message=f"{user_name} needs additional support - low comprehension on essay #{essay_number}",
-                details=json.dumps({
-                    'comprehension_score': evaluation['comprehension_score'],
-                    'comprehension_level': evaluation['comprehension_level'],
-                    'lesson_count': lesson_count,
-                    'current_level': current_level
-                })
-            )
+            update_user_difficulty(user_id, new_level, essay_id, 'Strong comprehension - AI advancing level')
+        elif evaluation['difficulty_recommendation'] == 'step_back':
+            # AI determined student is struggling — step down to easier content
+            new_level = get_previous_difficulty_level(current_level)
+            if new_level != current_level:
+                update_user_difficulty(user_id, new_level, essay_id, 'AI support: moving to easier passages to rebuild comprehension')
+                print(f"✓ AI stepped back {user_name} from {current_level} to {new_level}")
         
         conn.close()
         
@@ -8707,7 +8741,9 @@ async def submit_essay(request: Request):
                 "comprehension_score": evaluation['comprehension_score'],
                 "difficulty_recommendation": evaluation['difficulty_recommendation'],
                 "feedback": evaluation['ai_feedback'],
-                "needs_admin_review": evaluation['needs_admin_review']
+                "strengths": evaluation.get('strengths', []),
+                "areas_for_improvement": evaluation.get('areas_for_improvement', []),
+                "needs_admin_review": False
             },
             "points_awarded": points_awarded,
             "new_reading_level": new_level,
@@ -8723,7 +8759,11 @@ async def submit_essay(request: Request):
 # ========== AI ESSAY EVALUATION ==========
 
 async def evaluate_essay_with_ai(essay_text, user_name, current_level, lesson_topics, recent_lessons):
-    """Use OpenAI to evaluate comprehension essay"""
+    """
+    Use OpenAI to evaluate comprehension essay.
+    The AI acts as the sole reviewer — no human admin will review essays.
+    Feedback must be complete, specific, and actionable for the student.
+    """
     
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -8731,89 +8771,117 @@ async def evaluate_essay_with_ai(essay_text, user_name, current_level, lesson_to
         # Prepare lesson context
         lesson_context = "\n".join([
             f"Lesson {i+1}: {lesson.get('title', 'Unknown')}\n"
-            f"Content: {lesson.get('content', '')[:500]}...\n"
+            f"Content: {lesson.get('content', '')[:600]}\n"
             for i, lesson in enumerate(recent_lessons)
         ])
-        
-        prompt = f"""You are evaluating a student's comprehension essay to determine their understanding of recent lessons.
+
+        # Get first name for personal feedback tone
+        first_name = user_name.split()[0] if user_name else "Student"
+
+        prompt = f"""You are an expert literacy teacher and the SOLE reviewer of this student's essay.
+No human teacher will see this — your feedback is everything the student receives.
+Make it warm, specific, thorough, and genuinely useful.
 
 STUDENT INFO:
-- Name: {user_name}
+- Name: {first_name}
 - Current Reading Level: {current_level}
-- Recent Lessons Completed: {', '.join(lesson_topics)}
+- Lessons covered: {', '.join(lesson_topics)}
 
-RECENT LESSON CONTENT:
+LESSON CONTENT (what they were supposed to understand):
 {lesson_context}
 
 STUDENT'S ESSAY:
 {essay_text}
 
 EVALUATION CRITERIA:
-1. Does the student demonstrate understanding of key concepts from the lessons?
-2. Can they explain ideas in their own words?
-3. Do they make connections between different lessons?
-4. Is their writing clear and coherent for their level?
-5. Did they provide specific examples or details from the lessons?
+1. Does {first_name} demonstrate understanding of the key ideas from the lessons?
+2. Can they explain concepts in their own words (not just copy phrases)?
+3. Do they connect ideas across lessons?
+4. Is their writing clear and organized for their reading level?
+5. Did they use specific details or examples from the lessons?
 
-Please evaluate this essay and respond with ONLY a JSON object (no markdown, no preamble) in this exact format:
+IMPORTANT RULES FOR YOUR FEEDBACK:
+- Address {first_name} directly by name
+- Start with something genuine they did well — find it even in weak essays
+- Be specific: reference actual sentences or ideas from THEIR essay
+- For areas to improve, give concrete next-step advice, not vague suggestions
+- Keep the tone encouraging and age-appropriate for a {current_level} reader
+- The ai_feedback field should be 3-5 sentences minimum — this is their only feedback
+- Never mention "admin", "teacher review", or that anyone else will read this
+
+Respond with ONLY a JSON object in this exact format:
 {{
     "comprehension_level": "excellent|good|adequate|needs_help",
     "comprehension_score": 0-100,
-    "difficulty_recommendation": "advance|stay|support_needed",
-    "ai_feedback": "Specific, encouraging feedback for the student",
-    "needs_admin_review": true|false,
-    "strengths": ["strength1", "strength2"],
-    "areas_for_improvement": ["area1", "area2"]
+    "difficulty_recommendation": "advance|stay|step_back",
+    "ai_feedback": "Your complete, detailed, personalized feedback for {first_name}. Must be 3-5 sentences minimum.",
+    "strengths": ["specific strength from their essay", "another specific strength"],
+    "areas_for_improvement": ["specific actionable suggestion", "another concrete tip"]
 }}
 
-SCORING GUIDE:
-- 90-100: Excellent - clear mastery, ready to advance
-- 75-89: Good - solid understanding, can stay at current level
-- 60-74: Adequate - basic understanding, needs practice at current level
-- Below 60: Needs help - requires additional support
+SCORING AND RECOMMENDATION GUIDE:
+- 90-100 → excellent → advance (clear mastery, ready for harder passages)
+- 75-89  → good     → stay    (solid understanding, keep building at this level)
+- 60-74  → adequate → stay    (basic grasp, needs more practice before advancing)
+- Below 60 → needs_help → step_back (struggling — move to easier passages and rebuild)
 
-Be encouraging but honest. Focus on what they DID understand, not just what they missed."""
+NOTE: "step_back" means the AI will automatically move them to an easier level.
+Do NOT recommend step_back unless the score is genuinely below 60."""
 
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert literacy educator evaluating student comprehension. Always respond with valid JSON only."},
+                {"role": "system", "content": "You are an expert literacy educator. You are the sole reviewer of student essays — no human teacher will review these. Give complete, warm, specific feedback. Always respond with valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
+            temperature=0.4,
             response_format={"type": "json_object"}
         )
         
         content = response.choices[0].message.content
-        
-        # Parse AI response
         evaluation = json.loads(content)
         
-        # Ensure all required fields
+        # Normalize fields
         evaluation.setdefault('comprehension_level', 'adequate')
         evaluation.setdefault('comprehension_score', 70)
         evaluation.setdefault('difficulty_recommendation', 'stay')
-        evaluation.setdefault('ai_feedback', 'Good effort! Keep practicing.')
-        evaluation.setdefault('needs_admin_review', False)
-        
-        # Auto-flag for admin review if score is low
-        if evaluation['comprehension_score'] < 60:
-            evaluation['needs_admin_review'] = True
-            evaluation['difficulty_recommendation'] = 'support_needed'
-        
-        print(f"✓ AI Evaluation: {evaluation['comprehension_level']} ({evaluation['comprehension_score']}/100)")
+        evaluation.setdefault('ai_feedback', f'Good effort, {first_name}! Keep reading and writing every day.')
+        evaluation.setdefault('strengths', [])
+        evaluation.setdefault('areas_for_improvement', [])
+
+        # Always False — no human admin reviews
+        evaluation['needs_admin_review'] = False
+
+        # Enforce consistency between score and recommendation
+        score = evaluation['comprehension_score']
+        if score >= 90 and evaluation['difficulty_recommendation'] not in ('advance', 'stay'):
+            evaluation['difficulty_recommendation'] = 'advance'
+        elif score < 60 and evaluation['difficulty_recommendation'] != 'step_back':
+            evaluation['difficulty_recommendation'] = 'step_back'
+
+        print(f"✓ AI Evaluation: {evaluation['comprehension_level']} ({score}/100) → {evaluation['difficulty_recommendation']}")
         
         return evaluation
         
     except Exception as e:
         print(f"Error in AI evaluation: {e}")
-        # Fallback evaluation
+        import traceback
+        traceback.print_exc()
+        # Fallback — still useful, still student-facing
+        first_name = user_name.split()[0] if user_name else "there"
         return {
             'comprehension_level': 'adequate',
             'comprehension_score': 70,
             'difficulty_recommendation': 'stay',
-            'ai_feedback': 'Thank you for your essay. Your teacher will review it soon.',
-            'needs_admin_review': True
+            'ai_feedback': (
+                f"Thank you for your essay, {first_name}! "
+                f"You showed effort in writing about what you learned. "
+                f"Keep reading the passages carefully and try to use details from the story in your next essay — "
+                f"that's the best way to show what you understand."
+            ),
+            'strengths': ['Completed the essay', 'Made an effort to respond'],
+            'areas_for_improvement': ['Include more specific details from the lessons', 'Try to explain ideas in your own words'],
+            'needs_admin_review': False
         }
 
 # ========== HELPER FUNCTIONS ==========
@@ -8837,6 +8905,15 @@ def get_next_difficulty_level(current_level):
         'advanced': 'advanced'  # Stay at advanced
     }
     return level_progression.get(current_level, current_level)
+
+def get_previous_difficulty_level(current_level):
+    """Get the previous (easier) difficulty level for AI step-back support"""
+    level_regression = {
+        'advanced': 'intermediate',
+        'intermediate': 'beginner',
+        'beginner': 'beginner'  # Stay at beginner — can't go lower
+    }
+    return level_regression.get(current_level, current_level)
 
 def update_user_difficulty(user_id, new_level, essay_id, reason):
     """Update user's reading level and increase LESSON word count by 100"""
