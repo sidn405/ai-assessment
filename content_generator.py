@@ -535,20 +535,71 @@ class ContentGenerator:
                 {"word": "educational", "definition": "Related to learning and teaching"}
             ],
             "vocabulary_count": 3
-        }
-        
+        }     
             
-    def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4, allow_fill_blank: bool = True):
+    def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4, allow_fill_blank: bool = True, vocabulary_words: list = None):
         """
-        Generate comprehension questions with optional fill-in-blank
+        Generate comprehension questions with optional fill-in-blank and
+        always includes one vocabulary question when vocabulary_words are provided.
         
         Args:
             passage_text: The passage content
             passage_title: Title of the passage  
             num_questions: Number of questions (default 4)
             allow_fill_blank: If True, mix MC and fill-in-blank. If False, MC only.
+            vocabulary_words: List of vocab dicts with 'word' and 'definition' keys.
+                              When provided, one question will always be a vocab question.
         """
         
+        # Pick one vocab word for a dedicated vocabulary question.
+        # We generate num_questions - 1 comprehension questions from the AI
+        # then append the vocab question at the end so it's always present.
+        vocab_question = None
+        comprehension_count = num_questions
+
+        if vocabulary_words and len(vocabulary_words) > 0:
+            import random
+            # Pick a word — prefer words with clean single-word definitions
+            candidates = [v for v in vocabulary_words if v.get('word') and v.get('definition')]
+            if candidates:
+                vocab_entry = random.choice(candidates)
+                vocab_word = vocab_entry['word'].strip()
+                correct_def = vocab_entry['definition'].strip()
+
+                # Build 3 distractor definitions from other vocab words in the list
+                other_defs = [
+                    v['definition'].strip() for v in candidates
+                    if v['word'] != vocab_word and v.get('definition')
+                ]
+                random.shuffle(other_defs)
+                distractors = other_defs[:3]
+
+                # Pad with generic distractors if not enough vocab words
+                generic = [
+                    "A type of weather condition",
+                    "Something you eat for breakfast",
+                    "A place where people swim",
+                    "A very loud sound",
+                    "Moving very slowly",
+                ]
+                while len(distractors) < 3:
+                    distractors.append(generic[len(distractors)])
+
+                options = [correct_def] + distractors
+                random.shuffle(options)
+
+                vocab_question = {
+                    "question": f'What does the word "{vocab_word}" mean in the story?',
+                    "type": "multiple_choice",
+                    "options": options,
+                    "correct_answer": correct_def,
+                    "explanation": f'"{vocab_word}" means: {correct_def}',
+                    "difficulty": 1,
+                    "is_vocabulary": True
+                }
+                # Generate one fewer from AI so total stays at num_questions
+                comprehension_count = num_questions - 1
+
         if allow_fill_blank:
             # Mix of question types for lessons
             type_instruction = """
@@ -612,7 +663,7 @@ class ContentGenerator:
     PASSAGE:
     {passage_text}
     
-    {type_instruction.format(num_questions=num_questions)}
+    {type_instruction.format(num_questions=comprehension_count)}
     
     Return as JSON array:
     {json_example}
@@ -622,6 +673,7 @@ class ContentGenerator:
     - Cover different aspects of the passage
     - Make questions age-appropriate
     - Test different comprehension skills
+    - Do NOT include vocabulary definition questions — those are handled separately
     """
     
         try:
@@ -646,7 +698,7 @@ class ContentGenerator:
                 
                 # Validate and normalize questions
                 validated = []
-                for q in questions[:num_questions]:
+                for q in questions[:comprehension_count]:
                     # If allow_fill_blank=False, force all to multiple choice
                     if not allow_fill_blank:
                         q['type'] = 'multiple_choice'
@@ -660,26 +712,26 @@ class ContentGenerator:
                     
                     # Ensure required fields exist
                     if q['type'] == 'fill_in_blank':
-                        # Ensure accept_answers exists
                         if 'accept_answers' not in q:
                             base = q['correct_answer'].lower().strip()
                             q['accept_answers'] = [base, f"the {base}", f"a {base}"]
-                        # Remove options field if present
                         q.pop('options', None)
                     else:
-                        # Multiple choice - ensure options exist
                         if 'options' not in q or len(q['options']) < 4:
                             q['options'] = [
                                 q.get('correct_answer', 'Option A'),
-                                "Option B",
-                                "Option C", 
-                                "Option D"
+                                "Option B", "Option C", "Option D"
                             ]
                     
                     validated.append(q)
-                
+
+                # Append vocabulary question as the last question
+                if vocab_question:
+                    validated.append(vocab_question)
+
                 question_types = "mixed" if allow_fill_blank else "MC only"
-                print(f"✓ Generated {len(validated)} questions ({question_types})")
+                vocab_note = " + 1 vocab" if vocab_question else ""
+                print(f"✓ Generated {len(validated)} questions ({question_types}{vocab_note})")
                 return validated
                 
             else:
@@ -690,10 +742,10 @@ class ContentGenerator:
             import traceback
             traceback.print_exc()
             
-            # Fallback questions based on allow_fill_blank
+            # Fallback questions
+            fallback = []
             if allow_fill_blank:
-                # Mix of MC and fill-in-blank
-                return [
+                fallback = [
                     {
                         "question": "What is the main idea of this passage?",
                         "type": "multiple_choice",
@@ -717,19 +769,10 @@ class ContentGenerator:
                         "correct_answer": "A problem to solve",
                         "explanation": "The passage describes a challenge.",
                         "difficulty": 2
-                    },
-                    {
-                        "question": "The main character wanted to __________.",
-                        "type": "fill_in_blank",
-                        "correct_answer": "achieve a goal",
-                        "accept_answers": ["achieve a goal", "reach a goal", "accomplish something", "succeed"],
-                        "explanation": "The passage shows the character working toward something.",
-                        "difficulty": 2
                     }
-                ][:num_questions]
+                ]
             else:
-                # All multiple choice
-                return [
+                fallback = [
                     {
                         "question": "What is the main idea of this passage?",
                         "type": "multiple_choice",
@@ -753,16 +796,14 @@ class ContentGenerator:
                         "correct_answer": "To accomplish a goal",
                         "explanation": "The passage shows the character working toward something.",
                         "difficulty": 2
-                    },
-                    {
-                        "question": "What was the result of the character's efforts?",
-                        "type": "multiple_choice",
-                        "options": ["They made a positive impact", "They gave up completely", "Nothing changed", "They moved away"],
-                        "correct_answer": "They made a positive impact",
-                        "explanation": "The passage shows positive outcomes.",
-                        "difficulty": 2
                     }
-                ][:num_questions]
+                ]
+
+            # Always append vocab question if available, even in fallback
+            if vocab_question:
+                fallback.append(vocab_question)
+
+            return fallback[:num_questions]
         
     
     def _extract_topics(self, main_topic, interests):
