@@ -2225,6 +2225,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('wallet', event); return false;">
+                        <span>💰</span> My Wallet
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="#" class="nav-link" onclick="takeBreak(); return false;">
                         <span>☕</span> Take A Break
                     </a>
@@ -2993,6 +2998,80 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Wallet Section -->
+            <div id="walletSection" class="hidden">
+                <div class="header">
+                    <h1>💰 My Wallet</h1>
+                    <p>Your earnings from reading — redeem for a Visa prepaid gift card!</p>
+                </div>
+
+                <!-- Balance Card -->
+                <div class="card" style="text-align: center; margin-bottom: 1.5rem;">
+                    <div style="font-size: 3.5rem; font-weight: 800; color: var(--navy-primary);" id="walletBalance">$0.00</div>
+                    <div style="color: var(--text-gray); font-size: 1rem; margin-top: 0.25rem;">Available Balance</div>
+                    <div style="display: flex; justify-content: center; gap: 3rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.4rem; font-weight: 700; color: #28A745;" id="walletTotalEarned">$0.00</div>
+                            <div style="font-size: 0.85rem; color: var(--text-gray);">Total Earned</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.4rem; font-weight: 700; color: #667eea;" id="walletTotalRedeemed">$0.00</div>
+                            <div style="font-size: 0.85rem; color: var(--text-gray);">Total Redeemed</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-gray);">
+                        500 points = $1.00 &nbsp;·&nbsp; Minimum redemption: $10.00
+                    </div>
+                </div>
+
+                <!-- Redeem Card -->
+                <div class="card" id="redeemCard" style="margin-bottom: 1.5rem;">
+                    <h2 style="margin-bottom: 1rem;">🎁 Redeem for Visa Prepaid Gift Card</h2>
+                    <p style="color: var(--text-gray); margin-bottom: 1.5rem;">
+                        Your gift card will be sent to your email. It works anywhere Visa is accepted!
+                    </p>
+
+                    <div id="redeemNotEnough" class="hidden" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; color: #856404;">
+                        💡 You need at least $10.00 to redeem. Keep earning points!
+                    </div>
+
+                    <div id="redeemForm">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Amount to Redeem</label>
+                            <select id="redeemAmount" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem;">
+                                <option value="1000">$10.00 (5,000 points)</option>
+                                <option value="2500">$25.00 (12,500 points)</option>
+                                <option value="5000">$50.00 (25,000 points)</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Send to Email</label>
+                            <input type="email" id="redeemEmail" placeholder="your@email.com"
+                                   style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; box-sizing: border-box;">
+                            <div style="font-size: 0.8rem; color: var(--text-gray); margin-top: 0.35rem;">Leave blank to use your account email</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="redeemWallet()" id="redeemBtn"
+                                style="width: 100%; padding: 1rem; font-size: 1.1rem; font-weight: 700;">
+                            Redeem Gift Card 🎁
+                        </button>
+                    </div>
+
+                    <div id="redeemSuccess" class="hidden" style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 1.5rem; text-align: center; color: #155724;">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+                        <div style="font-weight: 700; font-size: 1.1rem;" id="redeemSuccessMsg">Gift card sent!</div>
+                    </div>
+                </div>
+
+                <!-- Transaction History -->
+                <div class="card">
+                    <h2 style="margin-bottom: 1rem;">📋 Transaction History</h2>
+                    <div id="walletTransactions">
+                        <p style="color: var(--text-gray);">Loading transactions...</p>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
     <footer class="dashboard-footer">
@@ -4572,7 +4651,7 @@
             if (event) event.preventDefault();
 
             // Hide all sections
-            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'wordgamesSection', 'ebooksSection', 'messagesSection', 'progressSection'];
+            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'wordgamesSection', 'ebooksSection', 'messagesSection', 'progressSection', 'walletSection'];
             sections.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -4625,6 +4704,8 @@
             } else if (sectionName === 'messages') {
                 // Initialize messaging when Messages section is shown
                 initializeStudentMessaging();
+            } else if (sectionName === 'wallet') {
+                loadWallet();
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -6440,6 +6521,117 @@
             console.log('=== submitLessonAnswers END ===');
 
         console.log('✓ Comprehensive essay system frontend loaded');
+
+        // ============================================================
+        // WALLET SYSTEM
+        // ============================================================
+        async function loadWallet() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            try {
+                const resp = await fetch(`/api/wallet?token=${encodeURIComponent(token)}`);
+                const data = await resp.json();
+                if (!data.success) return;
+
+                const w = data.wallet;
+
+                // Balance display
+                document.getElementById('walletBalance').textContent = `$${(w.balance_cents / 100).toFixed(2)}`;
+                document.getElementById('walletTotalEarned').textContent = `$${(w.total_earned_cents / 100).toFixed(2)}`;
+                document.getElementById('walletTotalRedeemed').textContent = `$${(w.total_redeemed_cents / 100).toFixed(2)}`;
+
+                // Show/hide redeem form based on balance
+                if (w.can_redeem) {
+                    document.getElementById('redeemNotEnough').classList.add('hidden');
+                    document.getElementById('redeemForm').classList.remove('hidden');
+                } else {
+                    document.getElementById('redeemNotEnough').classList.remove('hidden');
+                    document.getElementById('redeemForm').classList.add('hidden');
+                }
+
+                // Pre-fill email
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                if (user.email) document.getElementById('redeemEmail').placeholder = user.email;
+
+                // Filter redeem amounts to what student can afford
+                const select = document.getElementById('redeemAmount');
+                Array.from(select.options).forEach(opt => {
+                    opt.disabled = parseInt(opt.value) > w.balance_cents;
+                });
+
+                // Transaction history
+                const txContainer = document.getElementById('walletTransactions');
+                if (data.transactions.length === 0) {
+                    txContainer.innerHTML = '<p style="color: var(--text-gray);">No transactions yet. Start earning points!</p>';
+                } else {
+                    txContainer.innerHTML = data.transactions.map(tx => {
+                        const isCredit = tx.type !== 'redemption';
+                        const sign = isCredit ? '+' : '-';
+                        const color = isCredit ? '#28A745' : '#dc3545';
+                        const amount = Math.abs(tx.amount_cents) / 100;
+                        const date = new Date(tx.created_at).toLocaleDateString();
+                        const label = tx.type === 'admin_credit' ? '💳 Admin Credit'
+                                    : tx.type === 'redemption' ? '🎁 Gift Card Redeemed'
+                                    : `⭐ ${tx.description || 'Points earned'}`;
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center;
+                                        padding: 0.85rem 0; border-bottom: 1px solid #f0f0f0;">
+                                <div>
+                                    <div style="font-weight: 600;">${label}</div>
+                                    <div style="font-size: 0.82rem; color: var(--text-gray);">${date}</div>
+                                </div>
+                                <div style="font-weight: 700; font-size: 1.1rem; color: ${color};">
+                                    ${sign}$${amount.toFixed(2)}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+            } catch (err) {
+                console.error('Wallet load error:', err);
+            }
+        }
+
+        async function redeemWallet() {
+            const token = localStorage.getItem('token');
+            const amountCents = parseInt(document.getElementById('redeemAmount').value);
+            const email = document.getElementById('redeemEmail').value.trim();
+
+            const btn = document.getElementById('redeemBtn');
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+
+            try {
+                const resp = await fetch('/api/wallet/redeem', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token, amount_cents: amountCents, recipient_email: email})
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    document.getElementById('redeemForm').classList.add('hidden');
+                    document.getElementById('redeemSuccess').classList.remove('hidden');
+                    document.getElementById('redeemSuccessMsg').textContent = data.message;
+                    if (data.test_mode) {
+                        document.getElementById('redeemSuccessMsg').textContent += ' (Test Mode)';
+                    }
+                    // Refresh wallet balance
+                    await loadWallet();
+                } else {
+                    alert(data.detail || 'Redemption failed. Please try again.');
+                    btn.disabled = false;
+                    btn.textContent = 'Redeem Gift Card 🎁';
+                }
+            } catch (err) {
+                console.error('Redemption error:', err);
+                alert('Something went wrong. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Redeem Gift Card 🎁';
+            }
+        }
         }
 
         function displayLessonResults(score, correct, total) {
