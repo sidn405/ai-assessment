@@ -654,6 +654,10 @@ def init_db():
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
                 "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS activity_details TEXT",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS games_played INTEGER DEFAULT 0",
+                # Ensure unique constraints exist for ON CONFLICT upserts
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_streaks_user_id ON user_streaks(user_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_stats_user_id ON user_stats(user_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_points_user_id ON user_points(user_id)",
             ]
             for sql in migrations:
                 try:
@@ -1480,29 +1484,34 @@ async def reset_password(request: dict):
 
 def initialize_new_user(user_id):
     """
-    Initialize all required database records for a new user
-    Prevents HTTP 500 errors when new users access the dashboard
+    Initialize all required database records for a new user.
+    Each statement is wrapped individually so one failure never blocks the rest.
     """
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         print(f"Initializing user data for user_id: {user_id}")
-        
-        # Initialize user_streaks
-        if USE_POSTGRES:
-            cursor.execute("""
-                INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
-                VALUES (%s, 0, 0, CURRENT_DATE)
-                ON CONFLICT (user_id) DO NOTHING
-            """, (user_id,))
-        else:
-            cursor.execute("""
-                INSERT OR IGNORE INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
-                VALUES (?, 0, 0, date('now'))
-            """, (user_id,))
-        
-        # Check if you have user_stats table - if so, initialize it
+
+        # user_streaks
+        try:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
+                    VALUES (%s, 0, 0, CURRENT_DATE)
+                    ON CONFLICT (user_id) DO NOTHING
+                """, (user_id,))
+            else:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
+                    VALUES (?, 0, 0, date('now'))
+                """, (user_id,))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"⚠️ user_streaks init skipped: {e}")
+
+        # user_stats
         try:
             if USE_POSTGRES:
                 cursor.execute("""
@@ -1515,12 +1524,49 @@ def initialize_new_user(user_id):
                     INSERT OR IGNORE INTO user_stats (user_id, total_lessons, total_points, average_score)
                     VALUES (?, 0, 0, 0)
                 """, (user_id,))
-        except:
-            pass  # Table might not exist, that's OK
-        
-        conn.commit()
-        print(f"✓ User data initialized successfully for user_id: {user_id}")
-        
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"⚠️ user_stats init skipped: {e}")
+
+        # user_points
+        try:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    INSERT INTO user_points (user_id, points, total_earned, level)
+                    VALUES (%s, 0, 0, 1)
+                    ON CONFLICT (user_id) DO NOTHING
+                """, (user_id,))
+            else:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO user_points (user_id, points, total_earned, level)
+                    VALUES (?, 0, 0, 1)
+                """, (user_id,))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"⚠️ user_points init skipped: {e}")
+
+        # student_wallets
+        try:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    INSERT INTO student_wallets (user_id, balance_cents, total_earned_cents)
+                    VALUES (%s, 0, 0)
+                    ON CONFLICT (user_id) DO NOTHING
+                """, (user_id,))
+            else:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO student_wallets (user_id, balance_cents, total_earned_cents)
+                    VALUES (?, 0, 0)
+                """, (user_id,))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"⚠️ student_wallets init skipped: {e}")
+
+        print(f"✓ User data initialized for user_id: {user_id}")
+
     except Exception as e:
         print(f"Error initializing user {user_id}: {e}")
         import traceback
