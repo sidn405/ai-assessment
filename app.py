@@ -587,8 +587,10 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS user_badges (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER REFERENCES users(id),
-                    badge_id VARCHAR(50) NOT NULL,
+                    badge_type VARCHAR(50) NOT NULL,
                     badge_name VARCHAR(100),
+                    description TEXT,
+                    icon VARCHAR(10),
                     earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -608,6 +610,24 @@ def init_db():
             """)
             conn.commit()
             print("✓ user_stats table ready")
+
+            # Weekly goals
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS weekly_goals (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    week_start DATE NOT NULL,
+                    lessons_goal INTEGER DEFAULT 5,
+                    lessons_completed INTEGER DEFAULT 0,
+                    points_goal INTEGER DEFAULT 100,
+                    points_earned INTEGER DEFAULT 0,
+                    achieved BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (user_id, week_start)
+                )
+            """)
+            conn.commit()
+            print("✓ weekly_goals table ready")
 
             # ================================================================
             # INDEXES
@@ -658,6 +678,9 @@ def init_db():
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_streaks_user_id ON user_streaks(user_id)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_stats_user_id ON user_stats(user_id)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_points_user_id ON user_points(user_id)",
+                "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS badge_type VARCHAR(50)",
+                "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS description TEXT",
+                "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS icon VARCHAR(10)",
             ]
             for sql in migrations:
                 try:
@@ -988,8 +1011,10 @@ def init_db():
             CREATE TABLE IF NOT EXISTS user_badges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER REFERENCES users(id),
-                badge_id TEXT NOT NULL,
+                badge_type TEXT NOT NULL,
                 badge_name TEXT,
+                description TEXT,
+                icon TEXT,
                 earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -1002,6 +1027,21 @@ def init_db():
                 total_points INTEGER DEFAULT 0,
                 average_score REAL DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS weekly_goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                week_start DATE NOT NULL,
+                lessons_goal INTEGER DEFAULT 5,
+                lessons_completed INTEGER DEFAULT 0,
+                points_goal INTEGER DEFAULT 100,
+                points_earned INTEGER DEFAULT 0,
+                achieved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, week_start)
             )
         """)
 
