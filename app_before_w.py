@@ -47,8 +47,6 @@ app.add_middleware(
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "achieve-365-reading-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-TREMENDOUS_API_KEY = os.getenv("TREMENDOUS_API_KEY", "")  # Set in Railway Variables
-TREMENDOUS_TEST_MODE = os.getenv("TREMENDOUS_TEST_MODE", "true").lower() == "true"  # true = sandbox
 openai.api_key = OPENAI_API_KEY
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -503,132 +501,6 @@ def init_db():
             conn.commit()
             print("✓ difficulty_adjustments table ready")
 
-            # Student wallet — stores dollar balance in cents to avoid float precision issues
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS student_wallets (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id) UNIQUE,
-                    balance_cents INTEGER DEFAULT 0,
-                    total_earned_cents INTEGER DEFAULT 0,
-                    total_redeemed_cents INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            print("✓ student_wallets table ready")
-
-            # Wallet transactions — full audit trail of every credit and debit
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS wallet_transactions (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id),
-                    type VARCHAR(20) NOT NULL,
-                    amount_cents INTEGER NOT NULL,
-                    points_converted INTEGER DEFAULT 0,
-                    description TEXT,
-                    added_by INTEGER REFERENCES users(id),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            print("✓ wallet_transactions table ready")
-
-            # Gift card redemptions
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS wallet_redemptions (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id),
-                    amount_cents INTEGER NOT NULL,
-                    status VARCHAR(20) DEFAULT 'pending',
-                    gift_card_type VARCHAR(50) DEFAULT 'visa_prepaid',
-                    tremendous_order_id VARCHAR(255),
-                    tremendous_reward_id VARCHAR(255),
-                    recipient_email VARCHAR(255),
-                    fulfilled_at TIMESTAMP,
-                    error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            print("✓ wallet_redemptions table ready")
-
-            # User points (gamification)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS user_points (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id) UNIQUE,
-                    points INTEGER DEFAULT 0,
-                    total_earned INTEGER DEFAULT 0,
-                    level INTEGER DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            print("✓ user_points table ready")
-
-            # Points history
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS points_history (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id),
-                    points INTEGER NOT NULL,
-                    reason TEXT,
-                    activity_type VARCHAR(50),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            print("✓ points_history table ready")
-
-            # User badges
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS user_badges (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id),
-                    badge_type VARCHAR(50) NOT NULL,
-                    badge_name VARCHAR(100),
-                    description TEXT,
-                    icon VARCHAR(10),
-                    earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            print("✓ user_badges table ready")
-
-            # User stats
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS user_stats (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id) UNIQUE,
-                    total_lessons INTEGER DEFAULT 0,
-                    total_points INTEGER DEFAULT 0,
-                    average_score REAL DEFAULT 0,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            print("✓ user_stats table ready")
-
-            # Weekly goals
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS weekly_goals (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id),
-                    week_start DATE NOT NULL,
-                    lessons_goal INTEGER DEFAULT 5,
-                    lessons_completed INTEGER DEFAULT 0,
-                    points_goal INTEGER DEFAULT 100,
-                    points_earned INTEGER DEFAULT 0,
-                    achieved BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE (user_id, week_start)
-                )
-            """)
-            conn.commit()
-            print("✓ weekly_goals table ready")
-
             # ================================================================
             # INDEXES
             # ================================================================
@@ -672,17 +544,6 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_max INTEGER DEFAULT 75",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_interest_index INTEGER DEFAULT 0",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
-                "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS activity_details TEXT",
-                "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS games_played INTEGER DEFAULT 0",
-                # Ensure unique constraints exist for ON CONFLICT upserts
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_streaks_user_id ON user_streaks(user_id)",
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_stats_user_id ON user_stats(user_id)",
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_points_user_id ON user_points(user_id)",
-                "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS badge_type VARCHAR(50)",
-                "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS description TEXT",
-                "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS icon VARCHAR(10)",
-                "ALTER TABLE user_badges ALTER COLUMN badge_id DROP NOT NULL",
-                "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE",
             ]
             for sql in migrations:
                 try:
@@ -945,108 +806,6 @@ def init_db():
             )
         """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS student_wallets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE REFERENCES users(id),
-                balance_cents INTEGER DEFAULT 0,
-                total_earned_cents INTEGER DEFAULT 0,
-                total_redeemed_cents INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS wallet_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                type TEXT NOT NULL,
-                amount_cents INTEGER NOT NULL,
-                points_converted INTEGER DEFAULT 0,
-                description TEXT,
-                added_by INTEGER REFERENCES users(id),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS wallet_redemptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                amount_cents INTEGER NOT NULL,
-                status TEXT DEFAULT 'pending',
-                gift_card_type TEXT DEFAULT 'visa_prepaid',
-                tremendous_order_id TEXT,
-                tremendous_reward_id TEXT,
-                recipient_email TEXT,
-                fulfilled_at TIMESTAMP,
-                error_message TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_points (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE REFERENCES users(id),
-                points INTEGER DEFAULT 0,
-                total_earned INTEGER DEFAULT 0,
-                level INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS points_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                points INTEGER NOT NULL,
-                reason TEXT,
-                activity_type TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_badges (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                badge_type TEXT NOT NULL,
-                badge_name TEXT,
-                description TEXT,
-                icon TEXT,
-                earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE REFERENCES users(id),
-                total_lessons INTEGER DEFAULT 0,
-                total_points INTEGER DEFAULT 0,
-                average_score REAL DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS weekly_goals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                week_start DATE NOT NULL,
-                lessons_goal INTEGER DEFAULT 5,
-                lessons_completed INTEGER DEFAULT 0,
-                points_goal INTEGER DEFAULT 100,
-                points_earned INTEGER DEFAULT 0,
-                achieved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (user_id, week_start)
-            )
-        """)
-
         # SQLite column migrations — ADD any columns missing from older local DBs
         sqlite_migrations = [
             "ALTER TABLE users ADD COLUMN essay_word_count_requirement INTEGER DEFAULT 25",
@@ -1058,8 +817,6 @@ def init_db():
             "ALTER TABLE user_sessions ADD COLUMN session_end TIMESTAMP",
             "ALTER TABLE user_sessions ADD COLUMN status TEXT DEFAULT 'active'",
             "ALTER TABLE user_sessions ADD COLUMN last_activity TIMESTAMP",
-            "ALTER TABLE activity_log ADD COLUMN activity_details TEXT",
-            "ALTER TABLE game_completions ADD COLUMN games_played INTEGER DEFAULT 0",
             "ALTER TABLE passages ADD COLUMN image_url TEXT",
             "ALTER TABLE messages ADD COLUMN recipient_type TEXT DEFAULT 'student'",
             "ALTER TABLE game_completions ADD COLUMN rounds_completed INTEGER DEFAULT 0",
@@ -1526,34 +1283,29 @@ async def reset_password(request: dict):
 
 def initialize_new_user(user_id):
     """
-    Initialize all required database records for a new user.
-    Each statement is wrapped individually so one failure never blocks the rest.
+    Initialize all required database records for a new user
+    Prevents HTTP 500 errors when new users access the dashboard
     """
     conn = get_db()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor()
     
     try:
         print(f"Initializing user data for user_id: {user_id}")
-
-        # user_streaks
-        try:
-            if USE_POSTGRES:
-                cursor.execute("""
-                    INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
-                    VALUES (%s, 0, 0, CURRENT_DATE)
-                    ON CONFLICT (user_id) DO NOTHING
-                """, (user_id,))
-            else:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
-                    VALUES (?, 0, 0, date('now'))
-                """, (user_id,))
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            print(f"⚠️ user_streaks init skipped: {e}")
-
-        # user_stats
+        
+        # Initialize user_streaks
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
+                VALUES (%s, 0, 0, CURRENT_DATE)
+                ON CONFLICT (user_id) DO NOTHING
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                INSERT OR IGNORE INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date)
+                VALUES (?, 0, 0, date('now'))
+            """, (user_id,))
+        
+        # Check if you have user_stats table - if so, initialize it
         try:
             if USE_POSTGRES:
                 cursor.execute("""
@@ -1566,49 +1318,12 @@ def initialize_new_user(user_id):
                     INSERT OR IGNORE INTO user_stats (user_id, total_lessons, total_points, average_score)
                     VALUES (?, 0, 0, 0)
                 """, (user_id,))
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            print(f"⚠️ user_stats init skipped: {e}")
-
-        # user_points
-        try:
-            if USE_POSTGRES:
-                cursor.execute("""
-                    INSERT INTO user_points (user_id, points, total_earned, level)
-                    VALUES (%s, 0, 0, 1)
-                    ON CONFLICT (user_id) DO NOTHING
-                """, (user_id,))
-            else:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO user_points (user_id, points, total_earned, level)
-                    VALUES (?, 0, 0, 1)
-                """, (user_id,))
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            print(f"⚠️ user_points init skipped: {e}")
-
-        # student_wallets
-        try:
-            if USE_POSTGRES:
-                cursor.execute("""
-                    INSERT INTO student_wallets (user_id, balance_cents, total_earned_cents)
-                    VALUES (%s, 0, 0)
-                    ON CONFLICT (user_id) DO NOTHING
-                """, (user_id,))
-            else:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO student_wallets (user_id, balance_cents, total_earned_cents)
-                    VALUES (?, 0, 0)
-                """, (user_id,))
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            print(f"⚠️ student_wallets init skipped: {e}")
-
-        print(f"✓ User data initialized for user_id: {user_id}")
-
+        except:
+            pass  # Table might not exist, that's OK
+        
+        conn.commit()
+        print(f"✓ User data initialized successfully for user_id: {user_id}")
+        
     except Exception as e:
         print(f"Error initializing user {user_id}: {e}")
         import traceback
@@ -4784,16 +4499,10 @@ def award_points(user_id, points, reason, activity_type='general'):
             else:
                 cursor.execute("UPDATE user_points SET level = ? WHERE user_id = ?", (new_level, user_id))
             conn.commit()
-
-        # Credit the wallet — every point award automatically converts to cents
-        try:
-            credit_wallet_from_points(user_id, points, reason, conn, cursor)
-        except Exception as wallet_err:
-            print(f"⚠️ Wallet credit failed (non-fatal): {wallet_err}")
-
-        conn.close()
-        if new_level > current_level:
+            conn.close()
             return {'points_awarded': points, 'level_up': True, 'new_level': new_level}
+        
+        conn.close()
         return {'points_awarded': points, 'level_up': False}
         
     except Exception as e:
@@ -6908,479 +6617,6 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 # ========================================
-# ========================================
-# WALLET ENDPOINTS
-# ========================================
-
-POINTS_PER_DOLLAR = 500  # 500 points = $1
-MIN_REDEMPTION_CENTS = 1000  # $10 minimum redemption
-
-
-def get_or_create_wallet(user_id, cursor, conn):
-    """Get or create a wallet for a user."""
-    if USE_POSTGRES:
-        cursor.execute(
-            """INSERT INTO student_wallets (user_id, balance_cents, total_earned_cents)
-               VALUES (%s, 0, 0)
-               ON CONFLICT (user_id) DO NOTHING""",
-            (user_id,)
-        )
-        conn.commit()
-        cursor.execute(
-            "SELECT balance_cents, total_earned_cents, total_redeemed_cents FROM student_wallets WHERE user_id = %s",
-            (user_id,)
-        )
-    else:
-        cursor.execute("SELECT id FROM student_wallets WHERE user_id = ?", (user_id,))
-        if not cursor.fetchone():
-            cursor.execute(
-                "INSERT INTO student_wallets (user_id, balance_cents, total_earned_cents) VALUES (?, 0, 0)",
-                (user_id,)
-            )
-            conn.commit()
-        cursor.execute(
-            "SELECT balance_cents, total_earned_cents, total_redeemed_cents FROM student_wallets WHERE user_id = ?",
-            (user_id,)
-        )
-    return cursor.fetchone()
-
-
-def credit_wallet_from_points(user_id, points, reason, conn, cursor):
-    """
-    Convert points to cents and credit the wallet.
-    Called automatically by award_points — students never do this manually.
-    500 points = $1 = 100 cents → 1 point = 0.2 cents
-    """
-    cents = (points * 100) // POINTS_PER_DOLLAR
-    if cents <= 0:
-        return 0
-
-    get_or_create_wallet(user_id, cursor, conn)
-
-    if USE_POSTGRES:
-        cursor.execute(
-            """UPDATE student_wallets
-               SET balance_cents = balance_cents + %s,
-                   total_earned_cents = total_earned_cents + %s,
-                   updated_at = NOW()
-               WHERE user_id = %s""",
-            (cents, cents, user_id)
-        )
-        cursor.execute(
-            """INSERT INTO wallet_transactions (user_id, type, amount_cents, points_converted, description)
-               VALUES (%s, 'credit', %s, %s, %s)""",
-            (user_id, cents, points, reason)
-        )
-    else:
-        cursor.execute(
-            """UPDATE student_wallets
-               SET balance_cents = balance_cents + ?,
-                   total_earned_cents = total_earned_cents + ?,
-                   updated_at = datetime('now')
-               WHERE user_id = ?""",
-            (cents, cents, user_id)
-        )
-        cursor.execute(
-            """INSERT INTO wallet_transactions (user_id, type, amount_cents, points_converted, description)
-               VALUES (?, 'credit', ?, ?, ?)""",
-            (user_id, cents, points, reason)
-        )
-    conn.commit()
-    return cents
-
-
-@app.get("/api/wallet")
-async def get_wallet(token: str):
-    """Get student wallet balance and recent transactions."""
-    user_data = verify_token(token)
-    user_id = user_data["user_id"]
-
-    conn = get_db()
-    cursor = get_cursor(conn)
-
-    try:
-        wallet = get_or_create_wallet(user_id, cursor, conn)
-
-        balance_cents = wallet['balance_cents'] if hasattr(wallet, 'keys') else wallet[0]
-        total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
-        total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
-
-        # Recent transactions (last 10)
-        if USE_POSTGRES:
-            cursor.execute(
-                """SELECT type, amount_cents, points_converted, description, created_at
-                   FROM wallet_transactions WHERE user_id = %s
-                   ORDER BY created_at DESC LIMIT 10""",
-                (user_id,)
-            )
-        else:
-            cursor.execute(
-                """SELECT type, amount_cents, points_converted, description, created_at
-                   FROM wallet_transactions WHERE user_id = ?
-                   ORDER BY created_at DESC LIMIT 10""",
-                (user_id,)
-            )
-        rows = cursor.fetchall()
-        transactions = []
-        for r in rows:
-            transactions.append({
-                'type': r['type'] if hasattr(r, 'keys') else r[0],
-                'amount_cents': r['amount_cents'] if hasattr(r, 'keys') else r[1],
-                'points_converted': r['points_converted'] if hasattr(r, 'keys') else r[2],
-                'description': r['description'] if hasattr(r, 'keys') else r[3],
-                'created_at': str(r['created_at'] if hasattr(r, 'keys') else r[4])
-            })
-
-        # Pending redemptions
-        if USE_POSTGRES:
-            cursor.execute(
-                """SELECT id, amount_cents, status, gift_card_type, created_at
-                   FROM wallet_redemptions WHERE user_id = %s AND status = 'pending'""",
-                (user_id,)
-            )
-        else:
-            cursor.execute(
-                """SELECT id, amount_cents, status, gift_card_type, created_at
-                   FROM wallet_redemptions WHERE user_id = ? AND status = 'pending'""",
-                (user_id,)
-            )
-        pending = cursor.fetchall()
-        pending_redemptions = [
-            {
-                'id': r['id'] if hasattr(r, 'keys') else r[0],
-                'amount_cents': r['amount_cents'] if hasattr(r, 'keys') else r[1],
-                'status': r['status'] if hasattr(r, 'keys') else r[2],
-                'gift_card_type': r['gift_card_type'] if hasattr(r, 'keys') else r[3],
-                'created_at': str(r['created_at'] if hasattr(r, 'keys') else r[4])
-            }
-            for r in pending
-        ]
-
-        conn.close()
-        return {
-            "success": True,
-            "wallet": {
-                "balance_cents": balance_cents,
-                "balance_dollars": balance_cents / 100,
-                "total_earned_cents": total_earned,
-                "total_redeemed_cents": total_redeemed,
-                "min_redemption_cents": MIN_REDEMPTION_CENTS,
-                "can_redeem": balance_cents >= MIN_REDEMPTION_CENTS
-            },
-            "transactions": transactions,
-            "pending_redemptions": pending_redemptions
-        }
-
-    except Exception as e:
-        conn.close()
-        print(f"Wallet error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/wallet/redeem")
-async def redeem_wallet(request: Request):
-    """
-    Redeem wallet balance for a Visa prepaid gift card via Tremendous API.
-    In test mode, simulates a successful redemption without real money.
-    """
-    data = await request.json()
-    token = data.get("token")
-    amount_cents = data.get("amount_cents")
-    recipient_email = data.get("recipient_email", "")
-
-    if not token:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    user_data = verify_token(token)
-    user_id = user_data["user_id"]
-
-    if not amount_cents or amount_cents < MIN_REDEMPTION_CENTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Minimum redemption is ${MIN_REDEMPTION_CENTS // 100}"
-        )
-
-    conn = get_db()
-    cursor = get_cursor(conn)
-
-    try:
-        # Get user info for email fallback
-        if USE_POSTGRES:
-            cursor.execute("SELECT email, full_name FROM users WHERE id = %s", (user_id,))
-        else:
-            cursor.execute("SELECT email, full_name FROM users WHERE id = ?", (user_id,))
-        user_row = cursor.fetchone()
-        email = recipient_email or (user_row['email'] if hasattr(user_row, 'keys') else user_row[0])
-        full_name = user_row['full_name'] if hasattr(user_row, 'keys') else user_row[1]
-
-        # Check balance
-        wallet = get_or_create_wallet(user_id, cursor, conn)
-        balance = wallet['balance_cents'] if hasattr(wallet, 'keys') else wallet[0]
-        if balance < amount_cents:
-            raise HTTPException(status_code=400, detail="Insufficient wallet balance")
-
-        # Create redemption record
-        if USE_POSTGRES:
-            cursor.execute(
-                """INSERT INTO wallet_redemptions
-                   (user_id, amount_cents, status, gift_card_type, recipient_email)
-                   VALUES (%s, %s, 'pending', 'visa_prepaid', %s) RETURNING id""",
-                (user_id, amount_cents, email)
-            )
-            redemption_id = cursor.fetchone()['id']
-        else:
-            cursor.execute(
-                """INSERT INTO wallet_redemptions
-                   (user_id, amount_cents, status, gift_card_type, recipient_email)
-                   VALUES (?, ?, 'pending', 'visa_prepaid', ?)""",
-                (user_id, amount_cents, email)
-            )
-            redemption_id = cursor.lastrowid
-        conn.commit()
-
-        # Call Tremendous API (or simulate in test mode)
-        tremendous_result = await call_tremendous_api(
-            redemption_id=redemption_id,
-            amount_cents=amount_cents,
-            recipient_email=email,
-            recipient_name=full_name
-        )
-
-        if tremendous_result['success']:
-            # Deduct from wallet
-            if USE_POSTGRES:
-                cursor.execute(
-                    """UPDATE student_wallets
-                       SET balance_cents = balance_cents - %s,
-                           total_redeemed_cents = total_redeemed_cents + %s,
-                           updated_at = NOW()
-                       WHERE user_id = %s""",
-                    (amount_cents, amount_cents, user_id)
-                )
-                cursor.execute(
-                    """UPDATE wallet_redemptions
-                       SET status = 'fulfilled',
-                           tremendous_order_id = %s,
-                           tremendous_reward_id = %s,
-                           fulfilled_at = NOW()
-                       WHERE id = %s""",
-                    (tremendous_result.get('order_id'), tremendous_result.get('reward_id'), redemption_id)
-                )
-                cursor.execute(
-                    """INSERT INTO wallet_transactions
-                       (user_id, type, amount_cents, description)
-                       VALUES (%s, 'redemption', %s, %s)""",
-                    (user_id, -amount_cents, f"Visa prepaid gift card redemption #{redemption_id}")
-                )
-            else:
-                cursor.execute(
-                    """UPDATE student_wallets
-                       SET balance_cents = balance_cents - ?,
-                           total_redeemed_cents = total_redeemed_cents + ?,
-                           updated_at = datetime('now')
-                       WHERE user_id = ?""",
-                    (amount_cents, amount_cents, user_id)
-                )
-                cursor.execute(
-                    """UPDATE wallet_redemptions
-                       SET status = 'fulfilled',
-                           tremendous_order_id = ?,
-                           tremendous_reward_id = ?,
-                           fulfilled_at = datetime('now')
-                       WHERE id = ?""",
-                    (tremendous_result.get('order_id'), tremendous_result.get('reward_id'), redemption_id)
-                )
-                cursor.execute(
-                    """INSERT INTO wallet_transactions
-                       (user_id, type, amount_cents, description)
-                       VALUES (?, 'redemption', ?, ?)""",
-                    (user_id, -amount_cents, f"Visa prepaid gift card redemption #{redemption_id}")
-                )
-            conn.commit()
-
-            conn.close()
-            return {
-                "success": True,
-                "message": f"${amount_cents / 100:.2f} Visa prepaid gift card sent to {email}!",
-                "redemption_id": redemption_id,
-                "test_mode": TREMENDOUS_TEST_MODE,
-                "order_id": tremendous_result.get('order_id')
-            }
-        else:
-            # Mark as failed
-            if USE_POSTGRES:
-                cursor.execute(
-                    "UPDATE wallet_redemptions SET status = 'failed', error_message = %s WHERE id = %s",
-                    (tremendous_result.get('error', 'Unknown error'), redemption_id)
-                )
-            else:
-                cursor.execute(
-                    "UPDATE wallet_redemptions SET status = 'failed', error_message = ? WHERE id = ?",
-                    (tremendous_result.get('error', 'Unknown error'), redemption_id)
-                )
-            conn.commit()
-            conn.close()
-            raise HTTPException(status_code=500, detail=tremendous_result.get('error', 'Redemption failed'))
-
-    except HTTPException:
-        conn.close()
-        raise
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        print(f"Redemption error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-async def call_tremendous_api(redemption_id, amount_cents, recipient_email, recipient_name):
-    """
-    Call Tremendous API to issue a Visa prepaid gift card.
-    In test mode (TREMENDOUS_TEST_MODE=true), simulates success without real money.
-    
-    To go live:
-    1. Sign up at tremendous.com
-    2. Get API key from Settings → API
-    3. Set TREMENDOUS_API_KEY in Railway Variables
-    4. Set TREMENDOUS_TEST_MODE=false in Railway Variables
-    5. Fund your Tremendous account
-    """
-    import httpx
-
-    if TREMENDOUS_TEST_MODE:
-        print(f"🧪 TREMENDOUS TEST MODE: Simulating ${amount_cents/100:.2f} gift card to {recipient_email}")
-        return {
-            "success": True,
-            "order_id": f"TEST-ORDER-{redemption_id}",
-            "reward_id": f"TEST-REWARD-{redemption_id}"
-        }
-
-    if not TREMENDOUS_API_KEY:
-        return {"success": False, "error": "Tremendous API key not configured"}
-
-    # Tremendous uses sandbox vs production URLs
-    base_url = "https://testflight.tremendous.com/api/v2" if TREMENDOUS_TEST_MODE else "https://www.tremendous.com/api/v2"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{base_url}/orders",
-                headers={
-                    "Authorization": f"Bearer {TREMENDOUS_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "payment": {"funding_source_id": "BALANCE"},
-                    "rewards": [{
-                        "value": {
-                            "denomination": amount_cents / 100,
-                            "currency_code": "USD"
-                        },
-                        "products": ["Q24BD9EZ332JT"],  # Visa prepaid product ID
-                        "recipient": {
-                            "name": recipient_name,
-                            "email": recipient_email
-                        },
-                        "delivery": {"method": "EMAIL"}
-                    }]
-                },
-                timeout=30.0
-            )
-
-            if response.status_code in (200, 201):
-                result = response.json()
-                order = result.get('order', {})
-                rewards = order.get('rewards', [{}])
-                return {
-                    "success": True,
-                    "order_id": order.get('id'),
-                    "reward_id": rewards[0].get('id') if rewards else None
-                }
-            else:
-                error_text = response.text
-                print(f"Tremendous API error {response.status_code}: {error_text}")
-                return {"success": False, "error": f"Tremendous error: {response.status_code}"}
-
-    except Exception as e:
-        print(f"Tremendous API call failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-@app.post("/api/wallet/admin-credit")
-async def admin_credit_wallet(request: Request):
-    """
-    Admin or parent manually credits a student's wallet.
-    Requires admin role.
-    """
-    data = await request.json()
-    token = data.get("token")
-    student_id = data.get("student_id")
-    amount_cents = data.get("amount_cents")
-    description = data.get("description", "Manual credit from admin")
-
-    if not token:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    admin_data = verify_token(token)
-    if admin_data.get("role") not in ("admin", "parent"):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    if not student_id or not amount_cents or amount_cents <= 0:
-        raise HTTPException(status_code=400, detail="student_id and amount_cents required")
-
-    conn = get_db()
-    cursor = get_cursor(conn)
-
-    try:
-        get_or_create_wallet(student_id, cursor, conn)
-
-        if USE_POSTGRES:
-            cursor.execute(
-                """UPDATE student_wallets
-                   SET balance_cents = balance_cents + %s,
-                       total_earned_cents = total_earned_cents + %s,
-                       updated_at = NOW()
-                   WHERE user_id = %s""",
-                (amount_cents, amount_cents, student_id)
-            )
-            cursor.execute(
-                """INSERT INTO wallet_transactions
-                   (user_id, type, amount_cents, description, added_by)
-                   VALUES (%s, 'admin_credit', %s, %s, %s)""",
-                (student_id, amount_cents, description, admin_data['user_id'])
-            )
-        else:
-            cursor.execute(
-                """UPDATE student_wallets
-                   SET balance_cents = balance_cents + ?,
-                       total_earned_cents = total_earned_cents + ?,
-                       updated_at = datetime('now')
-                   WHERE user_id = ?""",
-                (amount_cents, amount_cents, student_id)
-            )
-            cursor.execute(
-                """INSERT INTO wallet_transactions
-                   (user_id, type, amount_cents, description, added_by)
-                   VALUES (?, 'admin_credit', ?, ?, ?)""",
-                (student_id, amount_cents, description, admin_data['user_id'])
-            )
-        conn.commit()
-        conn.close()
-
-        return {
-            "success": True,
-            "message": f"${amount_cents/100:.2f} credited to student wallet",
-            "student_id": student_id,
-            "amount_cents": amount_cents
-        }
-
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # WORD GAMES ENDPOINTS
 # ========================================
 

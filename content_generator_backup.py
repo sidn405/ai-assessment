@@ -289,11 +289,13 @@ class ContentGenerator:
             print(f"📚 Initial vocabulary words: {vocab_count}")
             
             # Minimum vocabulary requirements by level
+            # NOTE: difficulty_level is always 'beginner' | 'intermediate' | 'advanced'
+            # (see calculate_difficulty() in app.py). The old keys here ('elementary',
+            # 'high_school') never matched, so every passage silently fell back to 5.
             min_vocab = {
-                'elementary': 5,
+                'beginner': 5,
                 'intermediate': 6,
-                'high_school': 7,
-                'adult': 8
+                'advanced': 8
             }
             
             required_min = min_vocab.get(difficulty_level, 5)
@@ -357,6 +359,76 @@ class ContentGenerator:
             import traceback
             traceback.print_exc()
             return self._get_fallback_passage(topic, difficulty_level)
+
+    # Grade bands considered "younger students" for illustration purposes.
+    # Matches the same elementary grouping used elsewhere (select_age_appropriate_topic,
+    # calculate_difficulty) so this stays consistent if those buckets ever change.
+    YOUNG_LEARNER_GRADE_BANDS = {
+        'pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th', 'elementary'
+    }
+
+    def is_young_learner(self, grade_band):
+        """Return True if this grade band should get an illustration with its story."""
+        return (grade_band or '').lower() in self.YOUNG_LEARNER_GRADE_BANDS
+
+    def generate_story_image(self, title, content, topic, grade_band):
+        """
+        Generate a single child-friendly illustration for a story.
+        Only call this for younger grade bands (see is_young_learner) - image
+        generation costs real money per call, so we don't want it firing for
+        every passage at every grade level.
+
+        Returns a data URL (data:image/png;base64,...) on success, or None on
+        any failure (callers should treat a missing image as non-fatal - the
+        story still needs to render without it).
+
+        NOTE: dall-e-3 was retired from the OpenAI API on May 12, 2026.
+        This uses gpt-image-1-mini (the cost-effective GPT Image model) instead.
+        Bump to "gpt-image-1" or "gpt-image-2" below if quality needs to go up -
+        gpt-image-2 in particular allows custom resolutions instead of the
+        fixed 1024x1024 / 1024x1536 / 1536x1024 options.
+
+        IMPORTANT: unlike dall-e-3, GPT Image models ALWAYS return base64 image
+        data (no .url field, no response_format param) - and your OpenAI org
+        needs to complete Organization Verification before this model will work
+        at all. See: https://platform.openai.com/settings/organization/general
+        """
+        try:
+            # Keep the prompt short and visual. Explicitly avoid asking for any
+            # text/words in the image since image models render text poorly and
+            # it's not needed here - the story text is already on the page.
+            snippet = (content or '')[:300]
+            image_prompt = (
+                f"Children's picture book illustration in the style of a modern Pixar storybook. "
+                f"Warm, soft lighting. Rich colors with depth and texture — not flat. "
+                f"Story: '{title}'. Scene: {snippet} "
+                f"Characters should be expressive and cute with rounded features. "
+                f"Lush detailed background with natural elements. "
+                f"No text, no letters, no words anywhere in the image. "
+                f"Safe and joyful, appropriate for ages 4-8."
+            )
+
+            response = self.client.images.generate(
+                model="gpt-image-1",        # upgrade from mini
+                prompt=image_prompt,         # improved prompt above
+                size="1536x1024",           # landscape instead of square
+                quality="medium",            # upgrade from low
+                n=1
+            )
+
+            b64_data = response.data[0].b64_json
+            if not b64_data:
+                return None
+
+            # GPT Image models only return base64 - build a data URL so the
+            # frontend <img> tag works exactly like it would with a real URL,
+            # and so we follow the same storage pattern already used for
+            # profile photos elsewhere in app.py (data URL stored as TEXT).
+            return f"data:image/png;base64,{b64_data}"
+
+        except Exception as e:
+            print(f"⚠️ Story image generation failed (non-fatal, story will render without it): {e}")
+            return None
 
     def _extract_additional_vocabulary(self, passage_text, existing_vocab, difficulty_level, min_required=5):
         """

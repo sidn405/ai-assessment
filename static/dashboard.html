@@ -7240,25 +7240,15 @@
             
             document.body.appendChild(modal);
     
-            // ✅ PREVENT BODY SCROLL ON MOBILE
-            if (window.innerWidth <= 768) {
-                document.body.style.overflow = 'hidden';
-                document.body.style.position = 'fixed';
-                document.body.style.width = '100%';
-                document.body.style.top = `-${window.scrollY}px`;
-            }
-            
-            // ✅ SCROLL MODAL TO TOP
+            // Scroll modal overlay to top after render
             setTimeout(() => {
                 modal.scrollTop = 0;
-                const content = modal.querySelector('div');
-                if (content) content.scrollTop = 0;
-            }, 100);
+            }, 50);
 
             // NEW (CORRECT):
             console.log('🔊 Speaking congratulatory message...');
             if (typeof displayTutorMessage === 'function') {
-                const congratsMessage = `${userName}, now that you have completed three lessons and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
+                const congratsMessage = `${userName}, now that you have completed two lessons and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
                 displayTutorMessage(congratsMessage, 'excited');
                 console.log('✅ Tutor speech triggered with name:', userName);
             } else {
@@ -7277,20 +7267,6 @@
 
         function closeEssayResultsAndContinue() {
             const modal = document.getElementById('essay-results-modal');
-            
-            // ✅ RESTORE BODY SCROLL ON MOBILE (BEFORE REMOVING MODAL)
-            if (window.innerWidth <= 768) {
-                const scrollY = document.body.style.top;
-                document.body.style.overflow = '';
-                document.body.style.position = '';
-                document.body.style.width = '';
-                document.body.style.top = '';
-                
-                // Restore scroll position
-                if (scrollY) {
-                    window.scrollTo(0, parseInt(scrollY || '0') * -1);
-                }
-            }
             
             if (modal) {
                 modal.style.animation = 'fadeOut 0.3s ease';
@@ -7313,19 +7289,6 @@
 
         function closeEssayResultsAndReturnDashboard() {
             const modal = document.getElementById('essay-results-modal');
-            
-            // Restore body scroll on mobile
-            if (window.innerWidth <= 768) {
-                const scrollY = document.body.style.top;
-                document.body.style.overflow = '';
-                document.body.style.position = '';
-                document.body.style.width = '';
-                document.body.style.top = '';
-                
-                if (scrollY) {
-                    window.scrollTo(0, parseInt(scrollY || '0') * -1);
-                }
-            }
             
             if (modal) {
                 modal.style.animation = 'fadeOut 0.3s ease';
