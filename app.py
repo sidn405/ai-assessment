@@ -553,6 +553,62 @@ def init_db():
             conn.commit()
             print("✓ wallet_redemptions table ready")
 
+            # User points (gamification)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_points (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) UNIQUE,
+                    points INTEGER DEFAULT 0,
+                    total_earned INTEGER DEFAULT 0,
+                    level INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ user_points table ready")
+
+            # Points history
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS points_history (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    points INTEGER NOT NULL,
+                    reason TEXT,
+                    activity_type VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ points_history table ready")
+
+            # User badges
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_badges (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    badge_id VARCHAR(50) NOT NULL,
+                    badge_name VARCHAR(100),
+                    earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ user_badges table ready")
+
+            # User stats
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_stats (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) UNIQUE,
+                    total_lessons INTEGER DEFAULT 0,
+                    total_points INTEGER DEFAULT 0,
+                    average_score REAL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ user_stats table ready")
+
             # ================================================================
             # INDEXES
             # ================================================================
@@ -596,6 +652,8 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_max INTEGER DEFAULT 75",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_interest_index INTEGER DEFAULT 0",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
+                "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS activity_details TEXT",
+                "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS games_played INTEGER DEFAULT 0",
             ]
             for sql in migrations:
                 try:
@@ -899,6 +957,50 @@ def init_db():
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE REFERENCES users(id),
+                points INTEGER DEFAULT 0,
+                total_earned INTEGER DEFAULT 0,
+                level INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS points_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                points INTEGER NOT NULL,
+                reason TEXT,
+                activity_type TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_badges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                badge_id TEXT NOT NULL,
+                badge_name TEXT,
+                earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE REFERENCES users(id),
+                total_lessons INTEGER DEFAULT 0,
+                total_points INTEGER DEFAULT 0,
+                average_score REAL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # SQLite column migrations — ADD any columns missing from older local DBs
         sqlite_migrations = [
             "ALTER TABLE users ADD COLUMN essay_word_count_requirement INTEGER DEFAULT 25",
@@ -910,6 +1012,8 @@ def init_db():
             "ALTER TABLE user_sessions ADD COLUMN session_end TIMESTAMP",
             "ALTER TABLE user_sessions ADD COLUMN status TEXT DEFAULT 'active'",
             "ALTER TABLE user_sessions ADD COLUMN last_activity TIMESTAMP",
+            "ALTER TABLE activity_log ADD COLUMN activity_details TEXT",
+            "ALTER TABLE game_completions ADD COLUMN games_played INTEGER DEFAULT 0",
             "ALTER TABLE passages ADD COLUMN image_url TEXT",
             "ALTER TABLE messages ADD COLUMN recipient_type TEXT DEFAULT 'student'",
             "ALTER TABLE game_completions ADD COLUMN rounds_completed INTEGER DEFAULT 0",
