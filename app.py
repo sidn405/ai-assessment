@@ -3463,6 +3463,13 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         target_words = get_target_words(grade_band, "easier")
     else:
         target_words = get_target_words(grade_band, challenge)
+
+    # Cap placement test passages at 250 words max regardless of grade band.
+    # The placement test is about gauging comprehension, not word endurance.
+    # Older/advanced students still get appropriately hard vocabulary — just
+    # not an overwhelming wall of text on their first session.
+    if isPlacementTest := True:  # always applies in /api/read/sample
+        target_words = min(target_words, 250)
     
     if not content_generator:
         raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
@@ -3493,17 +3500,16 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         )
         print(f"✓ Passage generated: {passage_data['title']}")
         
-        # Generate an illustration for younger students only (cost-gated by grade band).
+        # Generate illustration for ALL readers (not just young learners)
         image_url = None
-        if content_generator.is_young_learner(grade_band):
-            print(f"🎨 Generating illustration for young learner (grade_band={grade_band})...")
-            image_url = content_generator.generate_story_image(
-                title=passage_data.get('title', ''),
-                content=passage_data.get('content', ''),
-                topic=topic,
-                grade_band=grade_band
-            )
-            print(f"✓ Illustration generated: {bool(image_url)}")
+        print(f"🎨 Generating illustration for passage (grade_band={grade_band})...")
+        image_url = content_generator.generate_story_image(
+            title=passage_data.get('title', ''),
+            content=passage_data.get('content', ''),
+            topic=topic,
+            grade_band=grade_band
+        )
+        print(f"✓ Illustration generated: {bool(image_url)}")
         
         # Save to database
         if USE_POSTGRES:
@@ -6724,18 +6730,17 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         topic = picked_topic or topic
         passage_data = normalize_passage(passage_data, topic, difficulty)
 
-        # Generate illustration for younger students (same logic as /api/read/sample)
+        # Generate illustration for ALL readers
         lesson_image_url = None
         lesson_grade_band = user.get('grade_band', '')
-        if content_generator.is_young_learner(lesson_grade_band):
-            print(f"🎨 Generating illustration for young learner (grade_band={lesson_grade_band})...")
-            lesson_image_url = content_generator.generate_story_image(
-                title=passage_data.get('title', ''),
-                content=passage_data.get('content', ''),
-                topic=topic,
-                grade_band=lesson_grade_band
-            )
-            print(f"✓ Illustration generated: {bool(lesson_image_url)}")
+        print(f"🎨 Generating illustration for passage (grade_band={lesson_grade_band})...")
+        lesson_image_url = content_generator.generate_story_image(
+            title=passage_data.get('title', ''),
+            content=passage_data.get('content', ''),
+            topic=topic,
+            grade_band=lesson_grade_band
+        )
+        print(f"✓ Illustration generated: {bool(lesson_image_url)}")
 
         # Step 8: Save passage
         print("Step 8: Saving passage to database...")

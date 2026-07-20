@@ -1480,7 +1480,11 @@
 
             updatePlacementProgressBar();
             startTime = Date.now();
-            await loadPassage(token);
+
+            // Pick up challenge level from URL param (set by previous passage feedback)
+            const urlParams = new URLSearchParams(window.location.search);
+            const challengeParam = urlParams.get('challenge') || 'appropriate';
+            await loadPassage(token, challengeParam);
         });
 
         async function loadPassage(token, challenge = 'appropriate') {
@@ -1799,9 +1803,9 @@
                     
                     updatePlacementProgressBar();
                     
-                    console.log(`📊 Placement test: ${placementTestProgress.passagesCompleted}/3 passages completed`);
+                    console.log(`📊 Placement test: ${placementTestProgress.passagesCompleted}/2 passages completed`);
                     
-                    if (placementTestProgress.passagesCompleted >= 3) {
+                    if (placementTestProgress.passagesCompleted >= PLACEMENT_TOTAL_PASSAGES) {
                         // Calculate reading level
                         const avgScore = placementTestProgress.scores.reduce((a, b) => a + b, 0) / placementTestProgress.scores.length;
                         const avgDifficulty = calculateAvgDifficulty(placementTestProgress.feedbacks);
@@ -1819,6 +1823,7 @@
                         sessionStorage.removeItem('placementPassagesCompleted');
                         sessionStorage.removeItem('placementScores');
                         sessionStorage.removeItem('placementFeedbacks');
+                        sessionStorage.removeItem('placementChallenge');
                         
                         // Show completion notification and auto-redirect
                         showSuccess(
@@ -1831,15 +1836,25 @@
                             window.location.href = '/dashboard';
                         }, 5000);
                     } else {
-                        // Passages 1 & 2: Just show progress and auto-load next
+                        // Determine challenge level for next passage based on feedback
+                        let nextChallenge = 'appropriate';
+                        if (feedback === 'too_hard') {
+                            nextChallenge = 'easier';
+                        } else if (feedback === 'too_easy') {
+                            nextChallenge = 'challenging';
+                        }
+                        // Store so next page load picks it up
+                        sessionStorage.setItem('placementChallenge', nextChallenge);
+                        
                         showSuccess(
-                            `Passage ${placementTestProgress.passagesCompleted}/3 Complete! 🎯`,
+                            `Passage ${placementTestProgress.passagesCompleted}/${PLACEMENT_TOTAL_PASSAGES} Complete! 🎯`,
                             'Loading your next passage...',
                             2000
                         );
                         
                         setTimeout(() => {
-                            location.reload();
+                            // Reload with the appropriate challenge level
+                            window.location.href = `/reading?challenge=${nextChallenge}`;
                         }, 2000);
                     }
                 } else {
