@@ -3952,7 +3952,7 @@
             if (hasInterests && !hasCompletedReading && !playedMessages.afterInterest) {
                 console.log('🎯 Playing navigation: Reading Assessment guide');
                 setTimeout(() => {
-                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Assessment button.`;
+                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Level Test button.`;
                     displayTutorMessage(message, 'happy');
                     
                     // Mark as played
@@ -7493,7 +7493,7 @@
                 }
             }
             
-            // Always show Reading Assessment button until it's complete
+            // Always show Reading Level Test button until it's complete
             if (readingBtn) {
                 if (hasCompletedReading) {
                     readingBtn.classList.add('hidden');
