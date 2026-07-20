@@ -409,16 +409,16 @@ class ContentGenerator:
         at all. See: https://platform.openai.com/settings/organization/general
         """
         try:
-            snippet = (content or '')[:300]
+            # Use title and topic only — raw story snippets can contain words or
+            # phrases that trip OpenAI's output moderation even in safe content.
+            # A clean descriptive prompt based on title/topic is more reliable.
             image_prompt = (
                 f"A warm, friendly children's storybook illustration in the style of a modern Pixar storybook. "
-                f"Warm, soft lighting. Rich colors with depth and texture — not flat. "
-                f"Story title: '{title}'. Topic: {topic}. "
-                f"Scene inspired by: {snippet} "
-                f"Characters should be expressive and cute with rounded features. "
-                f"Lush detailed background with natural elements. "
-                f"No text, no letters, no words anywhere in the image. "
-                f"Safe and joyful, appropriate for ages 4-8."
+                f"The story is called '{title}' and is about {topic}. "
+                f"Show a cheerful scene with expressive, rounded characters that fits this story. "
+                f"Warm soft lighting, rich colors with depth and texture, lush detailed background. "
+                f"Child-friendly, joyful, and safe. Appropriate for ages 4-8. "
+                f"Absolutely no text, letters, words, or numbers anywhere in the image."
             )
 
             response = self.client.images.generate(
