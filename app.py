@@ -6498,7 +6498,17 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
             interests = []
 
         if not interests:
-            interests = ['general reading', 'education']
+            # Use age-appropriate defaults — never 'general reading' which causes
+            # the AI to pick random topics like soccer unrelated to the student
+            grade_band_fallback = user.get('grade_band', 'elementary')
+            if grade_band_fallback in ('pre-k', 'kindergarten', '1st', '2nd', '3rd'):
+                interests = ['animals', 'colors', 'friends', 'family', 'games']
+            elif grade_band_fallback in ('4th', '5th', 'elementary'):
+                interests = ['animals', 'art', 'music', 'nature', 'adventure']
+            elif grade_band_fallback in ('6th', '7th', '8th', 'middle'):
+                interests = ['science', 'music', 'technology', 'history', 'adventure']
+            else:
+                interests = ['technology', 'health', 'career', 'music', 'travel']
 
         print(f"✓ Interests: {interests}")
 
@@ -6599,7 +6609,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         level_estimate = (user.get('level_estimate') or user.get('reading_level') or 'intermediate').lower()
         difficulty = level_estimate
 
-        if not word_count_min or not word_count_max:
+        if not word_count_min or not word_count_max or word_count_min < 50 or word_count_max < 50:
             defaults = {
                 'beginner': (150, 200),
                 'intermediate': (200, 250),

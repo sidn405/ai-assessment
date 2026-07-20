@@ -157,10 +157,11 @@ class ContentGenerator:
         - PRIMARY INTEREST/TOPIC: {topic}
         
         IMPORTANT - TOPIC FOCUS:
-        - Focus ONLY on {topic}
-        - Do NOT combine with other interests or topics
-        - Provide variety by exploring different aspects/subtopics within {topic}
-        - Make it fresh and engaging - avoid repetitive storylines
+        - The ONLY topic for this story is: {topic}
+        - Do NOT introduce other topics, sports, or activities not related to {topic}
+        - If {topic} is "cats; fish" — write about cats or fish, NOT soccer or basketball
+        - If {topic} is "toys; drawing" — write about toys or drawing, NOT gardening
+        - Stay 100% on topic — the student chose {topic} because it interests them
         
         CULTURAL CONTEXT:
         - Set in an urban community (city neighborhood, public spaces)
@@ -169,20 +170,23 @@ class ContentGenerator:
         - Include cultural elements (music, food, celebrations, traditions)
         - Demonstrate resilience and success
         
-        CHARACTER NAME RULES — CRITICAL:
-        - NEVER use the name "Jamal" — it has been overused in recent stories
-        - Choose a DIFFERENT name each time from this diverse list:
-          Marcus, Aaliyah, Devon, Zoe, Jordan, Imani, Malik, Destiny, 
+        CHARACTER DIVERSITY RULES:
+        - Use a wide variety of character names across stories — do not repeat the same
+          name in consecutive stories. Rotate through names like:
+          Jamal, Marcus, Aaliyah, Devon, Zoe, Jordan, Imani, Malik, Destiny,
           Andre, Jasmine, Elijah, Simone, Isaiah, Nia, Jaylen, Amara,
-          Darius, Keisha, Trey, Brianna, Cameron, Layla, Xavier, Jade
-        - Vary the name with every passage — do not reuse the same name twice in a row
+          Darius, Keisha, Trey, Brianna, Cameron, Layla, Xavier, Jade,
+          Kofi, Sanaa, DeShawn, Raven, Theo, Zara, Miles
+        - Vary gender too — alternate between male and female protagonists
+        - Pick a name that feels natural for the topic and setting
         
         SETTING RULES — CRITICAL:
-        - Do NOT default to "community center" — this setting has been overused
-        - Rotate settings: school classroom, backyard, library, park, kitchen/home,
-          art class, basketball court, music studio, garden, friend's house, bookstore,
-          science fair, sports field, after-school program, grandma's house, corner store
+        - Do NOT default to "community center" or "park" — these are overused
         - Pick a setting that fits naturally with the topic: {topic}
+        - Good options: school classroom, backyard, library, kitchen/home,
+          art class, basketball court, music studio, garden, friend's house,
+          bookstore, science fair, sports field, grandma's house, corner store,
+          after-school program, rooftop, neighborhood block
         
         HARD WORD COUNT RULE:
         - The "content" field MUST be EXACTLY {target_words} words.
