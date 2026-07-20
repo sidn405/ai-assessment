@@ -5365,7 +5365,7 @@ async def save_lesson_progress(request: Request):
                 "points_earned": points_result['points_awarded'],
                 "level_up": points_result.get('level_up', False),
                 "new_level": points_result.get('new_level'),
-                "new_badges": [{'name': b['name'], 'icon': b['icon']} for b in new_badges]
+                "new_badges": [{'name': b['badge']['name'], 'icon': b['badge']['icon']} for b in new_badges if b.get('badge')]
             }
         }
         

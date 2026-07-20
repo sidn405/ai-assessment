@@ -169,6 +169,21 @@ class ContentGenerator:
         - Include cultural elements (music, food, celebrations, traditions)
         - Demonstrate resilience and success
         
+        CHARACTER NAME RULES — CRITICAL:
+        - NEVER use the name "Jamal" — it has been overused in recent stories
+        - Choose a DIFFERENT name each time from this diverse list:
+          Marcus, Aaliyah, Devon, Zoe, Jordan, Imani, Malik, Destiny, 
+          Andre, Jasmine, Elijah, Simone, Isaiah, Nia, Jaylen, Amara,
+          Darius, Keisha, Trey, Brianna, Cameron, Layla, Xavier, Jade
+        - Vary the name with every passage — do not reuse the same name twice in a row
+        
+        SETTING RULES — CRITICAL:
+        - Do NOT default to "community center" — this setting has been overused
+        - Rotate settings: school classroom, backyard, library, park, kitchen/home,
+          art class, basketball court, music studio, garden, friend's house, bookstore,
+          science fair, sports field, after-school program, grandma's house, corner store
+        - Pick a setting that fits naturally with the topic: {topic}
+        
         HARD WORD COUNT RULE:
         - The "content" field MUST be EXACTLY {target_words} words.
         - Count words by splitting on spaces.
@@ -399,20 +414,19 @@ class ContentGenerator:
             # it's not needed here - the story text is already on the page.
             snippet = (content or '')[:300]
             image_prompt = (
-                f"Children's picture book illustration in the style of a modern Pixar storybook. "
-                f"Warm, soft lighting. Rich colors with depth and texture — not flat. "
-                f"Story: '{title}'. Scene: {snippet} "
-                f"Characters should be expressive and cute with rounded features. "
-                f"Lush detailed background with natural elements. "
-                f"No text, no letters, no words anywhere in the image. "
-                f"Safe and joyful, appropriate for ages 4-8."
+                f"A warm, friendly children's storybook illustration. "
+                f"Story title: '{title}'. Topic: {topic}. "
+                f"Scene inspired by: {snippet} "
+                f"Style: simple flat-color storybook art, bright and cheerful, "
+                f"no text or letters anywhere in the image, single clear scene, "
+                f"safe and appropriate for young children."
             )
 
             response = self.client.images.generate(
-                model="gpt-image-1",        # upgrade from mini
-                prompt=image_prompt,         # improved prompt above
-                size="1536x1024",           # landscape instead of square
-                quality="medium",            # upgrade from low
+                model="gpt-image-1-mini",
+                prompt=image_prompt,
+                size="1024x1024",
+                quality="low",
                 n=1
             )
 
@@ -535,7 +549,8 @@ class ContentGenerator:
                 {"word": "educational", "definition": "Related to learning and teaching"}
             ],
             "vocabulary_count": 3
-        }     
+        }
+        
             
     def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4, allow_fill_blank: bool = True, vocabulary_words: list = None):
         """
@@ -804,8 +819,201 @@ class ContentGenerator:
                 fallback.append(vocab_question)
 
             return fallback[:num_questions]
+        """
+        Generate comprehension questions with optional fill-in-blank
         
+        Args:
+            passage_text: The passage content
+            passage_title: Title of the passage  
+            num_questions: Number of questions (default 4)
+            allow_fill_blank: If True, mix MC and fill-in-blank. If False, MC only.
+        """
+        
+        if allow_fill_blank:
+            # Mix of question types for lessons
+            type_instruction = """
+    Generate EXACTLY {num_questions} comprehension questions with this distribution:
+    - 2-3 multiple choice questions
+    - 1-2 fill-in-the-blank questions
     
+    QUESTION TYPES:
+    1. MULTIPLE CHOICE: Standard 4-option questions
+    2. FILL-IN-THE-BLANK: Questions where user types a word or short phrase
+    
+    REQUIREMENTS FOR FILL-IN-BLANK:
+    - Provide "accept_answers" array with variations (lowercase)
+    - Keep answers SHORT (1-3 words max)
+    - Example: "accept_answers": ["library", "public library", "the library"]
+    """
+            json_example = """[
+    {
+        "question": "What is the main topic?",
+        "type": "multiple_choice",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correct_answer": "Option A",
+        "explanation": "Why this is correct",
+        "difficulty": 1
+    },
+    {
+        "question": "The story takes place in a __________.",
+        "type": "fill_in_blank",
+        "correct_answer": "library",
+        "accept_answers": ["library", "public library", "the library"],
+        "explanation": "The passage mentions they met at the library",
+        "difficulty": 2
+    }
+    ]"""
+        else:
+            # Only multiple choice for assessments
+            type_instruction = """
+    Generate EXACTLY {num_questions} MULTIPLE CHOICE questions.
+    
+    REQUIREMENTS:
+    - ALL questions must be multiple choice with 4 options
+    - NO fill-in-the-blank questions
+    - Ensure only ONE correct answer per question
+    """
+            json_example = """[
+    {
+        "question": "What is the main topic?",
+        "type": "multiple_choice",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correct_answer": "Option A",
+        "explanation": "Why this is correct",
+        "difficulty": 1
+    }
+    ]"""
+        
+        prompt = f"""
+    You are an expert educator creating comprehension questions for a reading passage.
+    
+    PASSAGE TITLE: {passage_title}
+    
+    PASSAGE:
+    {passage_text}
+    
+    {type_instruction.format(num_questions=num_questions)}
+    
+    Return as JSON array:
+    {json_example}
+    
+    IMPORTANT:
+    - Vary difficulty (easier questions first)
+    - Cover different aspects of the passage
+    - Make questions age-appropriate
+    - Test different comprehension skills
+    """
+    
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert educator creating engaging comprehension questions."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            
+            content = response.choices[0].message.content.strip()
+            
+            # Extract JSON from response
+            import re
+            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+            if json_match:
+                import json
+                questions = json.loads(json_match.group())
+                
+                # Validate and normalize questions
+                validated = []
+                for q in questions[:num_questions]:
+                    # If allow_fill_blank=False, force all to multiple choice
+                    if not allow_fill_blank:
+                        q['type'] = 'multiple_choice'
+                        q.pop('accept_answers', None)
+                    else:
+                        # Normalize type names
+                        if q.get('type') in ['fill_in_blank', 'fill-in-blank', 'fill_blank']:
+                            q['type'] = 'fill_in_blank'
+                        else:
+                            q['type'] = 'multiple_choice'
+                    
+                    # Ensure required fields exist
+                    if q['type'] == 'fill_in_blank':
+                        # Ensure accept_answers exists
+                        if 'accept_answers' not in q:
+                            base = q['correct_answer'].lower().strip()
+                            q['accept_answers'] = [base, f"the {base}", f"a {base}"]
+                        # Remove options field if present
+                        q.pop('options', None)
+                    else:
+                        # Multiple choice - ensure options exist
+                        if 'options' not in q or len(q['options']) < 4:
+                            q['options'] = [
+                                q.get('correct_answer', 'Option A'),
+                                "Option B",
+                                "Option C", 
+                                "Option D"
+                            ]
+                    
+                    validated.append(q)
+                
+                question_types = "mixed" if allow_fill_blank else "MC only"
+                print(f"✓ Generated {len(validated)} questions ({question_types})")
+                return validated
+                
+            else:
+                raise ValueError("Could not find JSON in response")
+                
+        except Exception as e:
+            print(f"Error generating questions: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback questions based on allow_fill_blank
+            if allow_fill_blank:
+                # Mix of MC and fill-in-blank
+                return [
+                    {
+                        "question": "What is the main idea of this passage?",
+                        "type": "multiple_choice",
+                        "options": ["A story about the topic", "A science experiment", "A history lesson", "A cooking recipe"],
+                        "correct_answer": "A story about the topic",
+                        "explanation": "The passage discusses this main theme.",
+                        "difficulty": 1
+                    },
+                    {
+                        "question": f"Fill in the blank: This passage is about __________.",
+                        "type": "fill_in_blank",
+                        "correct_answer": passage_title.lower() if passage_title else "the topic",
+                        "accept_answers": [passage_title.lower() if passage_title else "the topic", "the story", "this topic"],
+                        "explanation": "The passage focuses on this subject.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "What challenge or situation is described?",
+                        "type": "multiple_choice",
+                        "options": ["A problem to solve", "A celebration", "A vacation", "A test"],
+                        "correct_answer": "A problem to solve",
+                        "explanation": "The passage describes a challenge.",
+                        "difficulty": 2
+                    },
+                    {
+                        "question": "The main character wanted to __________.",
+                        "type": "fill_in_blank",
+                        "correct_answer": "achieve a goal",
+                        "accept_answers": ["achieve a goal", "reach a goal", "accomplish something", "succeed"],
+                        "explanation": "The passage shows the character working toward something.",
+                        "difficulty": 2
+                    }
+                ]
+
+            # Always append vocab question if available, even in fallback
+            if vocab_question:
+                fallback.append(vocab_question)
+
+            return fallback[:num_questions]
+
     def _extract_topics(self, main_topic, interests):
         """Extract relevant topic tags"""
         topics = [main_topic]
