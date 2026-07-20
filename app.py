@@ -668,8 +668,11 @@ def init_db():
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS rounds_completed INTEGER DEFAULT 0",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS time_seconds INTEGER DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS essay_word_count_requirement INTEGER DEFAULT 25",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_min INTEGER DEFAULT 50",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_max INTEGER DEFAULT 75",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_min INTEGER DEFAULT NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_max INTEGER DEFAULT NULL",
+                # Reset default 50/75 word counts from old migration — they bypass the
+                # level-based defaults in /api/lessons/next and cause 55-word lessons
+                "UPDATE users SET word_count_min = NULL WHERE word_count_min = 50 AND word_count_max = 75",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_interest_index INTEGER DEFAULT 0",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
                 "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS activity_details TEXT",

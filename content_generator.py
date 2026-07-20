@@ -409,16 +409,18 @@ class ContentGenerator:
         at all. See: https://platform.openai.com/settings/organization/general
         """
         try:
-            # Use title and topic only — raw story snippets can contain words or
-            # phrases that trip OpenAI's output moderation even in safe content.
-            # A clean descriptive prompt based on title/topic is more reliable.
+            # Extract a clean scene description from the first 2 sentences of the story.
+            # Avoids the raw snippet moderation issue while giving the image model
+            # enough context to match the actual scene (characters, setting, action).
+            sentences = [s.strip() for s in (content or '').replace('\n', ' ').split('.') if s.strip()]
+            scene_hint = '. '.join(sentences[:2]) if sentences else f"a story about {topic}"
+
             image_prompt = (
                 f"A warm, friendly children's storybook illustration in the style of a modern Pixar storybook. "
-                f"The story is called '{title}' and is about {topic}. "
-                f"Show a cheerful scene with expressive, rounded characters that fits this story. "
-                f"Warm soft lighting, rich colors with depth and texture, lush detailed background. "
-                f"Child-friendly, joyful, and safe. Appropriate for ages 4-8. "
-                f"Absolutely no text, letters, words, or numbers anywhere in the image."
+                f"Scene: {scene_hint}. "
+                f"Warm soft lighting, rich colors with depth and texture, expressive rounded characters, lush background. "
+                f"Joyful and safe, appropriate for ages 4-12. "
+                f"No text, letters, words, or numbers anywhere in the image."
             )
 
             response = self.client.images.generate(
