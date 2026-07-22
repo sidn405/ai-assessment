@@ -675,6 +675,8 @@ def init_db():
                 "UPDATE users SET word_count_min = NULL WHERE word_count_min = 50 AND word_count_max = 75",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_interest_index INTEGER DEFAULT 0",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_start TIMESTAMP",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_end TIMESTAMP",
                 "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS activity_details TEXT",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS games_played INTEGER DEFAULT 0",
                 # Ensure unique constraints exist for ON CONFLICT upserts
