@@ -2244,7 +2244,7 @@
             <div class="banner-steps">
                 <span class="banner-step" id="bannerStep1">📝 Step 1: Take the Interest Assessment</span>
                 <span style="opacity:0.5;">→</span>
-                <span class="banner-step" id="bannerStep2">📊 Step 2: Complete the Reading Level Test</span>
+                <span class="banner-step" id="bannerStep2">📊 Step 2: Complete the Reading Level Assessment</span>
             </div>
         </div>
 
@@ -2291,7 +2291,7 @@
                                 📝 Take Assessment
                             </button>
                             <button id="readingAssessmentBtn" class="btn btn-secondary" onclick="startReadingLevelTest()">
-                                📊 Reading Level Test
+                                📊 Reading Level Assessment
                             </button>
                         </div>
                     </div>
@@ -2308,7 +2308,7 @@
                                 📚 Continue Learning
                             </button>
                             <button class="btn btn-secondary" onclick="startReadingLevelTest()">
-                                🔄 Retake Reading Level Test
+                                🔄 Retake Reading Level Assessment
                             </button>
                         </div>
                     </div>
@@ -3535,7 +3535,7 @@
                             <button class="btn btn-primary" 
                                 onclick="closePlacementModal(); showSection('placement', null);"
                                 style="padding: 1rem 2.5rem; font-size: 1.1rem;">
-                                📊 Take Reading Level Test
+                                📊 Take Reading Level Assessment
                             </button>
                             <button class="btn btn-secondary" 
                                 onclick="closePlacementModal()"
@@ -3559,7 +3559,7 @@
         }
 
         function startReadingLevelTest() {
-            console.log('🎯 Starting reading level test...');
+            console.log('🎯 Starting reading level Assessment...');
             
             // Clear any cached level
             localStorage.removeItem('estimatedLevel');
@@ -3722,8 +3722,8 @@
                 }
                 if (step2El) {
                     step2El.textContent = hasCompletedReading
-                        ? '✅ Step 2: Reading Level Test'
-                        : '📊 Step 2: Complete the Reading Level Test';
+                        ? '✅ Step 2: Reading Level Assessment'
+                        : '📊 Step 2: Complete the Reading Level Assessment';
                     step2El.classList.toggle('done', hasCompletedReading);
                 }
             }
@@ -3952,7 +3952,7 @@
             if (hasInterests && !hasCompletedReading && !playedMessages.afterInterest) {
                 console.log('🎯 Playing navigation: Reading Assessment guide');
                 setTimeout(() => {
-                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Level Test button.`;
+                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Level Assessment button.`;
                     displayTutorMessage(message, 'happy');
                     
                     // Mark as played
@@ -5061,7 +5061,7 @@
                     playVoiceNavigation();
                 }, 2000);
 
-                // ✅ Navigate to overview to show "Reading Level Test" button
+                // ✅ Navigate to overview to show "Reading Level Assessment" button
                 showSection('overview');
 
             
@@ -7493,7 +7493,7 @@
                 }
             }
             
-            // Always show Reading Level Test button until it's complete
+            // Always show Reading Level Assessment button until it's complete
             if (readingBtn) {
                 if (hasCompletedReading) {
                     readingBtn.classList.add('hidden');

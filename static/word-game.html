@@ -2198,7 +2198,7 @@
                                 📝 Take Assessment
                             </button>
                             <button id="readingAssessmentBtn" class="btn btn-secondary" onclick="startReadingLevelTest()">
-                                📊 Reading Level Test
+                                📊 Reading Level Assessment
                             </button>
                         </div>
                     </div>
@@ -2215,7 +2215,7 @@
                                 📚 Continue Learning
                             </button>
                             <button class="btn btn-secondary" onclick="startReadingLevelTest()">
-                                🔄 Retake Reading Level Test
+                                🔄 Retake Reading Level Assessment
                             </button>
                         </div>
                     </div>
@@ -3362,7 +3362,7 @@
                             <button class="btn btn-primary" 
                                 onclick="closePlacementModal(); showSection('placement', null);"
                                 style="padding: 1rem 2.5rem; font-size: 1.1rem;">
-                                📊 Take Reading Level Test
+                                📊 Take Reading Level Assessment
                             </button>
                             <button class="btn btn-secondary" 
                                 onclick="closePlacementModal()"
@@ -3386,7 +3386,7 @@
         }
 
         function startReadingLevelTest() {
-            console.log('🎯 Starting reading level test...');
+            console.log('🎯 Starting reading level Assessment...');
             
             // Clear any cached level
             localStorage.removeItem('estimatedLevel');
@@ -4801,7 +4801,7 @@
                     playVoiceNavigation();
                 }, 2000);
 
-                // ✅ Navigate to overview to show "Reading Level Test" button
+                // ✅ Navigate to overview to show "Reading Level Assessment" button
                 showSection('overview');
 
             
