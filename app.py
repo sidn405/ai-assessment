@@ -3497,7 +3497,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         interest_index = total_read % len(interest_tags)
         topic = interest_tags[interest_index]
     else:
-        topic = select_age_appropriate_topic(interest_tags, age, grade_band)
+        topic = select_age_appropriate_topic(interest_tags, age, grade_band, passage_number=total_read)
     
     # NEW: Better difficulty mapping based on grade and challenge
     difficulty = calculate_difficulty(grade_band, level_estimate, challenge)
@@ -3686,9 +3686,10 @@ def get_target_words(grade_band, challenge="appropriate"):
     return counts.get(challenge, counts['appropriate'])
 
 
-def select_age_appropriate_topic(interests, age, grade_band):
+def select_age_appropriate_topic(interests, age, grade_band, passage_number=0):
     """
-    Select topic from interests that's appropriate for age/grade
+    Select topic from interests appropriate for age/grade.
+    passage_number allows the placement test to rotate topics across its 3 passages.
     """
     # Age-appropriate topic filters
     age_appropriate_topics = {
@@ -3720,14 +3721,21 @@ def select_age_appropriate_topic(interests, age, grade_band):
     
     appropriate = age_appropriate_topics.get(category, age_appropriate_topics['elementary'])
     
-    # Find matching interests
     if interests:
-        # Check if any interest matches age-appropriate topics
-        matching = [i for i in interests if any(i.lower() in topic.lower() for topic in appropriate)]
-        if matching:
-            return random.choice(matching)
-        # Otherwise use first interest (student chose it!)
-        return interests[0]
+        matching = [i for i in interests if any(t.lower() in i.lower() for t in appropriate)]
+        if not matching:
+            matching = interests
+
+        # Use passage_number to rotate through different interest topics
+        # so placement test passages cover different subjects
+        if len(matching) > 1:
+            idx = passage_number % len(matching)
+            return matching[idx]
+        return matching[0]
+    
+    # No interests — rotate through age-appropriate defaults
+    idx = passage_number % len(appropriate)
+    return appropriate[idx]
     
     # No interests? Pick age-appropriate default
     return random.choice(appropriate)

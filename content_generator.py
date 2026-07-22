@@ -112,42 +112,29 @@ class ContentGenerator:
         # Calculate target from range
         import random
         target_words = (word_count_min + word_count_max) // 2
+
+        # Pick a random story angle to prevent the AI defaulting to the same
+        # scenario (e.g. "pizza party at school") for the same topic every time
+        story_angles = [
+            "a surprising discovery",
+            "a friendly competition",
+            "helping someone in need",
+            "learning something new for the first time",
+            "a problem that needs creative solving",
+            "an unexpected friendship",
+            "a goal that takes practice to achieve",
+            "a funny misunderstanding",
+            "a challenge that builds confidence",
+            "a day that doesn't go as planned — but turns out great",
+            "working together as a team",
+            "a special talent being discovered",
+            "overcoming fear of trying something new",
+            "a mystery to solve",
+            "celebrating an achievement",
+        ]
+        story_angle = random.choice(story_angles)
         
-        # Build enhanced prompt
-        prompt = f"""
-        Generate an engaging reading passage for a student:
-        
-        Student Profile:
-        - Age: {age} years old
-        - Grade Level: {grade_band}
-        - Reading Difficulty: {difficulty_level}
-        - Interests: {', '.join(user_interests) if user_interests else 'general topics'}
-        - Topic: {topic}
-        
-        Requirements:
-        - Word count: approximately {target_words} words
-        - Use age-appropriate vocabulary for a {age}-year-old in {grade_band}
-        - Make it engaging and relatable to their interests
-        - Include vivid details and clear structure
-        - Difficulty level: {difficulty_level}
-        
-        The passage should be educational but fun, matching their grade level expectations.
-        """
-        
-        # Add after line 69
-        cultural_context = self._get_cultural_context_guidance(age, grade_band)
-        
-        # Include in prompt
-        prompt += f"""
-        
-        CULTURAL CONTEXT FOR THIS AGE/GRADE:
-        Settings to use: {', '.join(cultural_context['settings'])}
-        Characters to include: {', '.join(cultural_context['characters'])}
-        Appropriate themes: {', '.join(cultural_context['themes'])}
-        What to avoid: {', '.join(cultural_context['avoid'])}
-        """
-        
-        # ========== UPDATED PROMPT WITH SINGLE INTEREST FOCUS ==========
+        # ========== PASSAGE PROMPT ==========
         prompt = f"""Write a SHORT STORY (narrative) about {topic} featuring African American characters.
 
         Student Profile:
@@ -155,12 +142,18 @@ class ContentGenerator:
         - Grade Level: {grade_band}
         - Reading Difficulty: {difficulty_level}
         - PRIMARY INTEREST/TOPIC: {topic}
+
+        STORY ANGLE (use this to make the story fresh and different each time):
+        - Story concept: {story_angle}
+        - Apply this angle to the topic {topic} — don't just repeat the same scenario
+        - If {topic} is "sports; music" and you used a basketball story last time, try
+          a music angle or a different sport this time
+        - If {topic} is "pizza; chicken" write about cooking, sharing food, or a
+          food-related adventure — NOT just "eating pizza at a party" every time
         
         IMPORTANT - TOPIC FOCUS:
         - The ONLY topic for this story is: {topic}
         - Do NOT introduce other topics, sports, or activities not related to {topic}
-        - If {topic} is "cats; fish" — write about cats or fish, NOT soccer or basketball
-        - If {topic} is "toys; drawing" — write about toys or drawing, NOT gardening
         - Stay 100% on topic — the student chose {topic} because it interests them
         
         CULTURAL CONTEXT:
