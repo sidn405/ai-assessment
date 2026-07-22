@@ -6785,9 +6785,9 @@
                 padding: 2rem;
             `;
             
-            const lessonTitles = essayState.recentLessons.map((l, i) => 
-                `<div style="margin-bottom: 0.5rem;">${i + 1}. ${l.title}</div>`
-            ).join('');
+            const lessonTitle = essayState.recentLessons.length > 0 
+                ? essayState.recentLessons[0].title 
+                : 'Your Last Lesson';
             
             modal.innerHTML = `
                 <div style="
@@ -6812,7 +6812,7 @@
                             Great Job, ${userName}!
                         </h2>
                         <p style="font-size: 1.3rem; opacity: 0.95;">
-                            You've completed ${essayState.lessonCount} lessons! 🎉
+                            You finished a lesson! Now let's see what you learned. 📖
                         </p>
                     </div>
                     
@@ -6841,11 +6841,11 @@
                             border-radius: 12px;
                             margin-bottom: 2rem;
                         ">
-                            <div style="font-weight: bold; margin-bottom: 0.75rem; color: #1e3a5f;">
-                                📚 Your Recent Lessons:
+                            <div style="font-weight: bold; margin-bottom: 0.5rem; color: #1e3a5f;">
+                                📖 Your Last Lesson:
                             </div>
-                            <div style="color: #666; font-size: 0.95rem; line-height: 1.6;">
-                                ${lessonTitles}
+                            <div style="color: #333; font-size: 1.05rem;">
+                                ${lessonTitle}
                             </div>
                         </div>
                         
@@ -6857,7 +6857,7 @@
                                 color: #1e3a5f;
                                 margin-bottom: 1rem;
                             ">
-                                ✍️ In your own words, explain what you learned from these lessons:
+                                ✍️ In your own words, explain what you learned from this lesson:
                             </label>
                             <textarea 
                                 id="essay-text-input"

@@ -10034,7 +10034,7 @@ async def check_essay_due(token: str):
 
         print(f"✓ Essay due: {essay_due} | Checkpoint: {show_checkpoint}")
         
-        # Get last 2 real lessons for essay context
+        # Get only the most recent real lesson for essay context
         recent_lessons = []
         if essay_due:
             try:
@@ -10047,7 +10047,7 @@ async def check_essay_due(token: str):
                            AND sl.completion_status = 'completed'
                            AND (sl.is_placement IS NULL OR sl.is_placement = FALSE)
                            ORDER BY sl.completed_at DESC
-                           LIMIT 2""",
+                           LIMIT 1""",
                         (user_id,)
                     )
                 else:
@@ -10059,7 +10059,7 @@ async def check_essay_due(token: str):
                            AND sl.completion_status = 'completed'
                            AND (sl.is_placement IS NULL OR sl.is_placement = 0)
                            ORDER BY sl.completed_at DESC
-                           LIMIT 2""",
+                           LIMIT 1""",
                         (user_id,)
                     )
                 rows = cursor.fetchall()
@@ -10069,9 +10069,9 @@ async def check_essay_due(token: str):
                         'title': row['title'] if hasattr(row, 'keys') else row[1],
                         'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if (row['content'] if hasattr(row, 'keys') else row[2]) else ''
                     })
-                print(f"✓ Found {len(recent_lessons)} recent real lessons for essay context")
+                print(f"✓ Using most recent lesson for essay context: {recent_lessons[0]['title'] if recent_lessons else 'none'}")
             except Exception as e:
-                print(f"⚠ Error getting recent lessons: {e}")
+                print(f"⚠ Error getting recent lesson: {e}")
         
         conn.close()
         
