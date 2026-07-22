@@ -677,6 +677,7 @@ def init_db():
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_start TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_end TIMESTAMP",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS total_break_time INTEGER DEFAULT 0",
                 "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS activity_details TEXT",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS games_played INTEGER DEFAULT 0",
                 # Ensure unique constraints exist for ON CONFLICT upserts
