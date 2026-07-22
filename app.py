@@ -5673,6 +5673,7 @@ async def get_student_progress(token: str):
                    JOIN passages p ON sl.passage_id = p.id
                    WHERE sl.user_id = %s
                    AND sl.completion_status = 'completed'
+                   AND (sl.is_placement IS NULL OR sl.is_placement = FALSE)
                    ORDER BY sl.completed_at DESC
                    LIMIT 10""",
                 (user_id,)
@@ -5691,6 +5692,7 @@ async def get_student_progress(token: str):
                    JOIN passages p ON sl.passage_id = p.id
                    WHERE sl.user_id = ?
                    AND sl.completion_status = 'completed'
+                   AND (sl.is_placement IS NULL OR sl.is_placement = 0)
                    ORDER BY sl.completed_at DESC
                    LIMIT 10""",
                 (user_id,)
@@ -5720,7 +5722,8 @@ async def get_student_progress(token: str):
                    SUM(time_spent_seconds) as total_time,
                    MAX(completed_at) as last_activity
                    FROM session_logs 
-                   WHERE user_id = %s AND completion_status = 'completed'""",
+                   WHERE user_id = %s AND completion_status = 'completed'
+                   AND (is_placement IS NULL OR is_placement = FALSE)""",
                 (user_id,)
             )
         else:
@@ -5731,7 +5734,8 @@ async def get_student_progress(token: str):
                    SUM(time_spent_seconds) as total_time,
                    MAX(completed_at) as last_activity
                    FROM session_logs 
-                   WHERE user_id = ? AND completion_status = 'completed'""",
+                   WHERE user_id = ? AND completion_status = 'completed'
+                   AND (is_placement IS NULL OR is_placement = 0)""",
                 (user_id,)
             )
         
