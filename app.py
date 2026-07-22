@@ -686,6 +686,7 @@ def init_db():
                 "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS icon VARCHAR(10)",
                 "ALTER TABLE user_badges ALTER COLUMN badge_id DROP NOT NULL",
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
             ]
             for sql in migrations:
                 try:
@@ -2386,6 +2387,15 @@ async def update_reading_level(request: Request):
         user = cursor.fetchone()
         previous_level = user['reading_level'] if user else None
         
+        # Word count defaults per reading level — set these so lessons immediately
+        # use the correct word count after the placement test completes
+        word_count_defaults = {
+            'beginner':     (150, 200),
+            'intermediate': (200, 250),
+            'advanced':     (250, 350),
+        }
+        wc_min, wc_max = word_count_defaults.get(new_level, (200, 250))
+
         # Save to history
         if USE_POSTGRES:
             cursor.execute("""
@@ -2394,12 +2404,14 @@ async def update_reading_level(request: Request):
                 VALUES (%s, %s, %s, %s)
             """, (user_id, previous_level, new_level, score))
             
-            # Update user's current level and mark placement as complete
+            # Update reading level, word counts, and mark placement complete
             cursor.execute("""
                 UPDATE users 
-                SET reading_level = %s, level_estimate = %s, placement_completed = TRUE
+                SET reading_level = %s, level_estimate = %s,
+                    word_count_min = %s, word_count_max = %s,
+                    placement_completed = TRUE
                 WHERE id = %s
-            """, (new_level, new_level, user_id))
+            """, (new_level, new_level, wc_min, wc_max, user_id))
         else:
             cursor.execute("""
                 INSERT INTO reading_level_history 
@@ -2409,9 +2421,11 @@ async def update_reading_level(request: Request):
             
             cursor.execute("""
                 UPDATE users 
-                SET reading_level = ?, level_estimate = ?, placement_completed = 1
+                SET reading_level = ?, level_estimate = ?,
+                    word_count_min = ?, word_count_max = ?,
+                    placement_completed = 1
                 WHERE id = ?
-            """, (new_level, new_level, user_id))
+            """, (new_level, new_level, wc_min, wc_max, user_id))
         
         conn.commit()
         conn.close()
@@ -3583,21 +3597,26 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                      json.dumps(q.get('options', [])), q.get('explanation'), q.get('difficulty', 1))
                 )
         
-        # Create session log
+        # Create session log — tag placement test sessions so they're excluded
+        # from lesson counts (essay trigger, badge checks, etc.)
+        # Placement test sessions are identified by placement_completed being FALSE
+        # at the time of the session (user hasn't finished the assessment yet)
+        is_placement_session = not bool(user_data.get('placement_completed', False))
+
         if USE_POSTGRES:
             cursor.execute(
-                """INSERT INTO session_logs (user_id, passage_id, started_at)
-                   VALUES (%s, %s, NOW()) RETURNING id""",
-                (user_id, passage_id)
+                """INSERT INTO session_logs (user_id, passage_id, started_at, is_placement)
+                   VALUES (%s, %s, NOW(), %s) RETURNING id""",
+                (user_id, passage_id, is_placement_session)
             )
             result = cursor.fetchone()
             session_id = result['id']
-            print(f"✓ Passage saved with ID: {passage_id}")
+            print(f"✓ Session created (placement={is_placement_session}): passage {passage_id}")
         else:
             cursor.execute(
-                """INSERT INTO session_logs (user_id, passage_id, started_at)
-                   VALUES (?, ?, CURRENT_TIMESTAMP)""",
-                (user_id, passage_id)
+                """INSERT INTO session_logs (user_id, passage_id, started_at, is_placement)
+                   VALUES (?, ?, CURRENT_TIMESTAMP, ?)""",
+                (user_id, passage_id, 1 if is_placement_session else 0)
             )
             session_id = cursor.lastrowid
         
@@ -7023,6 +7042,64 @@ async def get_wallet(token: str):
         total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
         total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
 
+        # Auto-backfill: if wallet has never had any earnings but the student
+        # has points, convert their historical points to wallet balance.
+        # This handles students who earned points before the wallet system launched.
+        if total_earned == 0:
+            try:
+                if USE_POSTGRES:
+                    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s", (user_id,))
+                else:
+                    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+                pts_row = cursor.fetchone()
+                historical_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else 0
+
+                if historical_points > 0:
+                    backfill_cents = (historical_points * 100) // POINTS_PER_DOLLAR
+                    if backfill_cents > 0:
+                        if USE_POSTGRES:
+                            cursor.execute(
+                                """UPDATE student_wallets
+                                   SET balance_cents = balance_cents + %s,
+                                       total_earned_cents = total_earned_cents + %s,
+                                       updated_at = NOW()
+                                   WHERE user_id = %s""",
+                                (backfill_cents, backfill_cents, user_id)
+                            )
+                            cursor.execute(
+                                """INSERT INTO wallet_transactions
+                                   (user_id, type, amount_cents, points_converted, description)
+                                   VALUES (%s, 'credit', %s, %s, %s)""",
+                                (user_id, backfill_cents, historical_points,
+                                 f'Backfill: {historical_points} points earned before wallet launch')
+                            )
+                        else:
+                            cursor.execute(
+                                """UPDATE student_wallets
+                                   SET balance_cents = balance_cents + ?,
+                                       total_earned_cents = total_earned_cents + ?,
+                                       updated_at = datetime('now')
+                                   WHERE user_id = ?""",
+                                (backfill_cents, backfill_cents, user_id)
+                            )
+                            cursor.execute(
+                                """INSERT INTO wallet_transactions
+                                   (user_id, type, amount_cents, points_converted, description)
+                                   VALUES (?, 'credit', ?, ?, ?)""",
+                                (user_id, backfill_cents, historical_points,
+                                 f'Backfill: {historical_points} points earned before wallet launch')
+                            )
+                        conn.commit()
+                        print(f"✓ Wallet backfill: user {user_id} — {historical_points} pts → {backfill_cents}¢")
+                        # Refresh balance after backfill
+                        wallet = get_or_create_wallet(user_id, cursor, conn)
+                        balance_cents = wallet['balance_cents'] if hasattr(wallet, 'keys') else wallet[0]
+                        total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
+                        total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
+            except Exception as backfill_err:
+                print(f"⚠️ Wallet backfill skipped: {backfill_err}")
+                conn.rollback()
+
         # Recent transactions (last 10)
         if USE_POSTGRES:
             cursor.execute(
@@ -9902,32 +9979,42 @@ def create_admin_alert(user_id, essay_id, alert_type, priority, message, details
 
 @app.get("/api/essay/check-due")
 async def check_essay_due(token: str):
-    """Check if user needs to complete an essay"""
+    """
+    Check if student needs to write an essay or is at a stop/continue checkpoint.
+
+    NEW FLOW:
+    - After EVERY real lesson: essay is due
+    - After every 2 real lessons: also show stop/continue checkpoint
+    - Placement test sessions are excluded from counts entirely
+    """
     try:
         user_data = verify_token(token)
         user_id = user_data["user_id"]
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
         
-        # Count completed lessons
+        # Count REAL completed lessons (exclude placement test sessions)
         if USE_POSTGRES:
             cursor.execute(
                 """SELECT COUNT(*) as count FROM session_logs 
-                   WHERE user_id = %s AND completion_status = 'completed'""",
+                   WHERE user_id = %s 
+                   AND completion_status = 'completed'
+                   AND (is_placement IS NULL OR is_placement = FALSE)""",
                 (user_id,)
             )
         else:
             cursor.execute(
                 """SELECT COUNT(*) as count FROM session_logs 
-                   WHERE user_id = ? AND completion_status = 'completed'""",
+                   WHERE user_id = ? 
+                   AND completion_status = 'completed'
+                   AND (is_placement IS NULL OR is_placement = 0)""",
                 (user_id,)
             )
         
         result = cursor.fetchone()
         total_lessons = result['count'] if hasattr(result, 'keys') else result[0] if result else 0
-        
-        print(f"✓ User {user_id} has completed {total_lessons} lessons")
+        print(f"✓ User {user_id} has completed {total_lessons} real lessons (placement excluded)")
         
         # Count completed essays
         if USE_POSTGRES:
@@ -9937,18 +10024,17 @@ async def check_essay_due(token: str):
         
         result = cursor.fetchone()
         total_essays = result['count'] if hasattr(result, 'keys') else result[0] if result else 0
-        
         print(f"✓ User {user_id} has completed {total_essays} essays")
+
+        # Essay due after every real lesson
+        essay_due = total_lessons > 0 and total_essays < total_lessons
+
+        # Stop/continue checkpoint every 2 real lessons
+        show_checkpoint = total_lessons > 0 and total_lessons % 2 == 0
+
+        print(f"✓ Essay due: {essay_due} | Checkpoint: {show_checkpoint}")
         
-        # Essay is due every 2 lessons
-        expected_essays = total_lessons // 2
-        essay_due = (total_lessons > 0 and 
-                     total_lessons % 2 == 0 and 
-                     total_essays < expected_essays)
-        
-        print(f"✓ Essay due: {essay_due}")
-        
-        # If essay is due, get last 2 lessons from passages table
+        # Get last 2 real lessons for essay context
         recent_lessons = []
         if essay_due:
             try:
@@ -9959,6 +10045,7 @@ async def check_essay_due(token: str):
                            JOIN passages p ON sl.passage_id = p.id
                            WHERE sl.user_id = %s 
                            AND sl.completion_status = 'completed'
+                           AND (sl.is_placement IS NULL OR sl.is_placement = FALSE)
                            ORDER BY sl.completed_at DESC
                            LIMIT 2""",
                         (user_id,)
@@ -9968,52 +10055,32 @@ async def check_essay_due(token: str):
                         """SELECT p.id, p.title, p.content
                            FROM session_logs sl
                            JOIN passages p ON sl.passage_id = p.id
-                           WHERE sl.user_id = ? 
+                           WHERE sl.user_id = ?
                            AND sl.completion_status = 'completed'
+                           AND (sl.is_placement IS NULL OR sl.is_placement = 0)
                            ORDER BY sl.completed_at DESC
                            LIMIT 2""",
                         (user_id,)
                     )
-                
                 rows = cursor.fetchall()
-                
                 for row in rows:
                     recent_lessons.append({
                         'id': row['id'] if hasattr(row, 'keys') else row[0],
                         'title': row['title'] if hasattr(row, 'keys') else row[1],
                         'content': (row['content'] if hasattr(row, 'keys') else row[2])[:500] if (row['content'] if hasattr(row, 'keys') else row[2]) else ''
                     })
-                
-                print(f"✓ Found {len(recent_lessons)} lessons from passages table")
-                
+                print(f"✓ Found {len(recent_lessons)} recent real lessons for essay context")
             except Exception as e:
-                print(f"⚠ Error getting lesson titles: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        # If we still don't have 2 lessons, use generic placeholders
-        if essay_due and len(recent_lessons) < 2:
-            print(f"⚠ Only found {len(recent_lessons)} lessons, using placeholders")
-            while len(recent_lessons) < 2:
-                recent_lessons.append({
-                    'id': len(recent_lessons),
-                    'title': f'Recent Lesson {len(recent_lessons) + 1}',
-                    'content': 'A lesson you recently completed.'
-                })
+                print(f"⚠ Error getting recent lessons: {e}")
         
         conn.close()
-        
-        print(f"✓ Returning {len(recent_lessons)} lessons")
-        if recent_lessons:
-            for i, lesson in enumerate(recent_lessons):
-                print(f"  Lesson {i+1}: {lesson['title']}")
         
         return {
             "success": True,
             "essay_due": essay_due,
+            "show_checkpoint": show_checkpoint,
             "total_lessons": total_lessons,
             "total_essays": total_essays,
-            "lesson_count_for_next_essay": total_lessons,
             "recent_lessons": recent_lessons
         }
         
