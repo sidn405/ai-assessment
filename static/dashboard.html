@@ -3801,12 +3801,20 @@
         let tutorTimers = [];
         let tutorAbort = null;
         let tutorReqId = 0;
-
         let tutorSpeaking = false;
-
         let instructionInFlight = false;
         let lastInstructionAt = 0;
 
+        // ── Tutor avatar disabled per client request ──────────────────────
+        // Stub all tutor functions so existing call sites don't throw errors.
+        // To re-enable: restore the aiTutor HTML element and remove these stubs.
+        function showTutor(msg, opts) {}
+        function hideTutor() {}
+        function toggleTutorMute() {}
+        function playVoiceNavigation() {}
+        function speakTutorMessage(msg) {}
+        function playWelcomeGreeting() {}
+        // ─────────────────────────────────────────────────────────────────
 
         function unlockSpeechOnce() {
           if (speechUnlocked || !window.speechSynthesis) return;
@@ -10928,25 +10936,8 @@
     </script>
     
     <!-- AI Tutor Avatar -->
-    <div id="aiTutor" class="ai-tutor hidden">
-    <div class="tutor-avatar">
-        <div class="avatar-face" id="avatarFace">
-        <div class="eyes">
-            <div class="eye left"></div>
-            <div class="eye right"></div>
-        </div>
-        <div class="mouth" id="avatarMouth"></div>
-        </div>
-    </div>
-
-    <div class="tutor-speech-bubble">
-        <div class="speech-text" id="tutorMessage"></div>
-        <button class="speech-continue" onclick="hideTutor()">Got it! ✓</button>
-    </div>
-
-    <button class="tutor-close" onclick="hideTutor()">✕</button>
-    <button class="tutor-mute" onclick="toggleTutorMute()"><span id="muteIcon">🔊</span></button>
-    </div>
+    <!-- AI Tutor avatar removed per client request (timing issues) -->
+    <!-- To re-enable: restore the aiTutor div and uncomment showTutor/hideTutor calls -->
     
 </body>
 </html>
