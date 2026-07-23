@@ -133,9 +133,11 @@ class UserCreate(BaseModel):
     full_name: str
     age: Optional[int] = None
     age_band: Optional[str] = None
-    grade_band: Optional[str] = None      # NEW: Student's grade level
-    reading_level: Optional[str] = None   # NEW: Initial reading difficulty
+    grade_band: Optional[str] = None
+    reading_level: Optional[str] = None
     school: Optional[str] = None
+    cultural_identity: Optional[str] = None
+    spoken_language: Optional[str] = "en"
         
 class UserLogin(BaseModel):
     email: str
@@ -258,6 +260,8 @@ def init_db():
                     last_active TIMESTAMP,
                     profile_photo TEXT,
                     placement_completed BOOLEAN DEFAULT FALSE,
+                    cultural_identity VARCHAR(50),
+                    spoken_language VARCHAR(10) DEFAULT 'en',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -749,6 +753,8 @@ def init_db():
                 "UPDATE users SET word_count_min = NULL WHERE word_count_min = 50 AND word_count_max = 75",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_interest_index INTEGER DEFAULT 0",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS cultural_identity VARCHAR(50)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS spoken_language VARCHAR(10) DEFAULT 'en'",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_start TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_end TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS total_break_time INTEGER DEFAULT 0",
@@ -1372,19 +1378,21 @@ async def register(user: UserCreate):
     try:
         if USE_POSTGRES:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, FALSE) RETURNING id""",
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed, cultural_identity, spoken_language)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, FALSE, %s, %s) RETURNING id""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, school_name)
+                 user.age, user.age_band, user.grade_band, school_name,
+                 user.cultural_identity or None, user.spoken_language or 'en')
             )
             result = cursor.fetchone()
             user_id = result["id"] if isinstance(result, dict) else result[0]
         else:
             cursor.execute(
-                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)""",
+                """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed, cultural_identity, spoken_language) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?)""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, school_name)
+                 user.age, user.age_band, user.grade_band, school_name,
+                 user.cultural_identity or None, user.spoken_language or 'en')
             )
             user_id = cursor.lastrowid
  
@@ -3521,14 +3529,15 @@ async def onboard_interests(request: Request):
     cursor = get_cursor(conn)
     
     if USE_POSTGRES:
-        cursor.execute("SELECT grade_band, reading_level, age_band FROM users WHERE id = %s", (user_id,))
+        cursor.execute("SELECT grade_band, reading_level, age_band, cultural_identity FROM users WHERE id = %s", (user_id,))
     else:
-        cursor.execute("SELECT grade_band, reading_level, age_band FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT grade_band, reading_level, age_band, cultural_identity FROM users WHERE id = ?", (user_id,))
     existing = cursor.fetchone()
     
     existing_grade_band = existing['grade_band'] if existing else None
     existing_reading_level = existing['reading_level'] if existing else None
     existing_age_band = existing['age_band'] if existing else None
+    cultural_identity = existing['cultural_identity'] if existing else None
     
     if existing_grade_band:
         # Trust the precise value captured at registration.
@@ -3613,13 +3622,13 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     if USE_POSTGRES:
         cursor.execute("""
             SELECT id, level_estimate, interest_tags, total_passages_read,
-                   age, grade_band, reading_level, age_band
+                   age, grade_band, reading_level, age_band, cultural_identity
             FROM users WHERE id = %s
         """, (user_id,))
     else:
         cursor.execute("""
             SELECT id, level_estimate, interest_tags, total_passages_read,
-                   age, grade_band, reading_level, age_band
+                   age, grade_band, reading_level, age_band, cultural_identity
             FROM users WHERE id = ?
         """, (user_id,))
     
@@ -3636,6 +3645,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     age = user['age'] or 10
     grade_band = user['grade_band'] or 'elementary'
     age_band = user['age_band'] or 'child'
+    cultural_identity = user['cultural_identity'] if user['cultural_identity'] else None
     
     # For first passage, make it easier (quick win strategy)
     if total_read == 0:
@@ -3672,11 +3682,12 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         passage_data = content_generator.generate_passage(
            topic=topic,
            difficulty_level=difficulty,
-           word_count_min=target_words - 25,  # ✅ Correct parameter name
-           word_count_max=target_words + 25,  # ✅ Correct parameter name
+           word_count_min=target_words - 25,
+           word_count_max=target_words + 25,
            user_interests=interest_tags,
            age=age,
-           grade_band=grade_band
+           grade_band=grade_band,
+           cultural_identity=cultural_identity
         )
         print(f"✓ Passage generated: {passage_data['title']}")
 
@@ -6963,9 +6974,10 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 difficulty_level=difficulty,
                 word_count_min=word_count_min,
                 word_count_max=word_count_max,
-                user_interests=[picked_topic],  # ✅ Only pass the selected topic, not all interests
+                user_interests=[picked_topic],
                 age=user.get('age'),
-                grade_band=user.get('grade_band') or 'elementary'
+                grade_band=user.get('grade_band') or 'elementary',
+                cultural_identity=user.get('cultural_identity')
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)

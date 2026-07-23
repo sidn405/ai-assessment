@@ -358,6 +358,44 @@
             </div>
 
             <div class="form-group">
+                <label for="culturalIdentity">Cultural Identity</label>
+                <select id="culturalIdentity" name="culturalIdentity" required>
+                    <option value="" disabled selected>Select your cultural identity...</option>
+                    <option value="black_african_american">Black or African American</option>
+                    <option value="hispanic_latino">Hispanic or Latino</option>
+                    <option value="asian">Asian</option>
+                    <option value="native_american">American Indian or Alaska Native</option>
+                    <option value="pacific_islander">Native Hawaiian or Pacific Islander</option>
+                    <option value="white">White or European American</option>
+                    <option value="middle_eastern">Middle Eastern or North African</option>
+                    <option value="multiracial">Multiracial or Multiethnic</option>
+                    <option value="other">Other</option>
+                </select>
+                <small>Helps us personalize stories with characters that reflect your background</small>
+            </div>
+
+            <div class="form-group">
+                <label for="spokenLanguage">
+                    Primary Spoken Language
+                    <span class="optional">(optional)</span>
+                </label>
+                <select id="spokenLanguage" name="spokenLanguage">
+                    <option value="en" selected>English</option>
+                    <option value="es">Spanish / Español</option>
+                    <option value="fr">French / Français</option>
+                    <option value="zh">Chinese / 中文</option>
+                    <option value="ar">Arabic / العربية</option>
+                    <option value="pt">Portuguese / Português</option>
+                    <option value="hi">Hindi / हिन्दी</option>
+                    <option value="vi">Vietnamese / Tiếng Việt</option>
+                    <option value="ko">Korean / 한국어</option>
+                    <option value="tl">Tagalog / Filipino</option>
+                    <option value="other">Other</option>
+                </select>
+                <small>Used for future multi-language lesson support</small>
+            </div>
+
+            <div class="form-group">
                 <label for="email">Email Address</label>
                 <input 
                     type="email" 
@@ -577,10 +615,19 @@
             const password = document.getElementById('password').value;
             const gradeLevel = document.getElementById('gradeLevel').value;
             const school = document.getElementById('school').value.trim().toUpperCase();
+            const culturalIdentity = document.getElementById('culturalIdentity').value;
+            const spokenLanguage = document.getElementById('spokenLanguage').value;
 
             // Block submission if school code not confirmed valid
             if (!schoolCodeValid) {
                 showAlert('Please enter a valid school code before continuing.', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+                return;
+            }
+
+            if (!culturalIdentity) {
+                showAlert('Please select your cultural identity.', 'error');
                 btn.disabled = false;
                 btn.textContent = originalText;
                 return;
@@ -604,7 +651,9 @@
                         age_band: ageBand,
                         grade_band: gradeLevel,
                         reading_level: readingLevel,
-                        school: school
+                        school: school,
+                        cultural_identity: culturalIdentity,
+                        spoken_language: spokenLanguage
                     })
                 });
                 

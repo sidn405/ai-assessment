@@ -1193,6 +1193,47 @@
             <div id="schoolCodeStatus" style="margin-top: 0.4rem; font-size: 0.88rem; display: none;"></div>
           </div>
 
+          <div class="form-group">
+            <label for="registerCulturalIdentity" style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">
+                Cultural Identity
+            </label>
+            <select id="registerCulturalIdentity" required
+                style="width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; font-family: inherit; background: white; box-sizing: border-box; appearance: none; background-image: url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'%3E%3Cpath fill=\'%23667eea\' d=\'M6 9L1 4h10z\'/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 16px center; padding-right: 45px;">
+                <option value="" disabled selected>Select your cultural identity...</option>
+                <option value="black_african_american">Black or African American</option>
+                <option value="hispanic_latino">Hispanic or Latino</option>
+                <option value="asian">Asian</option>
+                <option value="native_american">American Indian or Alaska Native</option>
+                <option value="pacific_islander">Native Hawaiian or Pacific Islander</option>
+                <option value="white">White or European American</option>
+                <option value="middle_eastern">Middle Eastern or North African</option>
+                <option value="multiracial">Multiracial or Multiethnic</option>
+                <option value="other">Other</option>
+            </select>
+            <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Helps us personalize stories with characters that reflect your background</small>
+          </div>
+
+          <div class="form-group">
+            <label for="registerSpokenLanguage" style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">
+                Primary Spoken Language <span style="font-weight: 400; color: #757575; font-size: 0.85em;">(optional)</span>
+            </label>
+            <select id="registerSpokenLanguage"
+                style="width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; font-family: inherit; background: white; box-sizing: border-box;">
+                <option value="en">English</option>
+                <option value="es">Spanish / Español</option>
+                <option value="fr">French / Français</option>
+                <option value="zh">Chinese / 中文</option>
+                <option value="ar">Arabic / العربية</option>
+                <option value="pt">Portuguese / Português</option>
+                <option value="hi">Hindi / हिन्दी</option>
+                <option value="vi">Vietnamese / Tiếng Việt</option>
+                <option value="ko">Korean / 한국어</option>
+                <option value="tl">Tagalog / Filipino</option>
+                <option value="other">Other</option>
+            </select>
+            <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Used for future multi-language lesson support</small>
+          </div>
+
           <!-- role forced to student -->
           <input type="hidden" id="registerRole" value="student">
 
@@ -1605,9 +1646,17 @@
             const gradeLevel = document.getElementById('registerGradeLevel').value;
             const age = parseInt(document.getElementById('registerAge').value, 10);  // ADD THIS LINE
             const school = document.getElementById('registerSchool').value.trim().toUpperCase();
+            const culturalIdentity = document.getElementById('registerCulturalIdentity').value;
+            const spokenLanguage = document.getElementById('registerSpokenLanguage').value;
 
             if (!gradeLevel) {
                 errorDiv.textContent = 'Please select your grade level';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (!culturalIdentity) {
+                errorDiv.textContent = 'Please select your cultural identity';
                 errorDiv.style.display = 'block';
                 return;
             }
@@ -1648,7 +1697,9 @@
                         age_band,
                         grade_band: gradeLevel,
                         reading_level,
-                        school
+                        school,
+                        cultural_identity: culturalIdentity,
+                        spoken_language: spokenLanguage
                     })
                 });
 

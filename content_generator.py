@@ -18,48 +18,156 @@ class ContentGenerator:
         # NEW API - Create client
         self.client = OpenAI(api_key=self.api_key)
         
-    def _get_cultural_context_guidance(self, age, grade_band):
+    def _get_cultural_context_guidance(self, age, grade_band, cultural_identity=None):
         """
-        Provides age-appropriate cultural context guidance
+        Provides culturally-responsive context guidance based on the student's
+        cultural identity. Defaults to inclusive/diverse if not specified.
         """
-        contexts = {
+        # ── Culture-specific character name pools ──────────────────────────
+        name_pools = {
+            'black_african_american': [
+                'Jamal', 'Marcus', 'Aaliyah', 'Devon', 'Jordan', 'Imani', 'Malik',
+                'Destiny', 'Andre', 'Jasmine', 'Elijah', 'Simone', 'Isaiah', 'Nia',
+                'Jaylen', 'Amara', 'Darius', 'Keisha', 'Trey', 'Brianna', 'Kofi',
+                'Sanaa', 'DeShawn', 'Raven', 'Miles', 'Zara', 'Cameron', 'Jade'
+            ],
+            'hispanic_latino': [
+                'Sofia', 'Mateo', 'Isabella', 'Diego', 'Valentina', 'Sebastián',
+                'Camila', 'Alejandro', 'Lucia', 'Miguel', 'Gabriela', 'Carlos',
+                'Daniela', 'Andrés', 'Valeria', 'Emilio', 'Natalia', 'Rafael',
+                'Mariana', 'Javier', 'Fernanda', 'Luis', 'Paola', 'Rodrigo'
+            ],
+            'asian': [
+                'Mei', 'Kenji', 'Priya', 'Jin', 'Aiko', 'Raj', 'Yuki', 'Arjun',
+                'Sakura', 'Wei', 'Anya', 'Hiroshi', 'Ananya', 'Kaito', 'Sunita',
+                'Min-jun', 'Divya', 'Takeshi', 'Nadia', 'Ravi', 'Yuna', 'Sanjay',
+                'Leila', 'Haruto', 'Pooja', 'Tenzin', 'Amira', 'Park', 'Chen'
+            ],
+            'native_american': [
+                'Aiyana', 'Chayton', 'Kimi', 'Takoda', 'Winona', 'Suni',
+                'Dakota', 'Sequoia', 'Cochise', 'Ahanu', 'Cheyenne', 'Tala',
+                'Waya', 'Nadie', 'Shilah', 'Kaya', 'Elan', 'Lomasi'
+            ],
+            'pacific_islander': [
+                'Kalani', 'Moana', 'Kekai', 'Leilani', 'Kai', 'Hina',
+                'Makoa', 'Nalani', 'Keola', 'Mahina', 'Koa', 'Ikaika',
+                'Pua', 'Alika', 'Mele', 'Noelani'
+            ],
+            'white': [
+                'Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Ethan', 'Sophia',
+                'Mason', 'Isabella', 'Logan', 'Mia', 'Lucas', 'Harper', 'Aiden',
+                'Ella', 'Jackson', 'Scarlett', 'Owen', 'Grace', 'Sebastian'
+            ],
+            'middle_eastern': [
+                'Layla', 'Omar', 'Fatima', 'Khalid', 'Amira', 'Yousef',
+                'Nour', 'Hassan', 'Sara', 'Tariq', 'Rania', 'Ahmad',
+                'Yasmin', 'Kareem', 'Hana', 'Ziad', 'Samira', 'Ali'
+            ],
+        }
+
+        # ── Culture-specific story context ─────────────────────────────────
+        cultural_contexts = {
+            'black_african_american': {
+                'settings': ['urban neighborhood', 'community center', 'barbershop', 'church hall', 
+                             'HBCU campus', 'local park', 'corner store', 'basketball court', 'school'],
+                'themes': ['community pride', 'family bonds', 'resilience', 'excellence', 
+                           'mentorship', 'cultural heritage', 'creativity', 'leadership'],
+                'cultural_notes': 'Celebrate Black culture, excellence, and community. Use culturally authentic settings and experiences.'
+            },
+            'hispanic_latino': {
+                'settings': ['family kitchen', 'mercado', 'quinceañera', 'school', 'community garden',
+                             'neighborhood street', 'church', 'soccer field', 'abuela\'s house'],
+                'themes': ['family (familia)', 'hard work', 'community (comunidad)', 'heritage', 
+                           'bilingual pride', 'celebration', 'perseverance', 'dreams'],
+                'cultural_notes': 'Celebrate Latino culture and family values. May naturally include Spanish words or phrases. Show strong family bonds and community connections.'
+            },
+            'asian': {
+                'settings': ['family restaurant', 'school', 'temple', 'market', 'community center',
+                             'martial arts studio', 'tech lab', 'garden', 'family home'],
+                'themes': ['respect for elders', 'academic excellence', 'family honor', 'cultural tradition',
+                           'innovation', 'balance', 'perseverance', 'community'],
+                'cultural_notes': 'Celebrate Asian heritage authentically. Avoid stereotypes. Show diversity within Asian cultures. Balance tradition with modern life.'
+            },
+            'native_american': {
+                'settings': ['reservation', 'forest', 'river', 'community gathering', 'school',
+                             'elder\'s home', 'powwow', 'traditional grounds', 'natural landscape'],
+                'themes': ['connection to nature', 'tribal heritage', 'oral tradition', 'respect for elders',
+                           'stewardship', 'community', 'cultural preservation', 'identity'],
+                'cultural_notes': 'Honor Native American cultures with deep respect. Celebrate connection to land, community, and tradition. Avoid stereotypes.'
+            },
+            'pacific_islander': {
+                'settings': ['beach', 'community hall', 'school', 'fishing boat', 'family gathering',
+                             'ocean', 'garden', 'village', 'cultural festival'],
+                'themes': ['ocean connection', 'family (ohana)', 'navigation', 'cultural celebration',
+                           'community strength', 'natural harmony', 'tradition', 'identity'],
+                'cultural_notes': 'Celebrate Pacific Islander culture — Hawaiian, Samoan, Tongan, Filipino etc. Honor ohana (family) and connection to the ocean.'
+            },
+            'white': {
+                'settings': ['school', 'suburb', 'farm', 'city neighborhood', 'sports field',
+                             'library', 'park', 'family home', 'community center'],
+                'themes': ['friendship', 'hard work', 'family', 'community', 'learning',
+                           'sports', 'creativity', 'kindness', 'adventure'],
+                'cultural_notes': 'Relatable everyday American experiences with diverse supporting characters.'
+            },
+            'middle_eastern': {
+                'settings': ['family home', 'market (souk)', 'school', 'mosque', 'community center',
+                             'garden', 'city', 'family business', 'cultural festival'],
+                'themes': ['family honor', 'hospitality', 'faith', 'education', 'heritage',
+                           'generosity', 'cultural pride', 'community bonds', 'achievement'],
+                'cultural_notes': 'Celebrate Middle Eastern and North African cultures. Honor family, hospitality, and cultural heritage. Show modern and traditional balance.'
+            },
+        }
+
+        # ── Grade-level context overlay ────────────────────────────────────
+        grade_contexts = {
             'elementary': {
-                'settings': ['playground', 'classroom', 'community center', 'library', 'park', 'corner store'],
-                'characters': ['students', 'teachers', 'parents', 'grandparents', 'librarians', 'coaches'],
-                'themes': ['friendship', 'learning', 'helping others', 'trying new things', 'community'],
-                'avoid': ['Keep it simple and positive', 'No complex social issues', 'Focus on everyday experiences']
+                'themes_add': ['friendship', 'learning', 'helping others', 'trying new things'],
+                'avoid': ['Keep it simple and positive', 'No complex social issues']
             },
             'middle': {
-                'settings': ['school', 'community center', 'basketball court', 'tech lab', 'after-school program', 'local business'],
-                'characters': ['students', 'mentors', 'coaches', 'small business owners', 'community leaders', 'older siblings'],
-                'themes': ['discovering talents', 'overcoming challenges', 'leadership', 'innovation', 'community service'],
-                'avoid': ['Avoid trauma', 'No criminal justice references', 'Focus on growth and potential']
+                'themes_add': ['discovering talents', 'leadership', 'overcoming challenges'],
+                'avoid': ['No trauma', 'Focus on growth']
             },
             'high': {
-                'settings': ['high school', 'internships', 'community college', 'local businesses', 'volunteer programs', 'STEM programs'],
-                'characters': ['students', 'mentors', 'entrepreneurs', 'professionals', 'college students', 'counselors'],
-                'themes': ['career exploration', 'college prep', 'leadership', 'social justice', 'entrepreneurship', 'identity'],
-                'avoid': ['Respectful of complex realities', 'Focus on agency and empowerment', 'No deficit narratives']
+                'themes_add': ['career exploration', 'identity', 'college prep', 'entrepreneurship'],
+                'avoid': ['Focus on empowerment', 'No deficit narratives']
             },
             'adult': {
-                'settings': ['workplace', 'community organizations', 'professional settings', 'entrepreneurship', 'continuing education'],
-                'characters': ['professionals', 'entrepreneurs', 'community leaders', 'working parents', 'returning students'],
-                'themes': ['career advancement', 'community building', 'economic mobility', 'lifelong learning', 'giving back'],
-                'avoid': ['Acknowledge challenges without dwelling', 'Focus on resilience and success', 'Asset-based approach']
+                'themes_add': ['career advancement', 'community building', 'lifelong learning'],
+                'avoid': ['Focus on resilience', 'Asset-based approach']
             }
         }
-        
-        # Map grade to category
+
         if grade_band in ['pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th', 'elementary']:
-            category = 'elementary'
+            grade_cat = 'elementary'
         elif grade_band in ['6th', '7th', '8th', 'middle']:
-            category = 'middle'
+            grade_cat = 'middle'
         elif grade_band in ['9th', '10th', '11th', '12th', 'high']:
-            category = 'high'
+            grade_cat = 'high'
         else:
-            category = 'adult'
-        
-        return contexts.get(category, contexts['elementary'])
+            grade_cat = 'adult'
+
+        grade_ctx = grade_contexts.get(grade_cat, grade_contexts['elementary'])
+
+        # Get culture-specific or default context
+        culture = (cultural_identity or '').lower()
+        cult_ctx = cultural_contexts.get(culture, {
+            'settings': ['school', 'neighborhood', 'park', 'library', 'community center', 'home'],
+            'themes': ['friendship', 'learning', 'community', 'growth', 'kindness'],
+            'cultural_notes': 'Use diverse, inclusive characters representing multiple backgrounds.'
+        })
+
+        return {
+            'settings': cult_ctx['settings'],
+            'themes': cult_ctx['themes'] + grade_ctx['themes_add'],
+            'avoid': grade_ctx['avoid'],
+            'cultural_notes': cult_ctx['cultural_notes'],
+            'name_pool': name_pools.get(culture, [
+                # Default diverse pool when no identity specified
+                'Jordan', 'Avery', 'Quinn', 'Riley', 'Morgan', 'Alex', 'Taylor',
+                'Cameron', 'Sage', 'River', 'Phoenix', 'Remy', 'Skylar', 'Drew'
+            ])
+        }
     
     
         
@@ -106,12 +214,18 @@ class ContentGenerator:
             txt = txt.split("```")[1].split("```")[0].strip()
         return json.loads(txt)
     
-    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests, age=None, grade_band=None):
+    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests, age=None, grade_band=None, cultural_identity=None):
         """Generate educational passage using GPT-4 with dynamic word count"""
         
         # Calculate target from range
         import random
         target_words = (word_count_min + word_count_max) // 2
+
+        # Get culturally-responsive context
+        cultural_ctx = self._get_cultural_context_guidance(age, grade_band, cultural_identity)
+        name_pool = cultural_ctx['name_pool']
+        random.shuffle(name_pool)
+        name_suggestion = name_pool[0] if name_pool else 'Alex'
 
         # Pick a random story angle to prevent the AI defaulting to the same
         # scenario (e.g. "pizza party at school") for the same topic every time
@@ -135,76 +249,58 @@ class ContentGenerator:
         story_angle = random.choice(story_angles)
         
         # ========== PASSAGE PROMPT ==========
-        prompt = f"""Write a SHORT STORY (narrative) about {topic} featuring African American characters.
+        prompt = f"""Write a SHORT STORY (narrative) about {topic} featuring characters from the student's cultural background.
 
         Student Profile:
         - Age: {age} years old
         - Grade Level: {grade_band}
         - Reading Difficulty: {difficulty_level}
         - PRIMARY INTEREST/TOPIC: {topic}
+        - Cultural Background: {cultural_identity or 'diverse/inclusive'}
 
-        STORY ANGLE (use this to make the story fresh and different each time):
+        STORY ANGLE (make it fresh and different every time):
         - Story concept: {story_angle}
-        - Apply this angle to the topic {topic} — don't just repeat the same scenario
-        - If {topic} is "sports; music" and you used a basketball story last time, try
-          a music angle or a different sport this time
-        - If {topic} is "pizza; chicken" write about cooking, sharing food, or a
-          food-related adventure — NOT just "eating pizza at a party" every time
+        - Apply this angle to {topic} — avoid repeating the same scenario
+        
+        CULTURAL AUTHENTICITY — IMPORTANT:
+        - {cultural_ctx['cultural_notes']}
+        - Protagonist name suggestion: {name_suggestion} (or another authentic name from this culture)
+        - Authentic settings: {', '.join(cultural_ctx['settings'][:4])}
+        - Resonant themes: {', '.join(cultural_ctx['themes'][:4])}
+        - Guidelines: {' | '.join(cultural_ctx['avoid'])}
+        
+        CHARACTER DIVERSITY:
+        - Vary protagonist gender — alternate between male and female across stories
+        - Supporting characters can be from different backgrounds (friend, teacher, neighbor)
+        - Keep names authentic to the cultural background specified above
+        
+        SETTING RULES:
+        - Pick a setting that fits the topic: {topic}
+        - Good options: school classroom, backyard, library, kitchen/home,
+          art class, sports field, garden, friend's house, bookstore, grandma's house,
+          after-school program, market, studio, neighborhood block
+        - Avoid overused defaults like "community center"
         
         IMPORTANT - TOPIC FOCUS:
         - The ONLY topic for this story is: {topic}
-        - Do NOT introduce other topics, sports, or activities not related to {topic}
+        - Do NOT introduce other topics not related to {topic}
         - Stay 100% on topic — the student chose {topic} because it interests them
-        
-        CULTURAL CONTEXT:
-        - Set in an urban community (city neighborhood, public spaces)
-        - Feature authentic Black characters with realistic names
-        - Show positive community interactions and support
-        - Include cultural elements (music, food, celebrations, traditions)
-        - Demonstrate resilience and success
-        
-        CHARACTER DIVERSITY RULES:
-        - Use a wide variety of character names across stories — do not repeat the same
-          name in consecutive stories. Rotate through names like:
-          Jamal, Marcus, Aaliyah, Devon, Zoe, Jordan, Imani, Malik, Destiny,
-          Andre, Jasmine, Elijah, Simone, Isaiah, Nia, Jaylen, Amara,
-          Darius, Keisha, Trey, Brianna, Cameron, Layla, Xavier, Jade,
-          Kofi, Sanaa, DeShawn, Raven, Theo, Zara, Miles
-        - Vary gender too — alternate between male and female protagonists
-        - Pick a name that feels natural for the topic and setting
-        
-        SETTING RULES — CRITICAL:
-        - Do NOT default to "community center" or "park" — these are overused
-        - Pick a setting that fits naturally with the topic: {topic}
-        - Good options: school classroom, backyard, library, kitchen/home,
-          art class, basketball court, music studio, garden, friend's house,
-          bookstore, science fair, sports field, grandma's house, corner store,
-          after-school program, rooftop, neighborhood block
         
         HARD WORD COUNT RULE:
         - The "content" field MUST be EXACTLY {target_words} words.
         - Count words by splitting on spaces.
-        - Before you respond, self-check the word count and adjust until it is exactly {target_words}.
+        - Self-check word count and adjust until exactly {target_words}.
         
         STORY STRUCTURE:
-        - Character: African American protagonist facing a relatable challenge
-        - Setting: Urban neighborhood, school, community center, park, library, etc.
+        - Character: Protagonist facing a relatable challenge or opportunity
         - Plot: Beginning → problem/challenge → resolution through creativity/effort/community
         - Include at least one line of dialogue
         - Show positive outcome and growth
         - NO criminal justice, violence, or trauma content
-        - Focus on strengths, not struggles with poverty
-        
-        TOPIC FOCUS: {topic}
-        - Stay focused on this topic only
-        - Make it educational but engaging
-        - Connect to their real-world experiences
-        - Show how the topic matters in their community
         
         AGE-APPROPRIATE VOCABULARY:
         - Use {difficulty_level} level vocabulary
         - Include challenging academic words they can learn
-        - Define any cultural references they might not know
         
         Return your response as a JSON object:
         {{
