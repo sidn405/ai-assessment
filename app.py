@@ -361,8 +361,10 @@ def init_db():
                     sender_id INTEGER REFERENCES users(id),
                     recipient_id INTEGER REFERENCES users(id),
                     recipient_type VARCHAR(20) DEFAULT 'student',
+                    sender_type VARCHAR(20) DEFAULT 'student',
                     subject VARCHAR(255),
                     body TEXT,
+                    content TEXT,
                     read BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -680,6 +682,7 @@ def init_db():
                 "ALTER TABLE passages ADD COLUMN IF NOT EXISTS image_url TEXT",
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS recipient_type VARCHAR(20) DEFAULT 'student'",
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_type VARCHAR(20) DEFAULT 'student'",
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS content TEXT",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_end TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS rounds_completed INTEGER DEFAULT 0",
