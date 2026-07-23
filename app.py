@@ -676,6 +676,21 @@ def init_db():
             conn.commit()
             print("✓ timeout_events table ready")
 
+            # Admin invites
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS admin_invites (
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR(255) NOT NULL,
+                    invited_by INTEGER REFERENCES users(id),
+                    token VARCHAR(255) UNIQUE,
+                    status VARCHAR(20) DEFAULT 'pending',
+                    expires_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ admin_invites table ready")
+
             # ================================================================
             # INDEXES
             # ================================================================
@@ -1100,6 +1115,18 @@ def init_db():
                 total_points INTEGER DEFAULT 0,
                 average_score REAL DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_invites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                invited_by INTEGER REFERENCES users(id),
+                token TEXT UNIQUE,
+                status TEXT DEFAULT 'pending',
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
