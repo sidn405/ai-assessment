@@ -28,7 +28,7 @@ import secrets, hashlib
 import requests
 
 # Import our new utilities
-from readability import analyze_readability, get_difficulty_for_user
+from readability import analyze_readability, get_difficulty_for_user, flesch_kincaid_grade_to_lexile, calculate_student_lexile
 from content_generator import ContentGenerator
 
 # Initialize FastAPI
@@ -647,6 +647,21 @@ def init_db():
             conn.commit()
             print("✓ weekly_goals table ready")
 
+            # Lexile score history — tracks student Lexile Reader Measure over time
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS lexile_history (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    lexile_score INTEGER NOT NULL,
+                    passage_id INTEGER REFERENCES passages(id),
+                    passage_lexile INTEGER,
+                    comprehension_score REAL,
+                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ lexile_history table ready")
+
             # ================================================================
             # INDEXES
             # ================================================================
@@ -683,6 +698,8 @@ def init_db():
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS recipient_type VARCHAR(20) DEFAULT 'student'",
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_type VARCHAR(20) DEFAULT 'student'",
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS content TEXT",
+                "ALTER TABLE passages ADD COLUMN IF NOT EXISTS lexile_score INTEGER",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS lexile_score INTEGER",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_end TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS rounds_completed INTEGER DEFAULT 0",
@@ -3598,6 +3615,12 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
            grade_band=grade_band
         )
         print(f"✓ Passage generated: {passage_data['title']}")
+
+        # Calculate Lexile score for this passage
+        fk_grade = passage_data.get('flesch_kincaid_grade') or passage_data.get('readability_score') or 6.0
+        passage_lexile = flesch_kincaid_grade_to_lexile(float(fk_grade))
+        passage_data['lexile_score'] = passage_lexile
+        print(f"📊 Passage Lexile: {passage_lexile}L (FK grade: {fk_grade})")
         
         # Generate illustration for ALL readers (not just young learners)
         image_url = None
@@ -3616,8 +3639,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             cursor.execute(
                 """INSERT INTO passages 
                 (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
-                    difficulty_level, estimated_minutes, approved, created_by, image_url)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                    difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (passage_data['title'], 
                 passage_data['content'], 
                 passage_data.get('source', 'AI Generated'),
@@ -3627,7 +3650,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                 passage_data.get('flesch_ease'),
                 passage_data.get('difficulty_level', difficulty),
                 passage_data.get('estimated_minutes', 2),
-                True, 1, image_url)
+                True, 1, image_url, passage_lexile)
             )
             result = cursor.fetchone()
             passage_id = result['id']
@@ -3636,8 +3659,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             cursor.execute(
                 """INSERT INTO passages 
                 (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                    difficulty_level, estimated_minutes, approved, created_by, image_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (passage_data['title'], 
                 passage_data['content'], 
                 passage_data.get('source', 'AI Generated'),
@@ -3647,7 +3670,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                 passage_data.get('flesch_ease'),
                 passage_data.get('difficulty_level', difficulty),
                 passage_data.get('estimated_minutes', 2),
-                True, 1, image_url)
+                True, 1, image_url, passage_lexile)
             )
             passage_id = cursor.lastrowid
         
@@ -5456,9 +5479,72 @@ async def save_lesson_progress(request: Request):
         conn.commit()
         conn.close()
         
-
-        
-        # ========== GAMIFICATION ==========
+        # ========== UPDATE STUDENT LEXILE SCORE ==========
+        if completed and score is not None:
+            try:
+                lexile_conn = get_db()
+                lexile_cursor = get_cursor(lexile_conn)
+                
+                # Get passage Lexile score
+                if USE_POSTGRES:
+                    lexile_cursor.execute(
+                        "SELECT lexile_score FROM passages WHERE id = %s", (lesson_id,)
+                    )
+                else:
+                    lexile_cursor.execute(
+                        "SELECT lexile_score FROM passages WHERE id = ?", (lesson_id,)
+                    )
+                p_row = lexile_cursor.fetchone()
+                passage_lexile = (p_row['lexile_score'] if hasattr(p_row, 'keys') else p_row[0]) if p_row else None
+                
+                if passage_lexile:
+                    # Calculate new student Lexile based on performance
+                    new_lexile = calculate_student_lexile(passage_lexile, float(score))
+                    
+                    # Get existing student Lexile for weighted average
+                    if USE_POSTGRES:
+                        lexile_cursor.execute("SELECT lexile_score FROM users WHERE id = %s", (user_id,))
+                    else:
+                        lexile_cursor.execute("SELECT lexile_score FROM users WHERE id = ?", (user_id,))
+                    u_row = lexile_cursor.fetchone()
+                    existing_lexile = (u_row['lexile_score'] if hasattr(u_row, 'keys') else u_row[0]) if u_row else None
+                    
+                    # Weighted average: 70% existing, 30% new (smooths volatility)
+                    if existing_lexile:
+                        final_lexile = round(existing_lexile * 0.7 + new_lexile * 0.3)
+                    else:
+                        final_lexile = new_lexile
+                    
+                    # Update user's Lexile score
+                    if USE_POSTGRES:
+                        lexile_cursor.execute(
+                            "UPDATE users SET lexile_score = %s WHERE id = %s",
+                            (final_lexile, user_id)
+                        )
+                        # Record in history
+                        lexile_cursor.execute(
+                            """INSERT INTO lexile_history 
+                               (user_id, lexile_score, passage_id, passage_lexile, comprehension_score)
+                               VALUES (%s, %s, %s, %s, %s)""",
+                            (user_id, final_lexile, lesson_id, passage_lexile, score)
+                        )
+                    else:
+                        lexile_cursor.execute(
+                            "UPDATE users SET lexile_score = ? WHERE id = ?",
+                            (final_lexile, user_id)
+                        )
+                        lexile_cursor.execute(
+                            """INSERT INTO lexile_history 
+                               (user_id, lexile_score, passage_id, passage_lexile, comprehension_score)
+                               VALUES (?, ?, ?, ?, ?)""",
+                            (user_id, final_lexile, lesson_id, passage_lexile, score)
+                        )
+                    lexile_conn.commit()
+                    print(f"📊 Lexile updated: user {user_id} → {final_lexile}L (passage {passage_lexile}L, score {score}%)")
+                
+                lexile_conn.close()
+            except Exception as lexile_err:
+                print(f"⚠️ Lexile update failed (non-fatal): {lexile_err}")
         if score == 100:
             points_result = award_points(user_id, POINTS_CONFIG['perfect_score'], 'Perfect score!', 'lesson')
         elif score >= 80:
@@ -8238,7 +8324,7 @@ async def get_all_students(admin=Depends(require_admin)):
             cursor.execute(
                 """SELECT id, email, full_name, level_estimate, total_passages_read, 
                    comprehension_score, last_active, created_at, school, 
-                   grade_band, reading_level
+                   grade_band, reading_level, lexile_score
                    FROM users WHERE role = 'student' AND school = %s
                    ORDER BY created_at DESC""",
                 (admin_school,)
@@ -8247,7 +8333,7 @@ async def get_all_students(admin=Depends(require_admin)):
             cursor.execute(
                 """SELECT id, email, full_name, level_estimate, total_passages_read, 
                    comprehension_score, last_active, created_at, school, 
-                   grade_band, reading_level
+                   grade_band, reading_level, lexile_score
                    FROM users WHERE role = 'student' AND school = ?
                    ORDER BY created_at DESC""",
                 (admin_school,)
@@ -8257,7 +8343,7 @@ async def get_all_students(admin=Depends(require_admin)):
         cursor.execute(
             """SELECT id, email, full_name, level_estimate, total_passages_read, 
                comprehension_score, last_active, created_at, school, 
-               grade_band, reading_level
+               grade_band, reading_level, lexile_score
                FROM users WHERE role = 'student'
                ORDER BY school, created_at DESC"""
         )
@@ -8267,7 +8353,72 @@ async def get_all_students(admin=Depends(require_admin)):
     
     return {"students": students}
 
-@app.get("/api/admin/student/{student_id}/details")
+@app.get("/api/admin/student/{student_id}/lexile")
+async def get_student_lexile_admin(student_id: int, admin=Depends(require_admin)):
+    """Get a student's Lexile history for admin view."""
+    from readability import lexile_to_grade_equivalent
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        # Current Lexile
+        if USE_POSTGRES:
+            cursor.execute("SELECT lexile_score, full_name, school FROM users WHERE id = %s", (student_id,))
+        else:
+            cursor.execute("SELECT lexile_score, full_name, school FROM users WHERE id = ?", (student_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        lexile_score = row['lexile_score'] if hasattr(row, 'keys') else row[0]
+        full_name = row['full_name'] if hasattr(row, 'keys') else row[1]
+
+        # History
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT lh.lexile_score, lh.recorded_at, lh.passage_lexile,
+                          lh.comprehension_score, p.title as passage_title
+                   FROM lexile_history lh
+                   LEFT JOIN passages p ON lh.passage_id = p.id
+                   WHERE lh.user_id = %s
+                   ORDER BY lh.recorded_at ASC LIMIT 50""",
+                (student_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT lh.lexile_score, lh.recorded_at, lh.passage_lexile,
+                          lh.comprehension_score, p.title as passage_title
+                   FROM lexile_history lh
+                   LEFT JOIN passages p ON lh.passage_id = p.id
+                   WHERE lh.user_id = ?
+                   ORDER BY lh.recorded_at ASC LIMIT 50""",
+                (student_id,)
+            )
+        rows = cursor.fetchall()
+        history = []
+        for r in rows:
+            history.append({
+                'lexile_score': r['lexile_score'] if hasattr(r, 'keys') else r[0],
+                'recorded_at': str(r['recorded_at'] if hasattr(r, 'keys') else r[1]),
+                'passage_lexile': r['passage_lexile'] if hasattr(r, 'keys') else r[2],
+                'comprehension_score': r['comprehension_score'] if hasattr(r, 'keys') else r[3],
+                'passage_title': r['passage_title'] if hasattr(r, 'keys') else r[4],
+            })
+
+        conn.close()
+        return {
+            "success": True,
+            "student_name": full_name,
+            "lexile_score": lexile_score,
+            "lexile_label": f"{lexile_score}L" if lexile_score else "Not yet measured",
+            "grade_equivalent": lexile_to_grade_equivalent(lexile_score) if lexile_score else None,
+            "history": history
+        }
+    except HTTPException:
+        conn.close()
+        raise
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 async def get_student_details(student_id: int, admin=Depends(require_admin)):
     """Get detailed progress for a specific student"""
     
@@ -10284,6 +10435,62 @@ async def reset_staging_admin():
     except Exception as e:
         conn.close()
         return {"success": False, "error": str(e)}
+
+
+@app.get("/api/student/lexile")
+async def get_student_lexile(token: str):
+    """Get student's Lexile score and history for progress display."""
+    from readability import lexile_to_grade_equivalent
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        # Current Lexile score
+        if USE_POSTGRES:
+            cursor.execute("SELECT lexile_score FROM users WHERE id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT lexile_score FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        current_lexile = (row['lexile_score'] if hasattr(row, 'keys') else row[0]) if row else None
+
+        # Lexile history (last 20 entries for chart)
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT lexile_score, recorded_at, passage_lexile, comprehension_score
+                   FROM lexile_history WHERE user_id = %s
+                   ORDER BY recorded_at ASC LIMIT 20""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT lexile_score, recorded_at, passage_lexile, comprehension_score
+                   FROM lexile_history WHERE user_id = ?
+                   ORDER BY recorded_at ASC LIMIT 20""",
+                (user_id,)
+            )
+        history_rows = cursor.fetchall()
+        history = []
+        for r in history_rows:
+            history.append({
+                'lexile_score': r['lexile_score'] if hasattr(r, 'keys') else r[0],
+                'recorded_at': str(r['recorded_at'] if hasattr(r, 'keys') else r[1]),
+                'passage_lexile': r['passage_lexile'] if hasattr(r, 'keys') else r[2],
+                'comprehension_score': r['comprehension_score'] if hasattr(r, 'keys') else r[3],
+            })
+
+        conn.close()
+        return {
+            "success": True,
+            "lexile_score": current_lexile,
+            "lexile_label": f"{current_lexile}L" if current_lexile else "Not yet measured",
+            "grade_equivalent": lexile_to_grade_equivalent(current_lexile) if current_lexile else None,
+            "history": history
+        }
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ========== CHECK IF ESSAY IS DUE ==========

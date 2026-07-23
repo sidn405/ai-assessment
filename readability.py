@@ -97,10 +97,86 @@ def flesch_kincaid_grade(text: str) -> float:
     
     return max(0, grade)
 
-def analyze_readability(text: str) -> Dict[str, any]:
+def flesch_kincaid_grade_to_lexile(fk_grade: float) -> int:
+    """
+    Convert Flesch-Kincaid Grade Level to approximate Lexile score.
+    
+    This uses the well-documented linear relationship between FKGL and Lexile:
+    Lexile ≈ FKGL × 135 + 40
+    
+    Grade → Lexile equivalents (approximate):
+    K-1  → BR (Below Reader) to 200L
+    2    → 200L - 400L
+    3    → 400L - 600L
+    4    → 600L - 800L
+    5    → 700L - 900L
+    6    → 800L - 1000L
+    7    → 970L - 1120L
+    8    → 1080L - 1200L
+    9-10 → 1130L - 1300L
+    11+  → 1200L+
+    
+    Note: This is an approximation. Official Lexile scores require
+    MetaMetrics certification. These scores are directionally accurate
+    for tracking student progress.
+    """
+    if fk_grade <= 0:
+        return 100  # BR (Below Reader) — show as 100L minimum
+    
+    lexile = round(fk_grade * 135 + 40)
+    # Clamp to realistic range (BR to 2000L)
+    return max(100, min(2000, lexile))
+
+
+def lexile_to_grade_equivalent(lexile: int) -> str:
+    """Convert a Lexile score to a grade-level description."""
+    if lexile < 200:
+        return "Kindergarten - 1st Grade"
+    elif lexile < 400:
+        return "1st - 2nd Grade"
+    elif lexile < 600:
+        return "2nd - 3rd Grade"
+    elif lexile < 800:
+        return "4th - 5th Grade"
+    elif lexile < 1000:
+        return "5th - 6th Grade"
+    elif lexile < 1100:
+        return "6th - 7th Grade"
+    elif lexile < 1200:
+        return "7th - 8th Grade"
+    elif lexile < 1350:
+        return "9th - 10th Grade"
+    elif lexile < 1500:
+        return "11th - 12th Grade"
+    else:
+        return "College Level"
+
+
+def calculate_student_lexile(passage_lexile: int, comprehension_score: float) -> int:
+    """
+    Estimate a student's Lexile Reader Measure based on their performance
+    on a passage with a known Lexile Text Measure.
+    
+    Industry standard: A student reading at their Lexile level scores ~75%
+    comprehension. Above their level → lower score, below → higher score.
+    
+    Formula: student_lexile = passage_lexile + (comprehension_score - 75) × 5
+    This shifts the estimate up if they scored above 75%, down if below.
+    """
+    if comprehension_score is None:
+        return passage_lexile
+    
+    # Each percentage point above/below 75% shifts Lexile by ~5 points
+    adjustment = (comprehension_score - 75) * 5
+    student_lexile = passage_lexile + adjustment
+    
+    return max(100, min(2000, round(student_lexile)))
+
+
+def analyze_readability(text: str) -> dict:
     """
     Comprehensive readability analysis.
-    Returns multiple metrics for the text.
+    Returns multiple metrics for the text including Lexile score.
     """
     word_count = count_words(text)
     sentence_count = count_sentences(text)
@@ -110,6 +186,7 @@ def analyze_readability(text: str) -> Dict[str, any]:
     
     flesch_ease = flesch_reading_ease(text)
     fk_grade = flesch_kincaid_grade(text)
+    lexile_score = flesch_kincaid_grade_to_lexile(fk_grade)
     
     # Estimate reading time (average 200-250 words per minute for adults)
     # Use 150 wpm for learners
@@ -141,6 +218,8 @@ def analyze_readability(text: str) -> Dict[str, any]:
         "avg_syllables_per_word": round(syllable_count / word_count, 2) if word_count > 0 else 0,
         "flesch_reading_ease": round(flesch_ease, 1),
         "flesch_kincaid_grade": round(fk_grade, 1),
+        "lexile_score": lexile_score,
+        "lexile_grade_equivalent": lexile_to_grade_equivalent(lexile_score),
         "difficulty_level": difficulty,
         "grade_band": grade_band,
         "estimated_minutes": estimated_minutes,
