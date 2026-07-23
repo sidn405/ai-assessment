@@ -684,7 +684,9 @@ def init_db():
                     invited_by INTEGER REFERENCES users(id),
                     token VARCHAR(255) UNIQUE,
                     status VARCHAR(20) DEFAULT 'pending',
+                    role VARCHAR(20) DEFAULT 'admin',
                     expires_at TIMESTAMP,
+                    used_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -729,6 +731,10 @@ def init_db():
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS content TEXT",
                 "ALTER TABLE passages ADD COLUMN IF NOT EXISTS lexile_score INTEGER",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS lexile_score INTEGER",
+                "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS used_at TIMESTAMP",
+                "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_start TIMESTAMP",
+                "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_end TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
                 "ALTER TABLE game_completions ADD COLUMN IF NOT EXISTS rounds_completed INTEGER DEFAULT 0",
