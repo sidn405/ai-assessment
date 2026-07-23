@@ -911,21 +911,14 @@
             <div id="studentsSection" class="hidden">
                 <div class="header">
                     <h1>Student Management</h1>
-                    <p>View and manage enrolled students</p>
+                    <p>View and manage all enrolled students</p>
                 </div>
 
                 <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                         <h2 style="margin: 0;">All Students</h2>
-                        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-                            <!-- School filter — visible to super admin only (school-specific admins always see their school) -->
-                            <select id="schoolFilter" onchange="filterStudents()"
-                                    style="padding: 0.5rem 1rem; border: 2px solid var(--medium-gray); border-radius: 4px; font-size: 0.9rem;">
-                                <option value="">All Schools</option>
-                            </select>
-                            <input type="text" id="searchStudents" placeholder="Search students..."
-                                style="padding: 0.5rem 1rem; border: 2px solid var(--medium-gray); border-radius: 4px; width: 240px;">
-                        </div>
+                        <input type="text" id="searchStudents" placeholder="Search students..." 
+                            style="padding: 0.5rem 1rem; border: 2px solid var(--medium-gray); border-radius: 4px; width: 300px;">
                     </div>
                     
                     <div id="studentsLoading" class="loading">
@@ -933,17 +926,15 @@
                         <p>Loading students...</p>
                     </div>
                     
-                    <div id="studentsTable" class="hidden" style="overflow-x: auto;">
+                    <div id="studentsTable" class="hidden">
                         <table>
                             <thead>
                                 <tr>
                                     <th>Name</th>
-                                    <th>School</th>
+                                    <th>Email</th>
                                     <th>Reading Level</th>
-                                    <th>Lexile Score</th>
-                                    <th>Lessons</th>
-                                    <th>Avg Score</th>
                                     <th>Joined</th>
+                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -1336,7 +1327,7 @@
     <div id="studentModal" class="modal">
         <div class="modal-content">
             <button class="close-modal" onclick="closeStudentModal()">&times;</button>
-            <h2 id="studentModalName" style="margin-bottom: 1.5rem;"></h2>
+            <h2 id="studentModalName" style="margin-bottom: 2rem;"></h2>
             
             <div id="studentProgressLoading" class="loading">
                 <div class="spinner"></div>
@@ -1344,33 +1335,7 @@
             </div>
             
             <div id="studentProgressContent" class="hidden">
-                <!-- Lexile Score Banner -->
-                <div id="studentLexileBanner" style="
-                    background: linear-gradient(135deg, #0f4c75, #1b6ca8);
-                    color: white; border-radius: 12px; padding: 1.25rem 1.5rem;
-                    display: flex; justify-content: space-between; align-items: center;
-                    margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-                    <div>
-                        <div style="font-size: 0.85rem; opacity: 0.85; margin-bottom: 0.25rem;">Current Lexile Score</div>
-                        <div style="font-size: 2.5rem; font-weight: 800;" id="modalLexileScore">—</div>
-                        <div style="font-size: 0.9rem; opacity: 0.8;" id="modalLexileGrade"></div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 0.85rem; opacity: 0.85; margin-bottom: 0.25rem;">Lessons Completed</div>
-                        <div style="font-size: 2rem; font-weight: 700;" id="modalLessonsCount">—</div>
-                    </div>
-                </div>
-
-                <!-- Lexile Growth Chart -->
-                <div style="margin-bottom: 1.5rem;">
-                    <h3 style="margin-bottom: 0.75rem;">📈 Lexile Growth</h3>
-                    <canvas id="studentLexileChart" height="100"></canvas>
-                    <div id="studentLexileNoData" class="hidden" style="color:#888; text-align:center; padding:1.5rem;">
-                        No Lexile data yet — student needs to complete lessons.
-                    </div>
-                </div>
-
-                <h3 style="margin-bottom: 0.75rem;">Progress Overview</h3>
+                <h3>Progress Overview</h3>
                 <div id="studentProgressData"></div>
             </div>
         </div>
@@ -2101,7 +2066,7 @@
                 'school-codes': 'school-codes-section'
             };
 
-            document.querySelectorAll('[id$="Section"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id$="Section"], [id$="-section"]').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
 
             const sectionName = sectionMap[section] || (section + 'Section');
@@ -2851,17 +2816,6 @@
                 const data = await response.json();
                 
                 allStudents = data.students;
-
-                // Populate school filter with unique schools
-                const schoolFilter = document.getElementById('schoolFilter');
-                if (schoolFilter) {
-                    const schools = [...new Set(allStudents.map(s => s.school).filter(Boolean))].sort();
-                    schoolFilter.innerHTML = '<option value="">All Schools</option>' +
-                        schools.map(s => `<option value="${s}">${s}</option>`).join('');
-                    // Hide filter if only one school (teacher view)
-                    if (schools.length <= 1) schoolFilter.style.display = 'none';
-                }
-
                 renderStudentsTable(allStudents);
                 
                 loading.classList.add('hidden');
@@ -2870,16 +2824,6 @@
                 console.error('Error loading students:', error);
                 loading.innerHTML = '<p>Error loading students. Please try again.</p>';
             }
-        }
-
-        function filterStudents() {
-            const school = document.getElementById('schoolFilter')?.value || '';
-            const query = document.getElementById('searchStudents')?.value.toLowerCase() || '';
-            const filtered = allStudents.filter(s =>
-                (!school || s.school === school) &&
-                (!query || s.full_name.toLowerCase().includes(query) || s.email.toLowerCase().includes(query))
-            );
-            renderStudentsTable(filtered);
         }
        
         console.log('✓ Session tracking admin panel loaded');
@@ -3223,41 +3167,25 @@
         function renderStudentsTable(students) {
             const tbody = document.getElementById('studentsTableBody');
             tbody.innerHTML = '';
-
-            if (!students || students.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#888; padding:2rem;">No students found.</td></tr>';
-                return;
-            }
             
             students.forEach(student => {
                 const tr = document.createElement('tr');
-                const levelBadge = student.reading_level ?
-                    `<span class="badge badge-info">${student.reading_level}</span>` :
+                const level = student.reading_level || 'Not assessed';
+                const levelBadge = student.reading_level ? 
+                    `<span class="badge badge-info">${formatReadingLevel(student.reading_level)}</span>` :
                     `<span class="badge badge-warning">Pending</span>`;
                 
-                const lexileDisplay = student.lexile_score
-                    ? `<strong style="color:#1b6ca8;">${student.lexile_score}L</strong>`
-                    : `<span style="color:#aaa;">—</span>`;
-
                 const joinDate = new Date(student.created_at).toLocaleDateString();
-                const avgScore = student.comprehension_score
-                    ? `${Math.round(student.comprehension_score)}%`
-                    : '—';
-                const lessons = student.total_passages_read || 0;
-                const school = student.school || '—';
                 
                 tr.innerHTML = `
-                    <td><strong>${student.full_name}</strong><br>
-                        <small style="color:#888;">${student.email}</small></td>
-                    <td>${school}</td>
+                    <td><strong>${student.full_name}</strong></td>
+                    <td>${student.email}</td>
                     <td>${levelBadge}</td>
-                    <td>${lexileDisplay}</td>
-                    <td>${lessons}</td>
-                    <td>${avgScore}</td>
                     <td>${joinDate}</td>
+                    <td><span class="badge badge-success">Active</span></td>
                     <td style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
-                            View
+                        <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name}')">
+                            View Progress
                         </button>
                         <button class="btn btn-danger btn-small" onclick="confirmDeleteStudent(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
                             Delete
@@ -3282,11 +3210,16 @@
         document.addEventListener('DOMContentLoaded', () => {
             const searchInput = document.getElementById('searchStudents');
             if (searchInput) {
-                searchInput.addEventListener('input', filterStudents);
+                searchInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase();
+                    const filtered = allStudents.filter(s => 
+                        s.full_name.toLowerCase().includes(query) ||
+                        s.email.toLowerCase().includes(query)
+                    );
+                    renderStudentsTable(filtered);
+                });
             }
         });
-
-        let studentLexileChartInstance = null;
 
         async function viewStudentProgress(studentId, studentName) {
             document.getElementById('studentModal').classList.add('active');
@@ -3297,99 +3230,22 @@
             const token = localStorage.getItem('token');
             
             try {
-                // Load progress and Lexile in parallel
-                const [progressResp, lexileResp] = await Promise.all([
-                    fetch(`/api/admin/student/${studentId}/progress`, { headers: { Authorization: `Bearer ${token}` } }),
-                    fetch(`/api/admin/student/${studentId}/lexile`, { headers: { Authorization: `Bearer ${token}` } })
-                ]);
+                const token = localStorage.getItem("token");
 
-                const progressData = await progressResp.json();
-                const lexileData = lexileResp.ok ? await lexileResp.json() : null;
+                const response = await fetch(`/api/admin/student/${studentId}/progress?`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await response.json();
 
-                // Render progress
-                renderStudentProgress(Array.isArray(progressData.progress) ? progressData.progress : []);
+                // Always pass an array
+                renderStudentProgress(Array.isArray(data.progress) ? data.progress : []);
 
-                // Render Lexile banner + chart
-                if (lexileData?.success) {
-                    document.getElementById('modalLexileScore').textContent =
-                        lexileData.lexile_score ? `${lexileData.lexile_score}L` : '—';
-                    document.getElementById('modalLexileGrade').textContent =
-                        lexileData.grade_equivalent || '';
-                    document.getElementById('studentLexileBanner').style.display = 'flex';
-                    renderStudentLexileChart(lexileData.history);
-                } else {
-                    document.getElementById('studentLexileBanner').style.display = 'none';
-                }
-
-                // Update lessons count from student row
-                const student = allStudents.find(s => s.id === studentId);
-                document.getElementById('modalLessonsCount').textContent =
-                    student?.total_passages_read ?? '—';
-
+                
                 document.getElementById('studentProgressLoading').classList.add('hidden');
                 document.getElementById('studentProgressContent').classList.remove('hidden');
             } catch (error) {
                 console.error('Error loading student progress:', error);
             }
-        }
-
-        function renderStudentLexileChart(history) {
-            const canvas = document.getElementById('studentLexileChart');
-            const noData = document.getElementById('studentLexileNoData');
-            if (!canvas) return;
-
-            if (!history || history.length === 0) {
-                canvas.style.display = 'none';
-                if (noData) noData.classList.remove('hidden');
-                return;
-            }
-
-            canvas.style.display = 'block';
-            if (noData) noData.classList.add('hidden');
-
-            const labels = history.map((h, i) => `Lesson ${i + 1}`);
-            const scores = history.map(h => h.lexile_score);
-            const tooltips = history.map(h =>
-                `${h.lexile_score}L — ${h.passage_title || 'Lesson'} (${Math.round(h.comprehension_score || 0)}% score)`
-            );
-
-            if (studentLexileChartInstance) studentLexileChartInstance.destroy();
-
-            studentLexileChartInstance = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Lexile Score',
-                        data: scores,
-                        borderColor: '#1b6ca8',
-                        backgroundColor: 'rgba(27,108,168,0.1)',
-                        borderWidth: 3,
-                        pointBackgroundColor: '#1b6ca8',
-                        pointRadius: 5,
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (ctx) => tooltips[ctx.dataIndex]
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            title: { display: true, text: 'Lexile (L)' },
-                            beginAtZero: false,
-                            ticks: { callback: v => `${v}L` }
-                        }
-                    }
-                }
-            });
         }
 
         function renderStudentProgress(progress) {
