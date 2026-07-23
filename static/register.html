@@ -341,17 +341,20 @@
             </div>
 
             <div class="form-group">
-                <label for="school">School</label>
-                <select 
+                <label for="school">School Code</label>
+                <input 
+                    type="text" 
                     id="school" 
-                    name="school" 
+                    name="school"
                     required
+                    placeholder="e.g. CAM1900"
+                    autocomplete="off"
+                    maxlength="10"
+                    style="text-transform: uppercase; letter-spacing: 0.05em;"
+                    oninput="this.value = this.value.toUpperCase(); validateSchoolCode(this.value)"
                 >
-                    <option value="" disabled selected>Select your school...</option>
-                    <option value="McMain">Mc Main</option>
-                    <option value="Columbia">Columbia</option>
-                </select>
-                <small>Select the school you attend</small>
+                <small id="schoolCodeHint">Enter the code provided by your school or program</small>
+                <div id="schoolCodeStatus" style="margin-top: 0.4rem; font-size: 0.88rem; display: none;"></div>
             </div>
 
             <div class="form-group">
@@ -573,7 +576,15 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const gradeLevel = document.getElementById('gradeLevel').value;
-            const school = document.getElementById('school').value;
+            const school = document.getElementById('school').value.trim().toUpperCase();
+
+            // Block submission if school code not confirmed valid
+            if (!schoolCodeValid) {
+                showAlert('Please enter a valid school code before continuing.', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+                return;
+            }
             
             // Get age band and reading level from grade
             const ageBand = getAgeBandFromGrade(gradeLevel);
@@ -627,6 +638,50 @@
                 window.location.href = '/dashboard';
             }
         });
+
+        // School code live validation
+        let schoolCodeTimer = null;
+        let schoolCodeValid = false;
+
+        async function validateSchoolCode(code) {
+            const statusEl = document.getElementById('schoolCodeStatus');
+            const hintEl = document.getElementById('schoolCodeHint');
+
+            // Clear pending validation
+            clearTimeout(schoolCodeTimer);
+            schoolCodeValid = false;
+
+            if (!code || code.length < 5) {
+                statusEl.style.display = 'none';
+                hintEl.textContent = 'Enter the code provided by your school or program';
+                return;
+            }
+
+            statusEl.style.display = 'block';
+            statusEl.style.color = '#888';
+            statusEl.textContent = 'Checking code...';
+
+            schoolCodeTimer = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`/api/school-codes/validate/${encodeURIComponent(code)}`);
+                    const data = await resp.json();
+                    if (data.valid) {
+                        schoolCodeValid = true;
+                        statusEl.style.color = '#28A745';
+                        statusEl.textContent = `✅ ${data.school_name}`;
+                        hintEl.textContent = 'School confirmed — you\'re all set!';
+                    } else {
+                        schoolCodeValid = false;
+                        statusEl.style.color = '#dc3545';
+                        statusEl.textContent = `❌ ${data.error}`;
+                        hintEl.textContent = 'Enter the code provided by your school or program';
+                    }
+                } catch (e) {
+                    statusEl.style.color = '#888';
+                    statusEl.textContent = 'Could not verify code — please try again';
+                }
+            }, 500); // 500ms debounce
+        }
     </script>
 </body>
 </html>

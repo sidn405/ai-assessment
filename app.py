@@ -553,6 +553,22 @@ def init_db():
             conn.commit()
             print("✓ wallet_redemptions table ready")
 
+            # School codes — maps registration codes to school names
+            # Format: first 3 letters of school + 4-digit sequence (e.g. CAM1900)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS school_codes (
+                    id SERIAL PRIMARY KEY,
+                    code VARCHAR(20) UNIQUE NOT NULL,
+                    school_name VARCHAR(255) NOT NULL,
+                    active BOOLEAN DEFAULT TRUE,
+                    student_count INTEGER DEFAULT 0,
+                    created_by INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ school_codes table ready")
+
             # User points (gamification)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_points (
@@ -907,6 +923,18 @@ def init_db():
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS school_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                school_name TEXT NOT NULL,
+                active INTEGER DEFAULT 1,
+                student_count INTEGER DEFAULT 0,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_essays (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER REFERENCES users(id),
@@ -1228,6 +1256,33 @@ async def register(user: UserCreate):
     # ✅ Server decides role (email allowlist)
     email_lc = user.email.lower().strip()
     final_role = "admin" if (ADMIN_EMAILS and email_lc in ADMIN_EMAILS) else "student"
+
+    # Validate school code and resolve to school name
+    school_name = user.school  # fallback for admin accounts
+    school_code = (user.school or "").strip().upper()
+    if school_code and final_role == "student":
+        sc_conn = get_db()
+        sc_cursor = get_cursor(sc_conn)
+        try:
+            if USE_POSTGRES:
+                sc_cursor.execute(
+                    "SELECT school_name, active FROM school_codes WHERE UPPER(code) = %s",
+                    (school_code,)
+                )
+            else:
+                sc_cursor.execute(
+                    "SELECT school_name, active FROM school_codes WHERE UPPER(code) = ?",
+                    (school_code,)
+                )
+            sc_row = sc_cursor.fetchone()
+            if not sc_row:
+                raise HTTPException(status_code=400, detail="Invalid school code. Please check and try again.")
+            sc_active = sc_row['active'] if hasattr(sc_row, 'keys') else sc_row[1]
+            if not sc_active:
+                raise HTTPException(status_code=400, detail="This school code is no longer active.")
+            school_name = sc_row['school_name'] if hasattr(sc_row, 'keys') else sc_row[0]
+        finally:
+            sc_conn.close()
  
     try:
         if USE_POSTGRES:
@@ -1235,7 +1290,7 @@ async def register(user: UserCreate):
                 """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, FALSE) RETURNING id""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, user.school)
+                 user.age, user.age_band, user.grade_band, school_name)
             )
             result = cursor.fetchone()
             user_id = result["id"] if isinstance(result, dict) else result[0]
@@ -1244,13 +1299,33 @@ async def register(user: UserCreate):
                 """INSERT INTO users (email, password_hash, full_name, role, age, age_band, grade_band, school, reading_level, placement_completed) 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)""",
                 (user.email, password_hash.decode('utf-8'), user.full_name, final_role,
-                 user.age, user.age_band, user.grade_band, user.school)
+                 user.age, user.age_band, user.grade_band, school_name)
             )
             user_id = cursor.lastrowid
  
         conn.commit()
         
         initialize_new_user(user_id)
+
+        # Increment student count on the school code
+        if school_code and final_role == "student":
+            try:
+                sc_conn2 = get_db()
+                sc_cursor2 = get_cursor(sc_conn2)
+                if USE_POSTGRES:
+                    sc_cursor2.execute(
+                        "UPDATE school_codes SET student_count = student_count + 1 WHERE UPPER(code) = %s",
+                        (school_code,)
+                    )
+                else:
+                    sc_cursor2.execute(
+                        "UPDATE school_codes SET student_count = student_count + 1 WHERE UPPER(code) = ?",
+                        (school_code,)
+                    )
+                sc_conn2.commit()
+                sc_conn2.close()
+            except Exception:
+                pass  # Non-fatal
  
         # ✅ token uses final_role
         token = create_token(user_id, final_role)
@@ -7487,6 +7562,191 @@ async def admin_credit_wallet(request: Request):
 
     except Exception as e:
         conn.rollback()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================================
+# SCHOOL CODE ENDPOINTS
+# ========================================
+
+@app.get("/api/school-codes/validate/{code}")
+async def validate_school_code(code: str):
+    """
+    Public endpoint — validate a school code during registration.
+    Returns school name on success so the form can show it for confirmation.
+    Does NOT require authentication.
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT school_name, active FROM school_codes WHERE UPPER(code) = UPPER(%s)",
+                (code.strip(),)
+            )
+        else:
+            cursor.execute(
+                "SELECT school_name, active FROM school_codes WHERE UPPER(code) = UPPER(?)",
+                (code.strip(),)
+            )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return {"valid": False, "error": "Invalid school code. Please check and try again."}
+
+        school_name = row['school_name'] if hasattr(row, 'keys') else row[0]
+        active = row['active'] if hasattr(row, 'keys') else row[1]
+
+        if not active:
+            return {"valid": False, "error": "This school code is no longer active."}
+
+        return {"valid": True, "school_name": school_name}
+
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/school-codes")
+async def list_school_codes(admin=Depends(require_admin)):
+    """List all school codes — admin only."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT id, code, school_name, active, student_count, created_at FROM school_codes ORDER BY created_at DESC"
+        )
+        rows = cursor.fetchall()
+        codes = []
+        for r in rows:
+            if hasattr(r, 'keys'):
+                codes.append({
+                    'id': r['id'], 'code': r['code'],
+                    'school_name': r['school_name'], 'active': r['active'],
+                    'student_count': r['student_count'],
+                    'created_at': str(r['created_at'])
+                })
+            else:
+                codes.append({
+                    'id': r[0], 'code': r[1], 'school_name': r[2],
+                    'active': r[3], 'student_count': r[4], 'created_at': str(r[5])
+                })
+        conn.close()
+        return {"success": True, "codes": codes}
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/school-codes")
+async def create_school_code(request: Request, admin=Depends(require_admin)):
+    """Create a new school code — admin only."""
+    data = await request.json()
+    code = data.get("code", "").strip().upper()
+    school_name = data.get("school_name", "").strip()
+
+    if not code or not school_name:
+        raise HTTPException(status_code=400, detail="code and school_name are required")
+
+    # Validate format: 3 letters + 4 digits
+    import re
+    if not re.match(r'^[A-Z]{2,5}\d{4}$', code):
+        raise HTTPException(
+            status_code=400,
+            detail="Code must be 2-5 letters followed by 4 digits (e.g. CAM1900)"
+        )
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO school_codes (code, school_name, created_by)
+                   VALUES (%s, %s, %s) RETURNING id""",
+                (code, school_name, admin['user_id'])
+            )
+            new_id = cursor.fetchone()['id']
+        else:
+            cursor.execute(
+                "INSERT INTO school_codes (code, school_name, created_by) VALUES (?, ?, ?)",
+                (code, school_name, admin['user_id'])
+            )
+            new_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "id": new_id, "code": code, "school_name": school_name}
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            raise HTTPException(status_code=400, detail=f"Code {code} already exists")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/admin/school-codes/{code_id}")
+async def toggle_school_code(code_id: int, request: Request, admin=Depends(require_admin)):
+    """Activate or deactivate a school code."""
+    data = await request.json()
+    active = data.get("active", True)
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE school_codes SET active = %s WHERE id = %s",
+                (active, code_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE school_codes SET active = ? WHERE id = ?",
+                (1 if active else 0, code_id)
+            )
+        conn.commit()
+        conn.close()
+        return {"success": True, "active": active}
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/admin/school-codes/{code_id}")
+async def delete_school_code(code_id: int, admin=Depends(require_admin)):
+    """Delete a school code — only if no students are registered with it."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        # Check student count first
+        if USE_POSTGRES:
+            cursor.execute("SELECT student_count, code FROM school_codes WHERE id = %s", (code_id,))
+        else:
+            cursor.execute("SELECT student_count, code FROM school_codes WHERE id = ?", (code_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Code not found")
+
+        count = row['student_count'] if hasattr(row, 'keys') else row[0]
+        if count > 0:
+            conn.close()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete — {count} student(s) registered with this code. Deactivate instead."
+            )
+
+        if USE_POSTGRES:
+            cursor.execute("DELETE FROM school_codes WHERE id = %s", (code_id,))
+        else:
+            cursor.execute("DELETE FROM school_codes WHERE id = ?", (code_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except HTTPException:
+        conn.close()
+        raise
+    except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
