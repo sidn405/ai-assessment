@@ -727,6 +727,7 @@ def init_db():
                 "ALTER TABLE user_badges ALTER COLUMN badge_id DROP NOT NULL",
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
             for sql in migrations:
                 try:
