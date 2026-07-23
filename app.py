@@ -687,6 +687,7 @@ def init_db():
                     role VARCHAR(20) DEFAULT 'admin',
                     expires_at TIMESTAMP,
                     used_at TIMESTAMP,
+                    revoked_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -733,6 +734,7 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS lexile_score INTEGER",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS used_at TIMESTAMP",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'",
+                "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_start TIMESTAMP",
                 "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_end TIMESTAMP",
@@ -1131,7 +1133,10 @@ def init_db():
                 invited_by INTEGER REFERENCES users(id),
                 token TEXT UNIQUE,
                 status TEXT DEFAULT 'pending',
+                role TEXT DEFAULT 'admin',
                 expires_at TIMESTAMP,
+                used_at TIMESTAMP,
+                revoked_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
