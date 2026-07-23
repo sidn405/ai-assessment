@@ -662,6 +662,20 @@ def init_db():
             conn.commit()
             print("✓ lexile_history table ready")
 
+            # Timeout events
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS timeout_events (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    session_id INTEGER,
+                    warning_shown BOOLEAN DEFAULT FALSE,
+                    timeout_occurred BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ timeout_events table ready")
+
             # ================================================================
             # INDEXES
             # ================================================================
@@ -1086,6 +1100,17 @@ def init_db():
                 total_points INTEGER DEFAULT 0,
                 average_score REAL DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS timeout_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                session_id INTEGER,
+                warning_shown INTEGER DEFAULT 0,
+                timeout_occurred INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
