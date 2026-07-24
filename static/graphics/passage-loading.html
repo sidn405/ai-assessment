@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loading</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Georgia', serif;
+  }
+
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2rem;
+    max-width: 480px;
+    text-align: center;
+  }
+
+  .animation-wrapper {
+    width: 360px;
+    height: 288px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(68,136,255,0.15);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .animation-wrapper img,
+  .animation-wrapper object {
+    width: 100%;
+    height: 100%;
+  }
+
+  .message-area {
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .main-message {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e3a5f;
+    letter-spacing: 0.01em;
+  }
+
+  .sub-message {
+    font-size: 0.95rem;
+    color: #667;
+    font-style: italic;
+    min-height: 1.4em;
+  }
+
+  .dots {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: 4px;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #1e3a5f;
+    animation: dot-bounce 1.4s ease-in-out infinite;
+  }
+
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-8px); opacity: 1; }
+  }
+
+  .progress-bar {
+    width: 360px;
+    height: 4px;
+    background: #e0e6f0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #1e3a5f, #667eea, #1e3a5f);
+    background-size: 200% 100%;
+    border-radius: 999px;
+    animation: progress-grow 8s ease-in-out forwards, shimmer 1.5s linear infinite;
+  }
+
+  @keyframes progress-grow {
+    0%   { width: 0%; }
+    20%  { width: 25%; }
+    50%  { width: 55%; }
+    80%  { width: 78%; }
+    100% { width: 90%; }
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .loading-container { animation: fade-in-up 0.5s ease-out; }
+</style>
+</head>
+<body>
+<div class="loading-container">
+
+  <div class="animation-wrapper" id="animWrapper">
+    <!-- SVG injected by JS -->
+  </div>
+
+  <div class="message-area">
+    <div class="main-message">
+      <span id="mainMsg">Building your story</span>
+      <span class="dots">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </span>
+    </div>
+    <div class="sub-message" id="subMsg">Choosing just the right words for you</div>
+  </div>
+
+  <div class="progress-bar">
+    <div class="progress-fill"></div>
+  </div>
+
+</div>
+
+<script>
+  // Two animations, randomly selected
+  const animations = ['reader-animation', 'scientist-animation'];
+  const chosen = animations[Math.floor(Math.random() * animations.length)];
+
+  // Load SVG inline so CSS animations work (they don't in <img> tags)
+  fetch(`/graphics/${chosen}.svg`)
+    .then(r => r.text())
+    .then(svg => {
+      document.getElementById('animWrapper').innerHTML = svg;
+    })
+    .catch(() => {
+      // Fallback: simple spinner if SVG fails to load
+      document.getElementById('animWrapper').innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#1a1a2e;">
+          <div style="width:60px;height:60px;border:4px solid #667eea33;border-top-color:#667eea;border-radius:50%;animation:spin 1s linear infinite;"></div>
+          <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+        </div>`;
+    });
+
+  // Rotating sub-messages tied to which animation is showing
+  const readerMessages = [
+    "Our reader is finding inspiration for your story...",
+    "Picking the perfect vocabulary words...",
+    "Crafting a story that matches your interests...",
+    "Personalizing this passage just for you...",
+    "Making sure the difficulty is just right...",
+    "Adding comprehension questions...",
+  ];
+
+  const scientistMessages = [
+    "Mixing the perfect combination of words...",
+    "Analyzing your reading level and interests...",
+    "Synthesizing your personalized passage...",
+    "Running experiments to find the best topic...",
+    "Calibrating vocabulary to your grade level...",
+    "Formulating your comprehension questions...",
+  ];
+
+  const messages = chosen === 'scientist-animation' ? scientistMessages : readerMessages;
+  let msgIndex = 0;
+
+  function rotateMessage() {
+    const el = document.getElementById('subMsg');
+    el.style.opacity = '0';
+    setTimeout(() => {
+      msgIndex = (msgIndex + 1) % messages.length;
+      el.textContent = messages[msgIndex];
+      el.style.transition = 'opacity 0.4s ease';
+      el.style.opacity = '1';
+    }, 300);
+  }
+
+  // Start rotating after 2s, every 3s
+  setTimeout(() => {
+    rotateMessage();
+    setInterval(rotateMessage, 3000);
+  }, 2000);
+</script>
+</body>
+</html>

@@ -2287,8 +2287,8 @@
                             Start by taking our assessment to help us understand your interests and reading level.
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                            <button id="interestAssessmentBtn" class="btn btn-primary" onclick="console.log('Interest Assessment button clicked'); showSection('assessment', event);">
-                                📝 Interest Assessment
+                            <button id="interestAssessmentBtn" class="btn btn-primary" onclick="console.log('Take Assessment button clicked'); showSection('assessment', event);">
+                                📝 Take Assessment
                             </button>
                             <button id="readingAssessmentBtn" class="btn btn-secondary" onclick="startReadingLevelTest()">
                                 📊 Reading Level Assessment
@@ -2539,9 +2539,13 @@
                 </div>
                 
                 <!-- Loading State -->
-                <div id="lessonLoading" class="loading hidden">
-                    <div class="spinner"></div>
-                    <p>Generating your personalized lesson...</p>
+                <div id="lessonLoading" class="loading hidden" style="min-height: 420px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                    <iframe 
+                        src="/graphics/passage-loading.html"
+                        style="width: 100%; max-width: 500px; height: 420px; border: none; border-radius: 16px;"
+                        scrolling="no"
+                        title="Loading your personalized lesson">
+                    </iframe>
                 </div>
                 
                 <!-- Lesson Content Card -->
@@ -2590,7 +2594,7 @@
                 <!-- No Lessons Yet -->
                 <div id="noLessons" class="card">
                     <p>Lessons will appear here after you complete your assessment.</p>
-                    <button class="btn btn-primary" onclick="showSection('assessment', event)">Interest Assessment</button>
+                    <button class="btn btn-primary" onclick="showSection('assessment', event)">Take Assessment</button>
                 </div>
             </div>
 
@@ -6857,11 +6861,11 @@
                                 color: #1e3a5f;
                                 margin-bottom: 1rem;
                             ">
-                                ✍️ In your own words, explain what you remember from this lesson:
+                                ✍️ In your own words, explain what you learned from this lesson:
                             </label>
                             <textarea 
                                 id="essay-text-input"
-                                placeholder="Tell us what you remember! Try to include specific details or examples from the lessons..."
+                                placeholder="Tell us what you learned! Try to include specific details or examples from the lessons..."
                                 style="
                                     width: 100%;
                                     min-height: 250px;
@@ -7291,7 +7295,7 @@
             // NEW (CORRECT):
             console.log('🔊 Speaking congratulatory message...');
             if (typeof displayTutorMessage === 'function') {
-                const congratsMessage = `${userName}, now that you have completed two lessons and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
+                const congratsMessage = `${userName}, now that you have completed three lessons and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
                 displayTutorMessage(congratsMessage, 'excited');
                 console.log('✅ Tutor speech triggered with name:', userName);
             } else {

@@ -801,9 +801,14 @@
         </div>
 
         <!-- Loading State -->
-        <div id="loadingState" class="loading">
-            <div class="spinner"></div>
-            <p>Loading your personalized passage...</p>
+        <div id="loadingState" class="loading" style="min-height: 420px; display: flex; align-items: center; justify-content: center; padding: 0;">
+            <iframe 
+                src="/graphics/passage-loading.html" 
+                id="loadingFrame"
+                style="width: 100%; height: 420px; border: none; border-radius: 16px;"
+                scrolling="no"
+                title="Loading your personalized passage">
+            </iframe>
         </div>
 
         <!-- Passage Display -->
@@ -1480,11 +1485,7 @@
 
             updatePlacementProgressBar();
             startTime = Date.now();
-
-            // Pick up challenge level from URL param (set by previous passage feedback)
-            const urlParams = new URLSearchParams(window.location.search);
-            const challengeParam = urlParams.get('challenge') || 'appropriate';
-            await loadPassage(token, challengeParam);
+            await loadPassage(token);
         });
 
         async function loadPassage(token, challenge = 'appropriate') {
@@ -1803,9 +1804,9 @@
                     
                     updatePlacementProgressBar();
                     
-                    console.log(`📊 Placement test: ${placementTestProgress.passagesCompleted}/2 passages completed`);
+                    console.log(`📊 Placement test: ${placementTestProgress.passagesCompleted}/3 passages completed`);
                     
-                    if (placementTestProgress.passagesCompleted >= PLACEMENT_TOTAL_PASSAGES) {
+                    if (placementTestProgress.passagesCompleted >= 3) {
                         // Calculate reading level
                         const avgScore = placementTestProgress.scores.reduce((a, b) => a + b, 0) / placementTestProgress.scores.length;
                         const avgDifficulty = calculateAvgDifficulty(placementTestProgress.feedbacks);
@@ -1823,7 +1824,6 @@
                         sessionStorage.removeItem('placementPassagesCompleted');
                         sessionStorage.removeItem('placementScores');
                         sessionStorage.removeItem('placementFeedbacks');
-                        sessionStorage.removeItem('placementChallenge');
                         
                         // Show completion notification and auto-redirect
                         showSuccess(
@@ -1836,25 +1836,15 @@
                             window.location.href = '/dashboard';
                         }, 5000);
                     } else {
-                        // Determine challenge level for next passage based on feedback
-                        let nextChallenge = 'appropriate';
-                        if (feedback === 'too_hard') {
-                            nextChallenge = 'easier';
-                        } else if (feedback === 'too_easy') {
-                            nextChallenge = 'challenging';
-                        }
-                        // Store so next page load picks it up
-                        sessionStorage.setItem('placementChallenge', nextChallenge);
-                        
+                        // Passages 1 & 2: Just show progress and auto-load next
                         showSuccess(
-                            `Passage ${placementTestProgress.passagesCompleted}/${PLACEMENT_TOTAL_PASSAGES} Complete! 🎯`,
+                            `Passage ${placementTestProgress.passagesCompleted}/3 Complete! 🎯`,
                             'Loading your next passage...',
                             2000
                         );
                         
                         setTimeout(() => {
-                            // Reload with the appropriate challenge level
-                            window.location.href = `/reading?challenge=${nextChallenge}`;
+                            location.reload();
                         }, 2000);
                     }
                 } else {
