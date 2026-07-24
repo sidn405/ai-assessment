@@ -1467,9 +1467,16 @@
                           console.log('✅ Login successful');
                           localStorage.setItem('token', data.token);
                           localStorage.setItem('user', JSON.stringify(data.user));
-                          sessionStorage.setItem('justLoggedIn', 'true'); // dashboard can still greet
+                          sessionStorage.setItem('justLoggedIn', 'true');
                           localStorage.setItem('justLoggedIn', 'true');
                           localStorage.setItem('loginTimestamp', Date.now().toString());
+
+                          // Clear any leftover placement test state so this user starts fresh
+                          sessionStorage.removeItem('isPlacementTest');
+                          sessionStorage.removeItem('placementPassagesCompleted');
+                          sessionStorage.removeItem('placementScores');
+                          sessionStorage.removeItem('placementFeedbacks');
+                          sessionStorage.removeItem('placementChallenge');
 
                           // ✅ PLAY CHIME HERE (before redirect)
                           await playLoginChime();
@@ -1709,10 +1716,18 @@
                     // Clear any stale localStorage data
                     localStorage.clear();
                     
+                    // Clear any leftover placement test state from previous sessions
+                    // (prevents a new user from inheriting another user's progress)
+                    sessionStorage.removeItem('isPlacementTest');
+                    sessionStorage.removeItem('placementPassagesCompleted');
+                    sessionStorage.removeItem('placementScores');
+                    sessionStorage.removeItem('placementFeedbacks');
+                    sessionStorage.removeItem('placementChallenge');
+                    
                     // Set new user data
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-                    localStorage.setItem('justLoggedIn', 'true');  // Mark as just logged in
+                    localStorage.setItem('justLoggedIn', 'true');
                     localStorage.setItem('loginTimestamp', Date.now().toString());
                     
                     // Redirect to dashboard
