@@ -2535,6 +2535,7 @@ async def update_reading_level(request: Request):
         token = data.get('token')
         new_level = data.get('level')
         score = data.get('score', 0)
+        final_challenge = data.get('final_challenge', 'appropriate')  # challenge level student ended on
         
         user_data = verify_token(token)
         user_id = user_data["user_id"]
@@ -2549,23 +2550,23 @@ async def update_reading_level(request: Request):
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
         
-        # Get current level
+        # Get current level and grade band
         if USE_POSTGRES:
-            cursor.execute("SELECT reading_level FROM users WHERE id = %s", (user_id,))
+            cursor.execute("SELECT reading_level, grade_band FROM users WHERE id = %s", (user_id,))
         else:
-            cursor.execute("SELECT reading_level FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT reading_level, grade_band FROM users WHERE id = ?", (user_id,))
         
         user = cursor.fetchone()
         previous_level = user['reading_level'] if user else None
-        
-        # Word count defaults per reading level — set these so lessons immediately
-        # use the correct word count after the placement test completes
-        word_count_defaults = {
-            'beginner':     (150, 200),
-            'intermediate': (200, 250),
-            'advanced':     (250, 350),
-        }
-        wc_min, wc_max = word_count_defaults.get(new_level, (200, 250))
+        grade_band = user['grade_band'] if user else 'elementary'
+
+        # Set word count based on where the student actually landed in placement.
+        # If they said too_hard twice and ended on much_easier, their first lesson
+        # should start near that word count — not jump back to 'appropriate'.
+        target = get_target_words(grade_band or 'elementary', final_challenge)
+        wc_min = target - 15
+        wc_max = target + 15
+        print(f"📏 Placement complete: grade={grade_band}, final_challenge={final_challenge}, word_count={target} ({wc_min}-{wc_max})")
 
         # Save to history
         if USE_POSTGRES:
@@ -3654,21 +3655,10 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     else:
         target_words = get_target_words(grade_band, challenge)
 
-    # Cap placement test passages based on grade band so the first experience
-    # isn't overwhelming, while still allowing meaningful difficulty differences.
-    # Only applies to the first 3 passages (placement test).
-    if total_read < 3:
-        gb = grade_band or 'elementary'
-        if gb in ('pre-k', 'kindergarten', '1st', '2nd', '3rd'):
-            target_words = min(target_words, 120)
-        elif gb in ('4th', '5th', 'elementary'):
-            target_words = min(target_words, 180)
-        elif gb in ('6th', '7th', '8th', 'middle'):
-            target_words = min(target_words, 260)
-        elif gb in ('9th', '10th', '11th', '12th', 'high'):
-            target_words = min(target_words, 340)
-        else:
-            target_words = min(target_words, 400)
+    # No word count cap during placement test — the word_count_map already has
+    # appropriate values per grade band, and the challenge levels (easier/much_easier)
+    # create meaningful 50-100 word differences. A flat cap flattens those differences.
+    print(f"📏 target_words={target_words} (grade={grade_band}, challenge={challenge})")
     
     if not content_generator:
         raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")
@@ -6932,9 +6922,12 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         sessions_count = (row["c"] if isinstance(row, dict) else row[0]) or 0
 
         if sessions_count == 0:
+            # First real lesson after placement — use the word counts set during
+            # placement completion (which reflect where the student actually landed),
+            # not the grade band's 'appropriate' which ignores their too_hard feedback.
+            # word_count_min/max were already set correctly by /api/reading-level/update.
             if level_estimate == "intermediate":
                 difficulty = "beginner"
-            word_count_min, word_count_max = 150, 200
 
         print(f"✓ Difficulty: {difficulty}")
         print(f"✓ Word count range: {word_count_min}-{word_count_max} words")

@@ -1998,6 +1998,7 @@
 
         async function saveReadingLevel(token, level, score) {
             try {
+                const finalChallenge = sessionStorage.getItem('placementChallenge') || 'appropriate';
                 const response = await fetch('/api/reading-level/update', {
                     method: 'POST',
                     headers: {
@@ -2006,7 +2007,8 @@
                     body: JSON.stringify({
                         token: token,
                         level: level,
-                        score: Math.round(score)
+                        score: Math.round(score),
+                        final_challenge: finalChallenge
                     })
                 });
                 
