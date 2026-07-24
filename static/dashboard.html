@@ -5905,6 +5905,60 @@
             }
         }
 
+        // ── Lesson Loading Animation ───────────────────────────────────────
+        function startDashLoadingAnimation() {
+            const anims = ['reader-animation', 'scientist-animation'];
+            const chosen = anims[Math.floor(Math.random() * anims.length)];
+
+            const readerMsgs = [
+                "Our reader is finding inspiration for your lesson...",
+                "Picking the perfect vocabulary words...",
+                "Crafting a story that matches your interests...",
+                "Personalizing this lesson just for you...",
+                "Making sure the difficulty is just right...",
+                "Adding your comprehension questions...",
+            ];
+            const scientistMsgs = [
+                "Mixing the perfect combination of words...",
+                "Analyzing your reading level and interests...",
+                "Synthesizing your personalized lesson...",
+                "Running experiments to find the best topic...",
+                "Calibrating vocabulary to your grade level...",
+                "Formulating your comprehension questions...",
+            ];
+            const msgs = chosen === 'scientist-animation' ? scientistMsgs : readerMsgs;
+
+            fetch(`/static/graphics/${chosen}.svg`)
+                .then(r => r.text())
+                .then(svg => {
+                    const c = document.getElementById('dashLoadingAnimContainer');
+                    if (c) c.innerHTML = svg;
+                })
+                .catch(() => {});
+
+            let idx = 0;
+            const subEl = document.getElementById('dashLoadingSubMsg');
+            window._dashLoadingInterval = setInterval(() => {
+                if (!subEl) { clearInterval(window._dashLoadingInterval); return; }
+                subEl.style.opacity = '0';
+                setTimeout(() => {
+                    idx = (idx + 1) % msgs.length;
+                    if (subEl) { subEl.textContent = msgs[idx]; subEl.style.opacity = '1'; }
+                }, 300);
+            }, 3000);
+
+            const bar = document.getElementById('dashLoadingBar');
+            [[0.5,20],[1,40],[2,60],[3,75],[5,85],[8,90]].forEach(([d,p]) => {
+                setTimeout(() => { if (bar) bar.style.width = p + '%'; }, d * 1000);
+            });
+        }
+
+        function stopDashLoadingAnimation() {
+            clearInterval(window._dashLoadingInterval);
+            const bar = document.getElementById('dashLoadingBar');
+            if (bar) bar.style.width = '100%';
+        }
+
         async function loadNextLesson() {            
             console.log('=== loadNextLesson START ===');
             
@@ -6552,60 +6606,6 @@
             console.log('=== submitLessonAnswers END ===');
 
         console.log('✓ Comprehensive essay system frontend loaded');
-
-        // ── Lesson Loading Animation ───────────────────────────────────────
-        function startDashLoadingAnimation() {
-            const anims = ['reader-animation', 'scientist-animation'];
-            const chosen = anims[Math.floor(Math.random() * anims.length)];
-
-            const readerMsgs = [
-                "Our reader is finding inspiration for your lesson...",
-                "Picking the perfect vocabulary words...",
-                "Crafting a story that matches your interests...",
-                "Personalizing this lesson just for you...",
-                "Making sure the difficulty is just right...",
-                "Adding your comprehension questions...",
-            ];
-            const scientistMsgs = [
-                "Mixing the perfect combination of words...",
-                "Analyzing your reading level and interests...",
-                "Synthesizing your personalized lesson...",
-                "Running experiments to find the best topic...",
-                "Calibrating vocabulary to your grade level...",
-                "Formulating your comprehension questions...",
-            ];
-            const msgs = chosen === 'scientist-animation' ? scientistMsgs : readerMsgs;
-
-            fetch(`/static/graphics/${chosen}.svg`)
-                .then(r => r.text())
-                .then(svg => {
-                    const c = document.getElementById('dashLoadingAnimContainer');
-                    if (c) c.innerHTML = svg;
-                })
-                .catch(() => {});
-
-            let idx = 0;
-            const subEl = document.getElementById('dashLoadingSubMsg');
-            window._dashLoadingInterval = setInterval(() => {
-                if (!subEl) { clearInterval(window._dashLoadingInterval); return; }
-                subEl.style.opacity = '0';
-                setTimeout(() => {
-                    idx = (idx + 1) % msgs.length;
-                    if (subEl) { subEl.textContent = msgs[idx]; subEl.style.opacity = '1'; }
-                }, 300);
-            }, 3000);
-
-            const bar = document.getElementById('dashLoadingBar');
-            [[0.5,20],[1,40],[2,60],[3,75],[5,85],[8,90]].forEach(([d,p]) => {
-                setTimeout(() => { if (bar) bar.style.width = p + '%'; }, d * 1000);
-            });
-        }
-
-        function stopDashLoadingAnimation() {
-            clearInterval(window._dashLoadingInterval);
-            const bar = document.getElementById('dashLoadingBar');
-            if (bar) bar.style.width = '100%';
-        }
 
         function showCheckpointModal() {
             const existing = document.getElementById('checkpoint-modal');
