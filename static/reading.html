@@ -1509,7 +1509,11 @@
             updatePlacementProgressBar();
             startTime = Date.now();
             startLoadingAnimation();
-            await loadPassage(token);
+
+            // Pick up challenge level from URL param set by previous passage feedback
+            const urlParams = new URLSearchParams(window.location.search);
+            const challengeParam = urlParams.get('challenge') || 'appropriate';
+            await loadPassage(token, challengeParam);
         });
 
         async function loadPassage(token, challenge = 'appropriate') {
@@ -1570,10 +1574,43 @@
                 storyImageWrap.classList.add('hidden');
             }
             
-            // Format passage content
-            const paragraphs = data.content.split('\n\n').filter(p => p.trim());
+            // Format passage content into readable paragraphs.
+            // The AI sometimes returns well-spaced text (split on \n\n),
+            // sometimes single-newline breaks, and sometimes one big block.
+            // This handles all three cases so younger readers never see a wall of text.
+            let content = data.content || '';
+
+            let paragraphs = [];
+
+            if (content.includes('\n\n')) {
+                // Already has paragraph breaks — use them
+                paragraphs = content.split('\n\n').map(p => p.replace(/\n/g, ' ').trim()).filter(Boolean);
+            } else if (content.includes('\n')) {
+                // Single newline breaks — treat each as a paragraph
+                paragraphs = content.split('\n').map(p => p.trim()).filter(Boolean);
+            } else {
+                // One big block — auto-split into ~3-4 sentence chunks
+                const sentences = content.match(/[^.!?]+[.!?]+["']?/g) || [content];
+                const chunkSize = Math.ceil(sentences.length / Math.max(2, Math.ceil(sentences.length / 4)));
+                for (let i = 0; i < sentences.length; i += chunkSize) {
+                    const chunk = sentences.slice(i, i + chunkSize).join(' ').trim();
+                    if (chunk) paragraphs.push(chunk);
+                }
+            }
+
+            // Safety: if we somehow ended up with one huge paragraph, split it
+            if (paragraphs.length === 1 && paragraphs[0].length > 400) {
+                const sentences = paragraphs[0].match(/[^.!?]+[.!?]+["']?/g) || [paragraphs[0]];
+                const chunkSize = Math.ceil(sentences.length / Math.max(2, Math.ceil(sentences.length / 4)));
+                paragraphs = [];
+                for (let i = 0; i < sentences.length; i += chunkSize) {
+                    const chunk = sentences.slice(i, i + chunkSize).join(' ').trim();
+                    if (chunk) paragraphs.push(chunk);
+                }
+            }
+
             document.getElementById('passageContent').innerHTML = paragraphs
-                .map(p => `<p>${p.trim()}</p>`)
+                .map(p => `<p style="margin-bottom: 1rem; line-height: 1.8;">${p}</p>`)
                 .join('');
 
             // Display vocabulary if available
@@ -1861,7 +1898,16 @@
                             window.location.href = '/dashboard';
                         }, 5000);
                     } else {
-                        // Passages 1 & 2: Just show progress and auto-load next
+                        // Determine challenge level for next passage based on feedback
+                        let nextChallenge = 'appropriate';
+                        if (feedback === 'too_hard') {
+                            nextChallenge = 'easier';
+                        } else if (feedback === 'too_easy') {
+                            nextChallenge = 'challenging';
+                        }
+                        // Store in sessionStorage so the reloaded page picks it up
+                        sessionStorage.setItem('placementChallenge', nextChallenge);
+
                         showSuccess(
                             `Passage ${placementTestProgress.passagesCompleted}/3 Complete! 🎯`,
                             'Loading your next passage...',
@@ -1869,7 +1915,7 @@
                         );
                         
                         setTimeout(() => {
-                            location.reload();
+                            window.location.href = `/reading?challenge=${nextChallenge}`;
                         }, 2000);
                     }
                 } else {

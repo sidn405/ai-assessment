@@ -297,6 +297,8 @@ class ContentGenerator:
         - Include at least one line of dialogue
         - Show positive outcome and growth
         - NO criminal justice, violence, or trauma content
+        - PARAGRAPH BREAKS: Separate the story into 3-4 paragraphs using blank lines (\\n\\n between each).
+          Never return a single block of text — younger readers need visual breathing room.
         
         AGE-APPROPRIATE VOCABULARY:
         - Use {difficulty_level} level vocabulary
