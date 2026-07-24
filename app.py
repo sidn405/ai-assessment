@@ -3682,8 +3682,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         passage_data = content_generator.generate_passage(
            topic=topic,
            difficulty_level=difficulty,
-           word_count_min=target_words - 25,
-           word_count_max=target_words + 25,
+           word_count_min=target_words - 15,
+           word_count_max=target_words + 15,
            user_interests=interest_tags,
            age=age,
            grade_band=grade_band,
@@ -3837,32 +3837,55 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
 
 def get_target_words(grade_band, challenge="appropriate"):
     """
-    Get appropriate word count based on grade level and challenge
+    Get appropriate word count based on grade level and challenge.
+    much_easier = step down one full grade band (used after 2x too_hard)
+    much_challenging = step up one full grade band (used after 2x too_easy)
     """
     word_count_map = {
-        'pre-k': {'easier': 50, 'appropriate': 75, 'challenging': 100},
-        'kindergarten': {'easier': 75, 'appropriate': 100, 'challenging': 125},
-        '1st': {'easier': 100, 'appropriate': 125, 'challenging': 150},
-        '2nd': {'easier': 125, 'appropriate': 150, 'challenging': 175},
-        '3rd': {'easier': 150, 'appropriate': 175, 'challenging': 200},
-        '4th': {'easier': 175, 'appropriate': 200, 'challenging': 250},
-        '5th': {'easier': 200, 'appropriate': 250, 'challenging': 300},
-        'elementary': {'easier': 150, 'appropriate': 200, 'challenging': 250},
-        '6th': {'easier': 250, 'appropriate': 300, 'challenging': 350},
-        '7th': {'easier': 275, 'appropriate': 325, 'challenging': 375},
-        '8th': {'easier': 300, 'appropriate': 350, 'challenging': 400},
-        'middle': {'easier': 275, 'appropriate': 325, 'challenging': 375},
-        '9th': {'easier': 350, 'appropriate': 400, 'challenging': 450},
-        '10th': {'easier': 375, 'appropriate': 425, 'challenging': 475},
-        '11th': {'easier': 400, 'appropriate': 450, 'challenging': 500},
-        '12th': {'easier': 425, 'appropriate': 475, 'challenging': 550},
-        'high': {'easier': 375, 'appropriate': 425, 'challenging': 500},
-        'adult': {'easier': 350, 'appropriate': 450, 'challenging': 600},
-        'college': {'easier': 400, 'appropriate': 500, 'challenging': 650},
-        'professional': {'easier': 450, 'appropriate': 550, 'challenging': 700}
+        'pre-k':        {'easier': 40,  'appropriate': 60,  'challenging': 80},
+        'kindergarten': {'easier': 60,  'appropriate': 85,  'challenging': 110},
+        '1st':          {'easier': 85,  'appropriate': 110, 'challenging': 140},
+        '2nd':          {'easier': 110, 'appropriate': 140, 'challenging': 170},
+        '3rd':          {'easier': 140, 'appropriate': 170, 'challenging': 210},
+        '4th':          {'easier': 170, 'appropriate': 210, 'challenging': 260},
+        '5th':          {'easier': 200, 'appropriate': 260, 'challenging': 310},
+        'elementary':   {'easier': 150, 'appropriate': 210, 'challenging': 260},
+        '6th':          {'easier': 250, 'appropriate': 310, 'challenging': 360},
+        '7th':          {'easier': 280, 'appropriate': 340, 'challenging': 390},
+        '8th':          {'easier': 310, 'appropriate': 365, 'challenging': 420},
+        'middle':       {'easier': 280, 'appropriate': 340, 'challenging': 390},
+        '9th':          {'easier': 360, 'appropriate': 420, 'challenging': 470},
+        '10th':         {'easier': 385, 'appropriate': 445, 'challenging': 500},
+        '11th':         {'easier': 410, 'appropriate': 470, 'challenging': 530},
+        '12th':         {'easier': 440, 'appropriate': 500, 'challenging': 560},
+        'high':         {'easier': 385, 'appropriate': 445, 'challenging': 510},
+        'adult':        {'easier': 360, 'appropriate': 470, 'challenging': 620},
+        'college':      {'easier': 410, 'appropriate': 520, 'challenging': 670},
+        'professional': {'easier': 460, 'appropriate': 570, 'challenging': 720},
     }
-    
-    counts = word_count_map.get(grade_band, word_count_map['elementary'])
+
+    # Grade band progression for stepping up/down
+    grade_progression = [
+        'pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th',
+        '6th', '7th', '8th', '9th', '10th', '11th', '12th', 'adult', 'college'
+    ]
+
+    gb = grade_band if grade_band in word_count_map else 'elementary'
+
+    if challenge == 'much_easier':
+        # Step down one full grade band and use 'easier' within it
+        idx = grade_progression.index(gb) if gb in grade_progression else 5
+        lower_band = grade_progression[max(0, idx - 1)]
+        counts = word_count_map.get(lower_band, word_count_map['elementary'])
+        return counts['easier']
+    elif challenge == 'much_challenging':
+        # Step up one full grade band and use 'challenging' within it
+        idx = grade_progression.index(gb) if gb in grade_progression else 5
+        upper_band = grade_progression[min(len(grade_progression) - 1, idx + 1)]
+        counts = word_count_map.get(upper_band, word_count_map['adult'])
+        return counts['challenging']
+
+    counts = word_count_map.get(gb, word_count_map['elementary'])
     return counts.get(challenge, counts['appropriate'])
 
 

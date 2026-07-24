@@ -1901,13 +1901,25 @@
                         }, 5000);
                     } else {
                         // Determine challenge level for next passage based on feedback
+                        // Count how many times the student has said too_hard
+                        // Use cumulative feedback to step down progressively
+                        const previousFeedbacks = placementTestProgress.feedbacks;
+                        const tooHardCount = previousFeedbacks.filter(f => f === 'too_hard').length
+                            + (feedback === 'too_hard' ? 1 : 0);
+                        const tooEasyCount = previousFeedbacks.filter(f => f === 'too_easy').length
+                            + (feedback === 'too_easy' ? 1 : 0);
+
                         let nextChallenge = 'appropriate';
-                        if (feedback === 'too_hard') {
+                        if (tooHardCount >= 2) {
+                            // Two too_hard in a row — step down a full grade band
+                            nextChallenge = 'much_easier';
+                        } else if (feedback === 'too_hard') {
                             nextChallenge = 'easier';
+                        } else if (tooEasyCount >= 2) {
+                            nextChallenge = 'much_challenging';
                         } else if (feedback === 'too_easy') {
                             nextChallenge = 'challenging';
                         }
-                        // Store in sessionStorage so the reloaded page picks it up
                         sessionStorage.setItem('placementChallenge', nextChallenge);
 
                         showSuccess(
