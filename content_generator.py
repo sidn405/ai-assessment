@@ -481,38 +481,62 @@ class ContentGenerator:
 
     def generate_story_image(self, title, content, topic, grade_band):
         """
-        Generate a single child-friendly illustration for a story.
-        Only call this for younger grade bands (see is_young_learner) - image
-        generation costs real money per call, so we don't want it firing for
-        every passage at every grade level.
-
-        Returns a data URL (data:image/png;base64,...) on success, or None on
-        any failure (callers should treat a missing image as non-fatal - the
-        story still needs to render without it).
-
-        NOTE: dall-e-3 was retired from the OpenAI API on May 12, 2026.
-        This uses gpt-image-1-mini (the cost-effective GPT Image model) instead.
-        Bump to "gpt-image-1" or "gpt-image-2" below if quality needs to go up -
-        gpt-image-2 in particular allows custom resolutions instead of the
-        fixed 1024x1024 / 1024x1536 / 1536x1024 options.
-
-        IMPORTANT: unlike dall-e-3, GPT Image models ALWAYS return base64 image
-        data (no .url field, no response_format param) - and your OpenAI org
-        needs to complete Organization Verification before this model will work
-        at all. See: https://platform.openai.com/settings/organization/general
+        Generate a story illustration styled to match the student's age/grade band.
+        Style ranges from Pixar storybook (young kids) to graphic novel / editorial
+        illustration (older teens/adults) so the art always feels age-appropriate.
         """
         try:
-            # Extract a clean scene description from the first 2 sentences of the story.
-            # Avoids the raw snippet moderation issue while giving the image model
-            # enough context to match the actual scene (characters, setting, action).
             sentences = [s.strip() for s in (content or '').replace('\n', ' ').split('.') if s.strip()]
             scene_hint = '. '.join(sentences[:2]) if sentences else f"a story about {topic}"
 
+            # ── Age-adaptive style map ──────────────────────────────────────
+            # Maps grade band to an art style that fits the reader's age.
+            gb = (grade_band or '').lower()
+
+            if gb in ('pre-k', 'kindergarten', '1st', '2nd', '3rd'):
+                # Ages 4-9: bright, rounded, very safe and playful
+                style = (
+                    "Warm Pixar-style children's storybook illustration. "
+                    "Big expressive eyes, rounded soft shapes, pastel-bright colors, "
+                    "simple cheerful backgrounds. Cozy, safe, and magical feeling. "
+                    "Appropriate for ages 4-9."
+                )
+            elif gb in ('4th', '5th', '6th', 'elementary'):
+                # Ages 9-12: slightly more detailed, still cartoon/animated feel
+                style = (
+                    "Colorful children's book illustration with a modern animated style, "
+                    "similar to DreamWorks or Disney Channel. Expressive characters, "
+                    "rich colors, dynamic poses, detailed backgrounds. "
+                    "Appropriate for ages 9-12."
+                )
+            elif gb in ('7th', '8th', 'middle'):
+                # Ages 12-14: graphic novel / YA illustrated style
+                style = (
+                    "Young Adult graphic novel illustration style. "
+                    "Clean lines, bold colors, cinematic framing, "
+                    "slightly more realistic proportions while staying illustration-based. "
+                    "Dynamic and engaging, appropriate for ages 12-14."
+                )
+            elif gb in ('9th', '10th', '11th', '12th', 'high'):
+                # Ages 14-18: editorial illustration / concept art style
+                style = (
+                    "Editorial illustration / digital concept art style. "
+                    "Realistic proportions, sophisticated color palette, "
+                    "mood lighting, painterly texture. Visually compelling "
+                    "and age-appropriate for high school students ages 14-18."
+                )
+            else:
+                # Adult: polished editorial / magazine illustration
+                style = (
+                    "Polished editorial magazine illustration. "
+                    "Sophisticated color palette, realistic characters with expressive faces, "
+                    "atmospheric depth and lighting. Professional and visually compelling "
+                    "for adult readers."
+                )
+
             image_prompt = (
-                f"A warm, friendly children's storybook illustration in the style of a modern Pixar storybook. "
+                f"{style} "
                 f"Scene: {scene_hint}. "
-                f"Warm soft lighting, rich colors with depth and texture, expressive rounded characters, lush background. "
-                f"Joyful and safe, appropriate for ages 4-12. "
                 f"No text, letters, words, or numbers anywhere in the image."
             )
 
@@ -528,10 +552,6 @@ class ContentGenerator:
             if not b64_data:
                 return None
 
-            # GPT Image models only return base64 - build a data URL so the
-            # frontend <img> tag works exactly like it would with a real URL,
-            # and so we follow the same storage pattern already used for
-            # profile photos elsewhere in app.py (data URL stored as TEXT).
             return f"data:image/png;base64,{b64_data}"
 
         except Exception as e:
