@@ -3654,12 +3654,21 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     else:
         target_words = get_target_words(grade_band, challenge)
 
-    # Cap placement test passages at 250 words max regardless of grade band.
-    # IMPORTANT: Only apply this cap for the first 3 passages (placement test).
-    # Regular reading sessions (total_read >= 3) should use full word count ranges
-    # so that too_hard/too_easy feedback actually changes the passage length meaningfully.
+    # Cap placement test passages based on grade band so the first experience
+    # isn't overwhelming, while still allowing meaningful difficulty differences.
+    # Only applies to the first 3 passages (placement test).
     if total_read < 3:
-        target_words = min(target_words, 250)
+        gb = grade_band or 'elementary'
+        if gb in ('pre-k', 'kindergarten', '1st', '2nd', '3rd'):
+            target_words = min(target_words, 120)
+        elif gb in ('4th', '5th', 'elementary'):
+            target_words = min(target_words, 180)
+        elif gb in ('6th', '7th', '8th', 'middle'):
+            target_words = min(target_words, 260)
+        elif gb in ('9th', '10th', '11th', '12th', 'high'):
+            target_words = min(target_words, 340)
+        else:
+            target_words = min(target_words, 400)
     
     if not content_generator:
         raise HTTPException(status_code=503, detail="Content generation not available. Please configure OpenAI API key.")

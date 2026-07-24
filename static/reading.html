@@ -804,7 +804,9 @@
         <div id="loadingState" class="loading" style="min-height: 440px; display: flex; align-items: center; justify-content: center; padding: 1rem;">
             <div id="passageLoadingWidget" style="display:flex; flex-direction:column; align-items:center; gap:1.5rem; max-width:480px; width:100%; text-align:center;">
                 <div id="loadingAnimContainer" style="width:380px; height:304px; border-radius:20px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); background:#1a1a2e;">
-                    <!-- SVG animation loads here -->
+                    <!-- SVGs pre-inlined for instant display — no fetch latency -->
+                    <div id="svgReader" style="width:100%;height:100%;display:none;"></div>
+                    <div id="svgScientist" style="width:100%;height:100%;display:none;"></div>
                 </div>
                 <div style="min-height:60px;">
                     <div style="font-size:1.2rem; font-weight:700; color:var(--navy-primary);">
@@ -2069,12 +2071,39 @@
         }
 
         // ── Animated Loading Screen ────────────────────────────────────────
-        // Randomly picks between reader and scientist animation, loads SVG inline
-        // (must be inline — CSS animations don't work in <img> tags), rotates
-        // context-appropriate messages, and runs a fake progress bar.
+        // SVGs are fetched once on page load and injected into hidden divs.
+        // startLoadingAnimation just shows one instantly — no network delay.
+        let svgsPreloaded = false;
+
+        function preloadAnimations() {
+            const readerEl = document.getElementById('svgReader');
+            const sciEl = document.getElementById('svgScientist');
+            if (!readerEl || !sciEl || svgsPreloaded) return;
+
+            fetch('/static/graphics/reader-animation.svg')
+                .then(r => r.text())
+                .then(svg => { readerEl.innerHTML = svg; })
+                .catch(() => {});
+
+            fetch('/static/graphics/scientist-animation.svg')
+                .then(r => r.text())
+                .then(svg => { sciEl.innerHTML = svg; })
+                .catch(() => {});
+
+            svgsPreloaded = true;
+        }
+
+        // Preload immediately when page loads
+        preloadAnimations();
+
         function startLoadingAnimation() {
-            const animations = ['reader-animation', 'scientist-animation'];
-            const chosen = animations[Math.floor(Math.random() * animations.length)];
+            const readerEl = document.getElementById('svgReader');
+            const sciEl = document.getElementById('svgScientist');
+
+            // Pick one randomly
+            const showReader = Math.random() < 0.5;
+            if (readerEl) readerEl.style.display = showReader ? 'block' : 'none';
+            if (sciEl) sciEl.style.display = showReader ? 'none' : 'block';
 
             const readerMsgs = [
                 "Our reader is finding inspiration for your story...",
@@ -2092,27 +2121,12 @@
                 "Calibrating vocabulary to your grade level...",
                 "Formulating your comprehension questions...",
             ];
-            const msgs = chosen === 'scientist-animation' ? scientistMsgs : readerMsgs;
+            const msgs = showReader ? readerMsgs : scientistMsgs;
 
-            // Load SVG inline so its CSS @keyframe animations run
-            fetch(`/static/graphics/${chosen}.svg`)
-                .then(r => r.text())
-                .then(svg => {
-                    const container = document.getElementById('loadingAnimContainer');
-                    if (container) container.innerHTML = svg;
-                })
-                .catch(() => {
-                    // Silently ignore — progress bar and messages still show
-                });
-
-            // Rotate sub-messages every 3s
             let msgIdx = 0;
             const subEl = document.getElementById('loadingSubMsg');
             const msgInterval = setInterval(() => {
-                if (!subEl || !document.getElementById('loadingState')?.classList.contains('hidden') === false) {
-                    clearInterval(msgInterval);
-                    return;
-                }
+                if (!subEl) { clearInterval(msgInterval); return; }
                 subEl.style.opacity = '0';
                 setTimeout(() => {
                     msgIdx = (msgIdx + 1) % msgs.length;
@@ -2120,14 +2134,11 @@
                 }, 300);
             }, 3000);
 
-            // Fake progress bar — grows to 90% over ~10s, stops there to wait for content
             const bar = document.getElementById('loadingProgress');
-            const steps = [[0.5, 20], [1, 40], [2, 60], [3, 75], [5, 85], [8, 90]];
-            steps.forEach(([delay, pct]) => {
-                setTimeout(() => { if (bar) bar.style.width = pct + '%'; }, delay * 1000);
+            [[0.5,20],[1,40],[2,60],[3,75],[5,85],[8,90]].forEach(([d,p]) => {
+                setTimeout(() => { if (bar) bar.style.width = p + '%'; }, d * 1000);
             });
 
-            // Store interval ID so we can clean up when passage loads
             window._loadingMsgInterval = msgInterval;
         }
 
