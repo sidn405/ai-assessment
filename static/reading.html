@@ -1531,7 +1531,9 @@
 
                 displayPassage(data);
                 
-                document.getElementById('loadingState').classList.add('hidden');
+                const loadingEl = document.getElementById('loadingState');
+                loadingEl.classList.add('hidden');
+                loadingEl.style.display = 'none';
                 stopLoadingAnimation();
                 document.getElementById('passageSection').classList.remove('hidden');
 

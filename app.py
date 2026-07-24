@@ -3655,10 +3655,10 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         target_words = get_target_words(grade_band, challenge)
 
     # Cap placement test passages at 250 words max regardless of grade band.
-    # The placement test is about gauging comprehension, not word endurance.
-    # Older/advanced students still get appropriately hard vocabulary — just
-    # not an overwhelming wall of text on their first session.
-    if isPlacementTest := True:  # always applies in /api/read/sample
+    # IMPORTANT: Only apply this cap for the first 3 passages (placement test).
+    # Regular reading sessions (total_read >= 3) should use full word count ranges
+    # so that too_hard/too_easy feedback actually changes the passage length meaningfully.
+    if total_read < 3:
         target_words = min(target_words, 250)
     
     if not content_generator:
