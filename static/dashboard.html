@@ -3978,7 +3978,7 @@
             if (hasInterests && !hasCompletedReading && !playedMessages.afterInterest) {
                 console.log('🎯 Playing navigation: Reading Assessment guide');
                 setTimeout(() => {
-                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Level Assessment button.`;
+                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Assessment button.`;
                     displayTutorMessage(message, 'happy');
                     
                     // Mark as played
@@ -7165,26 +7165,6 @@
             const levelChanged = data.level_changed;
             const newLevel = data.new_reading_level;
             
-            // Determine emoji and color based on comprehension level
-            let emoji, color, title;
-            if (evaluation.comprehension_level === 'excellent') {
-                emoji = '🌟';
-                color = '#28A745';
-                title = 'Excellent Work!';
-            } else if (evaluation.comprehension_level === 'good') {
-                emoji = '👏';
-                color = '#667eea';
-                title = 'Great Job!';
-            } else if (evaluation.comprehension_level === 'adequate') {
-                emoji = '👍';
-                color = '#ffc107';
-                title = 'Good Effort!';
-            } else {
-                emoji = '💪';
-                color = '#f5576c';
-                title = 'Keep Practicing!';
-            }
-            
             const modal = document.createElement('div');
             modal.id = 'essay-results-modal';
             modal.style.cssText = `
@@ -7213,109 +7193,78 @@
                     text-align: center;
                     animation: scaleIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
                     margin: auto;
+                    padding: 2.5rem;
                 ">
-                    <div style="
-                        background: ${color};
-                        color: white;
-                        padding: 2.5rem;
-                        border-radius: 20px 20px 0 0;
-                    ">
-                        <div style="font-size: 5rem; margin-bottom: 1rem;">${emoji}</div>
-                        <h2 style="font-size: 2rem; margin-bottom: 0.5rem;">${title}</h2>
-                        <p style="font-size: 1.2rem; opacity: 0.95;">
-                            Comprehension Score: <strong>${evaluation.comprehension_score}/100</strong>
-                        </p>
-                    </div>
-                    
-                    <div style="padding: 2.5rem;">
-                        ${pointsAwarded > 0 ? `
-                            <div style="
-                                background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-                                color: white;
-                                padding: 1.5rem;
-                                border-radius: 12px;
-                                margin-bottom: 2rem;
-                                font-size: 1.3rem;
-                                font-weight: bold;
-                                box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
-                            ">
-                                💎 +${pointsAwarded} Points Earned!
-                            </div>
-                        ` : ''}
-                        
-                        ${levelChanged ? `
-                            <div style="
-                                background: ${evaluation.difficulty_recommendation === 'step_back' ? '#fff3cd' : '#e7f3ff'};
-                                border: 2px solid ${evaluation.difficulty_recommendation === 'step_back' ? '#ffc107' : '#667eea'};
-                                padding: 1.5rem;
-                                border-radius: 12px;
-                                margin-bottom: 2rem;
-                            ">
-                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">
-                                    ${evaluation.difficulty_recommendation === 'step_back' ? '📚' : '🎉'}
-                                </div>
-                                <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.5rem; font-size: 1.2rem;">
-                                    ${evaluation.difficulty_recommendation === 'step_back' ? 'Adjusting Your Level' : 'Level Up!'}
-                                </div>
-                                <div style="color: #666;">
-                                    ${evaluation.difficulty_recommendation === 'step_back'
-                                        ? `We're moving you to <strong>${newLevel}</strong> level so you can build a stronger foundation.`
-                                        : `You're now at <strong>${newLevel}</strong> level!`
-                                    }
-                                </div>
-                            </div>
-                        ` : ''}
-                        
+                    ${pointsAwarded > 0 ? `
                         <div style="
-                            background: #f8f9fa;
+                            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+                            color: white;
                             padding: 1.5rem;
                             border-radius: 12px;
                             margin-bottom: 2rem;
-                            text-align: left;
+                            font-size: 1.3rem;
+                            font-weight: bold;
+                            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
                         ">
-                            <div style="font-weight: bold; margin-bottom: 1rem; color: #1e3a5f;">
-                                📝 Feedback:
+                            💎 +${pointsAwarded} Points Earned!
+                        </div>
+                    ` : ''}
+                    
+                    ${levelChanged ? `
+                        <div style="
+                            background: ${evaluation.difficulty_recommendation === 'step_back' ? '#fff3cd' : '#e7f3ff'};
+                            border: 2px solid ${evaluation.difficulty_recommendation === 'step_back' ? '#ffc107' : '#667eea'};
+                            padding: 1.5rem;
+                            border-radius: 12px;
+                            margin-bottom: 2rem;
+                        ">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">
+                                ${evaluation.difficulty_recommendation === 'step_back' ? '📚' : '🎉'}
                             </div>
-                            <div style="color: #666; line-height: 1.6;">
-                                ${evaluation.feedback}
+                            <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.5rem; font-size: 1.2rem;">
+                                ${evaluation.difficulty_recommendation === 'step_back' ? 'Adjusting Your Level' : 'Level Up!'}
+                            </div>
+                            <div style="color: #666;">
+                                ${evaluation.difficulty_recommendation === 'step_back'
+                                    ? `We're moving you to <strong>${newLevel}</strong> level so you can build a stronger foundation.`
+                                    : `You're now at <strong>${newLevel}</strong> level!`
+                                }
                             </div>
                         </div>
+                    ` : ''}
+                    
+                    <div style="
+                        background: #f8f9fa;
+                        padding: 1.5rem;
+                        border-radius: 12px;
+                        margin-bottom: 2rem;
+                        text-align: left;
+                    ">
+                        <div style="font-weight: bold; margin-bottom: 1rem; color: #1e3a5f;">
+                            📝 Feedback:
+                        </div>
+                        <div style="color: #666; line-height: 1.6;">
+                            ${evaluation.feedback}
+                        </div>
+                    </div>
 
-                        ${evaluation.strengths && evaluation.strengths.length > 0 ? `
-                            <div style="
-                                background: #f0fff4;
-                                border-left: 4px solid #28A745;
-                                padding: 1.25rem 1.5rem;
-                                border-radius: 0 12px 12px 0;
-                                margin-bottom: 1.25rem;
-                                text-align: left;
-                            ">
-                                <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.75rem;">
-                                    ✅ What You Did Well
-                                </div>
-                                <ul style="margin: 0; padding-left: 1.25rem; color: #444; line-height: 1.8;">
-                                    ${evaluation.strengths.map(s => `<li>${s}</li>`).join('')}
-                                </ul>
+                    ${evaluation.strengths && evaluation.strengths.length > 0 ? `
+                        <div style="
+                            background: #f0fff4;
+                            border-left: 4px solid #28A745;
+                            padding: 1.25rem 1.5rem;
+                            border-radius: 0 12px 12px 0;
+                            margin-bottom: 1.25rem;
+                            text-align: left;
+                        ">
+                            <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.75rem;">
+                                ✅ What You Did Well
                             </div>
-                        ` : ''}
-
-                        ${evaluation.areas_for_improvement && evaluation.areas_for_improvement.length > 0 ? `
-                            <div style="
-                                background: #fff8f0;
-                                border-left: 4px solid #ffc107;
-                                padding: 1.25rem 1.5rem;
-                                border-radius: 0 12px 12px 0;
-                                margin-bottom: 2rem;
-                                text-align: left;
-                            ">
-                                <div style="font-weight: bold; color: #1e3a5f; margin-bottom: 0.75rem;">
-                                    💡 Next Time, Try This
-                                </div>
-                                <ul style="margin: 0; padding-left: 1.25rem; color: #444; line-height: 1.8;">
-                                    ${evaluation.areas_for_improvement.map(a => `<li>${a}</li>`).join('')}
-                                </ul>
-                            </div>
-                        ` : ''}
+                            <ul style="margin: 0; padding-left: 1.25rem; color: #444; line-height: 1.8;">
+                                ${evaluation.strengths.map(s => `<li>${s}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
                         
                         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
                             <button 
@@ -7359,7 +7308,6 @@
                                 Continue Learning 🚀
                             </button>
                         </div>
-                    </div>
                 </div>
             `;
             

@@ -6558,12 +6558,54 @@ async def submit_placement(request: Request):
     correct_rows = cursor.fetchall() or []
     correct = [(r["correct_answer"] if hasattr(r, "keys") else r[0]) for r in correct_rows][:len(answers)]
 
+    def spelling_match(student_ans, correct_ans):
+        """
+        Returns (is_correct, is_fuzzy) where:
+        - is_correct = True if exact match or close enough spelling
+        - is_fuzzy = True if it was a spelling match (not exact)
+        Uses Levenshtein edit distance for tolerance.
+        """
+        a = str(student_ans).strip().lower()
+        b = str(correct_ans).strip().lower()
+        if a == b:
+            return True, False
+        # Simple edit distance (handles 1-2 character misspellings)
+        # Only apply to answers over 3 chars to avoid false positives on short words
+        if len(a) >= 3 and len(b) >= 3:
+            # Build edit distance matrix
+            m, n = len(a), len(b)
+            if abs(m - n) > 3:
+                return False, False  # Too different in length
+            dp = list(range(n + 1))
+            for i in range(1, m + 1):
+                prev, dp[0] = dp[0], i
+                for j in range(1, n + 1):
+                    temp = dp[j]
+                    if a[i-1] == b[j-1]:
+                        dp[j] = prev
+                    else:
+                        dp[j] = 1 + min(prev, dp[j], dp[j-1])
+                    prev = temp
+            dist = dp[n]
+            # Allow 1 edit per 6 chars (so "busines" → "business" = 1 edit, allowed)
+            max_allowed = max(1, len(b) // 6)
+            if dist <= max_allowed:
+                return True, True
+        return False, False
+
     total = max(1, len(correct))
     correct_n = 0
+    fuzzy_n = 0
     for i in range(min(len(answers), len(correct))):
-        if str(answers[i]).strip() == str(correct[i]).strip():
+        is_correct, is_fuzzy = spelling_match(answers[i], correct[i])
+        if is_correct:
             correct_n += 1
-    score = round((correct_n / total) * 100.0, 2)
+            if is_fuzzy:
+                fuzzy_n += 1
+
+    # Fuzzy-matched answers earn 85% credit (slight deduction for spelling)
+    exact_n = correct_n - fuzzy_n
+    score = round(((exact_n + fuzzy_n * 0.85) / total) * 100.0, 2)
 
     minutes = max(1/60, time_spent_seconds / 60.0)
     wpm = round((wc / minutes), 1) if wc else 0.0
