@@ -2213,6 +2213,24 @@
                         <span>📖</span> eBooks Library
                     </a>
                 </li>
+                <li class="nav-item" style="position: relative;">
+                    <a href="#" class="nav-link" 
+                       style="opacity: 0.5; cursor: not-allowed; pointer-events: none;"
+                       title="Coming Soon">
+                        <span>📋</span> Assignments
+                        <span style="
+                            font-size: 0.65rem;
+                            background: #667eea;
+                            color: white;
+                            padding: 1px 6px;
+                            border-radius: 999px;
+                            margin-left: 6px;
+                            vertical-align: middle;
+                            font-weight: 600;
+                            letter-spacing: 0.02em;
+                        ">SOON</span>
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link" onclick="showSection('messages', event); return false;">
                         <span>💬</span> Messages
@@ -3978,7 +3996,7 @@
             if (hasInterests && !hasCompletedReading && !playedMessages.afterInterest) {
                 console.log('🎯 Playing navigation: Reading Assessment guide');
                 setTimeout(() => {
-                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Assessment button.`;
+                    const message = `Now that you have completed the Interest Assessment, let's check your reading level. Click the Reading Level Assessment button.`;
                     displayTutorMessage(message, 'happy');
                     
                     // Mark as played
@@ -10461,20 +10479,23 @@
         if (!query) return;
         
         showEbooksLoading();
-        
+
         try {
-            // Use Open Library API
-            const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=20`);
+            // Use Open Library API — age-appropriate results only
+            const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=40`);
             const data = await response.json();
             
-            currentBooks = data.docs.map(book => ({
-                title: book.title,
-                author: book.author_name?.[0] || 'Unknown Author',
-                cover: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg` : null,
-                year: book.first_publish_year,
-                key: book.key,
-                subjects: book.subject || []
-            }));
+            currentBooks = data.docs
+                .map(book => ({
+                    title: book.title,
+                    author: book.author_name?.[0] || 'Unknown Author',
+                    cover: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg` : null,
+                    year: book.first_publish_year,
+                    key: book.key,
+                    subjects: book.subject || []
+                }))
+                .filter(isAgeAppropriate)
+                .slice(0, 20);
             
             displayBooks(currentBooks);
         } catch (error) {
@@ -10501,17 +10522,20 @@
         // Search for first interest or popular books
         const query = interests[0] || 'adventure';
         try {
-            const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=20`);
+            const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=40`);
             const data = await response.json();
             
-            currentBooks = data.docs.map(book => ({
-                title: book.title,
-                author: book.author_name?.[0] || 'Unknown Author',
-                cover: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg` : null,
-                year: book.first_publish_year,
-                key: book.key,
-                subjects: book.subject || []
-            }));
+            currentBooks = data.docs
+                .map(book => ({
+                    title: book.title,
+                    author: book.author_name?.[0] || 'Unknown Author',
+                    cover: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg` : null,
+                    year: book.first_publish_year,
+                    key: book.key,
+                    subjects: book.subject || []
+                }))
+                .filter(isAgeAppropriate)
+                .slice(0, 20);
             
             displayBooks(currentBooks);
         } catch (error) {
@@ -10523,6 +10547,32 @@
     function searchEbooksByInterest(interest) {
         document.getElementById('ebookSearch').value = interest;
         searchEbooks();
+    }
+
+    // Content safety filter — blocks adult-themed books from the library
+    const BLOCKED_SUBJECTS = [
+        'erotica', 'erotic', 'adult fiction', 'adult literature', 'pornography',
+        'explicit', 'sexuality', 'sexual content', 'mature content', 'graphic novel adults',
+        'horror fiction', 'gore', 'violence', 'murder mystery for adults',
+        'drug use', 'drugs', 'substance abuse', 'alcohol abuse',
+        'romance fiction', 'romantic fiction', 'love stories adults',
+    ];
+    const BLOCKED_TITLE_WORDS = [
+        'erotica', 'erotic', 'adult', 'xxx', 'mature', 'explicit', 'sexy',
+        'naked', 'nude', 'playboy', 'penthouse', 'hustler',
+    ];
+
+    function isAgeAppropriate(book) {
+        const title = (book.title || '').toLowerCase();
+        const subjects = (book.subjects || []).map(s => s.toLowerCase());
+
+        // Block by title keywords
+        if (BLOCKED_TITLE_WORDS.some(word => title.includes(word))) return false;
+
+        // Block by subject tags
+        if (subjects.some(s => BLOCKED_SUBJECTS.some(blocked => s.includes(blocked)))) return false;
+
+        return true;
     }
 
     function displayBooks(books) {
