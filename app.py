@@ -8699,7 +8699,7 @@ async def get_student_progress(student_id: int, admin=Depends(require_admin)):
         "completed_at": str(r.get("completed_at") or r.get("started_at") or ""),
     } for r in rows]
 
-    # 1) Try progress table (empty in your screenshot)
+    # 1) Try progress table (may not exist)
     try:
         cursor.execute(
             """
@@ -8720,6 +8720,7 @@ async def get_student_progress(student_id: int, admin=Depends(require_admin)):
         )
         progress_rows = [dict(r) for r in (cursor.fetchall() or [])]
     except Exception:
+        conn.rollback()  # Reset aborted transaction so next query can run
         progress_rows = []
 
     # 2) If progress table is empty, build progress-like rows from session_logs
