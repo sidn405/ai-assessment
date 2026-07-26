@@ -8771,8 +8771,33 @@
             });
             
             if (response.ok) {
+                const data = await response.json();
                 console.log('✓ Game saved to backend');
-                loadAllStats();  // ✅ CORRECT - Refreshes all dashboard stats
+
+                // Show points earned badge on the completion screen
+                const pointsAwarded = data.points_awarded || 0;
+                if (pointsAwarded > 0) {
+                    const badge = document.createElement('div');
+                    badge.style.cssText = `
+                        background: linear-gradient(135deg, #FFD700, #FFA500);
+                        color: white; font-weight: 700; font-size: 1.1rem;
+                        padding: 0.75rem 1.5rem; border-radius: 12px;
+                        margin: 0.75rem auto; display: inline-block;
+                        box-shadow: 0 4px 12px rgba(255,165,0,0.4);
+                        animation: fadeIn 0.4s ease;
+                    `;
+                    badge.textContent = `💎 +${pointsAwarded} Points Earned!`;
+                    // Insert after the score banner
+                    const scoreArea = document.getElementById('gamePlayArea');
+                    if (scoreArea) {
+                        const banner = scoreArea.querySelector('[style*="gradient"]');
+                        if (banner && banner.parentNode) {
+                            banner.parentNode.insertBefore(badge, banner.nextSibling);
+                        }
+                    }
+                }
+
+                loadAllStats();
             }
         } catch (error) {
             console.error('Could not save game to backend:', error);
