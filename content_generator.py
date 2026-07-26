@@ -292,7 +292,6 @@ class ContentGenerator:
         
         CULTURAL AUTHENTICITY — IMPORTANT:
         - {cultural_ctx['cultural_notes']}
-        - Protagonist name suggestion: {name_suggestion} (or another authentic name from this culture)
         - Authentic settings: {', '.join(cultural_ctx['settings'][:4])}
         - Resonant themes: {', '.join(cultural_ctx['themes'][:4])}
         - Guidelines: {' | '.join(cultural_ctx['avoid'])}

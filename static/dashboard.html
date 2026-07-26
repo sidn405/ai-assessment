@@ -4018,7 +4018,7 @@
             if (hasInterests && hasCompletedReading && !playedMessages.bothComplete) {
                 console.log('🎯 Playing navigation: Both assessments complete');
                 setTimeout(() => {
-                    const message = `Both assessments are complete and your lessons are now personalized to your interests and reading level. Ready to start your learning journey? Click below to explore your customized lessons!`;
+                    const message = `Both assessments are complete and your lessons are now personalized to your interests and reading level. Ready to start your learning journey? Click the Continue Learning button below to explore your customized lessons!`;
                     displayTutorMessage(message, 'excited');
                     
                     // Mark as played
@@ -4697,7 +4697,13 @@
 
         function showSection(sectionName, event) {
             if (sectionName !== 'placement' && isPlacementTestActive) {
-                isPlacementTestActive = false;  // ⭐ ADD THIS
+                isPlacementTestActive = false;
+            }
+
+            // Stop tutor speech when navigating away from lessons
+            if (sectionName !== 'lessons') {
+                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                if (window._tutorInterval) { clearInterval(window._tutorInterval); window._tutorInterval = null; }
             }
 
             if (event) event.preventDefault();
@@ -4743,7 +4749,18 @@
                 loadGamificationData();
                 }
             } else if (sectionName === 'lessons') {
-                checkForNextLesson();
+                // Only load a new lesson if one isn't already displayed
+                const lessonCard = document.getElementById('lessonContentCard');
+                const questionsCard = document.getElementById('questionsCard');
+                const lessonLoading = document.getElementById('lessonLoading');
+                const alreadyLoaded = lessonCard && !lessonCard.classList.contains('hidden');
+                const questionsShowing = questionsCard && !questionsCard.classList.contains('hidden');
+                const isLoading = lessonLoading && !lessonLoading.classList.contains('hidden');
+
+                if (!alreadyLoaded && !questionsShowing && !isLoading) {
+                    checkForNextLesson();
+                }
+                // If already loaded — just show the section, don't regenerate
             } else if (sectionName === 'assessment') {
                 loadAssessment();
             } else if (sectionName === 'placement') {
@@ -5104,8 +5121,19 @@
                 
                 showMessage('Assessment completed successfully!', 'success');
 
-                // Show success message
-                alert('✓ Assessment completed! Next: complete the Reading Level Assessment.');
+                // Show inline success — no alert popup
+                const btn = document.getElementById('interestAssessmentBtn');
+                if (btn) {
+                    btn.textContent = '✅ Interest Assessment Complete';
+                    btn.style.background = '#28A745';
+                    btn.disabled = true;
+                }
+                // Show a non-blocking toast notification
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#28A745;color:white;padding:1rem 2rem;border-radius:12px;font-weight:600;font-size:1rem;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.3);animation:fadeIn 0.3s ease;';
+                toast.textContent = '✅ Interest Assessment Complete! Now complete your Reading Level Assessment.';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 4000);
 
                 // ✅ Reset voice navigation and trigger next message
                 resetVoiceNavigation('interest');
@@ -6189,24 +6217,55 @@
                 // Display content
                 const contentEl = document.getElementById('lessonText');
                 if (contentEl && lesson.content) {
-                    // Split into paragraphs - handle different line break formats
+                    let content = lesson.content;
                     let paragraphs = [];
-                    
-                    if (lesson.content.includes('\n\n')) {
-                        paragraphs = lesson.content.split('\n\n');
-                    } else if (lesson.content.includes('\n')) {
-                        paragraphs = lesson.content.split('\n');
+
+                    if (content.includes('\n\n')) {
+                        // Well-formatted with double newlines
+                        paragraphs = content.split('\n\n')
+                            .map(p => p.replace(/\n/g, ' ').trim())
+                            .filter(p => p.length > 0);
+                    } else if (content.includes('\n')) {
+                        // Single newlines — merge lines that don't end a sentence
+                        const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+                        let current = '';
+                        lines.forEach(line => {
+                            current = current ? current + ' ' + line : line;
+                            // Only break paragraph at sentence-ending punctuation
+                            if (/[.!?]["']?\s*$/.test(line)) {
+                                paragraphs.push(current);
+                                current = '';
+                            }
+                        });
+                        if (current) paragraphs.push(current);
                     } else {
-                        paragraphs = [lesson.content];
+                        // One big block — split into ~4-sentence chunks on proper sentence boundaries
+                        const sentenceRegex = /[^.!?]*[.!?]["']?(?:\s|$)/g;
+                        const sentences = content.match(sentenceRegex) || [content];
+                        const chunkSize = Math.max(3, Math.ceil(sentences.length / 4));
+                        for (let i = 0; i < sentences.length; i += chunkSize) {
+                            const chunk = sentences.slice(i, i + chunkSize).join('').trim();
+                            if (chunk) paragraphs.push(chunk);
+                        }
                     }
-                    
-                    // Filter and format paragraphs
-                    paragraphs = paragraphs
-                        .map(p => p.trim())
+
+                    // Safety: if any paragraph is still >500 chars and has no sentence end, split it
+                    const final = [];
+                    paragraphs.forEach(p => {
+                        if (p.length > 500) {
+                            const sents = p.match(/[^.!?]*[.!?]["']?(?:\s|$)/g) || [p];
+                            const mid = Math.ceil(sents.length / 2);
+                            final.push(sents.slice(0, mid).join('').trim());
+                            if (sents.length > mid) final.push(sents.slice(mid).join('').trim());
+                        } else {
+                            final.push(p);
+                        }
+                    });
+
+                    contentEl.innerHTML = final
                         .filter(p => p.length > 0)
-                        .map(p => `<p style="margin-bottom: 1rem;">${p}</p>`);
-                    
-                    contentEl.innerHTML = paragraphs.join('');
+                        .map(p => `<p style="margin-bottom: 1.2rem; line-height: 1.8;">${p.trim()}</p>`)
+                        .join('');
                 }
                 
                 // Display vocabulary if available
