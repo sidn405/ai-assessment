@@ -776,6 +776,8 @@ def init_db():
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS goal_type VARCHAR(50) DEFAULT 'lessons'",
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS target_value INTEGER DEFAULT 3",
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS current_value INTEGER DEFAULT 0",
+                "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS week_end DATE",
+                "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS points_reward INTEGER DEFAULT 0",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
