@@ -10415,11 +10415,11 @@ EVALUATION CRITERIA:
 
 IMPORTANT RULES FOR YOUR FEEDBACK:
 - Address {first_name} directly by name
-- Start with something genuine they did well — find it even in weak essays
+- Focus ONLY on what they did well — this is a positive-only feedback system
 - Be specific: reference actual sentences or ideas from THEIR essay
-- For areas to improve, give concrete next-step advice, not vague suggestions
 - Keep the tone encouraging and age-appropriate for a {current_level} reader
-- The ai_feedback field should be 3-5 sentences minimum — this is their only feedback
+- The ai_feedback field should be 2-4 sentences — warm, personal, celebrating what they got right
+- Never mention "To improve", "next time try", "areas to work on", or any corrective language
 - Never mention "admin", "teacher review", or that anyone else will read this
 
 Respond with ONLY a JSON object in this exact format:
@@ -10427,9 +10427,9 @@ Respond with ONLY a JSON object in this exact format:
     "comprehension_level": "excellent|good|adequate|needs_help",
     "comprehension_score": 0-100,
     "difficulty_recommendation": "advance|stay|step_back",
-    "ai_feedback": "Your complete, detailed, personalized feedback for {first_name}. Must be 3-5 sentences minimum.",
+    "ai_feedback": "Positive, encouraging feedback for {first_name}. 2-4 sentences. No improvement suggestions.",
     "strengths": ["specific strength from their essay", "another specific strength"],
-    "areas_for_improvement": ["specific actionable suggestion", "another concrete tip"]
+    "areas_for_improvement": []
 }}
 
 SCORING AND RECOMMENDATION GUIDE:
@@ -10461,6 +10461,20 @@ Do NOT recommend step_back unless the score is genuinely below 60."""
         evaluation.setdefault('ai_feedback', f'Good effort, {first_name}! Keep reading and writing every day.')
         evaluation.setdefault('strengths', [])
         evaluation.setdefault('areas_for_improvement', [])
+        evaluation['areas_for_improvement'] = []  # Always empty — positive-only
+
+        # Strip any "To improve..." / "Next time..." sentences that sneak through
+        feedback = evaluation.get('ai_feedback', '') or evaluation.get('feedback', '')
+        if feedback:
+            import re
+            # Remove sentences that start with improvement language
+            sentences = re.split(r'(?<=[.!?])\s+', feedback)
+            improvement_starters = ('to improve', 'next time', 'you could also', 'try to',
+                                    'consider', 'in the future', 'you might want', 'one area',
+                                    'areas to', 'you should', 'additionally, try', 'also, think')
+            clean = [s for s in sentences if not s.lower().startswith(improvement_starters)]
+            evaluation['ai_feedback'] = ' '.join(clean).strip()
+            evaluation['feedback'] = evaluation['ai_feedback']
 
         # Always False — no human admin reviews
         evaluation['needs_admin_review'] = False
