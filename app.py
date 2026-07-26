@@ -1298,15 +1298,27 @@ ADMIN_EMAILS = {
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_landing():
-    return FileResponse("static/index.html")
+    response = FileResponse("static/index.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def serve_dashboard():
-    return FileResponse("static/dashboard.html")
+    response = FileResponse("static/dashboard.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/admin-dashboard", response_class=HTMLResponse)
 async def serve_admin():
-    return FileResponse("static/admin-dashboard.html")
+    response = FileResponse("static/admin-dashboard.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/reading", response_class=HTMLResponse)
 async def serve_reading():
