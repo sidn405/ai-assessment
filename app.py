@@ -8161,23 +8161,37 @@ async def complete_game(request: CompleteGameRequest, user: dict = Depends(get_c
     print("=" * 60)
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
         # Insert game completion
-        cursor.execute("""
-            INSERT INTO game_completions 
-            (user_id, game_type, score, rounds_completed, time_seconds, completed_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
-        """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
-        
-        # Update user stats
-        cursor.execute("""
-            UPDATE users
-            SET games_played = COALESCE(games_played, 0) + 1,
-                total_game_score = COALESCE(total_game_score, 0) + %s
-            WHERE id = %s
-        """, (request.score, user_id))
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO game_completions 
+                (user_id, game_type, score, rounds_completed, time_seconds, completed_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+            """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
+            
+            # Update user stats
+            cursor.execute("""
+                UPDATE users
+                SET games_played = COALESCE(games_played, 0) + 1,
+                    total_game_score = COALESCE(total_game_score, 0) + %s
+                WHERE id = %s
+            """, (request.score, user_id))
+        else:
+            cursor.execute("""
+                INSERT INTO game_completions 
+                (user_id, game_type, score, rounds_completed, time_seconds, completed_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
+            
+            cursor.execute("""
+                UPDATE users
+                SET games_played = COALESCE(games_played, 0) + 1,
+                    total_game_score = COALESCE(total_game_score, 0) + ?
+                WHERE id = ?
+            """, (request.score, user_id))
         
         conn.commit()
         print(f"✓ Game completion saved")
@@ -8200,19 +8214,31 @@ async def get_game_stats(user: dict = Depends(get_current_user)):
     print(f"🎮 Getting stats for user {user_id}")
     
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
     
     try:
-        cursor.execute("""
-            SELECT 
-                COUNT(*) as games_played,
-                COALESCE(SUM(score), 0) as total_score,
-                COALESCE(AVG(score), 0) as avg_score,
-                COALESCE(MAX(score), 0) as high_score,
-                COALESCE(SUM(time_seconds), 0) as total_time
-            FROM game_completions
-            WHERE user_id = %s
-        """, (user_id,))
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as games_played,
+                    COALESCE(SUM(score), 0) as total_score,
+                    COALESCE(AVG(score), 0) as avg_score,
+                    COALESCE(MAX(score), 0) as high_score,
+                    COALESCE(SUM(time_seconds), 0) as total_time
+                FROM game_completions
+                WHERE user_id = %s
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as games_played,
+                    COALESCE(SUM(score), 0) as total_score,
+                    COALESCE(AVG(score), 0) as avg_score,
+                    COALESCE(MAX(score), 0) as high_score,
+                    COALESCE(SUM(time_seconds), 0) as total_time
+                FROM game_completions
+                WHERE user_id = ?
+            """, (user_id,))
         
         stats = cursor.fetchone()
         
@@ -8227,11 +8253,11 @@ async def get_game_stats(user: dict = Depends(get_current_user)):
         recent = cursor.fetchall()
         
         result = {
-            "games_played": stats[0] if stats else 0,
-            "total_score": stats[1] if stats else 0,
-            "avg_score": round(stats[2], 1) if stats and stats[2] else 0,
-            "high_score": stats[3] if stats else 0,
-            "total_time_minutes": round(stats[4] / 60, 1) if stats and stats[4] else 0,
+            "games_played": stats['games_played'] if stats else 0,
+            "total_score": stats['total_score'] if stats else 0,
+            "avg_score": round(float(stats['avg_score']), 1) if stats and stats['avg_score'] else 0,
+            "high_score": stats['high_score'] if stats else 0,
+            "total_time_minutes": round(float(stats['total_time'] or 0) / 60, 1) if stats else 0,
             "recent_games": []
         }
         
