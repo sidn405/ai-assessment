@@ -1883,7 +1883,6 @@
         .tutor-avatar {
             width: 120px;
             height: 120px;
-            background-image: url('static/graphics/tutor.jpg');
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -3872,6 +3871,14 @@
         }
 
         document.addEventListener("click", unlockSpeechOnce, { once: true });
+
+        // Cache-bust the tutor avatar photo so a fresh upload always shows immediately
+        document.addEventListener('DOMContentLoaded', () => {
+          const avatarEl = document.querySelector('.tutor-avatar');
+          if (avatarEl) {
+            avatarEl.style.backgroundImage = `url('static/graphics/tutor.jpg?v=${Date.now()}')`;
+          }
+        });
 
 
         function getStudentNameForTutor() {
