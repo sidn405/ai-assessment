@@ -1322,7 +1322,11 @@ async def serve_admin():
 
 @app.get("/reading", response_class=HTMLResponse)
 async def serve_reading():
-    return FileResponse("static/reading.html")
+    response = FileResponse("static/reading.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/writing", response_class=HTMLResponse)
 async def serve_writing():
