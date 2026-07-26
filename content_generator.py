@@ -214,18 +214,46 @@ class ContentGenerator:
             txt = txt.split("```")[1].split("```")[0].strip()
         return json.loads(txt)
     
-    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests, age=None, grade_band=None, cultural_identity=None):
+    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests, age=None, grade_band=None, cultural_identity=None, student_name=None, used_names=None):
         """Generate educational passage using GPT-4 with dynamic word count"""
         
-        # Calculate target from range
         import random
         target_words = (word_count_min + word_count_max) // 2
+        if used_names is None:
+            used_names = []
+
+        # Infer student gender from first name
+        male_indicators = {'james','john','robert','michael','william','david','richard','lance',
+            'joseph','thomas','charles','christopher','daniel','matthew','anthony','mark',
+            'donald','steven','paul','andrew','joshua','kenneth','kevin','brian','george',
+            'edward','ronald','timothy','jason','jeffrey','ryan','jacob','gary','nicholas',
+            'eric','jonathan','stephen','larry','justin','scott','brandon','benjamin','samuel',
+            'raymond','gregory','frank','alexander','patrick','raymond','jack','dennis','jerry',
+            'tyler','aaron','jose','adam','henry','nathan','zachary','douglas','peter','kyle',
+            'noah','ethan','mason','liam','aiden','jayden','jamal','marcus','malik','darius',
+            'kofi','trey','andre','elijah','isaiah','jaylen','miles','xavier','cameron','devon',
+            'jesus','carlos','mateo','diego','alejandro','miguel','sebastian','rafael','luis',
+            'kenji','hiroshi','kaito','arjun','raj','sanjay','wei','jin','takeshi','min',
+            'ahmed','omar','khalid','hassan','tariq','ziad','ali','kareem','chayton','takoda',
+            'elan','waya','shilah','kai','makoa','koa','ikaika','alika'}
+
+        student_first = (student_name or '').split()[0].lower() if student_name else ''
+        is_male_student = student_first in male_indicators
+        gender_hint = 'male' if is_male_student else 'female'
 
         # Get culturally-responsive context
         cultural_ctx = self._get_cultural_context_guidance(age, grade_band, cultural_identity)
-        name_pool = cultural_ctx['name_pool']
-        random.shuffle(name_pool)
-        name_suggestion = name_pool[0] if name_pool else 'Alex'
+        full_pool = cultural_ctx['name_pool']
+
+        # Filter out already-used names — student never sees the same name twice
+        available_names = [n for n in full_pool if n not in used_names]
+        # If we've used every name in the pool, reset (rare but prevents infinite loop)
+        if not available_names:
+            available_names = full_pool[:]
+
+        random.shuffle(available_names)
+        # Give AI the full available pool to choose from freely
+        name_options = ', '.join(available_names)
 
         # Pick a random story angle to prevent the AI defaulting to the same
         # scenario (e.g. "pizza party at school") for the same topic every time
@@ -270,9 +298,10 @@ class ContentGenerator:
         - Guidelines: {' | '.join(cultural_ctx['avoid'])}
         
         CHARACTER DIVERSITY:
-        - Vary protagonist gender — alternate between male and female across stories
+        - Protagonist gender: PREFER {gender_hint} protagonist
+        - Choose ONE name from this list (these names have NEVER been used before for this student): {name_options}
+        - DO NOT use any name not in the list above
         - Supporting characters can be from different backgrounds (friend, teacher, neighbor)
-        - Keep names authentic to the cultural background specified above
         
         SETTING RULES:
         - Pick a setting that fits the topic: {topic}
@@ -307,6 +336,7 @@ class ContentGenerator:
         Return your response as a JSON object:
         {{
             "title": "Engaging title about {topic}",
+            "protagonist_name": "The exact first name you chose for the protagonist",
             "content": "The full story (EXACTLY {target_words} words)",
             "key_concepts": ["concept1", "concept2", "concept3"],
             "vocabulary_words": [

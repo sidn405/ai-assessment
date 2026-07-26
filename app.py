@@ -262,6 +262,7 @@ def init_db():
                     placement_completed BOOLEAN DEFAULT FALSE,
                     cultural_identity VARCHAR(50),
                     spoken_language VARCHAR(10) DEFAULT 'en',
+                    used_character_names TEXT DEFAULT '[]',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -755,6 +756,7 @@ def init_db():
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS cultural_identity VARCHAR(50)",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS spoken_language VARCHAR(10) DEFAULT 'en'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS used_character_names TEXT DEFAULT '[]'",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_start TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS break_end TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS total_break_time INTEGER DEFAULT 0",
@@ -3623,13 +3625,15 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     if USE_POSTGRES:
         cursor.execute("""
             SELECT id, level_estimate, interest_tags, total_passages_read,
-                   age, grade_band, reading_level, age_band, cultural_identity
+                   age, grade_band, reading_level, age_band, cultural_identity,
+                   full_name, used_character_names
             FROM users WHERE id = %s
         """, (user_id,))
     else:
         cursor.execute("""
             SELECT id, level_estimate, interest_tags, total_passages_read,
-                   age, grade_band, reading_level, age_band, cultural_identity
+                   age, grade_band, reading_level, age_band, cultural_identity,
+                   full_name, used_character_names
             FROM users WHERE id = ?
         """, (user_id,))
     
@@ -3647,6 +3651,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     grade_band = user['grade_band'] or 'elementary'
     age_band = user['age_band'] or 'child'
     cultural_identity = user['cultural_identity'] if user['cultural_identity'] else None
+    student_name = user['full_name'] if user['full_name'] else None
+    used_names = json.loads(user['used_character_names'] or '[]')
     
     # For first passage, make it easier (quick win strategy)
     if total_read == 0:
@@ -3686,7 +3692,9 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
            user_interests=interest_tags,
            age=age,
            grade_band=grade_band,
-           cultural_identity=cultural_identity
+           cultural_identity=cultural_identity,
+           student_name=student_name,
+           used_names=used_names
         )
         print(f"✓ Passage generated: {passage_data['title']}")
 
@@ -3747,8 +3755,24 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                 True, 1, image_url, passage_lexile)
             )
             passage_id = cursor.lastrowid
-        
-        # Generate comprehension questions
+
+        # Track protagonist name to avoid repeating across stories
+        protagonist_name = passage_data.get('protagonist_name')
+        if protagonist_name and protagonist_name not in used_names:
+            used_names.append(protagonist_name)
+            # Keep last 30 names — after the full pool is exhausted, oldest names become available again
+            if len(used_names) > 30:
+                used_names = used_names[-25:]
+            if USE_POSTGRES:
+                cursor.execute(
+                    "UPDATE users SET used_character_names = %s WHERE id = %s",
+                    (json.dumps(used_names), user_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE users SET used_character_names = ? WHERE id = ?",
+                    (json.dumps(used_names), user_id)
+                )
         questions = content_generator.generate_comprehension_questions(
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
@@ -7044,7 +7068,9 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 user_interests=[picked_topic],
                 age=user.get('age'),
                 grade_band=user.get('grade_band') or 'elementary',
-                cultural_identity=user.get('cultural_identity')
+                cultural_identity=user.get('cultural_identity'),
+                student_name=user.get('full_name'),
+                used_names=json.loads(user.get('used_character_names') or '[]')
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
