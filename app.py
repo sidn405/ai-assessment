@@ -737,6 +737,8 @@ def init_db():
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS content TEXT",
                 "ALTER TABLE passages ADD COLUMN IF NOT EXISTS lexile_score INTEGER",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS lexile_score INTEGER",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS games_played INTEGER DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_game_score INTEGER DEFAULT 0",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS used_at TIMESTAMP",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP",
@@ -771,6 +773,9 @@ def init_db():
                 "ALTER TABLE user_badges ADD COLUMN IF NOT EXISTS icon VARCHAR(10)",
                 "ALTER TABLE user_badges ALTER COLUMN badge_id DROP NOT NULL",
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS goal_type VARCHAR(50) DEFAULT 'lessons'",
+                "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS target_value INTEGER DEFAULT 3",
+                "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS current_value INTEGER DEFAULT 0",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -8172,26 +8177,34 @@ async def complete_game(request: CompleteGameRequest, user: dict = Depends(get_c
                 VALUES (%s, %s, %s, %s, %s, NOW())
             """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
             
-            # Update user stats
-            cursor.execute("""
-                UPDATE users
-                SET games_played = COALESCE(games_played, 0) + 1,
-                    total_game_score = COALESCE(total_game_score, 0) + %s
-                WHERE id = %s
-            """, (request.score, user_id))
+            # Increment games_played on users table (best effort — ignore if column missing)
+            try:
+                cursor.execute("""
+                    UPDATE users SET games_played = COALESCE(games_played, 0) + 1
+                    WHERE id = %s
+                """, (user_id,))
+            except Exception as col_err:
+                print(f"⚠️ Could not update games_played on users: {col_err}")
+                conn.rollback()
+                # Re-insert since we rolled back — just skip the user update
+                cursor.execute("""
+                    INSERT INTO game_completions 
+                    (user_id, game_type, score, rounds_completed, time_seconds, completed_at)
+                    VALUES (%s, %s, %s, %s, %s, NOW())
+                """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
         else:
             cursor.execute("""
                 INSERT INTO game_completions 
                 (user_id, game_type, score, rounds_completed, time_seconds, completed_at)
                 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (user_id, request.game_type, request.score, request.rounds_completed, request.time_seconds))
-            
-            cursor.execute("""
-                UPDATE users
-                SET games_played = COALESCE(games_played, 0) + 1,
-                    total_game_score = COALESCE(total_game_score, 0) + ?
-                WHERE id = ?
-            """, (request.score, user_id))
+            try:
+                cursor.execute(
+                    "UPDATE users SET games_played = COALESCE(games_played, 0) + 1 WHERE id = ?",
+                    (user_id,)
+                )
+            except Exception:
+                pass
         
         conn.commit()
         print(f"✓ Game completion saved")
