@@ -3073,7 +3073,7 @@
                         </div>
                     </div>
                     <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-gray);">
-                        1000 points = $1.00 &nbsp;·&nbsp; Minimum redemption: $10.00
+                        500 points = $1.00 &nbsp;·&nbsp; Minimum redemption: $10.00
                     </div>
                 </div>
 
@@ -5675,7 +5675,11 @@
                 if (data.success) {
                     showNotification('✅ Goal Created!', 'success');
                     closeGoalModal();
-                    loadGamificationData(); // Reload to show new goal
+                    loadGamificationData();
+                } else if (data.already_set) {
+                    // Friendly message — not an error, just info
+                    showNotification('📌 ' + data.message, 'info');
+                    closeGoalModal();
                 } else {
                     showNotification('❌ ' + (data.error || 'Failed to create goal'), 'error');
                 }

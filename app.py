@@ -4876,7 +4876,28 @@ async def create_weekly_goal(request: Request):
         
         print(f"Inserting goal - user_id: {user_id}, week_start: {week_start}, week_end: {week_end}, goal_type: {goal_type}, target: {target}, points: {goal_config['points_reward']}")
         
-        # Create new goal with week_end
+        # Check if this exact goal type is already set for this week
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT id, goal_type FROM weekly_goals
+                WHERE user_id = %s AND week_start = %s AND goal_type = %s
+            """, (user_id, week_start, goal_type))
+        else:
+            cursor.execute("""
+                SELECT id, goal_type FROM weekly_goals
+                WHERE user_id = ? AND week_start = ? AND goal_type = ?
+            """, (user_id, week_start, goal_type))
+
+        existing = cursor.fetchone()
+        if existing:
+            conn.close()
+            return {
+                'success': False,
+                'already_set': True,
+                'message': f'You already have this goal set for this week! Keep going — you\'re already working on it. 💪'
+            }
+
+        # Insert new goal
         if USE_POSTGRES:
             sql = """INSERT INTO weekly_goals 
                    (user_id, week_start, week_end, goal_type, target_value, current_value, 
@@ -4884,8 +4905,6 @@ async def create_weekly_goal(request: Request):
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING id"""
             params = (user_id, week_start, week_end, goal_type, target, 0, False, goal_config['points_reward'])
-            print(f"PostgreSQL Query: {sql}")
-            print(f"Parameters: {params}")
             cursor.execute(sql, params)
             result = cursor.fetchone()
             goal_id = result['id'] if hasattr(result, 'keys') else result[0]
@@ -4895,8 +4914,6 @@ async def create_weekly_goal(request: Request):
                     completed, points_reward)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
             params = (user_id, week_start, week_end, goal_type, target, 0, 0, goal_config['points_reward'])
-            print(f"SQLite Query: {sql}")
-            print(f"Parameters: {params}")
             cursor.execute(sql, params)
             goal_id = cursor.lastrowid
         
