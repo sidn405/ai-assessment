@@ -804,9 +804,14 @@
         <div id="loadingState" class="loading" style="min-height: 440px; display: flex; align-items: center; justify-content: center; padding: 1rem;">
             <div id="passageLoadingWidget" style="display:flex; flex-direction:column; align-items:center; gap:1.5rem; max-width:480px; width:100%; text-align:center;">
                 <div id="loadingAnimContainer" style="width:380px; height:304px; border-radius:20px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); background:#1a1a2e;">
-                    <!-- SVGs pre-inlined for instant display — no fetch latency -->
-                    <div id="svgReader" style="width:100%;height:100%;display:none;"></div>
+                    <!-- 7 animations pre-loaded, one shown randomly — no fetch delay -->
+                    <div id="svgReader"    style="width:100%;height:100%;display:none;"></div>
                     <div id="svgScientist" style="width:100%;height:100%;display:none;"></div>
+                    <div id="svgSpace"     style="width:100%;height:100%;display:none;"></div>
+                    <div id="svgOcean"     style="width:100%;height:100%;display:none;"></div>
+                    <div id="svgDesert"    style="width:100%;height:100%;display:none;"></div>
+                    <div id="svgDoctor"    style="width:100%;height:100%;display:none;"></div>
+                    <div id="svgChef"      style="width:100%;height:100%;display:none;"></div>
                 </div>
                 <div style="min-height:60px;">
                     <div style="font-size:1.2rem; font-weight:700; color:var(--navy-primary);">
@@ -2075,56 +2080,52 @@
         // ── Animated Loading Screen ────────────────────────────────────────
         // SVGs are fetched once on page load and injected into hidden divs.
         // startLoadingAnimation just shows one instantly — no network delay.
+        const ALL_ANIMATIONS = [
+            { id: 'svgReader',    file: 'reader-animation.svg' },
+            { id: 'svgScientist', file: 'scientist-animation.svg' },
+            { id: 'svgSpace',     file: 'space-animation.svg' },
+            { id: 'svgOcean',     file: 'ocean-animation.svg' },
+            { id: 'svgDesert',    file: 'desert-animation.svg' },
+            { id: 'svgDoctor',    file: 'doctor-animation.svg' },
+            { id: 'svgChef',      file: 'chef-animation.svg' },
+        ];
+        const ANIMATION_MESSAGES = {
+            svgReader:    ["Our reader is finding inspiration for your story...", "Picking the perfect vocabulary words...", "Personalizing this passage just for you...", "Making sure the difficulty is just right..."],
+            svgScientist: ["Mixing the perfect combination of words...", "Analyzing your reading level...", "Running experiments to find the best topic...", "Formulating your comprehension questions..."],
+            svgSpace:     ["Exploring the universe for your story...", "Calculating the perfect reading orbit...", "Stars are aligning for your passage...", "Houston, your story is almost ready..."],
+            svgOcean:     ["Diving deep to find your story...", "Swimming through vocabulary waters...", "Discovering something amazing for you...", "Your passage is surfacing now..."],
+            svgDesert:    ["Uncovering the perfect story for you...", "Excavating your personalized passage...", "The pyramids hold your next story...", "Deciphering the right words for you..."],
+            svgDoctor:    ["Diagnosing the perfect passage for you...", "Prescribing some great vocabulary...", "Your story is in good hands...", "Preparing your personalized lesson..."],
+            svgChef:      ["Cooking up something special for you...", "Mixing the perfect ingredients...", "Your story is almost ready to serve...", "Seasoning with just the right words..."],
+        };
+
         let svgsPreloaded = false;
 
         function preloadAnimations() {
-            const readerEl = document.getElementById('svgReader');
-            const sciEl = document.getElementById('svgScientist');
-            if (!readerEl || !sciEl || svgsPreloaded) return;
-
-            fetch('/static/graphics/reader-animation.svg')
-                .then(r => r.text())
-                .then(svg => { readerEl.innerHTML = svg; })
-                .catch(() => {});
-
-            fetch('/static/graphics/scientist-animation.svg')
-                .then(r => r.text())
-                .then(svg => { sciEl.innerHTML = svg; })
-                .catch(() => {});
-
+            if (svgsPreloaded) return;
+            ALL_ANIMATIONS.forEach(anim => {
+                const el = document.getElementById(anim.id);
+                if (el) {
+                    fetch(`/static/graphics/${anim.file}`)
+                        .then(r => r.text())
+                        .then(svg => { el.innerHTML = svg; })
+                        .catch(() => {});
+                }
+            });
             svgsPreloaded = true;
         }
 
-        // Preload immediately when page loads
         preloadAnimations();
 
         function startLoadingAnimation() {
-            const readerEl = document.getElementById('svgReader');
-            const sciEl = document.getElementById('svgScientist');
-
             // Pick one randomly
-            const showReader = Math.random() < 0.5;
-            if (readerEl) readerEl.style.display = showReader ? 'block' : 'none';
-            if (sciEl) sciEl.style.display = showReader ? 'none' : 'block';
+            const chosen = ALL_ANIMATIONS[Math.floor(Math.random() * ALL_ANIMATIONS.length)];
+            ALL_ANIMATIONS.forEach(a => {
+                const el = document.getElementById(a.id);
+                if (el) el.style.display = a.id === chosen.id ? 'block' : 'none';
+            });
 
-            const readerMsgs = [
-                "Our reader is finding inspiration for your story...",
-                "Picking the perfect vocabulary words...",
-                "Crafting a story that matches your interests...",
-                "Personalizing this passage just for you...",
-                "Making sure the difficulty is just right...",
-                "Adding your comprehension questions...",
-            ];
-            const scientistMsgs = [
-                "Mixing the perfect combination of words...",
-                "Analyzing your reading level and interests...",
-                "Synthesizing your personalized passage...",
-                "Running experiments to find the best topic...",
-                "Calibrating vocabulary to your grade level...",
-                "Formulating your comprehension questions...",
-            ];
-            const msgs = showReader ? readerMsgs : scientistMsgs;
-
+            const msgs = ANIMATION_MESSAGES[chosen.id] || ANIMATION_MESSAGES['svgReader'];
             let msgIdx = 0;
             const subEl = document.getElementById('loadingSubMsg');
             const msgInterval = setInterval(() => {

@@ -2559,7 +2559,15 @@
                 <!-- Loading State -->
                 <div id="lessonLoading" class="loading hidden" style="min-height:440px; padding:1rem; display:flex; align-items:center; justify-content:center;">
                     <div style="display:flex; flex-direction:column; align-items:center; gap:1.5rem; max-width:480px; width:100%; text-align:center;">
-                        <div id="dashLoadingAnimContainer" style="width:380px; height:304px; border-radius:20px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.3); background:#1a1a2e; border:1px solid rgba(255,255,255,0.08);"></div>
+                        <div id="dashLoadingAnimContainer" style="width:380px; height:304px; border-radius:20px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.3); background:#1a1a2e; border:1px solid rgba(255,255,255,0.08);">
+                            <div id="dsvgReader"    style="width:100%;height:100%;display:none;"></div>
+                            <div id="dsvgScientist" style="width:100%;height:100%;display:none;"></div>
+                            <div id="dsvgSpace"     style="width:100%;height:100%;display:none;"></div>
+                            <div id="dsvgOcean"     style="width:100%;height:100%;display:none;"></div>
+                            <div id="dsvgDesert"    style="width:100%;height:100%;display:none;"></div>
+                            <div id="dsvgDoctor"    style="width:100%;height:100%;display:none;"></div>
+                            <div id="dsvgChef"      style="width:100%;height:100%;display:none;"></div>
+                        </div>
                         <div>
                             <div style="font-size:1.2rem; font-weight:700; color:var(--navy-primary);">
                                 Building your lesson
@@ -5923,37 +5931,50 @@
             }
         }
 
+        const DASH_ANIMATIONS = [
+            { id: 'dsvgReader',    file: 'reader-animation.svg' },
+            { id: 'dsvgScientist', file: 'scientist-animation.svg' },
+            { id: 'dsvgSpace',     file: 'space-animation.svg' },
+            { id: 'dsvgOcean',     file: 'ocean-animation.svg' },
+            { id: 'dsvgDesert',    file: 'desert-animation.svg' },
+            { id: 'dsvgDoctor',    file: 'doctor-animation.svg' },
+            { id: 'dsvgChef',      file: 'chef-animation.svg' },
+        ];
+        const DASH_MESSAGES = {
+            dsvgReader:    ["Our reader is finding inspiration for your lesson...", "Picking the perfect vocabulary words...", "Personalizing this lesson just for you...", "Making sure the difficulty is just right..."],
+            dsvgScientist: ["Mixing the perfect combination of words...", "Analyzing your reading level...", "Running experiments to find the best topic...", "Calibrating vocabulary to your grade level..."],
+            dsvgSpace:     ["Exploring the universe for your lesson...", "Calculating the perfect reading orbit...", "Stars are aligning for your passage...", "Houston, your lesson is almost ready..."],
+            dsvgOcean:     ["Diving deep to find your lesson...", "Swimming through vocabulary waters...", "Discovering something amazing for you...", "Your passage is surfacing now..."],
+            dsvgDesert:    ["Uncovering the perfect story for you...", "Excavating your personalized lesson...", "The pyramids hold your next story...", "Deciphering the right words for you..."],
+            dsvgDoctor:    ["Diagnosing the perfect passage for you...", "Prescribing some great vocabulary...", "Your lesson is in good hands...", "Preparing your personalized story..."],
+            dsvgChef:      ["Cooking up something special for you...", "Mixing the perfect ingredients...", "Your lesson is almost ready to serve...", "Seasoning with just the right words..."],
+        };
+        let dashSvgsPreloaded = false;
+
         // ── Lesson Loading Animation ───────────────────────────────────────
         function startDashLoadingAnimation() {
-            const anims = ['reader-animation', 'scientist-animation'];
-            const chosen = anims[Math.floor(Math.random() * anims.length)];
+            // Preload all on first call
+            if (!dashSvgsPreloaded) {
+                DASH_ANIMATIONS.forEach(anim => {
+                    const el = document.getElementById(anim.id);
+                    if (el && !el.innerHTML) {
+                        fetch(`/static/graphics/${anim.file}`)
+                            .then(r => r.text())
+                            .then(svg => { el.innerHTML = svg; })
+                            .catch(() => {});
+                    }
+                });
+                dashSvgsPreloaded = true;
+            }
 
-            const readerMsgs = [
-                "Our reader is finding inspiration for your lesson...",
-                "Picking the perfect vocabulary words...",
-                "Crafting a story that matches your interests...",
-                "Personalizing this lesson just for you...",
-                "Making sure the difficulty is just right...",
-                "Adding your comprehension questions...",
-            ];
-            const scientistMsgs = [
-                "Mixing the perfect combination of words...",
-                "Analyzing your reading level and interests...",
-                "Synthesizing your personalized lesson...",
-                "Running experiments to find the best topic...",
-                "Calibrating vocabulary to your grade level...",
-                "Formulating your comprehension questions...",
-            ];
-            const msgs = chosen === 'scientist-animation' ? scientistMsgs : readerMsgs;
+            // Pick one randomly and show it
+            const chosen = DASH_ANIMATIONS[Math.floor(Math.random() * DASH_ANIMATIONS.length)];
+            DASH_ANIMATIONS.forEach(a => {
+                const el = document.getElementById(a.id);
+                if (el) el.style.display = a.id === chosen.id ? 'block' : 'none';
+            });
 
-            fetch(`/static/graphics/${chosen}.svg`)
-                .then(r => r.text())
-                .then(svg => {
-                    const c = document.getElementById('dashLoadingAnimContainer');
-                    if (c) c.innerHTML = svg;
-                })
-                .catch(() => {});
-
+            const msgs = DASH_MESSAGES[chosen.id] || DASH_MESSAGES['dsvgReader'];
             let idx = 0;
             const subEl = document.getElementById('dashLoadingSubMsg');
             window._dashLoadingInterval = setInterval(() => {
@@ -6930,7 +6951,7 @@
                                 📝 Comprehension Check
                             </div>
                             <div style="font-size: 1rem; opacity: 0.95;">
-                                This quiz helps us gauge your progress!<br>
+                                This writing sample helps us gauge your progress!<br>
                                 The better you do, the more points you earn for rewards! 💎
                             </div>
                         </div>
@@ -6957,7 +6978,7 @@
                                 color: #1e3a5f;
                                 margin-bottom: 1rem;
                             ">
-                                ✍️ In your own words, Write anything you can remember from the story:
+                                ✍️ In your own words, write anything you can remember from the story:
                             </label>
                             <textarea 
                                 id="essay-text-input"
