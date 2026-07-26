@@ -10675,37 +10675,6 @@ def create_admin_alert(user_id, essay_id, alert_type, priority, message, details
         conn.rollback()
         conn.close()
 
-@app.get("/api/admin/reset-staging-admin")
-async def reset_staging_admin():
-    """
-    ONE-TIME endpoint to create/reset the staging admin account.
-    DELETE THIS ENDPOINT before merging to production.
-    """
-    import bcrypt
-    password = "Achieve365Admin!"
-    pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    
-    conn = get_db()
-    cursor = get_cursor(conn)
-    try:
-        if USE_POSTGRES:
-            cursor.execute("""
-                INSERT INTO users (email, password_hash, full_name, role)
-                VALUES ('admin@mfs.org', %s, 'Achieve 365 Administrator', 'admin')
-                ON CONFLICT (email) DO UPDATE SET password_hash = %s, role = 'admin'
-            """, (pw_hash, pw_hash))
-        else:
-            cursor.execute("""
-                INSERT OR REPLACE INTO users (email, password_hash, full_name, role)
-                VALUES ('admin@mfs.org', ?, 'Achieve 365 Administrator', 'admin')
-            """, (pw_hash,))
-        conn.commit()
-        conn.close()
-        return {"success": True, "email": "admin@mfs.org", "password": "Achieve365Admin!", "message": "Admin account ready. Delete this endpoint before production."}
-    except Exception as e:
-        conn.close()
-        return {"success": False, "error": str(e)}
-
 
 @app.get("/api/student/lexile")
 async def get_student_lexile(token: str):
