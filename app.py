@@ -8248,26 +8248,12 @@ async def complete_game(request: CompleteGameRequest, user: dict = Depends(get_c
         points_awarded = round(min(request.score, 100) * 0.10)
         if points_awarded > 0:
             try:
-                if USE_POSTGRES:
-                    cursor.execute("""
-                        INSERT INTO user_points (user_id, points, reason, created_at)
-                        VALUES (%s, %s, %s, NOW())
-                        ON CONFLICT DO NOTHING
-                    """, (user_id, points_awarded, f"Word game: {request.game_type}"))
-                    cursor.execute("""
-                        INSERT INTO points_history (user_id, points_change, reason, created_at)
-                        VALUES (%s, %s, %s, NOW())
-                    """, (user_id, points_awarded, f"Word game: {request.game_type}"))
-                else:
-                    cursor.execute(
-                        "INSERT INTO user_points (user_id, points, reason) VALUES (?, ?, ?)",
-                        (user_id, points_awarded, f"Word game: {request.game_type}")
-                    )
-                    cursor.execute(
-                        "INSERT INTO points_history (user_id, points_change, reason) VALUES (?, ?, ?)",
-                        (user_id, points_awarded, f"Word game: {request.game_type}")
-                    )
-                conn.commit()
+                award_points(
+                    user_id,
+                    points_awarded,
+                    f"Word game: {request.game_type}",
+                    activity_type='word_game'
+                )
                 print(f"💎 Awarded {points_awarded} points for game (score={request.score})")
             except Exception as pts_err:
                 print(f"⚠️ Points award failed (non-fatal): {pts_err}")
