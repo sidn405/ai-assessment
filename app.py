@@ -778,6 +778,7 @@ def init_db():
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS current_value INTEGER DEFAULT 0",
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS week_end DATE",
                 "ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS points_reward INTEGER DEFAULT 0",
+                "ALTER TABLE weekly_goals DROP CONSTRAINT IF EXISTS weekly_goals_user_id_week_start_key",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -8609,6 +8610,109 @@ async def get_all_students(admin=Depends(require_admin)):
     conn.close()
     
     return {"students": students}
+
+@app.get("/api/admin/backfill-lexile-scores")
+async def backfill_lexile_scores(admin=Depends(require_admin)):
+    """
+    ONE-TIME endpoint to backfill Lexile scores for students who completed
+    lessons before Lexile tracking existed.
+
+    Step 1: backfills passages.lexile_score from readability_score for any
+            passage created before the Lexile feature existed.
+    Step 2: for each student missing a lexile_score, replays their completed
+            session_logs history in chronological order through the exact
+            same calculate_student_lexile() formula the live completion flow
+            uses, so the result matches what they'd have today had the
+            feature existed all along.
+
+    DELETE THIS ENDPOINT after running it once in production.
+    """
+    from readability import calculate_student_lexile
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        # Step 1: backfill any passages still missing a Lexile score
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE passages
+                SET lexile_score = GREATEST(100, LEAST(2000, ROUND(COALESCE(readability_score, 6.0) * 135 + 40)))
+                WHERE lexile_score IS NULL
+            """)
+        else:
+            cursor.execute("""
+                UPDATE passages
+                SET lexile_score = MAX(100, MIN(2000, ROUND(COALESCE(readability_score, 6.0) * 135 + 40)))
+                WHERE lexile_score IS NULL
+            """)
+        conn.commit()
+
+        # Step 2: find students with no Lexile score yet
+        cursor.execute("SELECT id FROM users WHERE role = 'student' AND lexile_score IS NULL")
+        student_ids = [r['id'] if hasattr(r, 'keys') else r[0] for r in cursor.fetchall()]
+
+        updated = []
+        skipped = []
+
+        for uid in student_ids:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    SELECT sl.comprehension_score, p.lexile_score AS passage_lexile
+                    FROM session_logs sl
+                    JOIN passages p ON p.id = sl.passage_id
+                    WHERE sl.user_id = %s
+                      AND sl.completion_status = 'completed'
+                      AND sl.comprehension_score IS NOT NULL
+                      AND p.lexile_score IS NOT NULL
+                    ORDER BY sl.completed_at ASC
+                """, (uid,))
+            else:
+                cursor.execute("""
+                    SELECT sl.comprehension_score, p.lexile_score AS passage_lexile
+                    FROM session_logs sl
+                    JOIN passages p ON p.id = sl.passage_id
+                    WHERE sl.user_id = ?
+                      AND sl.completion_status = 'completed'
+                      AND sl.comprehension_score IS NOT NULL
+                      AND p.lexile_score IS NOT NULL
+                    ORDER BY sl.completed_at ASC
+                """, (uid,))
+            rows = cursor.fetchall()
+
+            if not rows:
+                skipped.append(uid)
+                continue
+
+            # Replay the same rolling weighted-average logic used live
+            current_lexile = None
+            for row in rows:
+                comp_score = row['comprehension_score'] if hasattr(row, 'keys') else row[0]
+                passage_lexile = row['passage_lexile'] if hasattr(row, 'keys') else row[1]
+                new_lexile = calculate_student_lexile(passage_lexile, float(comp_score))
+                if current_lexile:
+                    current_lexile = round(current_lexile * 0.7 + new_lexile * 0.3)
+                else:
+                    current_lexile = new_lexile
+
+            if USE_POSTGRES:
+                cursor.execute("UPDATE users SET lexile_score = %s WHERE id = %s", (current_lexile, uid))
+            else:
+                cursor.execute("UPDATE users SET lexile_score = ? WHERE id = ?", (current_lexile, uid))
+            updated.append({"user_id": uid, "lexile_score": current_lexile, "sessions_replayed": len(rows)})
+
+        conn.commit()
+        return {
+            "success": True,
+            "updated_count": len(updated),
+            "skipped_no_history_count": len(skipped),
+            "updated": updated,
+            "skipped_user_ids": skipped
+        }
+    except Exception as e:
+        conn.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.get("/api/admin/student/{student_id}/lexile")
 async def get_student_lexile_admin(student_id: int, admin=Depends(require_admin)):
