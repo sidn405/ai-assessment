@@ -2124,6 +2124,8 @@
 
         preloadAnimations();
 
+        let loadingAudio = null;
+
         function startLoadingAnimation() {
             // Pick one randomly
             const chosen = ALL_ANIMATIONS[Math.floor(Math.random() * ALL_ANIMATIONS.length)];
@@ -2150,6 +2152,14 @@
             });
 
             window._loadingMsgInterval = msgInterval;
+
+            // Play loading sound on a loop while the animation plays
+            try {
+                loadingAudio = new Audio('/static/sounds/loading.mp3');
+                loadingAudio.volume = 0.4;
+                loadingAudio.loop = true;
+                loadingAudio.play().catch(() => {});
+            } catch (e) {}
         }
 
         // Call when passage finishes loading to snap progress to 100%
@@ -2157,6 +2167,12 @@
             clearInterval(window._loadingMsgInterval);
             const bar = document.getElementById('loadingProgress');
             if (bar) bar.style.width = '100%';
+
+            if (loadingAudio) {
+                loadingAudio.pause();
+                loadingAudio.currentTime = 0;
+                loadingAudio = null;
+            }
         }
     </script>
 </body>

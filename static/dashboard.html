@@ -5990,21 +5990,29 @@
         };
         let dashSvgsPreloaded = false;
 
+        // Preload all lesson-loading SVGs immediately on page load so they're
+        // ready before the loading screen is ever shown (no network delay).
+        function preloadDashAnimations() {
+            if (dashSvgsPreloaded) return;
+            DASH_ANIMATIONS.forEach(anim => {
+                const el = document.getElementById(anim.id);
+                if (el && !el.innerHTML) {
+                    fetch(`/static/graphics/${anim.file}`)
+                        .then(r => r.text())
+                        .then(svg => { el.innerHTML = svg; })
+                        .catch(() => {});
+                }
+            });
+            dashSvgsPreloaded = true;
+        }
+        preloadDashAnimations();
+
+        let dashLoadingAudio = null;
+
         // ── Lesson Loading Animation ───────────────────────────────────────
         function startDashLoadingAnimation() {
-            // Preload all on first call
-            if (!dashSvgsPreloaded) {
-                DASH_ANIMATIONS.forEach(anim => {
-                    const el = document.getElementById(anim.id);
-                    if (el && !el.innerHTML) {
-                        fetch(`/static/graphics/${anim.file}`)
-                            .then(r => r.text())
-                            .then(svg => { el.innerHTML = svg; })
-                            .catch(() => {});
-                    }
-                });
-                dashSvgsPreloaded = true;
-            }
+            // Safety net: preload here too in case this runs before DOMContentLoaded
+            preloadDashAnimations();
 
             // Pick one randomly and show it
             const chosen = DASH_ANIMATIONS[Math.floor(Math.random() * DASH_ANIMATIONS.length)];
@@ -6029,12 +6037,26 @@
             [[0.5,20],[1,40],[2,60],[3,75],[5,85],[8,90]].forEach(([d,p]) => {
                 setTimeout(() => { if (bar) bar.style.width = p + '%'; }, d * 1000);
             });
+
+            // Play loading sound on a loop while the animation plays
+            try {
+                dashLoadingAudio = new Audio('/static/sounds/loading.mp3');
+                dashLoadingAudio.volume = 0.4;
+                dashLoadingAudio.loop = true;
+                dashLoadingAudio.play().catch(() => {});
+            } catch (e) {}
         }
 
         function stopDashLoadingAnimation() {
             clearInterval(window._dashLoadingInterval);
             const bar = document.getElementById('dashLoadingBar');
             if (bar) bar.style.width = '100%';
+
+            if (dashLoadingAudio) {
+                dashLoadingAudio.pause();
+                dashLoadingAudio.currentTime = 0;
+                dashLoadingAudio = null;
+            }
         }
 
         async function loadNextLesson() {            
