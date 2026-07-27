@@ -2124,7 +2124,13 @@
 
         preloadAnimations();
 
-        let loadingAudio = null;
+        // Preload the loading sound once on page load so it's ready to play
+        // instantly (no network delay) whenever the loading screen appears.
+        const loadingAudio = new Audio('/static/sounds/loading.mp3');
+        loadingAudio.preload = 'auto';
+        loadingAudio.volume = 0.4;
+        loadingAudio.loop = true;
+        loadingAudio.load();
 
         function startLoadingAnimation() {
             // Pick one randomly
@@ -2155,9 +2161,7 @@
 
             // Play loading sound on a loop while the animation plays
             try {
-                loadingAudio = new Audio('/static/sounds/loading.mp3');
-                loadingAudio.volume = 0.4;
-                loadingAudio.loop = true;
+                loadingAudio.currentTime = 0;
                 loadingAudio.play().catch(() => {});
             } catch (e) {}
         }
@@ -2168,11 +2172,10 @@
             const bar = document.getElementById('loadingProgress');
             if (bar) bar.style.width = '100%';
 
-            if (loadingAudio) {
+            try {
                 loadingAudio.pause();
                 loadingAudio.currentTime = 0;
-                loadingAudio = null;
-            }
+            } catch (e) {}
         }
     </script>
 </body>
