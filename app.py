@@ -7940,6 +7940,94 @@ async def list_school_codes(admin=Depends(require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/admin/backfill-school-codes")
+async def backfill_school_codes(admin=Depends(require_admin)):
+    """
+    ONE-TIME endpoint to fix two related data-drift issues:
+
+    1. student_count on school_codes is a cached counter that only increments
+       on brand-new registrations, so it never reflects students who existed
+       before the school-code system (it's currently way undercounted).
+    2. Older students' free-text `school` values often don't exactly match
+       the canonical school_codes.school_name spelling (e.g. "McMain" vs
+       "Mc Main"), so even a straightforward recount would miss them.
+
+    This normalizes each student's school text (ignoring case/spacing) and,
+    on a confident match to a known school code, corrects it to the exact
+    canonical spelling. Students with a blank school, or a school value that
+    doesn't match any known code, are left untouched and reported separately
+    for manual review. Finally recomputes student_count for every code.
+
+    DELETE THIS ENDPOINT after running it once in production.
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        def normalize(s):
+            return "".join((s or "").lower().split())
+
+        cursor.execute("SELECT code, school_name FROM school_codes")
+        codes = [dict(r) if hasattr(r, 'keys') else {"code": r[0], "school_name": r[1]} for r in cursor.fetchall()]
+        norm_to_canonical = {normalize(c["school_name"]): c["school_name"] for c in codes}
+
+        cursor.execute("SELECT id, school FROM users WHERE role = 'student' AND school IS NOT NULL AND school != ''")
+        students = [dict(r) if hasattr(r, 'keys') else {"id": r[0], "school": r[1]} for r in cursor.fetchall()]
+
+        renamed = []
+        unmatched = []
+
+        for s in students:
+            norm = normalize(s["school"])
+            canonical = norm_to_canonical.get(norm)
+            if canonical:
+                if canonical != s["school"]:
+                    if USE_POSTGRES:
+                        cursor.execute("UPDATE users SET school = %s WHERE id = %s", (canonical, s["id"]))
+                    else:
+                        cursor.execute("UPDATE users SET school = ? WHERE id = ?", (canonical, s["id"]))
+                    renamed.append({"user_id": s["id"], "from": s["school"], "to": canonical})
+            else:
+                unmatched.append({"user_id": s["id"], "school": s["school"]})
+
+        # Recompute accurate student_count for every code
+        updated_counts = []
+        for c in codes:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "SELECT COUNT(*) AS cnt FROM users WHERE role = 'student' AND school = %s",
+                    (c["school_name"],)
+                )
+            else:
+                cursor.execute(
+                    "SELECT COUNT(*) AS cnt FROM users WHERE role = 'student' AND school = ?",
+                    (c["school_name"],)
+                )
+            row = cursor.fetchone()
+            count = row['cnt'] if hasattr(row, 'keys') else row[0]
+
+            if USE_POSTGRES:
+                cursor.execute("UPDATE school_codes SET student_count = %s WHERE code = %s", (count, c["code"]))
+            else:
+                cursor.execute("UPDATE school_codes SET student_count = ? WHERE code = ?", (count, c["code"]))
+            updated_counts.append({"code": c["code"], "school_name": c["school_name"], "student_count": count})
+
+        conn.commit()
+        return {
+            "success": True,
+            "renamed_count": len(renamed),
+            "renamed": renamed,
+            "unmatched_count": len(unmatched),
+            "unmatched": unmatched,
+            "updated_counts": updated_counts
+        }
+    except Exception as e:
+        conn.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.post("/api/admin/school-codes")
 async def create_school_code(request: Request, admin=Depends(require_admin)):
     """Create a new school code — admin only."""
