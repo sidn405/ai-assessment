@@ -1,7 +1,7 @@
 # Achieve 365 Reading Rewards
 # AI-Powered Adaptive Learning System
 
-from fastapi import FastAPI, APIRouter,  HTTPException, Depends, Request, BackgroundTasks, Header
+from fastapi import FastAPI, APIRouter,  HTTPException, Depends, Request, BackgroundTasks, Header, Response
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -8554,9 +8554,12 @@ async def debug_lesson_generation(token: str):
 # ============================================
 
 @app.get("/api/admin/students")
-async def get_all_students(admin=Depends(require_admin)):
+async def get_all_students(response: Response, admin=Depends(require_admin)):
     """Get students - filtered by admin's school"""
-    
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     conn = get_db()
     cursor = get_cursor(conn)
     
