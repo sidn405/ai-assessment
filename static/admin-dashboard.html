@@ -953,6 +953,7 @@
                                     <th>Lexile Score</th>
                                     <th>Lessons</th>
                                     <th>Avg Score</th>
+                                    <th>Read-Aloud</th>
                                     <th>Joined</th>
                                     <th>Actions</th>
                                 </tr>
@@ -1383,6 +1384,14 @@
                 <h3 style="margin-bottom: 0.75rem;">Progress Overview</h3>
                 <div id="studentProgressData"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Lesson Detail Modal -->
+    <div id="lessonDetailModal" class="modal">
+        <div class="modal-content" style="max-width:700px;">
+            <button class="close-modal" onclick="closeLessonDetailModal()">&times;</button>
+            <div id="lessonDetailBody"></div>
         </div>
     </div>
 
@@ -3214,7 +3223,7 @@
             tbody.innerHTML = '';
 
             if (!students || students.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:2rem;">No students found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:2rem;">No students found.</td></tr>';
                 return;
             }
             
@@ -3232,6 +3241,18 @@
                 const school = student.school || '—';
                 const lessons = student.total_passages_read || 0;
                 const avgScore = student.comprehension_score ? `${Math.round(student.comprehension_score)}%` : '—';
+
+                const readAloudChecked = student.read_aloud_override === true;
+                const readAloudCell = `
+                    <label style="position:relative; display:inline-block; width:36px; height:20px;" title="Override: on for this student regardless of school default">
+                        <input type="checkbox" ${readAloudChecked ? 'checked' : ''}
+                               onchange="toggleReadAloud(${student.id}, this.checked)"
+                               style="opacity:0; width:0; height:0;">
+                        <span style="position:absolute; cursor:pointer; inset:0; background:${readAloudChecked ? '#1e3a5f' : '#ccc'};
+                                     border-radius:999px; transition:0.2s;"></span>
+                        <span style="position:absolute; height:14px; width:14px; left:${readAloudChecked ? '19px' : '3px'}; bottom:3px;
+                                     background:white; border-radius:50%; transition:0.2s;"></span>
+                    </label>`;
                 
                 tr.innerHTML = `
                     <td>
@@ -3243,6 +3264,7 @@
                     <td>${lexileDisplay}</td>
                     <td>${lessons}</td>
                     <td>${avgScore}</td>
+                    <td>${readAloudCell}</td>
                     <td>${joinDate}</td>
                     <td style="display:flex;gap:0.5rem;">
                         <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
@@ -3416,6 +3438,7 @@
                             <th>Topic</th>
                             <th>Score</th>
                             <th>Completed</th>
+                            <th>Details</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3425,11 +3448,81 @@
                                 <td>${p.topic || p.activity_details || 'General'}</td>
                                 <td>${p.score ? p.score + '%' : 'N/A'}</td>
                                 <td>${p.completed_at ? new Date(p.completed_at).toLocaleDateString() : 'In Progress'}</td>
+                                <td>
+                                    ${p.id ? `<button onclick="viewLessonDetail(${p.id})"
+                                        style="padding:0.3rem 0.8rem; border-radius:5px; border:1px solid #ddd;
+                                               cursor:pointer; font-size:0.82rem; background:white;">View</button>` : '—'}
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             `;
+        }
+
+        async function viewLessonDetail(sessionId) {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const modal = document.getElementById('lessonDetailModal');
+            const body = document.getElementById('lessonDetailBody');
+            body.innerHTML = '<p style="color:#888;">Loading...</p>';
+            modal.classList.add('active');
+
+            try {
+                const resp = await fetch(`/api/admin/session/${sessionId}/detail`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    body.innerHTML = '<p style="color:#dc3545;">Failed to load lesson detail.</p>';
+                    return;
+                }
+                const s = data.session;
+                const answersHtml = (s.answers || []).map((a, i) => `
+                    <div style="margin-bottom:1rem; padding:0.85rem; border-radius:8px; background:${a.is_correct === false ? '#fdecea' : '#f5f5f5'};">
+                        <div style="font-weight:600; margin-bottom:0.3rem;">Q${i + 1}: ${escapeHtmlLD(a.question || '')}</div>
+                        <div>Student's answer: <strong>${escapeHtmlLD(a.selected || '(no answer)')}</strong>
+                            ${a.is_correct === true ? ' ✅' : a.is_correct === false ? ' ❌' : ''}
+                        </div>
+                        ${a.is_correct === false ? `<div style="color:#555;">Correct answer: ${escapeHtmlLD(a.correct || '')}</div>` : ''}
+                    </div>
+                `).join('') || '<p style="color:#888;">No question data recorded for this lesson.</p>';
+
+                const essayHtml = data.essay ? `
+                    <h4 style="margin:1.5rem 0 0.75rem;">Essay Response</h4>
+                    <div style="padding:1rem; background:#f5f5f5; border-radius:8px; white-space:pre-wrap;">${escapeHtmlLD(data.essay.essay_text)}</div>
+                    <div style="margin-top:0.5rem; font-size:0.88rem; color:#555;">
+                        ${data.essay.word_count || 0} words &middot; ${data.essay.comprehension_level || ''} ${data.essay.comprehension_score ? `(${data.essay.comprehension_score}%)` : ''}
+                    </div>
+                    ${data.essay.ai_feedback ? `<div style="margin-top:0.5rem; font-style:italic; color:#333;">"${escapeHtmlLD(data.essay.ai_feedback)}"</div>` : ''}
+                ` : '';
+
+                body.innerHTML = `
+                    <h3 style="margin-bottom:0.25rem;">${escapeHtmlLD(s.title)}</h3>
+                    <div style="color:#888; font-size:0.88rem; margin-bottom:1rem;">
+                        ${s.difficulty_level || ''} &middot; Score: ${s.score != null ? s.score + '%' : 'N/A'}
+                        &middot; ${s.completed_at ? new Date(s.completed_at).toLocaleDateString() : 'In progress'}
+                    </div>
+                    <h4 style="margin-bottom:0.5rem;">Passage</h4>
+                    <div style="padding:1rem; background:#f5f5f5; border-radius:8px; white-space:pre-wrap; max-height:220px; overflow-y:auto;">
+                        ${escapeHtmlLD(s.content) || '<span style="color:#888;">No passage text available.</span>'}
+                    </div>
+                    <h4 style="margin:1.5rem 0 0.75rem;">Questions &amp; Answers</h4>
+                    ${answersHtml}
+                    ${essayHtml}
+                `;
+            } catch (e) {
+                body.innerHTML = '<p style="color:#dc3545;">Failed to load lesson detail.</p>';
+            }
+        }
+
+        function closeLessonDetailModal() {
+            document.getElementById('lessonDetailModal').classList.remove('active');
+        }
+
+        function escapeHtmlLD(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
         }
 
         function closeStudentModal() {
@@ -3966,6 +4059,8 @@
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee;">School Name</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Students</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Status</th>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Tutor</th>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Read-Aloud (default)</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Actions</th>
                             </tr>
                         </thead>
@@ -3981,6 +4076,28 @@
                                                      color:${c.active ? '#155724' : '#721c24'};">
                                             ${c.active ? 'Active' : 'Inactive'}
                                         </span>
+                                    </td>
+                                    <td style="padding:0.75rem 1rem; text-align:center;">
+                                        <label style="position:relative; display:inline-block; width:40px; height:22px;">
+                                            <input type="checkbox" ${c.tutor_enabled ? 'checked' : ''}
+                                                   onchange="toggleSchoolSetting(${c.id}, 'tutor_enabled', this.checked)"
+                                                   style="opacity:0; width:0; height:0;">
+                                            <span style="position:absolute; cursor:pointer; inset:0; background:${c.tutor_enabled ? '#1e3a5f' : '#ccc'};
+                                                         border-radius:999px; transition:0.2s;"></span>
+                                            <span style="position:absolute; height:16px; width:16px; left:${c.tutor_enabled ? '21px' : '3px'}; bottom:3px;
+                                                         background:white; border-radius:50%; transition:0.2s;"></span>
+                                        </label>
+                                    </td>
+                                    <td style="padding:0.75rem 1rem; text-align:center;">
+                                        <label style="position:relative; display:inline-block; width:40px; height:22px;">
+                                            <input type="checkbox" ${c.read_aloud_default ? 'checked' : ''}
+                                                   onchange="toggleSchoolSetting(${c.id}, 'read_aloud_default', this.checked)"
+                                                   style="opacity:0; width:0; height:0;">
+                                            <span style="position:absolute; cursor:pointer; inset:0; background:${c.read_aloud_default ? '#1e3a5f' : '#ccc'};
+                                                         border-radius:999px; transition:0.2s;"></span>
+                                            <span style="position:absolute; height:16px; width:16px; left:${c.read_aloud_default ? '21px' : '3px'}; bottom:3px;
+                                                         background:white; border-radius:50%; transition:0.2s;"></span>
+                                        </label>
                                     </td>
                                     <td style="padding:0.75rem 1rem; text-align:center;">
                                         <button onclick="toggleCode(${c.id}, ${!c.active})"
@@ -4001,6 +4118,36 @@
                 `;
             } catch (e) {
                 container.innerHTML = '<p style="color:#dc3545;">Failed to load school codes.</p>';
+            }
+        }
+
+        async function toggleReadAloud(studentId, checked) {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            try {
+                await fetch(`/api/admin/student/${studentId}/read-aloud`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ read_aloud_override: checked ? true : null })
+                });
+                const s = allStudents.find(st => st.id === studentId);
+                if (s) s.read_aloud_override = checked ? true : null;
+            } catch (e) {
+                alert('Failed to update read-aloud setting. Please try again.');
+                loadStudents();
+            }
+        }
+
+        async function toggleSchoolSetting(codeId, field, value) {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            try {
+                await fetch(`/api/admin/school-codes/${codeId}/settings`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [field]: value })
+                });
+            } catch (e) {
+                alert('Failed to update setting. Please try again.');
+                loadSchoolCodes();
             }
         }
 
