@@ -7209,6 +7209,13 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         )
         print(f"✓ Illustration generated: {bool(lesson_image_url)}")
 
+        # Calculate Lexile score for this passage (was previously omitted here,
+        # which silently broke live Lexile tracking for every "My Lessons" completion)
+        lesson_fk_grade = passage_data.get('flesch_kincaid_grade') or passage_data.get('readability_score') or 6.0
+        lesson_passage_lexile = flesch_kincaid_grade_to_lexile(float(lesson_fk_grade))
+        passage_data['lexile_score'] = lesson_passage_lexile
+        print(f"📊 Passage Lexile: {lesson_passage_lexile}L (FK grade: {lesson_fk_grade})")
+
         # Step 8: Save passage
         print("Step 8: Saving passage to database...")
         conn = get_db()
@@ -7219,8 +7226,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 cursor.execute(
                     """INSERT INTO passages
                        (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                        difficulty_level, estimated_minutes, approved, created_by, image_url)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        RETURNING id""",
                     (
                         passage_data.get('title'),
@@ -7234,7 +7241,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                         passage_data.get('estimated_minutes'),
                         True,
                         user_id,
-                        lesson_image_url
+                        lesson_image_url,
+                        lesson_passage_lexile
                     )
                 )
                 result = cursor.fetchone()
@@ -7243,8 +7251,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                 cursor.execute(
                     """INSERT INTO passages
                        (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                        difficulty_level, estimated_minutes, approved, created_by, image_url)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         passage_data.get('title'),
                         passage_data.get('content'),
@@ -7257,7 +7265,8 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
                         passage_data.get('estimated_minutes'),
                         True,
                         user_id,
-                        lesson_image_url
+                        lesson_image_url,
+                        lesson_passage_lexile
                     )
                 )
                 lesson_id = cursor.lastrowid
@@ -8805,6 +8814,140 @@ async def update_student_read_aloud(student_id: int, request: Request, admin=Dep
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/backfill-lexile-gap")
+async def backfill_lexile_gap(admin=Depends(require_admin)):
+    """
+    ONE-TIME endpoint to close a gap the earlier Lexile backfills missed:
+    /api/lessons/next (used by "My Lessons") never computed or stored
+    lexile_score on the passages it created, so every completion through
+    that path silently skipped live Lexile tracking, and the earlier
+    backfills (which required passages.lexile_score IS NOT NULL) couldn't
+    pick these students up either. The generation code itself has now been
+    fixed for future lessons; this backfills the historical gap.
+
+    Step 1: backfill any remaining NULL passages.lexile_score from
+            readability_score.
+    Step 2: for students with zero lexile_history rows (now that their
+            passages have real Lexile values), replay their session_logs
+            history and write both users.lexile_score and lexile_history
+            rows, same as the earlier backfills.
+
+    DELETE THIS ENDPOINT after running it once in production.
+    """
+    from readability import calculate_student_lexile
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        # Step 1: backfill any passages still missing a Lexile score
+        if USE_POSTGRES:
+            cursor.execute("""
+                UPDATE passages
+                SET lexile_score = GREATEST(100, LEAST(2000, ROUND(COALESCE(readability_score, 6.0) * 135 + 40)))
+                WHERE lexile_score IS NULL
+            """)
+        else:
+            cursor.execute("""
+                UPDATE passages
+                SET lexile_score = MAX(100, MIN(2000, ROUND(COALESCE(readability_score, 6.0) * 135 + 40)))
+                WHERE lexile_score IS NULL
+            """)
+        conn.commit()
+
+        # Step 2: students with no lexile_history rows yet
+        cursor.execute("""
+            SELECT u.id FROM users u
+            WHERE u.role = 'student'
+              AND NOT EXISTS (SELECT 1 FROM lexile_history lh WHERE lh.user_id = u.id)
+        """)
+        student_ids = [r['id'] if hasattr(r, 'keys') else r[0] for r in cursor.fetchall()]
+
+        updated = []
+        skipped = []
+
+        for uid in student_ids:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    SELECT sl.passage_id, sl.comprehension_score, sl.completed_at,
+                           p.lexile_score AS passage_lexile
+                    FROM session_logs sl
+                    JOIN passages p ON p.id = sl.passage_id
+                    WHERE sl.user_id = %s
+                      AND sl.completion_status = 'completed'
+                      AND sl.comprehension_score IS NOT NULL
+                      AND p.lexile_score IS NOT NULL
+                    ORDER BY sl.completed_at ASC
+                """, (uid,))
+            else:
+                cursor.execute("""
+                    SELECT sl.passage_id, sl.comprehension_score, sl.completed_at,
+                           p.lexile_score AS passage_lexile
+                    FROM session_logs sl
+                    JOIN passages p ON p.id = sl.passage_id
+                    WHERE sl.user_id = ?
+                      AND sl.completion_status = 'completed'
+                      AND sl.comprehension_score IS NOT NULL
+                      AND p.lexile_score IS NOT NULL
+                    ORDER BY sl.completed_at ASC
+                """, (uid,))
+            rows = cursor.fetchall()
+
+            if not rows:
+                skipped.append(uid)
+                continue
+
+            current_lexile = None
+            inserted = 0
+            for row in rows:
+                passage_id = row['passage_id'] if hasattr(row, 'keys') else row[0]
+                comp_score = row['comprehension_score'] if hasattr(row, 'keys') else row[1]
+                completed_at = row['completed_at'] if hasattr(row, 'keys') else row[2]
+                passage_lexile = row['passage_lexile'] if hasattr(row, 'keys') else row[3]
+
+                new_lexile = calculate_student_lexile(passage_lexile, float(comp_score))
+                if current_lexile:
+                    current_lexile = round(current_lexile * 0.7 + new_lexile * 0.3)
+                else:
+                    current_lexile = new_lexile
+
+                if USE_POSTGRES:
+                    cursor.execute(
+                        """INSERT INTO lexile_history
+                           (user_id, lexile_score, passage_id, passage_lexile, comprehension_score, recorded_at)
+                           VALUES (%s, %s, %s, %s, %s, %s)""",
+                        (uid, current_lexile, passage_id, passage_lexile, comp_score, completed_at)
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO lexile_history
+                           (user_id, lexile_score, passage_id, passage_lexile, comprehension_score, recorded_at)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (uid, current_lexile, passage_id, passage_lexile, comp_score, completed_at)
+                    )
+                inserted += 1
+
+            if USE_POSTGRES:
+                cursor.execute("UPDATE users SET lexile_score = %s WHERE id = %s", (current_lexile, uid))
+            else:
+                cursor.execute("UPDATE users SET lexile_score = ? WHERE id = ?", (current_lexile, uid))
+
+            updated.append({"user_id": uid, "history_rows_inserted": inserted, "final_lexile_score": current_lexile})
+
+        conn.commit()
+        return {
+            "success": True,
+            "updated_count": len(updated),
+            "skipped_no_history_count": len(skipped),
+            "updated": updated,
+            "skipped_user_ids": skipped
+        }
+    except Exception as e:
+        conn.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
 
 
 @app.get("/api/admin/student/{student_id}/lexile")
