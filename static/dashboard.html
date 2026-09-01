@@ -7567,6 +7567,16 @@
             
             // Show lessons section
             showSection('lessons');
+
+            // The just-completed lesson's card is still visible at this point,
+            // which would make showSection()'s "already loaded" check skip
+            // fetching a new lesson. Force-hide it and fetch fresh explicitly
+            // so "Continue Learning" always advances past the finished lesson.
+            const lessonCard = document.getElementById('lessonContentCard');
+            const questionsCard = document.getElementById('questionsCard');
+            if (lessonCard) lessonCard.classList.add('hidden');
+            if (questionsCard) questionsCard.classList.add('hidden');
+            checkForNextLesson();
             
             // ✅ SCROLL TO TOP ON MOBILE
             setTimeout(() => {
