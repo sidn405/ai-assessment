@@ -760,6 +760,30 @@
 </head>
 <body>
 
+    <!-- Raise Hand -->
+    <button id="raiseHandBtn" onclick="toggleRaiseHand()" title="Ask for help with this lesson"
+            style="position:fixed; bottom:24px; right:24px; z-index:9998; width:56px; height:56px;
+                   border-radius:50%; background:#1e3a5f; color:white; border:none; font-size:1.6rem;
+                   box-shadow:0 4px 12px rgba(0,0,0,0.25); cursor:pointer;">
+        ✋
+    </button>
+    <div id="raiseHandPanel" style="display:none; position:fixed; bottom:92px; right:24px; z-index:9998;
+                width:320px; max-width:90vw; max-height:60vh; background:white; border-radius:12px;
+                box-shadow:0 8px 24px rgba(0,0,0,0.25); flex-direction:column; overflow:hidden;">
+        <div style="padding:0.9rem 1rem; background:#1e3a5f; color:white; display:flex; justify-content:space-between; align-items:center;">
+            <strong>Need help with this lesson?</strong>
+            <span onclick="toggleRaiseHand()" style="cursor:pointer; font-size:1.2rem;">&times;</span>
+        </div>
+        <div id="raiseHandMessages" style="flex:1; overflow-y:auto; padding:1rem; font-size:0.92rem; max-height:280px;"></div>
+        <div style="padding:0.75rem; border-top:1px solid #eee; display:flex; gap:0.5rem;">
+            <input id="raiseHandInput" type="text" placeholder="Ask about this passage..."
+                   onkeydown="if(event.key==='Enter') submitRaiseHand()"
+                   style="flex:1; padding:0.5rem 0.7rem; border:1px solid #ddd; border-radius:6px; font-size:0.9rem;">
+            <button onclick="submitRaiseHand()" style="padding:0.5rem 0.9rem; background:#1e3a5f; color:white;
+                    border:none; border-radius:6px; cursor:pointer;">Ask</button>
+        </div>
+    </div>
+
     <!-- AI Tutor Avatar -->
     <div id="aiTutor" class="ai-tutor hidden">
         <div class="tutor-avatar">
@@ -862,7 +886,7 @@
                         </div>
                     </div>
                     <div class="controls">
-                        <div class="audio-controls">
+                        <div class="audio-controls" id="readAloudControls">
                             <button class="btn btn-icon" onclick="readAloud()" title="Read aloud">
                                 🔊
                             </button>
@@ -945,6 +969,84 @@
             avatarEl.style.backgroundImage = `url('static/graphics/tutor.jpg?v=${Date.now()}')`;
           }
         });
+
+        // Apply per-school/per-student feature settings (tutor on/off, read-aloud access)
+        let mySettings = { tutor_enabled: true, read_aloud_enabled: false };
+        async function loadMySettings() {
+            try {
+                const resp = await fetch('/api/me', {
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await resp.json();
+                mySettings.tutor_enabled = data.tutor_enabled !== false;
+                mySettings.read_aloud_enabled = !!data.read_aloud_enabled;
+            } catch (e) {
+                console.warn('Could not load user settings, using defaults', e);
+            }
+
+            if (!mySettings.tutor_enabled) {
+                const tutorEl = document.getElementById('aiTutor');
+                if (tutorEl) tutorEl.style.display = 'none';
+            }
+            const readAloudEl = document.getElementById('readAloudControls');
+            if (readAloudEl) readAloudEl.style.display = mySettings.read_aloud_enabled ? '' : 'none';
+        }
+        document.addEventListener('DOMContentLoaded', loadMySettings);
+
+        function toggleRaiseHand() {
+            const panel = document.getElementById('raiseHandPanel');
+            const isOpen = panel.style.display === 'flex';
+            panel.style.display = isOpen ? 'none' : 'flex';
+            if (!isOpen) document.getElementById('raiseHandInput').focus();
+        }
+
+        function appendRaiseHandMessage(role, text) {
+            const container = document.getElementById('raiseHandMessages');
+            const bubble = document.createElement('div');
+            bubble.style.margin = '0 0 0.75rem 0';
+            bubble.style.padding = '0.6rem 0.8rem';
+            bubble.style.borderRadius = '8px';
+            bubble.style.maxWidth = '90%';
+            if (role === 'user') {
+                bubble.style.background = '#e8eef5';
+                bubble.style.marginLeft = 'auto';
+                bubble.style.textAlign = 'right';
+            } else {
+                bubble.style.background = '#f5f5f5';
+            }
+            bubble.textContent = text;
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function submitRaiseHand() {
+            const input = document.getElementById('raiseHandInput');
+            const question = input.value.trim();
+            if (!question) return;
+            input.value = '';
+            appendRaiseHandMessage('user', question);
+            appendRaiseHandMessage('assistant', 'Thinking...');
+            const container = document.getElementById('raiseHandMessages');
+            const thinkingBubble = container.lastChild;
+
+            try {
+                const resp = await fetch('/api/ai-helper/raise-hand', {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        passage_id: currentPassage ? currentPassage.passage_id : null
+                    })
+                });
+                const data = await resp.json();
+                thinkingBubble.textContent = data.answer || "Sorry, I couldn't find an answer to that.";
+            } catch (e) {
+                thinkingBubble.textContent = "Something went wrong — please try again.";
+            }
+        }
 
         let currentPassage = null;
         let currentQuestions = [];

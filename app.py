@@ -782,6 +782,8 @@ def init_db():
                 "ALTER TABLE school_codes ADD COLUMN IF NOT EXISTS tutor_enabled BOOLEAN DEFAULT TRUE",
                 "ALTER TABLE school_codes ADD COLUMN IF NOT EXISTS read_aloud_default BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS read_aloud_override BOOLEAN",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0",
+                "CREATE TABLE IF NOT EXISTS lesson_reserve (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), passage_id INTEGER REFERENCES passages(id), consumed BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, consumed_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS lesson_reserve (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, passage_id INTEGER, consumed BOOLEAN DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, consumed_at TIMESTAMP)",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -1548,11 +1550,22 @@ async def login(credentials: UserLogin):
     
     # Update last active
     update_user_activity(user['id'])
-    
+
     initialize_new_user(user['id'])
-    
+
+    new_login_count = (user.get('login_count') or 0) + 1
+    count_conn = get_db()
+    count_cursor = get_cursor(count_conn)
+    if USE_POSTGRES:
+        count_cursor.execute("UPDATE users SET login_count = %s WHERE id = %s", (new_login_count, user['id']))
+    else:
+        count_cursor.execute("UPDATE users SET login_count = ? WHERE id = ?", (new_login_count, user['id']))
+    count_conn.commit()
+    count_cursor.close()
+    count_conn.close()
+
     token = create_token(user['id'], user['role'])
-    
+
     return {
         "success": True,
         "token": token,
@@ -1563,7 +1576,8 @@ async def login(credentials: UserLogin):
             "role": user['role'],
             "reading_level": user.get('reading_level'),
             "interests": user.get('interests'),
-            "level_estimate": user.get('level_estimate')
+            "level_estimate": user.get('level_estimate'),
+            "login_count": new_login_count
         }
     }
     
@@ -2599,7 +2613,7 @@ async def submit_assessment(request: Request):
 # Add these endpoints to app.py after /api/assessment/submit
 
 @app.post("/api/reading-level/update")
-async def update_reading_level(request: Request):
+async def update_reading_level(request: Request, background_tasks: BackgroundTasks):
     """Update user's reading level and save history"""
     try:
         data = await request.json()
@@ -2672,7 +2686,11 @@ async def update_reading_level(request: Request):
         
         conn.commit()
         conn.close()
-        
+
+        # Reading level now established — start building the lesson reserve
+        # in the background so lessons load instantly once the student begins.
+        background_tasks.add_task(_replenish_reserve_task, user_id)
+
         return {
             "success": True,
             "previous_level": previous_level,
@@ -5621,7 +5639,7 @@ def get_user_weekly_goals(user_id):
         return []
     
 @app.post("/api/lessons/progress")
-async def save_lesson_progress(request: Request):
+async def save_lesson_progress(request: Request, background_tasks: BackgroundTasks):
     """Save lesson progress WITH GAMIFICATION"""
     data = await request.json()
     token = data.get("token")
@@ -5766,7 +5784,10 @@ async def save_lesson_progress(request: Request):
         # ==================================
         
         print(f"✓ Points awarded: {points_result['points_awarded']}")
-        
+
+        # Top up the lesson reserve now that one slot was just consumed
+        background_tasks.add_task(_replenish_reserve_task, user_id)
+
         return {
             "success": True,
             "message": "Progress saved successfully",
@@ -6841,10 +6862,10 @@ async def retake_placement(request: Request):
 # LESSONS ENDPOINTS (Phase 2 - AI Generated)
 # ============================================
 
-@app.get("/api/lessons/next")
-async def get_next_lesson(token: str, exclude_topics: str = None):
-    """Get next AI-generated lesson with topic variety (fast + reliable)"""
-
+async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
+    """Core lesson-generation logic. Extracted from the /api/lessons/next route
+    so it can be called both for live on-demand requests and by the background
+    reserve-replenishment task. See get_next_lesson() below for the route."""
     import json
     import random
     import re
@@ -6902,10 +6923,7 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         return p
 
     try:
-        # Step 1: Verify token
-        print("Step 1: Verifying token...")
-        user_data = verify_token(token)
-        user_id = user_data["user_id"]
+        # Step 1: user_id provided directly by caller (token already verified upstream)
         print(f"✓ User ID: {user_id}")
 
         # Step 2: Check content generator
@@ -7387,6 +7405,201 @@ async def get_next_lesson(token: str, exclude_topics: str = None):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+RESERVE_TARGET_SIZE = 5  # keep this many unused lessons ready per student
+
+
+def _consume_reserved_lesson(user_id: int):
+    """Pop the oldest unconsumed reserved lesson for this student, if any,
+    and return it shaped exactly like _generate_lesson_core()'s response."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT id, passage_id FROM lesson_reserve
+                   WHERE user_id = %s AND consumed = FALSE
+                   ORDER BY created_at ASC LIMIT 1""",
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT id, passage_id FROM lesson_reserve
+                   WHERE user_id = ? AND consumed = 0
+                   ORDER BY created_at ASC LIMIT 1""",
+                (user_id,)
+            )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        reserve_id = row['id'] if hasattr(row, 'keys') else row[0]
+        passage_id = row['passage_id'] if hasattr(row, 'keys') else row[1]
+
+        if USE_POSTGRES:
+            cursor.execute("SELECT * FROM passages WHERE id = %s", (passage_id,))
+        else:
+            cursor.execute("SELECT * FROM passages WHERE id = ?", (passage_id,))
+        p = cursor.fetchone()
+        if not p:
+            # Reserve pointed at a passage that no longer exists — skip it
+            if USE_POSTGRES:
+                cursor.execute("UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE id = %s", (reserve_id,))
+            else:
+                cursor.execute("UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE id = ?", (reserve_id,))
+            conn.commit()
+            return None
+        p = dict(p) if hasattr(p, 'keys') else None
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT question_text, question_type, correct_answer, options, explanation, difficulty
+                   FROM passage_questions WHERE passage_id = %s""",
+                (passage_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT question_text, question_type, correct_answer, options, explanation, difficulty
+                   FROM passage_questions WHERE passage_id = ?""",
+                (passage_id,)
+            )
+        q_rows = cursor.fetchall()
+        questions = []
+        for q in q_rows:
+            q = dict(q) if hasattr(q, 'keys') else {
+                'question_text': q[0], 'question_type': q[1], 'correct_answer': q[2],
+                'options': q[3], 'explanation': q[4], 'difficulty': q[5]
+            }
+            try:
+                options = json.loads(q['options']) if q['options'] else []
+            except Exception:
+                options = []
+            questions.append({
+                "question": q['question_text'],
+                "type": q['question_type'],
+                "options": options,
+                "correct_answer": q['correct_answer'],
+                "explanation": q['explanation'],
+                "difficulty": q.get('difficulty', 1)
+            })
+
+        # Mark this reserve slot consumed
+        if USE_POSTGRES:
+            cursor.execute("UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE id = %s", (reserve_id,))
+        else:
+            cursor.execute("UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE id = ?", (reserve_id,))
+        conn.commit()
+
+        try:
+            topic_tags = json.loads(p.get('topic_tags')) if p.get('topic_tags') else []
+        except Exception:
+            topic_tags = []
+
+        return {
+            'id': p['id'],
+            'title': p['title'],
+            'content': p['content'],
+            'difficulty_level': p.get('difficulty_level'),
+            'word_count': p.get('word_count', 0),
+            'key_points': [],
+            'vocabulary': [],
+            'image_url': p.get('image_url'),
+            'questions': questions,
+            'topic_tags': topic_tags,
+            'from_reserve': True
+        }
+    except Exception as e:
+        print(f"⚠️ Error consuming reserved lesson: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+async def _replenish_reserve_task(user_id: int):
+    """Background task: top up a student's lesson reserve to the target size.
+    Only runs for students who've completed the reading assessment (required
+    by _generate_lesson_core), and silently no-ops otherwise. Each generation
+    failure is caught individually so one bad attempt doesn't block the rest."""
+    try:
+        conn = get_db()
+        cursor = get_cursor(conn)
+        try:
+            if USE_POSTGRES:
+                cursor.execute("SELECT reading_level, level_estimate FROM users WHERE id = %s", (user_id,))
+            else:
+                cursor.execute("SELECT reading_level, level_estimate FROM users WHERE id = ?", (user_id,))
+            u = cursor.fetchone()
+            if not u:
+                return
+            u = dict(u) if hasattr(u, 'keys') else {'reading_level': u[0], 'level_estimate': u[1]}
+            if not (u.get('reading_level') or u.get('level_estimate')):
+                return  # reading level not established yet — nothing to reserve
+
+            if USE_POSTGRES:
+                cursor.execute(
+                    "SELECT COUNT(*) AS c FROM lesson_reserve WHERE user_id = %s AND consumed = FALSE",
+                    (user_id,)
+                )
+            else:
+                cursor.execute(
+                    "SELECT COUNT(*) AS c FROM lesson_reserve WHERE user_id = ? AND consumed = 0",
+                    (user_id,)
+                )
+            row = cursor.fetchone()
+            current_count = (row['c'] if hasattr(row, 'keys') else row[0]) or 0
+        finally:
+            cursor.close()
+            conn.close()
+
+        needed = RESERVE_TARGET_SIZE - current_count
+        if needed <= 0:
+            return
+
+        print(f"🔄 Replenishing lesson reserve for user {user_id}: generating {needed} lesson(s)")
+        for _ in range(needed):
+            try:
+                lesson = await _generate_lesson_core(user_id)
+                insert_conn = get_db()
+                insert_cursor = get_cursor(insert_conn)
+                if USE_POSTGRES:
+                    insert_cursor.execute(
+                        "INSERT INTO lesson_reserve (user_id, passage_id) VALUES (%s, %s)",
+                        (user_id, lesson['id'])
+                    )
+                else:
+                    insert_cursor.execute(
+                        "INSERT INTO lesson_reserve (user_id, passage_id) VALUES (?, ?)",
+                        (user_id, lesson['id'])
+                    )
+                insert_conn.commit()
+                insert_cursor.close()
+                insert_conn.close()
+            except Exception as gen_error:
+                print(f"⚠️ Reserve replenishment: one lesson failed for user {user_id}: {gen_error}")
+                continue
+        print(f"✓ Reserve replenishment complete for user {user_id}")
+    except Exception as e:
+        print(f"⚠️ Reserve replenishment task failed for user {user_id}: {e}")
+
+
+@app.get("/api/lessons/next")
+async def get_next_lesson(token: str, background_tasks: BackgroundTasks, exclude_topics: str = None):
+    """Get next lesson — instantly from the pre-generated reserve if available,
+    otherwise generated on the spot (original behavior). Either way, kicks off
+    a background task to keep the student's reserve topped up for next time."""
+    user_data = verify_token(token)
+    user_id = user_data["user_id"]
+
+    reserved = _consume_reserved_lesson(user_id)
+    if reserved:
+        print(f"⚡ Served lesson {reserved['id']} from reserve for user {user_id}")
+        background_tasks.add_task(_replenish_reserve_task, user_id)
+        return reserved
+
+    lesson = await _generate_lesson_core(user_id, exclude_topics)
+    background_tasks.add_task(_replenish_reserve_task, user_id)
+    return lesson
 
 # ========================================
 # ========================================
