@@ -7584,10 +7584,14 @@ async def _replenish_reserve_task(user_id: int):
 
 
 @app.get("/api/lessons/next")
-async def get_next_lesson(token: str, background_tasks: BackgroundTasks, exclude_topics: str = None):
+async def get_next_lesson(response: Response, token: str, background_tasks: BackgroundTasks, exclude_topics: str = None):
     """Get next lesson — instantly from the pre-generated reserve if available,
     otherwise generated on the spot (original behavior). Either way, kicks off
     a background task to keep the student's reserve topped up for next time."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     user_data = verify_token(token)
     user_id = user_data["user_id"]
 
