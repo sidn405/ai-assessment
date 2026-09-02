@@ -47,6 +47,8 @@ app.add_middleware(
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "achieve-365-reading-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 TREMENDOUS_API_KEY = os.getenv("TREMENDOUS_API_KEY", "")  # Set in Railway Variables
 TREMENDOUS_TEST_MODE = os.getenv("TREMENDOUS_TEST_MODE", "true").lower() == "true"  # true = sandbox
 openai.api_key = OPENAI_API_KEY
@@ -142,6 +144,11 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class ParentCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
 
 class InterestOnboarding(BaseModel):
     interests: List[str]
@@ -784,6 +791,8 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS read_aloud_override BOOLEAN",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0",
                 "CREATE TABLE IF NOT EXISTS lesson_reserve (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), passage_id INTEGER REFERENCES passages(id), consumed BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, consumed_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS lesson_reserve (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, passage_id INTEGER, consumed BOOLEAN DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, consumed_at TIMESTAMP)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_link_code VARCHAR(10)",
+                "CREATE TABLE IF NOT EXISTS parent_child_links (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES users(id), child_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS parent_child_links (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, child_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -1326,6 +1335,14 @@ async def serve_admin():
     response.headers["Expires"] = "0"
     return response
 
+@app.get("/parent-dashboard", response_class=HTMLResponse)
+async def serve_parent_dashboard():
+    response = FileResponse("static/parent-dashboard.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 @app.get("/reading", response_class=HTMLResponse)
 async def serve_reading():
     response = FileResponse("static/reading.html")
@@ -1431,6 +1448,9 @@ async def register(user: UserCreate):
         
         initialize_new_user(user_id)
 
+        if final_role == "student":
+            _assign_parent_link_code(user_id)
+
         # Increment student count on the school code
         if school_code and final_role == "student":
             try:
@@ -1520,6 +1540,34 @@ def require_admin(user: dict = Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+
+def require_parent(user: dict = Depends(get_current_user)):
+    if user.get("role") != "parent":
+        raise HTTPException(status_code=403, detail="Parent access required")
+    return user
+
+
+def _verify_parent_owns_child(parent_id: int, child_id: int) -> bool:
+    """Authorization check: does this parent actually have a link to this child?
+    Every parent-scoped per-child endpoint must call this before returning data."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT 1 FROM parent_child_links WHERE parent_id = %s AND child_id = %s",
+                (parent_id, child_id)
+            )
+        else:
+            cursor.execute(
+                "SELECT 1 FROM parent_child_links WHERE parent_id = ? AND child_id = ?",
+                (parent_id, child_id)
+            )
+        return cursor.fetchone() is not None
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def require_user(user: dict = Depends(get_current_user)):
@@ -7410,6 +7458,41 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
 RESERVE_TARGET_SIZE = 5  # keep this many unused lessons ready per student
 
 
+def _assign_parent_link_code(user_id: int) -> str:
+    """Generate and store a unique short code a parent can use to link to
+    this student's account. Retries on the rare collision."""
+    import random, string
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        for _ in range(10):
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            try:
+                if USE_POSTGRES:
+                    cursor.execute("UPDATE users SET parent_link_code = %s WHERE id = %s AND parent_link_code IS NULL", (code, user_id))
+                else:
+                    cursor.execute("UPDATE users SET parent_link_code = ? WHERE id = ? AND parent_link_code IS NULL", (code, user_id))
+                conn.commit()
+                if cursor.rowcount and cursor.rowcount > 0:
+                    return code
+                # Someone already has a code (rowcount 0 means either already set, or no such user)
+                if USE_POSTGRES:
+                    cursor.execute("SELECT parent_link_code FROM users WHERE id = %s", (user_id,))
+                else:
+                    cursor.execute("SELECT parent_link_code FROM users WHERE id = ?", (user_id,))
+                existing = cursor.fetchone()
+                existing_code = existing['parent_link_code'] if existing and hasattr(existing, 'keys') else (existing[0] if existing else None)
+                if existing_code:
+                    return existing_code
+            except Exception:
+                conn.rollback()
+                continue  # collision on UNIQUE-ish generation attempt, retry with a new random code
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def _consume_reserved_lesson(user_id: int):
     """Pop the oldest unconsumed reserved lesson for this student, if any,
     and return it shaped exactly like _generate_lesson_core()'s response."""
@@ -8082,6 +8165,9 @@ async def admin_credit_wallet(request: Request):
     if admin_data.get("role") not in ("admin", "parent"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
+    if admin_data.get("role") == "parent" and not _verify_parent_owns_child(admin_data["user_id"], student_id):
+        raise HTTPException(status_code=403, detail="You can only credit your own linked child's wallet")
+
     if not student_id or not amount_cents or amount_cents <= 0:
         raise HTTPException(status_code=400, detail="student_id and amount_cents required")
 
@@ -8135,6 +8221,444 @@ async def admin_credit_wallet(request: Request):
         conn.rollback()
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================================
+# PARENT PORTAL ENDPOINTS
+# ========================================
+
+@app.post("/api/register/parent")
+async def register_parent(parent: ParentCreate):
+    """Register a parent account. No school code — parents sign up
+    independently and link to their child(ren) via a link code afterward."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        email_lc = parent.email.lower().strip()
+        if USE_POSTGRES:
+            cursor.execute("SELECT id FROM users WHERE LOWER(email) = %s", (email_lc,))
+        else:
+            cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email_lc,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="An account with this email already exists.")
+
+        password_hash = bcrypt.hashpw(parent.password.encode('utf-8'), bcrypt.gensalt())
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role) VALUES (%s, %s, %s, 'parent') RETURNING id",
+                (parent.email, password_hash.decode('utf-8'), parent.full_name)
+            )
+            user_id = cursor.fetchone()['id']
+        else:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, 'parent')",
+                (parent.email, password_hash.decode('utf-8'), parent.full_name)
+            )
+            user_id = cursor.lastrowid
+        conn.commit()
+
+        token = create_token(user_id, "parent")
+        return {
+            "success": True,
+            "token": token,
+            "user": {"id": user_id, "email": parent.email, "full_name": parent.full_name, "role": "parent"}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/student/link-code")
+async def get_my_link_code(user=Depends(get_current_user)):
+    """A student's own code to share with a parent so they can link accounts."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT parent_link_code FROM users WHERE id = %s", (user["user_id"],))
+        else:
+            cursor.execute("SELECT parent_link_code FROM users WHERE id = ?", (user["user_id"],))
+        row = cursor.fetchone()
+        code = row['parent_link_code'] if row and hasattr(row, 'keys') else (row[0] if row else None)
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not code:
+        code = _assign_parent_link_code(user["user_id"])
+
+    return {"link_code": code}
+
+
+@app.post("/api/parent/link-child")
+async def link_child(request: Request, parent=Depends(require_parent)):
+    """Parent links to an existing student account using that student's link code."""
+    data = await request.json()
+    link_code = (data.get("link_code") or "").strip().upper()
+    if not link_code:
+        raise HTTPException(status_code=400, detail="link_code is required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, full_name FROM users WHERE parent_link_code = %s AND role = 'student'",
+                (link_code,)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, full_name FROM users WHERE parent_link_code = ? AND role = 'student'",
+                (link_code,)
+            )
+        child_row = cursor.fetchone()
+        if not child_row:
+            raise HTTPException(status_code=404, detail="No student found with that link code.")
+        child_row = dict(child_row) if hasattr(child_row, 'keys') else {'id': child_row[0], 'full_name': child_row[1]}
+
+        try:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "INSERT INTO parent_child_links (parent_id, child_id) VALUES (%s, %s)",
+                    (parent["user_id"], child_row['id'])
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO parent_child_links (parent_id, child_id) VALUES (?, ?)",
+                    (parent["user_id"], child_row['id'])
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            # Likely already linked (UNIQUE constraint) — treat as success, idempotent
+            pass
+
+        return {"success": True, "child_id": child_row['id'], "child_name": child_row['full_name']}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/parent/children")
+async def get_my_children(parent=Depends(require_parent)):
+    """List every child linked to this parent, with a quick progress summary."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT u.id, u.full_name, u.reading_level, u.lexile_score, u.school,
+                          COUNT(sl.id) FILTER (WHERE sl.completion_status = 'completed') AS lessons_completed,
+                          AVG(sl.comprehension_score) FILTER (WHERE sl.completion_status = 'completed') AS avg_score
+                   FROM parent_child_links pcl
+                   JOIN users u ON u.id = pcl.child_id
+                   LEFT JOIN session_logs sl ON sl.user_id = u.id
+                   WHERE pcl.parent_id = %s
+                   GROUP BY u.id, u.full_name, u.reading_level, u.lexile_score, u.school
+                   ORDER BY u.full_name""",
+                (parent["user_id"],)
+            )
+        else:
+            cursor.execute(
+                """SELECT u.id, u.full_name, u.reading_level, u.lexile_score, u.school,
+                          (SELECT COUNT(*) FROM session_logs sl WHERE sl.user_id = u.id AND sl.completion_status = 'completed') AS lessons_completed,
+                          (SELECT AVG(comprehension_score) FROM session_logs sl WHERE sl.user_id = u.id AND sl.completion_status = 'completed') AS avg_score
+                   FROM parent_child_links pcl
+                   JOIN users u ON u.id = pcl.child_id
+                   WHERE pcl.parent_id = ?
+                   ORDER BY u.full_name""",
+                (parent["user_id"],)
+            )
+        rows = cursor.fetchall()
+        children = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {
+                'id': r[0], 'full_name': r[1], 'reading_level': r[2], 'lexile_score': r[3],
+                'school': r[4], 'lessons_completed': r[5], 'avg_score': r[6]
+            }
+            children.append({
+                "id": r['id'],
+                "full_name": r['full_name'],
+                "reading_level": r['reading_level'],
+                "lexile_score": r['lexile_score'],
+                "school": r['school'],
+                "lessons_completed": r['lessons_completed'] or 0,
+                "avg_score": round(r['avg_score']) if r['avg_score'] is not None else None
+            })
+        return {"children": children}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/parent/child/{child_id}/progress")
+async def get_child_progress(child_id: int, parent=Depends(require_parent)):
+    """A child's recent lesson history, scoped to their linked parent only."""
+    if not _verify_parent_owns_child(parent["user_id"], child_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT full_name, reading_level, lexile_score FROM users WHERE id = %s", (child_id,))
+        else:
+            cursor.execute("SELECT full_name, reading_level, lexile_score FROM users WHERE id = ?", (child_id,))
+        student = cursor.fetchone()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        student = dict(student) if hasattr(student, 'keys') else {'full_name': student[0], 'reading_level': student[1], 'lexile_score': student[2]}
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT sl.id, sl.passage_id, sl.completion_status, sl.comprehension_score,
+                          sl.completed_at, p.title
+                   FROM session_logs sl LEFT JOIN passages p ON p.id = sl.passage_id
+                   WHERE sl.user_id = %s ORDER BY sl.started_at DESC LIMIT 20""",
+                (child_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT sl.id, sl.passage_id, sl.completion_status, sl.comprehension_score,
+                          sl.completed_at, p.title
+                   FROM session_logs sl LEFT JOIN passages p ON p.id = sl.passage_id
+                   WHERE sl.user_id = ? ORDER BY sl.started_at DESC LIMIT 20""",
+                (child_id,)
+            )
+        rows = cursor.fetchall()
+        lessons = []
+        completed_count = 0
+        score_sum = 0
+        score_count = 0
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {
+                'id': r[0], 'passage_id': r[1], 'completion_status': r[2],
+                'comprehension_score': r[3], 'completed_at': r[4], 'title': r[5]
+            }
+            is_done = r['completion_status'] == 'completed'
+            if is_done:
+                completed_count += 1
+                if r['comprehension_score'] is not None:
+                    score_sum += r['comprehension_score']
+                    score_count += 1
+            lessons.append({
+                "id": r['id'],
+                "title": r['title'] or (f"Passage #{r['passage_id']}" if r['passage_id'] else "Untitled"),
+                "score": r['comprehension_score'],
+                "completed": is_done,
+                "completed_at": str(r['completed_at']) if r['completed_at'] else None
+            })
+
+        return {
+            "student": student,
+            "lessons_completed": completed_count,
+            "avg_score": round(score_sum / score_count) if score_count else None,
+            "recent_lessons": lessons
+        }
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/parent/child/{child_id}/lexile")
+async def get_child_lexile(child_id: int, parent=Depends(require_parent)):
+    """A child's Lexile growth history, scoped to their linked parent only."""
+    if not _verify_parent_owns_child(parent["user_id"], child_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT lexile_score, passage_id, recorded_at FROM lexile_history WHERE user_id = %s ORDER BY recorded_at ASC",
+                (child_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT lexile_score, passage_id, recorded_at FROM lexile_history WHERE user_id = ? ORDER BY recorded_at ASC",
+                (child_id,)
+            )
+        rows = cursor.fetchall()
+        history = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {'lexile_score': r[0], 'passage_id': r[1], 'recorded_at': r[2]}
+            history.append({"lexile_score": r['lexile_score'], "recorded_at": str(r['recorded_at'])})
+        return {"history": history}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/parent/session/{session_id}/detail")
+async def get_child_session_detail(session_id: int, parent=Depends(require_parent)):
+    """Full lesson detail (passage, Q&A, essay) for a child's completed lesson,
+    reusing the same logic as the admin view but scoped to the parent's own child."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT user_id FROM session_logs WHERE id = %s", (session_id,))
+        else:
+            cursor.execute("SELECT user_id FROM session_logs WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Session not found")
+        session_user_id = row['user_id'] if hasattr(row, 'keys') else row[0]
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not _verify_parent_owns_child(parent["user_id"], session_user_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+
+    # Reuse the exact same detail-building logic the admin endpoint uses
+    return await get_session_detail(session_id, admin=parent)
+
+
+@app.post("/api/parent/child/{child_id}/create-checkout")
+async def create_stripe_checkout(child_id: int, request: Request, parent=Depends(require_parent)):
+    """Create a Stripe Checkout session for a parent to add funds to their
+    child's incentive wallet. Requires STRIPE_SECRET_KEY to be configured."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+    if not _verify_parent_owns_child(parent["user_id"], child_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+
+    data = await request.json()
+    amount_dollars = data.get("amount_dollars")
+    try:
+        amount_cents = int(round(float(amount_dollars) * 100))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid amount")
+    if amount_cents < 100:
+        raise HTTPException(status_code=400, detail="Minimum add-funds amount is $1.00")
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT full_name FROM users WHERE id = %s", (child_id,))
+        else:
+            cursor.execute("SELECT full_name FROM users WHERE id = ?", (child_id,))
+        child = cursor.fetchone()
+        child_name = (child['full_name'] if hasattr(child, 'keys') else child[0]) if child else "your child"
+    finally:
+        cursor.close()
+        conn.close()
+
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": f"Achieve 365 incentive funds for {child_name}"},
+                    "unit_amount": amount_cents,
+                },
+                "quantity": 1,
+            }],
+            metadata={
+                "parent_id": str(parent["user_id"]),
+                "child_id": str(child_id),
+                "amount_cents": str(amount_cents),
+            },
+            success_url=f"{APP_BASE_URL}/parent-dashboard?funds_added=1",
+            cancel_url=f"{APP_BASE_URL}/parent-dashboard?funds_cancelled=1",
+        )
+        return {"checkout_url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Stripe calls this when a checkout completes. Verifies the signature,
+    then credits the child's wallet — this is the only place funds actually
+    get added, so it's safe against a parent messing with the client-side flow."""
+    if not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Webhook signature verification failed: {str(e)}")
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        metadata = session.get("metadata", {})
+        child_id = metadata.get("child_id")
+        parent_id = metadata.get("parent_id")
+        amount_cents = metadata.get("amount_cents")
+
+        if child_id and amount_cents:
+            child_id = int(child_id)
+            amount_cents = int(amount_cents)
+            conn = get_db()
+            cursor = get_cursor(conn)
+            try:
+                get_or_create_wallet(child_id, cursor, conn)
+                if USE_POSTGRES:
+                    cursor.execute(
+                        """UPDATE student_wallets
+                           SET balance_cents = balance_cents + %s, total_earned_cents = total_earned_cents + %s, updated_at = NOW()
+                           WHERE user_id = %s""",
+                        (amount_cents, amount_cents, child_id)
+                    )
+                    cursor.execute(
+                        """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
+                           VALUES (%s, 'parent_deposit', %s, %s, %s)""",
+                        (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
+                    )
+                else:
+                    cursor.execute(
+                        """UPDATE student_wallets
+                           SET balance_cents = balance_cents + ?, total_earned_cents = total_earned_cents + ?, updated_at = datetime('now')
+                           WHERE user_id = ?""",
+                        (amount_cents, amount_cents, child_id)
+                    )
+                    cursor.execute(
+                        """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
+                           VALUES (?, 'parent_deposit', ?, ?, ?)""",
+                        (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
+                    )
+                conn.commit()
+                print(f"💰 Stripe deposit: ${amount_cents/100:.2f} credited to child {child_id} by parent {parent_id}")
+            except Exception as e:
+                conn.rollback()
+                print(f"❌ Failed to credit wallet from Stripe webhook: {e}")
+            finally:
+                cursor.close()
+                conn.close()
+
+    return {"received": True}
 
 
 # ========================================

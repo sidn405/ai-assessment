@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parent Portal - Achieve 365</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f4f6f9;
+        color: #1e293b;
+        min-height: 100vh;
+    }
+    .topbar {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .topbar h1 { font-size: 1.3rem; }
+    .topbar .logo { display: flex; align-items: center; gap: 0.6rem; }
+    .topbar button {
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .card {
+        background: white;
+        border-radius: 14px;
+        padding: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        margin-bottom: 1.5rem;
+    }
+    h2 { color: #1e3a5f; margin-bottom: 1rem; }
+    input {
+        width: 100%;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+        font-size: 1rem;
+        margin-bottom: 0.9rem;
+    }
+    label { font-weight: 600; font-size: 0.9rem; color: #334155; display: block; margin-bottom: 0.3rem; }
+    .btn {
+        background: #1e3a5f;
+        color: white;
+        border: none;
+        padding: 0.8rem 1.5rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+    }
+    .btn:hover { background: #163049; }
+    .btn-secondary {
+        background: white;
+        color: #1e3a5f;
+        border: 1px solid #1e3a5f;
+    }
+    .btn-secondary:hover { background: #f0f4f8; }
+    .toggle-link { text-align: center; margin-top: 1rem; color: #2c5282; cursor: pointer; font-size: 0.9rem; }
+    .error-msg { color: #dc3545; font-size: 0.88rem; margin-bottom: 0.8rem; display: none; }
+    .hidden { display: none !important; }
+
+    .children-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.2rem; }
+    .child-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.4rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        cursor: pointer;
+        transition: transform 0.15s;
+        border: 1px solid #eef1f5;
+    }
+    .child-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+    .child-card h3 { color: #1e3a5f; margin-bottom: 0.4rem; }
+    .child-stat-row { display: flex; justify-content: space-between; font-size: 0.88rem; color: #555; margin-top: 0.3rem; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+    .stat-box { background: #f4f6f9; border-radius: 10px; padding: 1rem; text-align: center; }
+    .stat-box .num { font-size: 1.6rem; font-weight: 700; color: #1e3a5f; }
+    .stat-box .label { font-size: 0.82rem; color: #64748b; margin-top: 0.2rem; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+    th { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 2px solid #eee; font-size: 0.85rem; color: #555; }
+    td { padding: 0.6rem 0.5rem; border-bottom: 1px solid #f0f0f0; font-size: 0.92rem; }
+    .view-btn {
+        padding: 0.3rem 0.8rem; border-radius: 5px; border: 1px solid #ddd;
+        cursor: pointer; font-size: 0.82rem; background: white;
+    }
+
+    .back-link { color: #2c5282; cursor: pointer; font-size: 0.92rem; margin-bottom: 1rem; display: inline-block; }
+
+    .modal-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+        display: flex; align-items: center; justify-content: center; z-index: 999;
+        padding: 1rem;
+    }
+    .modal-box {
+        background: white; border-radius: 14px; padding: 1.8rem;
+        max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto;
+        position: relative;
+    }
+    .modal-close {
+        position: absolute; top: 1rem; right: 1.2rem; cursor: pointer;
+        font-size: 1.4rem; color: #888; background: none; border: none;
+    }
+    .passage-box, .essay-box {
+        background: #f5f5f5; border-radius: 8px; padding: 1rem;
+        white-space: pre-wrap; max-height: 220px; overflow-y: auto; margin: 0.5rem 0 1rem;
+    }
+    .qa-item { margin-bottom: 1rem; padding: 0.85rem; border-radius: 8px; background: #f5f5f5; }
+    .qa-item.wrong { background: #fdecea; }
+
+    .empty-state { text-align: center; padding: 2rem 1rem; color: #64748b; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="logo">
+        <span style="font-size:1.4rem;">📚</span>
+        <h1>Achieve 365 &mdash; Parent Portal</h1>
+    </div>
+    <button id="logoutBtn" class="hidden" onclick="logout()">Logout</button>
+</div>
+
+<div class="container">
+
+    <!-- AUTH VIEWS -->
+    <div id="authView">
+        <div class="card" style="max-width:420px; margin: 2rem auto;">
+            <div id="loginForm">
+                <h2>Parent Login</h2>
+                <div class="error-msg" id="loginError"></div>
+                <label>Email</label>
+                <input type="email" id="loginEmail" placeholder="you@example.com">
+                <label>Password</label>
+                <input type="password" id="loginPassword" placeholder="Your password">
+                <button class="btn" onclick="doLogin()">Log In</button>
+                <div class="toggle-link" onclick="toggleAuth('register')">Don't have an account? Create one</div>
+            </div>
+            <div id="registerForm" class="hidden">
+                <h2>Create Parent Account</h2>
+                <div class="error-msg" id="registerError"></div>
+                <label>Full Name</label>
+                <input type="text" id="regName" placeholder="Your name">
+                <label>Email</label>
+                <input type="email" id="regEmail" placeholder="you@example.com">
+                <label>Password</label>
+                <input type="password" id="regPassword" placeholder="Choose a password">
+                <button class="btn" onclick="doRegister()">Create Account</button>
+                <div class="toggle-link" onclick="toggleAuth('login')">Already have an account? Log in</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHILDREN LIST VIEW -->
+    <div id="childrenView" class="hidden">
+        <div class="card">
+            <h2>Link a Child</h2>
+            <p style="color:#64748b; font-size:0.92rem; margin-bottom:1rem;">
+                Ask your child for their link code (they can find it on their dashboard) and enter it below to connect their account.
+            </p>
+            <div class="error-msg" id="linkError"></div>
+            <div style="display:flex; gap:0.6rem;">
+                <input type="text" id="linkCodeInput" placeholder="e.g. AB12CD" style="margin-bottom:0; text-transform:uppercase;">
+                <button class="btn" style="width:auto; white-space:nowrap;" onclick="doLinkChild()">Link Child</button>
+            </div>
+        </div>
+
+        <h2 style="margin-bottom:1rem;">Your Children</h2>
+        <div id="childrenGrid" class="children-grid"></div>
+        <div id="noChildren" class="empty-state hidden">
+            No children linked yet — use the form above to connect your first child's account.
+        </div>
+    </div>
+
+    <!-- CHILD DETAIL VIEW -->
+    <div id="childDetailView" class="hidden">
+        <span class="back-link" onclick="showChildrenView()">&larr; Back to all children</span>
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+                <div>
+                    <h2 id="childName" style="margin-bottom:0.2rem;"></h2>
+                    <div id="childMeta" style="color:#64748b; font-size:0.92rem;"></div>
+                </div>
+                <button class="btn btn-secondary" style="width:auto;" onclick="openAddFunds()">💰 Add Funds</button>
+            </div>
+            <div class="stat-grid">
+                <div class="stat-box"><div class="num" id="statLessons">-</div><div class="label">Lessons Completed</div></div>
+                <div class="stat-box"><div class="num" id="statAvg">-</div><div class="label">Avg Score</div></div>
+                <div class="stat-box"><div class="num" id="statLexile">-</div><div class="label">Lexile Score</div></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Lessons</h2>
+            <table>
+                <thead><tr><th>Lesson</th><th>Score</th><th>Completed</th><th>Details</th></tr></thead>
+                <tbody id="lessonsTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- Add Funds Modal -->
+<div id="addFundsModal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:400px;">
+        <button class="modal-close" onclick="closeAddFunds()">&times;</button>
+        <h2>Add Funds</h2>
+        <p style="color:#64748b; font-size:0.9rem; margin-bottom:1rem;">
+            Add money to <strong id="fundsChildName"></strong>'s incentive account. You'll be redirected to a secure Stripe checkout page.
+        </p>
+        <div class="error-msg" id="fundsError"></div>
+        <label>Amount (USD)</label>
+        <input type="number" id="fundsAmount" min="1" step="1" placeholder="10">
+        <button class="btn" onclick="submitAddFunds()">Continue to Payment</button>
+    </div>
+</div>
+
+<!-- Lesson Detail Modal -->
+<div id="lessonDetailModal" class="modal-overlay hidden">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeLessonDetail()">&times;</button>
+        <div id="lessonDetailBody"></div>
+    </div>
+</div>
+
+<script>
+    let currentChildId = null;
+    let currentChildName = null;
+
+    function getToken() { return localStorage.getItem('parentToken'); }
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text == null ? '' : String(text);
+        return div.innerHTML;
+    }
+
+    function toggleAuth(which) {
+        document.getElementById('loginForm').classList.toggle('hidden', which !== 'login');
+        document.getElementById('registerForm').classList.toggle('hidden', which !== 'register');
+    }
+
+    async function doLogin() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const errEl = document.getElementById('loginError');
+        errEl.style.display = 'none';
+        try {
+            const resp = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Login failed');
+            if (data.user.role !== 'parent') throw new Error('This login is for parent accounts only.');
+            localStorage.setItem('parentToken', data.token);
+            localStorage.setItem('parentUser', JSON.stringify(data.user));
+            showPortal();
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    async function doRegister() {
+        const full_name = document.getElementById('regName').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        const password = document.getElementById('regPassword').value;
+        const errEl = document.getElementById('registerError');
+        errEl.style.display = 'none';
+        try {
+            const resp = await fetch('/api/register/parent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_name, email, password })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Registration failed');
+            localStorage.setItem('parentToken', data.token);
+            localStorage.setItem('parentUser', JSON.stringify(data.user));
+            showPortal();
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('parentToken');
+        localStorage.removeItem('parentUser');
+        location.reload();
+    }
+
+    function showPortal() {
+        document.getElementById('authView').classList.add('hidden');
+        document.getElementById('logoutBtn').classList.remove('hidden');
+        showChildrenView();
+    }
+
+    async function showChildrenView() {
+        document.getElementById('childDetailView').classList.add('hidden');
+        document.getElementById('childrenView').classList.remove('hidden');
+        await loadChildren();
+    }
+
+    async function loadChildren() {
+        try {
+            const resp = await fetch('/api/parent/children', {
+                headers: { Authorization: `Bearer ${getToken()}` }
+            });
+            const data = await resp.json();
+            const grid = document.getElementById('childrenGrid');
+            const empty = document.getElementById('noChildren');
+            if (!data.children || data.children.length === 0) {
+                grid.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            grid.innerHTML = data.children.map(c => `
+                <div class="child-card" onclick="openChild(${c.id}, '${escapeHtml(c.full_name)}')">
+                    <h3>${escapeHtml(c.full_name)}</h3>
+                    <div class="child-stat-row"><span>Reading Level</span><strong>${escapeHtml(c.reading_level || 'Pending')}</strong></div>
+                    <div class="child-stat-row"><span>Lessons Completed</span><strong>${c.lessons_completed}</strong></div>
+                    <div class="child-stat-row"><span>Avg Score</span><strong>${c.avg_score != null ? c.avg_score + '%' : '—'}</strong></div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load children', e);
+        }
+    }
+
+    async function doLinkChild() {
+        const codeInput = document.getElementById('linkCodeInput');
+        const errEl = document.getElementById('linkError');
+        errEl.style.display = 'none';
+        const code = codeInput.value.trim();
+        if (!code) return;
+        try {
+            const resp = await fetch('/api/parent/link-child', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ link_code: code })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Could not link that code');
+            codeInput.value = '';
+            await loadChildren();
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    async function openChild(childId, childName) {
+        currentChildId = childId;
+        currentChildName = childName;
+        document.getElementById('childrenView').classList.add('hidden');
+        document.getElementById('childDetailView').classList.remove('hidden');
+        document.getElementById('childName').textContent = childName;
+
+        try {
+            const [progressResp, lexileResp] = await Promise.all([
+                fetch(`/api/parent/child/${childId}/progress`, { headers: { Authorization: `Bearer ${getToken()}` } }),
+                fetch(`/api/parent/child/${childId}/lexile`, { headers: { Authorization: `Bearer ${getToken()}` } })
+            ]);
+            const progress = await progressResp.json();
+            const lexile = await lexileResp.json();
+
+            document.getElementById('childMeta').textContent =
+                `${progress.student.reading_level || 'Reading level pending'}${progress.student.school ? ' · ' + progress.student.school : ''}`;
+            document.getElementById('statLessons').textContent = progress.lessons_completed;
+            document.getElementById('statAvg').textContent = progress.avg_score != null ? progress.avg_score + '%' : '—';
+
+            const latestLexile = lexile.history && lexile.history.length
+                ? lexile.history[lexile.history.length - 1].lexile_score
+                : progress.student.lexile_score;
+            document.getElementById('statLexile').textContent = latestLexile ? latestLexile + 'L' : '—';
+
+            const tbody = document.getElementById('lessonsTableBody');
+            if (!progress.recent_lessons || progress.recent_lessons.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#888; padding:1.5rem;">No lessons yet.</td></tr>';
+            } else {
+                tbody.innerHTML = progress.recent_lessons.map(l => `
+                    <tr>
+                        <td>${escapeHtml(l.title)}</td>
+                        <td>${l.score != null ? Math.round(l.score) + '%' : '—'}</td>
+                        <td>${l.completed_at ? new Date(l.completed_at).toLocaleDateString() : (l.completed ? '' : 'In progress')}</td>
+                        <td>${l.completed ? `<button class="view-btn" onclick="viewLessonDetail(${l.id})">View</button>` : '—'}</td>
+                    </tr>
+                `).join('');
+            }
+        } catch (e) {
+            console.error('Failed to load child detail', e);
+        }
+    }
+
+    async function viewLessonDetail(sessionId) {
+        const modal = document.getElementById('lessonDetailModal');
+        const body = document.getElementById('lessonDetailBody');
+        body.innerHTML = '<p style="color:#888;">Loading...</p>';
+        modal.classList.remove('hidden');
+
+        try {
+            const resp = await fetch(`/api/parent/session/${sessionId}/detail`, {
+                headers: { Authorization: `Bearer ${getToken()}` }
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                body.innerHTML = '<p style="color:#dc3545;">Failed to load lesson detail.</p>';
+                return;
+            }
+            const s = data.session;
+            const answersHtml = (s.answers || []).map((a, i) => `
+                <div class="qa-item ${a.is_correct === false ? 'wrong' : ''}">
+                    <div style="font-weight:600; margin-bottom:0.3rem;">Q${i + 1}: ${escapeHtml(a.question || '')}</div>
+                    <div>Answer: <strong>${escapeHtml(a.selected || '(no answer)')}</strong>
+                        ${a.is_correct === true ? ' ✅' : a.is_correct === false ? ' ❌' : ''}
+                    </div>
+                    ${a.is_correct === false ? `<div style="color:#555;">Correct answer: ${escapeHtml(a.correct || '')}</div>` : ''}
+                </div>
+            `).join('') || '<p style="color:#888;">No question data recorded for this lesson.</p>';
+
+            const essayHtml = data.essay ? `
+                <h3 style="margin:1.2rem 0 0.5rem;">Essay Response</h3>
+                <div class="essay-box">${escapeHtml(data.essay.essay_text)}</div>
+                <div style="font-size:0.85rem; color:#555;">
+                    ${data.essay.word_count || 0} words &middot; ${escapeHtml(data.essay.comprehension_level || '')} ${data.essay.comprehension_score ? `(${data.essay.comprehension_score}%)` : ''}
+                </div>
+                ${data.essay.ai_feedback ? `<div style="margin-top:0.4rem; font-style:italic;">"${escapeHtml(data.essay.ai_feedback)}"</div>` : ''}
+            ` : '';
+
+            body.innerHTML = `
+                <h2 style="margin-bottom:0.2rem;">${escapeHtml(s.title)}</h2>
+                <div style="color:#888; font-size:0.85rem; margin-bottom:1rem;">
+                    Score: ${s.score != null ? s.score + '%' : 'N/A'} &middot; ${s.completed_at ? new Date(s.completed_at).toLocaleDateString() : ''}
+                </div>
+                <h3 style="margin-bottom:0.4rem;">Passage</h3>
+                <div class="passage-box">${escapeHtml(s.content) || '<span style="color:#888;">No passage text available.</span>'}</div>
+                <h3 style="margin:1.2rem 0 0.5rem;">Questions &amp; Answers</h3>
+                ${answersHtml}
+                ${essayHtml}
+            `;
+        } catch (e) {
+            body.innerHTML = '<p style="color:#dc3545;">Failed to load lesson detail.</p>';
+        }
+    }
+
+    function closeLessonDetail() {
+        document.getElementById('lessonDetailModal').classList.add('hidden');
+    }
+
+    function openAddFunds() {
+        document.getElementById('fundsChildName').textContent = currentChildName;
+        document.getElementById('fundsError').style.display = 'none';
+        document.getElementById('fundsAmount').value = '';
+        document.getElementById('addFundsModal').classList.remove('hidden');
+    }
+
+    function closeAddFunds() {
+        document.getElementById('addFundsModal').classList.add('hidden');
+    }
+
+    async function submitAddFunds() {
+        const errEl = document.getElementById('fundsError');
+        errEl.style.display = 'none';
+        const amount = parseFloat(document.getElementById('fundsAmount').value);
+        if (!amount || amount < 1) {
+            errEl.textContent = 'Enter an amount of at least $1.';
+            errEl.style.display = 'block';
+            return;
+        }
+        try {
+            const resp = await fetch(`/api/parent/child/${currentChildId}/create-checkout`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount_dollars: amount })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Could not start checkout');
+            window.location.href = data.checkout_url;
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    // On load: restore session if we have one
+    (function init() {
+        const token = getToken();
+        if (token) {
+            showPortal();
+        }
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('funds_added')) {
+            setTimeout(() => alert('Funds added successfully! 🎉'), 300);
+        }
+    })();
+</script>
+
+</body>
+</html>

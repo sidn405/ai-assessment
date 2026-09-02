@@ -2292,6 +2292,19 @@
                     </div>
                 </div>
 
+                <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
+                    <div>
+                        <h3 style="color: var(--navy-primary); margin-bottom:0.2rem;">👨‍👩‍👧 Invite a Parent</h3>
+                        <p style="color:#64748b; font-size:0.9rem;">
+                            Share this code so a parent can follow your progress and add funds to your account:
+                            <strong id="parentLinkCode" style="color:var(--navy-primary); font-family:monospace; font-size:1.1rem; letter-spacing:1px;">••••••</strong>
+                        </p>
+                    </div>
+                    <button onclick="copyParentLinkCode()" style="padding:0.5rem 1rem; border-radius:8px; border:1px solid var(--navy-primary); background:white; color:var(--navy-primary); cursor:pointer; white-space:nowrap;">
+                        Copy Code
+                    </button>
+                </div>
+
                 <div class="card">
                     <h2 style="color: var(--navy-primary); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
                         <span>🚀</span> Getting Started
@@ -2868,7 +2881,6 @@
                     </div>
 
                     
-
                     <!-- Reading Level - Blue Gradient -->
                     <div style="text-align: center; background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 20px rgba(79,172,254,0.4); transform: translateY(0); transition: transform 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
@@ -3894,6 +3906,33 @@
             }
         }
         document.addEventListener('DOMContentLoaded', loadMySettings);
+
+        let myParentLinkCode = '';
+        async function loadParentLinkCode() {
+            try {
+                const resp = await fetch('/api/student/link-code', {
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await resp.json();
+                if (data.link_code) {
+                    myParentLinkCode = data.link_code;
+                    const el = document.getElementById('parentLinkCode');
+                    if (el) el.textContent = data.link_code;
+                }
+            } catch (e) {
+                console.warn('Could not load parent link code', e);
+            }
+        }
+        document.addEventListener('DOMContentLoaded', loadParentLinkCode);
+
+        function copyParentLinkCode() {
+            if (!myParentLinkCode) return;
+            navigator.clipboard.writeText(myParentLinkCode).then(() => {
+                alert('Code copied! Share it with your parent so they can link your account.');
+            }).catch(() => {
+                alert(`Your code: ${myParentLinkCode}`);
+            });
+        }
 
         function toggleRaiseHand() {
             const panel = document.getElementById('raiseHandPanel');
