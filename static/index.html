@@ -1110,6 +1110,17 @@
         <h2 style="color: var(--navy-primary); margin-bottom: 2rem;">Create Your Account</h2>
 
         <form id="registerForm">
+          <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; border:1px solid #e0e0e0; border-radius:10px; padding:4px;">
+            <button type="button" id="roleToggleStudent" onclick="setRegisterRole('student')"
+                    style="flex:1; padding:0.6rem; border:none; border-radius:8px; cursor:pointer; font-weight:600; background:var(--navy-primary); color:white;">
+                I'm a Student
+            </button>
+            <button type="button" id="roleToggleParent" onclick="setRegisterRole('parent')"
+                    style="flex:1; padding:0.6rem; border:none; border-radius:8px; cursor:pointer; font-weight:600; background:transparent; color:var(--navy-primary);">
+                I'm a Parent
+            </button>
+          </div>
+
           <div class="form-group">
             <label for="registerName">Full Name</label>
             <input type="text" id="registerName" required>
@@ -1143,6 +1154,7 @@
             </button>
           </div>
          
+          <div id="studentOnlyFields">
           <div class="form-group" id="ageFieldWrapper">
             <label for="registerAge">Age</label>
             <input type="number" id="registerAge" min="5" max="100"
@@ -1233,8 +1245,9 @@
             </select>
             <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Used for future multi-language lesson support</small>
           </div>
+          </div><!-- /studentOnlyFields -->
 
-          <!-- role forced to student -->
+          <!-- role set dynamically by setRegisterRole() -->
           <input type="hidden" id="registerRole" value="student">
 
           <div class="form-error" id="registerError"></div>
@@ -1295,6 +1308,29 @@
         </div>
     </div>
     <script>
+
+        function setRegisterRole(role) {
+            document.getElementById('registerRole').value = role;
+            const studentFields = document.getElementById('studentOnlyFields');
+            const studentBtn = document.getElementById('roleToggleStudent');
+            const parentBtn = document.getElementById('roleToggleParent');
+
+            const isStudent = role === 'student';
+            studentFields.style.display = isStudent ? '' : 'none';
+
+            studentBtn.style.background = isStudent ? 'var(--navy-primary)' : 'transparent';
+            studentBtn.style.color = isStudent ? 'white' : 'var(--navy-primary)';
+            parentBtn.style.background = isStudent ? 'transparent' : 'var(--navy-primary)';
+            parentBtn.style.color = isStudent ? 'var(--navy-primary)' : 'white';
+
+            // Only require student-only fields when actually registering as a student
+            const gradeLevel = document.getElementById('registerGradeLevel');
+            const schoolCode = document.getElementById('registerSchool');
+            const culturalIdentity = document.getElementById('registerCulturalIdentity');
+            [gradeLevel, schoolCode, culturalIdentity].forEach(el => {
+                if (el) el.required = isStudent;
+            });
+        }
 
         function togglePassword(inputId) {
             const input = document.getElementById(inputId);
@@ -1483,6 +1519,10 @@
 
                           if (data.user.role === 'admin') {
                               window.location.href = '/admin-dashboard';
+                          } else if (data.user.role === 'parent') {
+                              localStorage.setItem('parentToken', data.token);
+                              localStorage.setItem('parentUser', JSON.stringify(data.user));
+                              window.location.href = '/parent-dashboard';
                           } else {
                               window.location.href = '/dashboard';
                           }
@@ -1646,6 +1686,31 @@
             if (password.length < 6) {
                 errorDiv.textContent = 'Password must be at least 6 characters';
                 errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Parent registration takes a completely different, simpler path
+            if (role === 'parent') {
+                try {
+                    const response = await fetch('/api/register/parent', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ full_name: full_name.trim(), email: email.trim(), password })
+                    });
+                    const data = await response.json();
+                    if (response.ok) {
+                        localStorage.setItem('parentToken', data.token);
+                        localStorage.setItem('parentUser', JSON.stringify(data.user));
+                        window.location.href = '/parent-dashboard';
+                    } else {
+                        errorDiv.textContent = data.detail || 'Registration failed';
+                        errorDiv.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('Parent registration error:', error);
+                    errorDiv.textContent = 'Registration failed. Please try again.';
+                    errorDiv.style.display = 'block';
+                }
                 return;
             }
 

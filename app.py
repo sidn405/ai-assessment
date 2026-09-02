@@ -8532,6 +8532,56 @@ async def get_child_session_detail(session_id: int, parent=Depends(require_paren
     return await get_session_detail(session_id, admin=parent)
 
 
+@app.get("/api/parent/child/{child_id}/wallet")
+async def get_child_wallet(child_id: int, parent=Depends(require_parent)):
+    """A child's wallet balance and recent transactions, scoped to their linked parent only."""
+    if not _verify_parent_owns_child(parent["user_id"], child_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        wallet = get_or_create_wallet(child_id, cursor, conn)
+        balance_cents = wallet['balance_cents'] if hasattr(wallet, 'keys') else wallet[0]
+        total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
+        total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT type, amount_cents, description, created_at
+                   FROM wallet_transactions WHERE user_id = %s
+                   ORDER BY created_at DESC LIMIT 10""",
+                (child_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT type, amount_cents, description, created_at
+                   FROM wallet_transactions WHERE user_id = ?
+                   ORDER BY created_at DESC LIMIT 10""",
+                (child_id,)
+            )
+        rows = cursor.fetchall()
+        transactions = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {'type': r[0], 'amount_cents': r[1], 'description': r[2], 'created_at': r[3]}
+            transactions.append({
+                'type': r['type'],
+                'amount_cents': r['amount_cents'],
+                'description': r['description'],
+                'created_at': str(r['created_at'])
+            })
+
+        return {
+            "balance_cents": balance_cents,
+            "total_earned_cents": total_earned,
+            "total_redeemed_cents": total_redeemed,
+            "transactions": transactions
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.post("/api/parent/child/{child_id}/create-checkout")
 async def create_stripe_checkout(child_id: int, request: Request, parent=Depends(require_parent)):
     """Create a Stripe Checkout session for a parent to add funds to their
