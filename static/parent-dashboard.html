@@ -38,13 +38,17 @@
         padding: 0.65rem 0.8rem; border-radius: 8px; margin-bottom: 0.3rem; font-size: 0.94rem;
         cursor: pointer;
     }
-    .sidebar-nav a:hover, .sidebar-nav a.active { background: rgba(255,255,255,0.12); color: white; }
+    .sidebar-nav a:hover, .sidebar-nav a.active { background: rgba(255,255,255,0.15); color: white; font-weight: 600; }
     .logout-btn {
         margin-top: 2rem; width: 100%; padding: 0.7rem; border-radius: 8px;
         border: 1px solid rgba(255,255,255,0.4); background: transparent; color: white; cursor: pointer;
     }
 
-    .main { flex: 1; padding: 2rem; max-width: 1100px; }
+    .main { flex: 1; padding: 2rem; max-width: 1200px; }
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { color: var(--navy-primary); font-size: 1.6rem; margin-bottom: 0.2rem; }
+    .page-header p { color: #64748b; font-size: 0.95rem; }
+
     .card {
         background: white; border-radius: 14px; padding: 1.8rem;
         box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 1.5rem;
@@ -65,6 +69,15 @@
     .error-msg { color: #dc3545; font-size: 0.88rem; margin-bottom: 0.8rem; display: none; }
     .hidden { display: none !important; }
 
+    .overview-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.2rem; margin-bottom: 1.5rem; }
+    .overview-stat-card {
+        background: linear-gradient(135deg, var(--navy-light) 0%, var(--navy-primary) 100%);
+        border-radius: 14px; padding: 1.5rem; color: white;
+    }
+    .overview-stat-card .num { font-size: 2.1rem; font-weight: 800; }
+    .overview-stat-card .label { font-size: 0.88rem; opacity: 0.85; margin-top: 0.3rem; }
+    .overview-stat-card.gold { background: linear-gradient(135deg, var(--gold) 0%, #e6a930 100%); color: #4a3400; }
+
     .children-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.2rem; }
     .child-card {
         background: white; border-radius: 12px; padding: 1.4rem; cursor: pointer;
@@ -79,13 +92,17 @@
     .stat-box .num { font-size: 1.7rem; font-weight: 700; }
     .stat-box .label { font-size: 0.8rem; opacity: 0.85; margin-top: 0.2rem; }
 
-    .wallet-box {
-        background: linear-gradient(135deg, var(--gold) 0%, #e6a930 100%);
-        border-radius: 12px; padding: 1.4rem; color: #4a3400;
-        display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+    .wallet-card {
+        background: white; border-radius: 14px; padding: 1.6rem; margin-bottom: 1.2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
     }
-    .wallet-box .balance { font-size: 2rem; font-weight: 800; }
-    .wallet-box .balance-label { font-size: 0.85rem; opacity: 0.85; }
+    .wallet-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+    .wallet-balance-pill {
+        background: linear-gradient(135deg, var(--gold) 0%, #e6a930 100%);
+        border-radius: 10px; padding: 0.9rem 1.4rem; color: #4a3400; text-align: right;
+    }
+    .wallet-balance-pill .balance { font-size: 1.5rem; font-weight: 800; }
+    .wallet-balance-pill .balance-label { font-size: 0.78rem; opacity: 0.85; }
 
     table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
     th { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 2px solid #eee; font-size: 0.85rem; color: #555; }
@@ -93,6 +110,8 @@
     .view-btn { padding: 0.3rem 0.8rem; border-radius: 5px; border: 1px solid #ddd; cursor: pointer; font-size: 0.82rem; background: white; }
 
     .back-link { color: var(--navy-primary); cursor: pointer; font-size: 0.92rem; margin-bottom: 1rem; display: inline-block; font-weight: 600; }
+
+    .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.5rem; }
 
     .modal-overlay {
         position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -127,80 +146,147 @@
         <div class="user-level">Parent Account</div>
     </div>
     <nav class="sidebar-nav">
-        <a onclick="showChildrenView()" class="active">👨‍👩‍👧 My Children</a>
+        <a id="navOverview" onclick="showPage('overview')">📊 Overview</a>
+        <a id="navStudents" onclick="showPage('students')">👨‍👩‍👧 Students</a>
+        <a id="navAnalytics" onclick="showPage('analytics')">📈 Analytics</a>
+        <a id="navWallet" onclick="showPage('wallet')">💰 Wallet</a>
     </nav>
     <button class="logout-btn" onclick="logout()">Logout</button>
 </aside>
 
 <div class="main">
 
-    <!-- CHILDREN LIST VIEW -->
-    <div id="childrenView">
-        <div class="card">
-            <h2>Link a Child</h2>
-            <p style="color:#64748b; font-size:0.92rem; margin-bottom:1rem;">
-                Ask your child for their link code (they can find it on their dashboard) and enter it below to connect their account.
-            </p>
-            <div class="error-msg" id="linkError"></div>
-            <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
-                <input type="text" id="linkCodeInput" placeholder="e.g. AB12CD" style="margin-bottom:0; text-transform:uppercase; flex:1; min-width:180px;">
-                <button class="btn" onclick="doLinkChild()">Link Child</button>
+    <!-- ============ OVERVIEW PAGE ============ -->
+    <div id="page-overview" class="page hidden">
+        <div class="page-header">
+            <h1>Overview</h1>
+            <p>A summary across all your linked children</p>
+        </div>
+
+        <div class="overview-stats">
+            <div class="overview-stat-card">
+                <div class="num" id="ovChildren">0</div>
+                <div class="label">Children Linked</div>
+            </div>
+            <div class="overview-stat-card">
+                <div class="num" id="ovLessons">0</div>
+                <div class="label">Total Lessons Completed</div>
+            </div>
+            <div class="overview-stat-card">
+                <div class="num" id="ovAvgScore">—</div>
+                <div class="label">Combined Avg Score</div>
+            </div>
+            <div class="overview-stat-card gold">
+                <div class="num" id="ovWallet">$0.00</div>
+                <div class="label">Total Wallet Balance</div>
             </div>
         </div>
 
-        <h2 style="margin-bottom:1rem;">Your Children</h2>
-        <div id="childrenGrid" class="children-grid"></div>
-        <div id="noChildren" class="empty-state hidden">
-            No children linked yet — use the form above to connect your first child's account.
+        <div class="card">
+            <h2>Your Children</h2>
+            <table>
+                <thead><tr><th>Name</th><th>Reading Level</th><th>Lessons</th><th>Avg Score</th><th></th></tr></thead>
+                <tbody id="overviewTableBody"></tbody>
+            </table>
+            <div id="overviewEmpty" class="empty-state hidden">No children linked yet — head to the Students page to link your first child.</div>
         </div>
     </div>
 
-    <!-- CHILD DETAIL VIEW -->
-    <div id="childDetailView" class="hidden">
-        <span class="back-link" onclick="showChildrenView()">&larr; Back to all children</span>
+    <!-- ============ STUDENTS PAGE ============ -->
+    <div id="page-students" class="page hidden">
+        <div class="page-header">
+            <h1>Students</h1>
+            <p>Link and monitor your children's accounts</p>
+        </div>
 
-        <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
-                <div>
-                    <h2 id="childName" style="margin-bottom:0.2rem;"></h2>
-                    <div id="childMeta" style="color:#64748b; font-size:0.92rem;"></div>
+        <!-- Children list view -->
+        <div id="childrenListView">
+            <div class="card">
+                <h2>Link a Child</h2>
+                <p style="color:#64748b; font-size:0.92rem; margin-bottom:1rem;">
+                    Ask your child for their link code (they can find it on their dashboard) and enter it below to connect their account.
+                </p>
+                <div class="error-msg" id="linkError"></div>
+                <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+                    <input type="text" id="linkCodeInput" placeholder="e.g. AB12CD" style="margin-bottom:0; text-transform:uppercase; flex:1; min-width:180px;">
+                    <button class="btn" onclick="doLinkChild()">Link Child</button>
                 </div>
             </div>
-            <div class="stat-grid">
-                <div class="stat-box"><div class="num" id="statLessons">-</div><div class="label">Lessons Completed</div></div>
-                <div class="stat-box"><div class="num" id="statAvg">-</div><div class="label">Avg Score</div></div>
-                <div class="stat-box"><div class="num" id="statLexile">-</div><div class="label">Lexile Score</div></div>
+
+            <h2 style="margin-bottom:1rem;">Your Children</h2>
+            <div id="childrenGrid" class="children-grid"></div>
+            <div id="noChildren" class="empty-state hidden">
+                No children linked yet — use the form above to connect your first child's account.
             </div>
         </div>
 
-        <div class="card">
-            <h2>📈 Lexile Growth</h2>
-            <canvas id="lexileChart" height="90"></canvas>
-            <div id="lexileNoData" class="hidden empty-state">No Lexile data yet — your child needs to complete lessons.</div>
-        </div>
+        <!-- Child detail view -->
+        <div id="childDetailView" class="hidden">
+            <span class="back-link" onclick="showChildrenList()">&larr; Back to all children</span>
 
-        <div class="card">
-            <div class="wallet-box">
-                <div>
-                    <div class="balance-label">Incentive Wallet Balance</div>
-                    <div class="balance" id="walletBalance">$0.00</div>
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <h2 id="childName" style="margin-bottom:0.2rem;"></h2>
+                        <div id="childMeta" style="color:#64748b; font-size:0.92rem;"></div>
+                    </div>
+                    <button class="btn btn-gold" onclick="openAddFunds()">💰 Add Funds</button>
                 </div>
-                <button class="btn btn-gold" onclick="openAddFunds()">💰 Add Funds</button>
+                <div class="stat-grid">
+                    <div class="stat-box"><div class="num" id="statLessons">-</div><div class="label">Lessons Completed</div></div>
+                    <div class="stat-box"><div class="num" id="statAvg">-</div><div class="label">Avg Score</div></div>
+                    <div class="stat-box"><div class="num" id="statLexile">-</div><div class="label">Lexile Score</div></div>
+                </div>
             </div>
-            <h3 style="margin-top:1.5rem; margin-bottom:0.5rem; color:var(--navy-primary);">Recent Transactions</h3>
-            <table>
-                <thead><tr><th>Description</th><th>Amount</th><th>Date</th></tr></thead>
-                <tbody id="walletTableBody"></tbody>
-            </table>
-        </div>
 
-        <div class="card">
-            <h2>Recent Lessons</h2>
-            <table>
-                <thead><tr><th>Lesson</th><th>Score</th><th>Completed</th><th>Details</th></tr></thead>
-                <tbody id="lessonsTableBody"></tbody>
-            </table>
+            <div class="card">
+                <h2>📈 Lexile Growth</h2>
+                <canvas id="lexileChart" height="90"></canvas>
+                <div id="lexileNoData" class="hidden empty-state">No Lexile data yet — your child needs to complete lessons.</div>
+            </div>
+
+            <div class="card">
+                <h2>Recent Lessons</h2>
+                <table>
+                    <thead><tr><th>Lesson</th><th>Score</th><th>Completed</th><th>Details</th></tr></thead>
+                    <tbody id="lessonsTableBody"></tbody>
+                </table>
+            </div>
         </div>
+    </div>
+
+    <!-- ============ ANALYTICS PAGE ============ -->
+    <div id="page-analytics" class="page hidden">
+        <div class="page-header">
+            <h1>Analytics</h1>
+            <p>Compare progress across your children</p>
+        </div>
+        <div id="analyticsEmpty" class="empty-state hidden">Link a child to see analytics here.</div>
+        <div id="analyticsContent" class="analytics-grid">
+            <div class="card">
+                <h2>Avg Score by Child</h2>
+                <canvas id="scoreCompareChart" height="220"></canvas>
+            </div>
+            <div class="card">
+                <h2>Lessons Completed by Child</h2>
+                <canvas id="lessonsCompareChart" height="220"></canvas>
+            </div>
+            <div class="card" style="grid-column: 1 / -1;">
+                <h2>Lexile Growth — All Children</h2>
+                <canvas id="combinedLexileChart" height="100"></canvas>
+                <div id="combinedLexileEmpty" class="hidden empty-state">No Lexile history yet for any linked child.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ WALLET PAGE ============ -->
+    <div id="page-wallet" class="page hidden">
+        <div class="page-header">
+            <h1>Wallet</h1>
+            <p>Manage each child's incentive account</p>
+        </div>
+        <div id="walletEmpty" class="empty-state hidden">Link a child to manage their wallet here.</div>
+        <div id="walletCards"></div>
     </div>
 
 </div>
@@ -229,9 +315,13 @@
 </div>
 
 <script>
+    let allChildren = [];
     let currentChildId = null;
     let currentChildName = null;
     let lexileChartInstance = null;
+    let scoreCompareChartInstance = null;
+    let lessonsCompareChartInstance = null;
+    let combinedLexileChartInstance = null;
 
     function getToken() { return localStorage.getItem('parentToken'); }
     function escapeHtml(text) {
@@ -247,36 +337,100 @@
         window.location.href = '/';
     }
 
-    async function showChildrenView() {
-        document.getElementById('childDetailView').classList.add('hidden');
-        document.getElementById('childrenView').classList.remove('hidden');
-        await loadChildren();
+    function showPage(page) {
+        document.querySelectorAll('.page').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.sidebar-nav a').forEach(el => el.classList.remove('active'));
+        document.getElementById(`page-${page}`).classList.remove('hidden');
+        document.getElementById(`nav${page.charAt(0).toUpperCase() + page.slice(1)}`).classList.add('active');
+
+        if (page === 'students') showChildrenList();
+        if (page === 'overview') loadOverview();
+        if (page === 'analytics') loadAnalytics();
+        if (page === 'wallet') loadWalletPage();
     }
 
-    async function loadChildren() {
-        try {
-            const resp = await fetch('/api/parent/children', { headers: { Authorization: `Bearer ${getToken()}` } });
-            if (resp.status === 401 || resp.status === 403) { logout(); return; }
-            const data = await resp.json();
-            const grid = document.getElementById('childrenGrid');
-            const empty = document.getElementById('noChildren');
-            if (!data.children || data.children.length === 0) {
-                grid.innerHTML = '';
-                empty.classList.remove('hidden');
-                return;
-            }
+    async function fetchChildren() {
+        const resp = await fetch('/api/parent/children', { headers: { Authorization: `Bearer ${getToken()}` } });
+        if (resp.status === 401 || resp.status === 403) { logout(); return []; }
+        const data = await resp.json();
+        allChildren = data.children || [];
+        return allChildren;
+    }
+
+    // ---------- OVERVIEW ----------
+    async function loadOverview() {
+        const children = await fetchChildren();
+        document.getElementById('ovChildren').textContent = children.length;
+
+        const totalLessons = children.reduce((sum, c) => sum + (c.lessons_completed || 0), 0);
+        document.getElementById('ovLessons').textContent = totalLessons;
+
+        const scored = children.filter(c => c.avg_score != null);
+        const avgScore = scored.length
+            ? Math.round(scored.reduce((sum, c) => sum + c.avg_score, 0) / scored.length)
+            : null;
+        document.getElementById('ovAvgScore').textContent = avgScore != null ? avgScore + '%' : '—';
+
+        const tbody = document.getElementById('overviewTableBody');
+        const empty = document.getElementById('overviewEmpty');
+        if (children.length === 0) {
+            tbody.innerHTML = '';
+            empty.classList.remove('hidden');
+        } else {
             empty.classList.add('hidden');
-            grid.innerHTML = data.children.map(c => `
-                <div class="child-card" onclick="openChild(${c.id}, '${escapeHtml(c.full_name)}')">
-                    <h3>${escapeHtml(c.full_name)}</h3>
-                    <div class="child-stat-row"><span>Reading Level</span><strong>${escapeHtml(c.reading_level || 'Pending')}</strong></div>
-                    <div class="child-stat-row"><span>Lessons Completed</span><strong>${c.lessons_completed}</strong></div>
-                    <div class="child-stat-row"><span>Avg Score</span><strong>${c.avg_score != null ? c.avg_score + '%' : '—'}</strong></div>
-                </div>
+            tbody.innerHTML = children.map(c => `
+                <tr>
+                    <td>${escapeHtml(c.full_name)}</td>
+                    <td>${escapeHtml(c.reading_level || 'Pending')}</td>
+                    <td>${c.lessons_completed}</td>
+                    <td>${c.avg_score != null ? c.avg_score + '%' : '—'}</td>
+                    <td><button class="view-btn" onclick="jumpToChild(${c.id}, '${escapeHtml(c.full_name)}')">View</button></td>
+                </tr>
             `).join('');
-        } catch (e) {
-            console.error('Failed to load children', e);
         }
+
+        // Sum wallet balances across all children
+        let totalWalletCents = 0;
+        await Promise.all(children.map(async c => {
+            try {
+                const r = await fetch(`/api/parent/child/${c.id}/wallet`, { headers: { Authorization: `Bearer ${getToken()}` } });
+                const w = await r.json();
+                totalWalletCents += w.balance_cents || 0;
+            } catch (e) {}
+        }));
+        document.getElementById('ovWallet').textContent = formatCents(totalWalletCents);
+    }
+
+    function jumpToChild(id, name) {
+        showPage('students');
+        setTimeout(() => openChild(id, name), 50);
+    }
+
+    // ---------- STUDENTS ----------
+    function showChildrenList() {
+        document.getElementById('childDetailView').classList.add('hidden');
+        document.getElementById('childrenListView').classList.remove('hidden');
+        loadChildrenGrid();
+    }
+
+    async function loadChildrenGrid() {
+        const children = await fetchChildren();
+        const grid = document.getElementById('childrenGrid');
+        const empty = document.getElementById('noChildren');
+        if (children.length === 0) {
+            grid.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        grid.innerHTML = children.map(c => `
+            <div class="child-card" onclick="openChild(${c.id}, '${escapeHtml(c.full_name)}')">
+                <h3>${escapeHtml(c.full_name)}</h3>
+                <div class="child-stat-row"><span>Reading Level</span><strong>${escapeHtml(c.reading_level || 'Pending')}</strong></div>
+                <div class="child-stat-row"><span>Lessons Completed</span><strong>${c.lessons_completed}</strong></div>
+                <div class="child-stat-row"><span>Avg Score</span><strong>${c.avg_score != null ? c.avg_score + '%' : '—'}</strong></div>
+            </div>
+        `).join('');
     }
 
     async function doLinkChild() {
@@ -294,7 +448,7 @@
             const data = await resp.json();
             if (!resp.ok) throw new Error(data.detail || 'Could not link that code');
             codeInput.value = '';
-            await loadChildren();
+            await loadChildrenGrid();
         } catch (e) {
             errEl.textContent = e.message;
             errEl.style.display = 'block';
@@ -304,19 +458,17 @@
     async function openChild(childId, childName) {
         currentChildId = childId;
         currentChildName = childName;
-        document.getElementById('childrenView').classList.add('hidden');
+        document.getElementById('childrenListView').classList.add('hidden');
         document.getElementById('childDetailView').classList.remove('hidden');
         document.getElementById('childName').textContent = childName;
 
         try {
-            const [progressResp, lexileResp, walletResp] = await Promise.all([
+            const [progressResp, lexileResp] = await Promise.all([
                 fetch(`/api/parent/child/${childId}/progress`, { headers: { Authorization: `Bearer ${getToken()}` } }),
-                fetch(`/api/parent/child/${childId}/lexile`, { headers: { Authorization: `Bearer ${getToken()}` } }),
-                fetch(`/api/parent/child/${childId}/wallet`, { headers: { Authorization: `Bearer ${getToken()}` } })
+                fetch(`/api/parent/child/${childId}/lexile`, { headers: { Authorization: `Bearer ${getToken()}` } })
             ]);
             const progress = await progressResp.json();
             const lexile = await lexileResp.json();
-            const wallet = await walletResp.json();
 
             document.getElementById('childMeta').textContent =
                 `${progress.student.reading_level || 'Reading level pending'}${progress.student.school ? ' · ' + progress.student.school : ''}`;
@@ -330,24 +482,6 @@
 
             renderLexileChart(lexile.history || []);
 
-            // Wallet
-            document.getElementById('walletBalance').textContent = formatCents(wallet.balance_cents || 0);
-            const walletBody = document.getElementById('walletTableBody');
-            if (!wallet.transactions || wallet.transactions.length === 0) {
-                walletBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888; padding:1rem;">No transactions yet.</td></tr>';
-            } else {
-                walletBody.innerHTML = wallet.transactions.map(t => `
-                    <tr>
-                        <td>${escapeHtml(t.description || t.type)}</td>
-                        <td style="color:${t.amount_cents >= 0 ? '#16a34a' : '#dc3545'};">
-                            ${t.amount_cents >= 0 ? '+' : ''}${formatCents(t.amount_cents)}
-                        </td>
-                        <td>${new Date(t.created_at).toLocaleDateString()}</td>
-                    </tr>
-                `).join('');
-            }
-
-            // Lessons
             const tbody = document.getElementById('lessonsTableBody');
             if (!progress.recent_lessons || progress.recent_lessons.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#888; padding:1.5rem;">No lessons yet.</td></tr>';
@@ -381,36 +515,17 @@
         const scores = history.map(h => h.lexile_score);
 
         if (lexileChartInstance) lexileChartInstance.destroy();
-
         lexileChartInstance = new Chart(canvas, {
             type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Lexile Score',
-                    data: scores,
-                    borderColor: '#2A398A',
-                    backgroundColor: 'rgba(42,57,138,0.1)',
-                    borderWidth: 3,
-                    pointBackgroundColor: '#2A398A',
-                    pointRadius: 5,
-                    fill: true,
-                    tension: 0.3
-                }]
-            },
+            data: { labels, datasets: [{
+                label: 'Lexile Score', data: scores,
+                borderColor: '#2A398A', backgroundColor: 'rgba(42,57,138,0.1)',
+                borderWidth: 3, pointBackgroundColor: '#2A398A', pointRadius: 5, fill: true, tension: 0.3
+            }]},
             options: {
                 responsive: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: ctx => `${ctx.parsed.y}L` } }
-                },
-                scales: {
-                    y: {
-                        title: { display: true, text: 'Lexile (L)' },
-                        beginAtZero: false,
-                        ticks: { callback: v => `${v}L` }
-                    }
-                }
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y}L` } } },
+                scales: { y: { title: { display: true, text: 'Lexile (L)' }, beginAtZero: false, ticks: { callback: v => `${v}L` } } }
             }
         });
     }
@@ -425,10 +540,7 @@
         try {
             const resp = await fetch(`/api/parent/session/${sessionId}/detail`, { headers: { Authorization: `Bearer ${getToken()}` } });
             const data = await resp.json();
-            if (!data.success) {
-                body.innerHTML = '<p style="color:#dc3545;">Failed to load lesson detail.</p>';
-                return;
-            }
+            if (!data.success) { body.innerHTML = '<p style="color:#dc3545;">Failed to load lesson detail.</p>'; return; }
             const s = data.session;
             const answersHtml = (s.answers || []).map((a, i) => `
                 <div class="qa-item ${a.is_correct === false ? 'wrong' : ''}">
@@ -469,6 +581,134 @@
         const modal = document.getElementById('lessonDetailModal');
         modal.classList.add('hidden');
         modal.style.display = 'none';
+    }
+
+    // ---------- ANALYTICS ----------
+    async function loadAnalytics() {
+        const children = await fetchChildren();
+        const empty = document.getElementById('analyticsEmpty');
+        const content = document.getElementById('analyticsContent');
+        if (children.length === 0) {
+            empty.classList.remove('hidden');
+            content.classList.add('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        content.classList.remove('hidden');
+
+        const names = children.map(c => c.full_name);
+        const scores = children.map(c => c.avg_score || 0);
+        const lessons = children.map(c => c.lessons_completed || 0);
+
+        if (scoreCompareChartInstance) scoreCompareChartInstance.destroy();
+        scoreCompareChartInstance = new Chart(document.getElementById('scoreCompareChart'), {
+            type: 'bar',
+            data: { labels: names, datasets: [{ label: 'Avg Score (%)', data: scores, backgroundColor: '#2A398A', borderRadius: 6 }] },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+
+        if (lessonsCompareChartInstance) lessonsCompareChartInstance.destroy();
+        lessonsCompareChartInstance = new Chart(document.getElementById('lessonsCompareChart'), {
+            type: 'bar',
+            data: { labels: names, datasets: [{ label: 'Lessons Completed', data: lessons, backgroundColor: '#f5b942', borderRadius: 6 }] },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+
+        // Combined Lexile chart — one line per child
+        const lexileResults = await Promise.all(children.map(c =>
+            fetch(`/api/parent/child/${c.id}/lexile`, { headers: { Authorization: `Bearer ${getToken()}` } }).then(r => r.json())
+        ));
+        const combinedCanvas = document.getElementById('combinedLexileChart');
+        const combinedEmpty = document.getElementById('combinedLexileEmpty');
+        const hasAnyHistory = lexileResults.some(r => r.history && r.history.length > 0);
+
+        if (!hasAnyHistory) {
+            combinedCanvas.style.display = 'none';
+            combinedEmpty.classList.remove('hidden');
+        } else {
+            combinedCanvas.style.display = 'block';
+            combinedEmpty.classList.add('hidden');
+            const colors = ['#2A398A', '#f5b942', '#16a34a', '#dc3545', '#8b5cf6', '#0ea5e9'];
+            const maxLen = Math.max(...lexileResults.map(r => (r.history || []).length));
+            const labels = Array.from({ length: maxLen }, (_, i) => `Lesson ${i + 1}`);
+            const datasets = children.map((c, idx) => ({
+                label: c.full_name,
+                data: (lexileResults[idx].history || []).map(h => h.lexile_score),
+                borderColor: colors[idx % colors.length],
+                backgroundColor: 'transparent',
+                borderWidth: 3,
+                pointRadius: 4,
+                tension: 0.3
+            }));
+
+            if (combinedLexileChartInstance) combinedLexileChartInstance.destroy();
+            combinedLexileChartInstance = new Chart(combinedCanvas, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}L` } } },
+                    scales: { y: { title: { display: true, text: 'Lexile (L)' }, ticks: { callback: v => `${v}L` } } }
+                }
+            });
+        }
+    }
+
+    // ---------- WALLET ----------
+    async function loadWalletPage() {
+        const children = await fetchChildren();
+        const empty = document.getElementById('walletEmpty');
+        const container = document.getElementById('walletCards');
+        if (children.length === 0) {
+            empty.classList.remove('hidden');
+            container.innerHTML = '';
+            return;
+        }
+        empty.classList.add('hidden');
+        container.innerHTML = children.map(c => `<div class="wallet-card" id="walletCard-${c.id}">Loading ${escapeHtml(c.full_name)}'s wallet...</div>`).join('');
+
+        await Promise.all(children.map(async c => {
+            try {
+                const resp = await fetch(`/api/parent/child/${c.id}/wallet`, { headers: { Authorization: `Bearer ${getToken()}` } });
+                const wallet = await resp.json();
+                const el = document.getElementById(`walletCard-${c.id}`);
+                const txRows = (wallet.transactions || []).slice(0, 5).map(t => `
+                    <tr>
+                        <td>${escapeHtml(t.description || t.type)}</td>
+                        <td style="color:${t.amount_cents >= 0 ? '#16a34a' : '#dc3545'};">
+                            ${t.amount_cents >= 0 ? '+' : ''}${formatCents(t.amount_cents)}
+                        </td>
+                        <td>${new Date(t.created_at).toLocaleDateString()}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="3" style="text-align:center; color:#888;">No transactions yet.</td></tr>';
+
+                el.innerHTML = `
+                    <div class="wallet-top">
+                        <h2 style="margin-bottom:0;">${escapeHtml(c.full_name)}</h2>
+                        <div style="display:flex; align-items:center; gap:1rem;">
+                            <div class="wallet-balance-pill">
+                                <div class="balance">${formatCents(wallet.balance_cents || 0)}</div>
+                                <div class="balance-label">Current Balance</div>
+                            </div>
+                            <button class="btn btn-gold" onclick="openAddFundsFor(${c.id}, '${escapeHtml(c.full_name)}')">💰 Add Funds</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead><tr><th>Description</th><th>Amount</th><th>Date</th></tr></thead>
+                        <tbody>${txRows}</tbody>
+                    </table>
+                `;
+            } catch (e) {
+                const el = document.getElementById(`walletCard-${c.id}`);
+                if (el) el.innerHTML = `<p style="color:#dc3545;">Failed to load ${escapeHtml(c.full_name)}'s wallet.</p>`;
+            }
+        }));
+    }
+
+    function openAddFundsFor(childId, childName) {
+        currentChildId = childId;
+        currentChildName = childName;
+        openAddFunds();
     }
 
     function openAddFunds() {
@@ -513,10 +753,7 @@
     // On load: require a parent session, otherwise send to the main login page
     (function init() {
         const token = getToken();
-        if (!token) {
-            window.location.href = '/';
-            return;
-        }
+        if (!token) { window.location.href = '/'; return; }
         const userRaw = localStorage.getItem('parentUser');
         if (userRaw) {
             try {
@@ -524,7 +761,7 @@
                 document.getElementById('parentName').textContent = user.full_name || 'Parent';
             } catch (e) {}
         }
-        showChildrenView();
+        showPage('overview');
 
         const params = new URLSearchParams(window.location.search);
         if (params.get('funds_added')) {
