@@ -8601,6 +8601,10 @@ async def create_stripe_checkout(child_id: int, request: Request, parent=Depends
     if amount_cents < 100:
         raise HTTPException(status_code=400, detail="Minimum add-funds amount is $1.00")
 
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    request_base_url = f"{forwarded_proto}://{forwarded_host}"
+
     import stripe
     stripe.api_key = STRIPE_SECRET_KEY
 
@@ -8634,8 +8638,8 @@ async def create_stripe_checkout(child_id: int, request: Request, parent=Depends
                 "child_id": str(child_id),
                 "amount_cents": str(amount_cents),
             },
-            success_url=f"{APP_BASE_URL}/parent-dashboard?funds_added=1",
-            cancel_url=f"{APP_BASE_URL}/parent-dashboard?funds_cancelled=1",
+            success_url=f"{request_base_url}/parent-dashboard?funds_added=1",
+            cancel_url=f"{request_base_url}/parent-dashboard?funds_cancelled=1",
         )
         return {"checkout_url": session.url}
     except Exception as e:
