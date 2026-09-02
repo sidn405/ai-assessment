@@ -8665,52 +8665,65 @@ async def stripe_webhook(request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Webhook signature verification failed: {str(e)}")
 
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        metadata = session.get("metadata", {})
-        child_id = metadata.get("child_id")
-        parent_id = metadata.get("parent_id")
-        amount_cents = metadata.get("amount_cents")
+    try:
+        if event["type"] == "checkout.session.completed":
+            session = event["data"]["object"]
+            metadata = session.get("metadata", {}) or {}
+            child_id = metadata.get("child_id")
+            parent_id = metadata.get("parent_id")
+            amount_cents = metadata.get("amount_cents")
 
-        if child_id and amount_cents:
-            child_id = int(child_id)
-            amount_cents = int(amount_cents)
-            conn = get_db()
-            cursor = get_cursor(conn)
-            try:
-                get_or_create_wallet(child_id, cursor, conn)
-                if USE_POSTGRES:
-                    cursor.execute(
-                        """UPDATE student_wallets
-                           SET balance_cents = balance_cents + %s, total_earned_cents = total_earned_cents + %s, updated_at = NOW()
-                           WHERE user_id = %s""",
-                        (amount_cents, amount_cents, child_id)
-                    )
-                    cursor.execute(
-                        """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
-                           VALUES (%s, 'parent_deposit', %s, %s, %s)""",
-                        (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
-                    )
-                else:
-                    cursor.execute(
-                        """UPDATE student_wallets
-                           SET balance_cents = balance_cents + ?, total_earned_cents = total_earned_cents + ?, updated_at = datetime('now')
-                           WHERE user_id = ?""",
-                        (amount_cents, amount_cents, child_id)
-                    )
-                    cursor.execute(
-                        """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
-                           VALUES (?, 'parent_deposit', ?, ?, ?)""",
-                        (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
-                    )
-                conn.commit()
-                print(f"💰 Stripe deposit: ${amount_cents/100:.2f} credited to child {child_id} by parent {parent_id}")
-            except Exception as e:
-                conn.rollback()
-                print(f"❌ Failed to credit wallet from Stripe webhook: {e}")
-            finally:
-                cursor.close()
-                conn.close()
+            print(f"🔔 Stripe webhook received: checkout.session.completed — metadata={metadata}")
+
+            if child_id and amount_cents:
+                child_id = int(child_id)
+                amount_cents = int(amount_cents)
+                conn = get_db()
+                cursor = get_cursor(conn)
+                try:
+                    get_or_create_wallet(child_id, cursor, conn)
+                    if USE_POSTGRES:
+                        cursor.execute(
+                            """UPDATE student_wallets
+                               SET balance_cents = balance_cents + %s, total_earned_cents = total_earned_cents + %s, updated_at = NOW()
+                               WHERE user_id = %s""",
+                            (amount_cents, amount_cents, child_id)
+                        )
+                        cursor.execute(
+                            """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
+                               VALUES (%s, 'parent_deposit', %s, %s, %s)""",
+                            (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
+                        )
+                    else:
+                        cursor.execute(
+                            """UPDATE student_wallets
+                               SET balance_cents = balance_cents + ?, total_earned_cents = total_earned_cents + ?, updated_at = datetime('now')
+                               WHERE user_id = ?""",
+                            (amount_cents, amount_cents, child_id)
+                        )
+                        cursor.execute(
+                            """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
+                               VALUES (?, 'parent_deposit', ?, ?, ?)""",
+                            (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
+                        )
+                    conn.commit()
+                    print(f"💰 Stripe deposit: ${amount_cents/100:.2f} credited to child {child_id} by parent {parent_id}")
+                except Exception as e:
+                    conn.rollback()
+                    print(f"❌ Failed to credit wallet from Stripe webhook (DB step): {e}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    cursor.close()
+                    conn.close()
+            else:
+                print(f"⚠️ Stripe webhook missing expected metadata — child_id={child_id}, amount_cents={amount_cents}")
+    except Exception as e:
+        # Never let an unexpected error here bubble into a bare 500 — log the
+        # full traceback so it's diagnosable, but still acknowledge receipt.
+        print(f"❌ Unhandled error processing Stripe webhook event: {e}")
+        import traceback
+        traceback.print_exc()
 
     return {"received": True}
 
