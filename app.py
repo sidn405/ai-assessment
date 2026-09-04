@@ -7771,8 +7771,12 @@ def credit_wallet_from_points(user_id, points, reason, conn, cursor):
 
 
 @app.get("/api/wallet")
-async def get_wallet(token: str):
+async def get_wallet(response: Response, token: str):
     """Get student wallet balance and recent transactions."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     user_data = verify_token(token)
     user_id = user_data["user_id"]
 
