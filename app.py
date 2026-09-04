@@ -793,6 +793,7 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS lesson_reserve (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), passage_id INTEGER REFERENCES passages(id), consumed BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, consumed_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS lesson_reserve (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, passage_id INTEGER, consumed BOOLEAN DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, consumed_at TIMESTAMP)",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_link_code VARCHAR(10)",
                 "CREATE TABLE IF NOT EXISTS parent_child_links (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES users(id), child_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS parent_child_links (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, child_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))",
+                "CREATE TABLE IF NOT EXISTS stripe_processed_events (event_id VARCHAR(255) PRIMARY KEY, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS stripe_processed_events (event_id VARCHAR(255) PRIMARY KEY, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -8668,6 +8669,34 @@ async def stripe_webhook(request: Request):
         event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Webhook signature verification failed: {str(e)}")
+
+    # Idempotency guard: Stripe delivers webhooks "at least once" — retries and
+    # manual resends of the SAME event are expected and must not double-process
+    # (e.g. crediting a wallet twice for one payment). Record this event's ID
+    # before doing any work; if it's already recorded, skip processing entirely.
+    event_id = event["id"]
+    idem_conn = get_db()
+    idem_cursor = get_cursor(idem_conn)
+    try:
+        if USE_POSTGRES:
+            idem_cursor.execute(
+                "INSERT INTO stripe_processed_events (event_id) VALUES (%s) ON CONFLICT DO NOTHING",
+                (event_id,)
+            )
+        else:
+            idem_cursor.execute(
+                "INSERT OR IGNORE INTO stripe_processed_events (event_id) VALUES (?)",
+                (event_id,)
+            )
+        idem_conn.commit()
+        already_processed = idem_cursor.rowcount == 0
+    finally:
+        idem_cursor.close()
+        idem_conn.close()
+
+    if already_processed:
+        print(f"⏭️ Stripe event {event_id} already processed — skipping duplicate delivery")
+        return {"received": True, "duplicate": True}
 
     try:
         if event["type"] == "checkout.session.completed":
