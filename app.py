@@ -8891,12 +8891,12 @@ async def list_teachers(admin=Depends(require_admin)):
 
         if USE_POSTGRES:
             cursor.execute(
-                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND school = %s ORDER BY teacher_grade_level, full_name",
+                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(%s, '') ORDER BY teacher_grade_level, full_name",
                 (admin_school,)
             )
         else:
             cursor.execute(
-                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND school = ? ORDER BY teacher_grade_level, full_name",
+                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(?, '') ORDER BY teacher_grade_level, full_name",
                 (admin_school,)
             )
         rows = cursor.fetchall()
@@ -9229,12 +9229,12 @@ async def get_teacher_students(teacher=Depends(require_teacher)):
 
         if USE_POSTGRES:
             cursor.execute(
-                "SELECT id, full_name, email, reading_level FROM users WHERE role = 'student' AND school = %s AND grade_band = %s ORDER BY full_name",
+                "SELECT id, full_name, email, reading_level FROM users WHERE role = 'student' AND COALESCE(school, '') = COALESCE(%s, '') AND grade_band = %s ORDER BY full_name",
                 (school, grade_level)
             )
         else:
             cursor.execute(
-                "SELECT id, full_name, email, reading_level FROM users WHERE role = 'student' AND school = ? AND grade_band = ? ORDER BY full_name",
+                "SELECT id, full_name, email, reading_level FROM users WHERE role = 'student' AND COALESCE(school, '') = COALESCE(?, '') AND grade_band = ? ORDER BY full_name",
                 (school, grade_level)
             )
         rows = cursor.fetchall()
@@ -9271,9 +9271,9 @@ async def send_assignment(assignment_id: int, request: Request, teacher=Depends(
             school = row['school'] if hasattr(row, 'keys') else row[0]
             grade_level = row['teacher_grade_level'] if hasattr(row, 'keys') else row[1]
             if USE_POSTGRES:
-                cursor.execute("SELECT id FROM users WHERE role = 'student' AND school = %s AND grade_band = %s", (school, grade_level))
+                cursor.execute("SELECT id FROM users WHERE role = 'student' AND COALESCE(school, '') = COALESCE(%s, '') AND grade_band = %s", (school, grade_level))
             else:
-                cursor.execute("SELECT id FROM users WHERE role = 'student' AND school = ? AND grade_band = ?", (school, grade_level))
+                cursor.execute("SELECT id FROM users WHERE role = 'student' AND COALESCE(school, '') = COALESCE(?, '') AND grade_band = ?", (school, grade_level))
             student_ids = [r['id'] if hasattr(r, 'keys') else r[0] for r in cursor.fetchall()]
 
         if not student_ids:
