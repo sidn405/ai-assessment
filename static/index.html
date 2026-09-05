@@ -1189,7 +1189,7 @@
              <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">This helps us match content to your reading level and adapt lessons as you progress</small>
             </div>
 
-          <div class="form-group">
+          <div class="form-group" id="schoolCodeFieldWrapper">
             <label for="registerSchool">School Code</label>
             <input 
                 type="text" 
@@ -1469,6 +1469,14 @@
                 const inviteWrapper = document.getElementById('inviteCodeFieldWrapper');
                 if (inviteInput) inviteInput.value = invite.toUpperCase();
                 if (inviteWrapper) inviteWrapper.style.display = '';
+
+                // Invited children may not belong to any contracted school —
+                // hide the School Code field entirely rather than just making
+                // it optional, so it's clear it isn't needed here.
+                const schoolWrapper = document.getElementById('schoolCodeFieldWrapper');
+                const schoolInput = document.getElementById('registerSchool');
+                if (schoolWrapper) schoolWrapper.style.display = 'none';
+                if (schoolInput) schoolInput.required = false;
             }
         });
 
