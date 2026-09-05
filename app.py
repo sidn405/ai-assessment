@@ -140,6 +140,7 @@ class UserCreate(BaseModel):
     school: Optional[str] = None
     cultural_identity: Optional[str] = None
     spoken_language: Optional[str] = "en"
+    invite_code: Optional[str] = None
         
 class UserLogin(BaseModel):
     email: str
@@ -794,6 +795,7 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_link_code VARCHAR(10)",
                 "CREATE TABLE IF NOT EXISTS parent_child_links (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES users(id), child_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS parent_child_links (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, child_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))",
                 "CREATE TABLE IF NOT EXISTS stripe_processed_events (event_id VARCHAR(255) PRIMARY KEY, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS stripe_processed_events (event_id VARCHAR(255) PRIMARY KEY, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS parent_child_invites (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES users(id), invite_code VARCHAR(10) UNIQUE, used BOOLEAN DEFAULT FALSE, used_by_child_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, used_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS parent_child_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, invite_code VARCHAR(10) UNIQUE, used BOOLEAN DEFAULT 0, used_by_child_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, used_at TIMESTAMP)",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -1451,6 +1453,9 @@ async def register(user: UserCreate):
 
         if final_role == "student":
             _assign_parent_link_code(user_id)
+
+            if user.invite_code:
+                _redeem_parent_invite(user.invite_code.strip().upper(), user_id)
 
         # Increment student count on the school code
         if school_code and final_role == "student":
@@ -7494,6 +7499,63 @@ def _assign_parent_link_code(user_id: int) -> str:
         conn.close()
 
 
+def _redeem_parent_invite(invite_code: str, child_id: int):
+    """
+    Called right after a new student registers with an invite_code. Looks up
+    the parent's invite, links the new student to that parent, and marks the
+    invite used. Never raises — a bad/expired/typo'd invite code should not
+    block the student's registration from succeeding; it's simply ignored,
+    and the student can still be linked manually later via their own
+    link_code as a fallback.
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, parent_id FROM parent_child_invites WHERE invite_code = %s AND used = FALSE",
+                (invite_code,)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, parent_id FROM parent_child_invites WHERE invite_code = ? AND used = 0",
+                (invite_code,)
+            )
+        invite = cursor.fetchone()
+        if not invite:
+            print(f"⚠️ Invite code {invite_code} not found or already used — skipping auto-link")
+            return
+
+        invite = dict(invite) if hasattr(invite, 'keys') else {'id': invite[0], 'parent_id': invite[1]}
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "INSERT INTO parent_child_links (parent_id, child_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (invite['parent_id'], child_id)
+            )
+            cursor.execute(
+                "UPDATE parent_child_invites SET used = TRUE, used_by_child_id = %s, used_at = NOW() WHERE id = %s",
+                (child_id, invite['id'])
+            )
+        else:
+            cursor.execute(
+                "INSERT OR IGNORE INTO parent_child_links (parent_id, child_id) VALUES (?, ?)",
+                (invite['parent_id'], child_id)
+            )
+            cursor.execute(
+                "UPDATE parent_child_invites SET used = 1, used_by_child_id = ?, used_at = datetime('now') WHERE id = ?",
+                (child_id, invite['id'])
+            )
+        conn.commit()
+        print(f"🔗 Auto-linked new student {child_id} to parent {invite['parent_id']} via invite {invite_code}")
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ Failed to redeem parent invite {invite_code} for student {child_id}: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def _consume_reserved_lesson(user_id: int):
     """Pop the oldest unconsumed reserved lesson for this student, if any,
     and return it shaped exactly like _generate_lesson_core()'s response."""
@@ -8302,6 +8364,41 @@ async def get_my_link_code(user=Depends(get_current_user)):
         code = _assign_parent_link_code(user["user_id"])
 
     return {"link_code": code}
+
+
+@app.post("/api/parent/create-invite")
+async def create_child_invite(parent=Depends(require_parent)):
+    """
+    Generate a one-time invite code a parent can share with their child so
+    the child can register their own account and be automatically linked —
+    the reverse of link-child, for families without a school code.
+    """
+    import random, string
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        for _ in range(10):
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            try:
+                if USE_POSTGRES:
+                    cursor.execute(
+                        "INSERT INTO parent_child_invites (parent_id, invite_code) VALUES (%s, %s)",
+                        (parent["user_id"], code)
+                    )
+                else:
+                    cursor.execute(
+                        "INSERT INTO parent_child_invites (parent_id, invite_code) VALUES (?, ?)",
+                        (parent["user_id"], code)
+                    )
+                conn.commit()
+                return {"invite_code": code}
+            except Exception:
+                conn.rollback()
+                continue  # rare code collision — try another random code
+        raise HTTPException(status_code=500, detail="Could not generate a unique invite code, please try again.")
+    finally:
+        cursor.close()
+        conn.close()
 
 
 @app.post("/api/parent/link-child")

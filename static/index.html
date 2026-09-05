@@ -1245,6 +1245,12 @@
             </select>
             <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Used for future multi-language lesson support</small>
           </div>
+
+          <div class="form-group" id="inviteCodeFieldWrapper" style="display:none;">
+            <label for="registerInviteCode">Parent Invite Code</label>
+            <input type="text" id="registerInviteCode" placeholder="e.g. AB12CD" style="text-transform:uppercase;">
+            <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Your account will be automatically linked to your parent.</small>
+          </div>
           </div><!-- /studentOnlyFields -->
 
           <!-- role set dynamically by setRegisterRole() -->
@@ -1449,6 +1455,22 @@
                 console.log('⚠️ Audio unlock failed:', error.message);
             }
         }
+
+        // Parent invite link handling: ?invite=XXXXXX auto-opens registration,
+        // pre-selected as Student, with the invite code filled in and the
+        // school-code requirement waived (these are non-contracted-school signups)
+        document.addEventListener('DOMContentLoaded', function() {
+            const params = new URLSearchParams(window.location.search);
+            const invite = params.get('invite');
+            if (invite) {
+                openModal('register');
+                setRegisterRole('student');
+                const inviteInput = document.getElementById('registerInviteCode');
+                const inviteWrapper = document.getElementById('inviteCodeFieldWrapper');
+                if (inviteInput) inviteInput.value = invite.toUpperCase();
+                if (inviteWrapper) inviteWrapper.style.display = '';
+            }
+        });
 
         // Login Form Handler
         document.addEventListener('DOMContentLoaded', function() {
@@ -1740,17 +1762,22 @@
                 return;
             }
 
-            // Validate school code
-            if (!school) {
-                errorDiv.textContent = 'Please enter your school code';
-                errorDiv.style.display = 'block';
-                return;
-            }
+            const inviteCode = document.getElementById('registerInviteCode').value.trim();
 
-            if (!schoolCodeValid) {
-                errorDiv.textContent = 'Please enter a valid school code';
-                errorDiv.style.display = 'block';
-                return;
+            // School code is only required for students NOT joining via a parent invite —
+            // invited children may not be part of any contracted school.
+            if (!inviteCode) {
+                if (!school) {
+                    errorDiv.textContent = 'Please enter your school code';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                if (!schoolCodeValid) {
+                    errorDiv.textContent = 'Please enter a valid school code';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
             }
 
             const age_band = getAgeBandFromGrade(gradeLevel);
@@ -1771,7 +1798,8 @@
                         reading_level,
                         school,
                         cultural_identity: culturalIdentity,
-                        spoken_language: spokenLanguage
+                        spoken_language: spokenLanguage,
+                        invite_code: inviteCode || null
                     })
                 });
 

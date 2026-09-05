@@ -66,6 +66,8 @@
     .btn:hover { background: var(--navy-light); }
     .btn-gold { background: var(--gold); color: #4a3400; }
     .btn-gold:hover { background: #e6a930; }
+    .btn-secondary { background: white; color: var(--navy-primary); border: 1px solid var(--navy-primary); }
+    .btn-secondary:hover { background: #f0f4f8; }
     .error-msg { color: #dc3545; font-size: 0.88rem; margin-bottom: 0.8rem; display: none; }
     .hidden { display: none !important; }
 
@@ -211,6 +213,22 @@
                     <input type="text" id="linkCodeInput" placeholder="e.g. AB12CD" style="margin-bottom:0; text-transform:uppercase; flex:1; min-width:180px;">
                     <button class="btn" onclick="doLinkChild()">Link Child</button>
                 </div>
+            </div>
+
+            <div class="card">
+                <h2>Invite a Child</h2>
+                <p style="color:#64748b; font-size:0.92rem; margin-bottom:1rem;">
+                    Don't have your child's account set up yet? Generate an invite link — your child uses it to create their own account, and they'll be linked to you automatically.
+                </p>
+                <div class="error-msg" id="inviteError"></div>
+                <div id="inviteResultBox" class="hidden" style="background:#f4f6f9; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                    <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.4rem;">Share this link with your child:</div>
+                    <div style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center;">
+                        <code id="inviteLinkText" style="flex:1; min-width:200px; word-break:break-all; background:white; padding:0.5rem 0.7rem; border-radius:6px; border:1px solid #dde3ea;"></code>
+                        <button class="btn btn-secondary" style="width:auto;" onclick="copyInviteLink()">Copy Link</button>
+                    </div>
+                </div>
+                <button class="btn" onclick="doCreateInvite()">✉️ Generate Invite Link</button>
             </div>
 
             <h2 style="margin-bottom:1rem;">Your Children</h2>
@@ -453,6 +471,35 @@
             errEl.textContent = e.message;
             errEl.style.display = 'block';
         }
+    }
+
+    let lastInviteLink = '';
+    async function doCreateInvite() {
+        const errEl = document.getElementById('inviteError');
+        errEl.style.display = 'none';
+        try {
+            const resp = await fetch('/api/parent/create-invite', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}` }
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Could not generate an invite');
+            lastInviteLink = `${window.location.origin}/?invite=${data.invite_code}`;
+            document.getElementById('inviteLinkText').textContent = lastInviteLink;
+            document.getElementById('inviteResultBox').classList.remove('hidden');
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    function copyInviteLink() {
+        if (!lastInviteLink) return;
+        navigator.clipboard.writeText(lastInviteLink).then(() => {
+            alert('Invite link copied! Send it to your child so they can create their account.');
+        }).catch(() => {
+            alert(`Your invite link: ${lastInviteLink}`);
+        });
     }
 
     async function openChild(childId, childName) {
