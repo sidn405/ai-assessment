@@ -796,6 +796,9 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS parent_child_links (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES users(id), child_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS parent_child_links (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, child_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(parent_id, child_id))",
                 "CREATE TABLE IF NOT EXISTS stripe_processed_events (event_id VARCHAR(255) PRIMARY KEY, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS stripe_processed_events (event_id VARCHAR(255) PRIMARY KEY, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS parent_child_invites (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES users(id), invite_code VARCHAR(10) UNIQUE, used BOOLEAN DEFAULT FALSE, used_by_child_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, used_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS parent_child_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, invite_code VARCHAR(10) UNIQUE, used BOOLEAN DEFAULT 0, used_by_child_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, used_at TIMESTAMP)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS teacher_grade_level VARCHAR(20)",
+                "CREATE TABLE IF NOT EXISTS assignments (id SERIAL PRIMARY KEY, teacher_id INTEGER REFERENCES users(id), subject VARCHAR(50), grade_level VARCHAR(20), standards TEXT, due_at TIMESTAMP, content_description TEXT, special_instructions TEXT, assessment_type VARCHAR(30), title VARCHAR(255), content TEXT, questions TEXT, status VARCHAR(20) DEFAULT 'draft', approved_at TIMESTAMP, approved_by_name VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS assignments (id INTEGER PRIMARY KEY AUTOINCREMENT, teacher_id INTEGER, subject VARCHAR(50), grade_level VARCHAR(20), standards TEXT, due_at TIMESTAMP, content_description TEXT, special_instructions TEXT, assessment_type VARCHAR(30), title VARCHAR(255), content TEXT, questions TEXT, status VARCHAR(20) DEFAULT 'draft', approved_at TIMESTAMP, approved_by_name VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS assignment_deliveries (id SERIAL PRIMARY KEY, assignment_id INTEGER REFERENCES assignments(id), student_id INTEGER REFERENCES users(id), sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'assigned', submitted_at TIMESTAMP, is_late BOOLEAN DEFAULT FALSE, score REAL, teacher_feedback_summary TEXT, student_feedback_summary TEXT, answers TEXT, graded_at TIMESTAMP, UNIQUE(assignment_id, student_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS assignment_deliveries (id INTEGER PRIMARY KEY AUTOINCREMENT, assignment_id INTEGER, student_id INTEGER, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'assigned', submitted_at TIMESTAMP, is_late BOOLEAN DEFAULT 0, score REAL, teacher_feedback_summary TEXT, student_feedback_summary TEXT, answers TEXT, graded_at TIMESTAMP, UNIQUE(assignment_id, student_id))",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -1346,6 +1349,14 @@ async def serve_parent_dashboard():
     response.headers["Expires"] = "0"
     return response
 
+@app.get("/teacher-dashboard", response_class=HTMLResponse)
+async def serve_teacher_dashboard():
+    response = FileResponse("static/teacher-dashboard.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 @app.get("/reading", response_class=HTMLResponse)
 async def serve_reading():
     response = FileResponse("static/reading.html")
@@ -1551,6 +1562,12 @@ def require_admin(user: dict = Depends(get_current_user)):
 def require_parent(user: dict = Depends(get_current_user)):
     if user.get("role") != "parent":
         raise HTTPException(status_code=403, detail="Parent access required")
+    return user
+
+
+def require_teacher(user: dict = Depends(get_current_user)):
+    if user.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher access required")
     return user
 
 
@@ -8856,6 +8873,782 @@ async def stripe_webhook(request: Request):
         traceback.print_exc()
 
     return {"received": True}
+
+
+# ========================================
+# TEACHER PORTAL ENDPOINTS
+# ========================================
+
+@app.get("/api/admin/teachers")
+async def list_teachers(admin=Depends(require_admin)):
+    """List teacher accounts at the admin's own school."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        row = cursor.fetchone()
+        admin_school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND school = %s ORDER BY teacher_grade_level, full_name",
+                (admin_school,)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND school = ? ORDER BY teacher_grade_level, full_name",
+                (admin_school,)
+            )
+        rows = cursor.fetchall()
+        teachers = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {'id': r[0], 'full_name': r[1], 'email': r[2], 'teacher_grade_level': r[3], 'created_at': r[4]}
+            r['created_at'] = str(r['created_at']) if r.get('created_at') else None
+            teachers.append(r)
+        return {"teachers": teachers}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/admin/create-teacher")
+async def create_teacher(request: Request, admin=Depends(require_admin)):
+    """Admin creates a teacher account, scoped to the admin's own school and
+    a specific grade level. The teacher will only ever see students in that
+    same school + grade combination."""
+    data = await request.json()
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+    full_name = (data.get("full_name") or "").strip()
+    grade_level = (data.get("grade_level") or "").strip()
+
+    if not email or not password or not full_name or not grade_level:
+        raise HTTPException(status_code=400, detail="email, password, full_name, and grade_level are all required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        admin_row = cursor.fetchone()
+        admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
+
+        email_lc = email.lower()
+        cursor.execute("SELECT id FROM users WHERE LOWER(email) = %s" if USE_POSTGRES else "SELECT id FROM users WHERE LOWER(email) = ?", (email_lc,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="An account with this email already exists.")
+
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role, school, teacher_grade_level) VALUES (%s, %s, %s, 'teacher', %s, %s) RETURNING id",
+                (email, password_hash.decode('utf-8'), full_name, admin_school, grade_level)
+            )
+            teacher_id = cursor.fetchone()['id']
+        else:
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, full_name, role, school, teacher_grade_level) VALUES (?, ?, ?, 'teacher', ?, ?)",
+                (email, password_hash.decode('utf-8'), full_name, admin_school, grade_level)
+            )
+            teacher_id = cursor.lastrowid
+        conn.commit()
+        return {"success": True, "teacher_id": teacher_id, "email": email, "grade_level": grade_level}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+async def _generate_assignment_content(subject, grade_level, standards, content_description, special_instructions, assessment_type, revision_instructions=None, existing_content=None):
+    """
+    Core AI generation for the Assignment Builder. Produces a reading
+    passage/content and an assessment in the requested format, aligned to
+    the given grade level and (AI-suggested) standards. Returns a dict:
+    {title, content, questions: [...]}. Each question shape depends on type:
+      - multiple_choice / true_false: {type, question, options, correct_answer}
+      - fill_in_blank: {type, question, correct_answer}
+      - short_answer / essay: {type, question, rubric_notes}
+    """
+    type_instructions = {
+        "Multiple Choice": "Every question must be multiple_choice with exactly 4 options.",
+        "True / False": "Every question must be true_false with correct_answer exactly \"True\" or \"False\".",
+        "Fill in the Blank": "Every question must be fill_in_blank — the question text contains a blank shown as ____, with a single correct_answer.",
+        "Short Answer": "Every question must be short_answer — include rubric_notes describing what a strong answer should contain, for AI grading.",
+        "Essay / Extended Response": "Every question must be essay — include rubric_notes describing what a strong response should demonstrate, for AI grading.",
+        "Mixed Format": "Use a thoughtful mix of multiple_choice, true_false, fill_in_blank, short_answer, and essay questions."
+    }.get(assessment_type, "Use a thoughtful mix of question types appropriate to the content.")
+
+    system_prompt = f"""You are an expert curriculum designer creating a standards-aligned reading/writing assignment for a teacher.
+
+Subject area: {subject}
+Grade level: {grade_level}
+Standards to address: {', '.join(standards) if standards else '(suggest 1-3 relevant Common Core or state standards yourself, labeled naturally, e.g. "CCSS.ELA-LITERACY.RL.5.2")'}
+Content topic/description: {content_description or '(choose an engaging, age-appropriate topic yourself)'}
+Special instructions from the teacher (accommodations, themes, restrictions): {special_instructions or '(none)'}
+Assessment format: {assessment_type}. {type_instructions}
+
+Requirements:
+- The reading passage must reflect grade-level-appropriate rigor and Lexile range for {grade_level} — not below it, unless special instructions explicitly ask for a modified reading level.
+- Generate 5-8 assessment questions.
+- Respond ONLY with valid JSON, no markdown fences, no commentary, in exactly this shape:
+{{
+  "title": "...",
+  "content": "...",
+  "standards_addressed": ["...", "..."],
+  "questions": [
+    {{"type": "multiple_choice", "question": "...", "options": ["...","...","...","..."], "correct_answer": "..."}},
+    {{"type": "true_false", "question": "...", "correct_answer": "True"}},
+    {{"type": "fill_in_blank", "question": "... ____ ...", "correct_answer": "..."}},
+    {{"type": "short_answer", "question": "...", "rubric_notes": "..."}},
+    {{"type": "essay", "question": "...", "rubric_notes": "..."}}
+  ]
+}}"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+    if revision_instructions and existing_content:
+        messages.append({"role": "user", "content": f"Here is the current assignment JSON:\n{json.dumps(existing_content)}\n\nApply this revision and return the FULL updated JSON in the same shape: {revision_instructions}"})
+    else:
+        messages.append({"role": "user", "content": "Generate the assignment now."})
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        temperature=0.7,
+        response_format={"type": "json_object"}
+    )
+    return json.loads(response.choices[0].message.content)
+
+
+@app.post("/api/teacher/assignments/generate")
+async def generate_assignment(request: Request, teacher=Depends(require_teacher)):
+    """Step 1 (Create): generate a draft assignment from the teacher's inputs.
+    Nothing is visible to students yet — this is review-only until approved+sent."""
+    data = await request.json()
+    subject = data.get("subject", "")
+    grade_level = data.get("grade_level", "")
+    standards = data.get("standards", [])
+    due_at = data.get("due_at")
+    content_description = data.get("content_description", "")
+    special_instructions = data.get("special_instructions", "")
+    assessment_type = data.get("assessment_type", "Mixed Format")
+
+    if not subject or not grade_level or not assessment_type:
+        raise HTTPException(status_code=400, detail="subject, grade_level, and assessment_type are required")
+
+    try:
+        generated = await _generate_assignment_content(
+            subject, grade_level, standards, content_description, special_instructions, assessment_type
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Assignment generation failed: {str(e)}")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        all_standards = standards or generated.get("standards_addressed", [])
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO assignments
+                   (teacher_id, subject, grade_level, standards, due_at, content_description,
+                    special_instructions, assessment_type, title, content, questions, status)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'draft') RETURNING id""",
+                (teacher["user_id"], subject, grade_level, json.dumps(all_standards), due_at,
+                 content_description, special_instructions, assessment_type,
+                 generated.get("title"), generated.get("content"), json.dumps(generated.get("questions", [])))
+            )
+            assignment_id = cursor.fetchone()['id']
+        else:
+            cursor.execute(
+                """INSERT INTO assignments
+                   (teacher_id, subject, grade_level, standards, due_at, content_description,
+                    special_instructions, assessment_type, title, content, questions, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')""",
+                (teacher["user_id"], subject, grade_level, json.dumps(all_standards), due_at,
+                 content_description, special_instructions, assessment_type,
+                 generated.get("title"), generated.get("content"), json.dumps(generated.get("questions", [])))
+            )
+            assignment_id = cursor.lastrowid
+        conn.commit()
+
+        return {
+            "success": True,
+            "assignment_id": assignment_id,
+            "title": generated.get("title"),
+            "content": generated.get("content"),
+            "standards_addressed": all_standards,
+            "questions": generated.get("questions", [])
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+async def _get_assignment_or_404(assignment_id: int, teacher_id: int, cursor):
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM assignments WHERE id = %s AND teacher_id = %s", (assignment_id, teacher_id))
+    else:
+        cursor.execute("SELECT * FROM assignments WHERE id = ? AND teacher_id = ?", (assignment_id, teacher_id))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    return dict(row) if hasattr(row, 'keys') else None
+
+
+@app.post("/api/teacher/assignments/{assignment_id}/revise-content")
+async def revise_assignment_content(assignment_id: int, request: Request, teacher=Depends(require_teacher)):
+    """Step 3.3: regenerate just the reading content per teacher's change instructions."""
+    data = await request.json()
+    instructions = data.get("instructions", "")
+    if not instructions:
+        raise HTTPException(status_code=400, detail="instructions is required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        assignment = await _get_assignment_or_404(assignment_id, teacher["user_id"], cursor)
+        if assignment["status"] != "draft":
+            raise HTTPException(status_code=400, detail="Only draft assignments can be revised")
+
+        existing = {
+            "title": assignment["title"], "content": assignment["content"],
+            "questions": json.loads(assignment["questions"] or "[]")
+        }
+        generated = await _generate_assignment_content(
+            assignment["subject"], assignment["grade_level"], json.loads(assignment["standards"] or "[]"),
+            assignment["content_description"], assignment["special_instructions"], assignment["assessment_type"],
+            revision_instructions=f"Content change request: {instructions}. Keep the questions as-is unless they no longer make sense with the revised content.",
+            existing_content=existing
+        )
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE assignments SET title = %s, content = %s, questions = %s WHERE id = %s",
+                            (generated.get("title"), generated.get("content"), json.dumps(generated.get("questions", [])), assignment_id))
+        else:
+            cursor.execute("UPDATE assignments SET title = ?, content = ?, questions = ? WHERE id = ?",
+                            (generated.get("title"), generated.get("content"), json.dumps(generated.get("questions", [])), assignment_id))
+        conn.commit()
+        return {"success": True, "title": generated.get("title"), "content": generated.get("content"), "questions": generated.get("questions", [])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/teacher/assignments/{assignment_id}/revise-assessment")
+async def revise_assignment_assessment(assignment_id: int, request: Request, teacher=Depends(require_teacher)):
+    """Step 3.4: regenerate just the assessment questions per teacher's change instructions."""
+    data = await request.json()
+    instructions = data.get("instructions", "")
+    if not instructions:
+        raise HTTPException(status_code=400, detail="instructions is required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        assignment = await _get_assignment_or_404(assignment_id, teacher["user_id"], cursor)
+        if assignment["status"] != "draft":
+            raise HTTPException(status_code=400, detail="Only draft assignments can be revised")
+
+        existing = {
+            "title": assignment["title"], "content": assignment["content"],
+            "questions": json.loads(assignment["questions"] or "[]")
+        }
+        generated = await _generate_assignment_content(
+            assignment["subject"], assignment["grade_level"], json.loads(assignment["standards"] or "[]"),
+            assignment["content_description"], assignment["special_instructions"], assignment["assessment_type"],
+            revision_instructions=f"Assessment change request: {instructions}. Keep the reading content exactly as-is — only change the questions.",
+            existing_content=existing
+        )
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE assignments SET questions = %s WHERE id = %s",
+                            (json.dumps(generated.get("questions", [])), assignment_id))
+        else:
+            cursor.execute("UPDATE assignments SET questions = ? WHERE id = ?",
+                            (json.dumps(generated.get("questions", [])), assignment_id))
+        conn.commit()
+        return {"success": True, "questions": generated.get("questions", [])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/teacher/assignments/{assignment_id}/approve")
+async def approve_assignment(assignment_id: int, teacher=Depends(require_teacher)):
+    """Step 3.5: formally approve — required before Send is available. Logged with timestamp + teacher name."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        assignment = await _get_assignment_or_404(assignment_id, teacher["user_id"], cursor)
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE assignments SET status = 'approved', approved_at = NOW(), approved_by_name = %s WHERE id = %s",
+                (teacher.get("full_name") or "", assignment_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE assignments SET status = 'approved', approved_at = datetime('now'), approved_by_name = ? WHERE id = ?",
+                (teacher.get("full_name") or "", assignment_id)
+            )
+        conn.commit()
+        return {"success": True}
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/teacher/students")
+async def get_teacher_students(teacher=Depends(require_teacher)):
+    """Students visible to this teacher: same school AND same grade_band, matching this teacher's assigned grade level."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT school, teacher_grade_level FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, teacher_grade_level FROM users WHERE id = ?",
+            (teacher["user_id"],)
+        )
+        row = cursor.fetchone()
+        school = row['school'] if hasattr(row, 'keys') else row[0]
+        grade_level = row['teacher_grade_level'] if hasattr(row, 'keys') else row[1]
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, full_name, email, reading_level FROM users WHERE role = 'student' AND school = %s AND grade_band = %s ORDER BY full_name",
+                (school, grade_level)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, full_name, email, reading_level FROM users WHERE role = 'student' AND school = ? AND grade_band = ? ORDER BY full_name",
+                (school, grade_level)
+            )
+        rows = cursor.fetchall()
+        students = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {'id': r[0], 'full_name': r[1], 'email': r[2], 'reading_level': r[3]}
+            students.append(r)
+        return {"students": students, "school": school, "grade_level": grade_level}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/teacher/assignments/{assignment_id}/send")
+async def send_assignment(assignment_id: int, request: Request, teacher=Depends(require_teacher)):
+    """Step 3.6: distribute an approved assignment to individual students or the entire (grade-scoped) class."""
+    data = await request.json()
+    target = data.get("target")  # 'individual' | 'class'
+    student_ids = data.get("student_ids", [])
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        assignment = await _get_assignment_or_404(assignment_id, teacher["user_id"], cursor)
+        if assignment["status"] != "approved":
+            raise HTTPException(status_code=400, detail="Assignment must be approved before it can be sent")
+
+        if target == "class":
+            cursor.execute(
+                "SELECT school, teacher_grade_level FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, teacher_grade_level FROM users WHERE id = ?",
+                (teacher["user_id"],)
+            )
+            row = cursor.fetchone()
+            school = row['school'] if hasattr(row, 'keys') else row[0]
+            grade_level = row['teacher_grade_level'] if hasattr(row, 'keys') else row[1]
+            if USE_POSTGRES:
+                cursor.execute("SELECT id FROM users WHERE role = 'student' AND school = %s AND grade_band = %s", (school, grade_level))
+            else:
+                cursor.execute("SELECT id FROM users WHERE role = 'student' AND school = ? AND grade_band = ?", (school, grade_level))
+            student_ids = [r['id'] if hasattr(r, 'keys') else r[0] for r in cursor.fetchall()]
+
+        if not student_ids:
+            raise HTTPException(status_code=400, detail="No students to send to")
+
+        sent_count = 0
+        for sid in student_ids:
+            try:
+                if USE_POSTGRES:
+                    cursor.execute(
+                        "INSERT INTO assignment_deliveries (assignment_id, student_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                        (assignment_id, sid)
+                    )
+                else:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO assignment_deliveries (assignment_id, student_id) VALUES (?, ?)",
+                        (assignment_id, sid)
+                    )
+                sent_count += 1
+            except Exception:
+                continue
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE assignments SET status = 'sent' WHERE id = %s", (assignment_id,))
+        else:
+            cursor.execute("UPDATE assignments SET status = 'sent' WHERE id = ?", (assignment_id,))
+        conn.commit()
+        return {"success": True, "sent_to_count": sent_count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/teacher/assignments")
+async def list_teacher_assignments(teacher=Depends(require_teacher)):
+    """Assignment history / audit log for this teacher."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT a.id, a.title, a.subject, a.grade_level, a.status, a.due_at, a.created_at, a.approved_at,
+                          COUNT(d.id) AS delivered_count,
+                          COUNT(d.id) FILTER (WHERE d.status = 'graded') AS graded_count
+                   FROM assignments a LEFT JOIN assignment_deliveries d ON d.assignment_id = a.id
+                   WHERE a.teacher_id = %s GROUP BY a.id ORDER BY a.created_at DESC""",
+                (teacher["user_id"],)
+            )
+        else:
+            cursor.execute(
+                """SELECT a.id, a.title, a.subject, a.grade_level, a.status, a.due_at, a.created_at, a.approved_at,
+                          (SELECT COUNT(*) FROM assignment_deliveries d WHERE d.assignment_id = a.id) AS delivered_count,
+                          (SELECT COUNT(*) FROM assignment_deliveries d WHERE d.assignment_id = a.id AND d.status = 'graded') AS graded_count
+                   FROM assignments a WHERE a.teacher_id = ? ORDER BY a.created_at DESC""",
+                (teacher["user_id"],)
+            )
+        rows = cursor.fetchall()
+        assignments = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {
+                'id': r[0], 'title': r[1], 'subject': r[2], 'grade_level': r[3], 'status': r[4],
+                'due_at': r[5], 'created_at': r[6], 'approved_at': r[7], 'delivered_count': r[8], 'graded_count': r[9]
+            }
+            for k in ('due_at', 'created_at', 'approved_at'):
+                if r.get(k) is not None:
+                    r[k] = str(r[k])
+            assignments.append(r)
+        return {"assignments": assignments}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/teacher/assignments/{assignment_id}/report")
+async def get_assignment_report(assignment_id: int, teacher=Depends(require_teacher)):
+    """SYS-04: teacher feedback report — all student deliveries for this assignment, sortable client-side."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        assignment = await _get_assignment_or_404(assignment_id, teacher["user_id"], cursor)
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT d.id, d.student_id, u.full_name, d.status, d.submitted_at, d.is_late,
+                          d.score, d.teacher_feedback_summary, d.graded_at
+                   FROM assignment_deliveries d JOIN users u ON u.id = d.student_id
+                   WHERE d.assignment_id = %s ORDER BY u.full_name""",
+                (assignment_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT d.id, d.student_id, u.full_name, d.status, d.submitted_at, d.is_late,
+                          d.score, d.teacher_feedback_summary, d.graded_at
+                   FROM assignment_deliveries d JOIN users u ON u.id = d.student_id
+                   WHERE d.assignment_id = ? ORDER BY u.full_name""",
+                (assignment_id,)
+            )
+        rows = cursor.fetchall()
+        deliveries = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {
+                'id': r[0], 'student_id': r[1], 'full_name': r[2], 'status': r[3], 'submitted_at': r[4],
+                'is_late': r[5], 'score': r[6], 'teacher_feedback_summary': r[7], 'graded_at': r[8]
+            }
+            for k in ('submitted_at', 'graded_at'):
+                if r.get(k) is not None:
+                    r[k] = str(r[k])
+            deliveries.append(r)
+
+        return {
+            "assignment": {
+                "id": assignment["id"], "title": assignment["title"], "subject": assignment["subject"],
+                "grade_level": assignment["grade_level"], "due_at": str(assignment["due_at"]) if assignment["due_at"] else None
+            },
+            "deliveries": deliveries
+        }
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/student/assignments")
+async def get_student_assignments(user=Depends(get_current_user)):
+    """SYS-02: the student's Assignment Queue — everything sent to them."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT d.id AS delivery_id, d.status, d.submitted_at, d.is_late, d.score,
+                          d.student_feedback_summary, d.graded_at,
+                          a.id AS assignment_id, a.title, a.subject, a.due_at, a.assessment_type
+                   FROM assignment_deliveries d JOIN assignments a ON a.id = d.assignment_id
+                   WHERE d.student_id = %s ORDER BY a.due_at ASC NULLS LAST""",
+                (user["user_id"],)
+            )
+        else:
+            cursor.execute(
+                """SELECT d.id AS delivery_id, d.status, d.submitted_at, d.is_late, d.score,
+                          d.student_feedback_summary, d.graded_at,
+                          a.id AS assignment_id, a.title, a.subject, a.due_at, a.assessment_type
+                   FROM assignment_deliveries d JOIN assignments a ON a.id = d.assignment_id
+                   WHERE d.student_id = ? ORDER BY a.due_at ASC""",
+                (user["user_id"],)
+            )
+        rows = cursor.fetchall()
+        assignments = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {
+                'delivery_id': r[0], 'status': r[1], 'submitted_at': r[2], 'is_late': r[3], 'score': r[4],
+                'student_feedback_summary': r[5], 'graded_at': r[6], 'assignment_id': r[7], 'title': r[8],
+                'subject': r[9], 'due_at': r[10], 'assessment_type': r[11]
+            }
+            for k in ('submitted_at', 'due_at', 'graded_at'):
+                if r.get(k) is not None:
+                    r[k] = str(r[k])
+            assignments.append(r)
+        return {"assignments": assignments}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/student/assignments/{delivery_id}")
+async def get_student_assignment_detail(delivery_id: int, user=Depends(get_current_user)):
+    """The actual reading content + questions for a student to complete."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT d.id AS delivery_id, d.status, d.student_id, a.title, a.content, a.questions,
+                          a.subject, a.due_at, a.assessment_type
+                   FROM assignment_deliveries d JOIN assignments a ON a.id = d.assignment_id
+                   WHERE d.id = %s""",
+                (delivery_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT d.id AS delivery_id, d.status, d.student_id, a.title, a.content, a.questions,
+                          a.subject, a.due_at, a.assessment_type
+                   FROM assignment_deliveries d JOIN assignments a ON a.id = d.assignment_id
+                   WHERE d.id = ?""",
+                (delivery_id,)
+            )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+        row = dict(row) if hasattr(row, 'keys') else None
+        if row['student_id'] != user['user_id']:
+            raise HTTPException(status_code=403, detail="This assignment was not sent to you")
+
+        questions = json.loads(row['questions'] or "[]")
+        # Strip rubric_notes and correct_answer before sending to the student — no answer leakage
+        safe_questions = []
+        for q in questions:
+            safe_q = {"type": q.get("type"), "question": q.get("question")}
+            if q.get("type") == "multiple_choice":
+                safe_q["options"] = q.get("options", [])
+            safe_questions.append(safe_q)
+
+        return {
+            "delivery_id": row['delivery_id'], "status": row['status'], "title": row['title'],
+            "content": row['content'], "subject": row['subject'],
+            "due_at": str(row['due_at']) if row['due_at'] else None,
+            "assessment_type": row['assessment_type'], "questions": safe_questions
+        }
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _grade_objective_question(question, student_answer):
+    """Exact-match grading for multiple_choice, true_false, fill_in_blank. Returns (is_correct, points 0-1)."""
+    correct = (question.get("correct_answer") or "").strip().lower()
+    given = (student_answer or "").strip().lower()
+    is_correct = correct == given
+    return is_correct, 1.0 if is_correct else 0.0
+
+
+async def _grade_subjective_question(question, student_answer, subject, grade_level):
+    """AI rubric-based grading for short_answer / essay. Returns (points 0-1, brief_note)."""
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    prompt = f"""Grade this {grade_level} {subject} student response on a 0-100 scale based on the rubric.
+
+Question: {question.get('question')}
+Rubric guidance: {question.get('rubric_notes', 'Evaluate content accuracy, use of evidence, and completeness.')}
+Student's response: {student_answer or '(no answer given)'}
+
+Respond ONLY with JSON: {{"score": <0-100 integer>, "note": "<one sentence on why>"}}"""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        response_format={"type": "json_object"}
+    )
+    result = json.loads(response.choices[0].message.content)
+    score_pct = max(0, min(100, result.get("score", 0)))
+    return score_pct / 100.0, result.get("note", "")
+
+
+@app.post("/api/student/assignments/{delivery_id}/submit")
+async def submit_assignment(delivery_id: int, request: Request, user=Depends(get_current_user)):
+    """SYS-03/04/05/06: grade the submission, flag lateness, and generate both
+    the teacher-facing and student-facing feedback reports."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+
+    data = await request.json()
+    answers = data.get("answers", [])  # list of strings, aligned to question order
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT d.student_id, d.status, a.id AS assignment_id, a.title, a.subject, a.grade_level,
+                          a.questions, a.due_at, a.standards
+                   FROM assignment_deliveries d JOIN assignments a ON a.id = d.assignment_id
+                   WHERE d.id = %s""",
+                (delivery_id,)
+            )
+        else:
+            cursor.execute(
+                """SELECT d.student_id, d.status, a.id AS assignment_id, a.title, a.subject, a.grade_level,
+                          a.questions, a.due_at, a.standards
+                   FROM assignment_deliveries d JOIN assignments a ON a.id = d.assignment_id
+                   WHERE d.id = ?""",
+                (delivery_id,)
+            )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+        row = dict(row) if hasattr(row, 'keys') else None
+        if row['student_id'] != user['user_id']:
+            raise HTTPException(status_code=403, detail="This assignment was not sent to you")
+        if row['status'] in ('submitted', 'graded'):
+            raise HTTPException(status_code=400, detail="This assignment has already been submitted")
+
+        questions = json.loads(row['questions'] or "[]")
+        standards = json.loads(row['standards'] or "[]")
+
+        total_points = 0.0
+        graded_answers = []
+        for i, q in enumerate(questions):
+            student_answer = answers[i] if i < len(answers) else ""
+            if q.get("type") in ("multiple_choice", "true_false", "fill_in_blank"):
+                is_correct, points = _grade_objective_question(q, student_answer)
+                graded_answers.append({
+                    "question": q.get("question"), "type": q.get("type"), "answer": student_answer,
+                    "is_correct": is_correct, "correct_answer": q.get("correct_answer")
+                })
+            else:
+                points, note = await _grade_subjective_question(q, student_answer, row['subject'], row['grade_level'])
+                graded_answers.append({
+                    "question": q.get("question"), "type": q.get("type"), "answer": student_answer,
+                    "ai_note": note
+                })
+            total_points += points
+
+        score = round((total_points / len(questions)) * 100) if questions else 0
+
+        # Late check
+        is_late = False
+        if row['due_at']:
+            from datetime import datetime as dt
+            due = row['due_at'] if isinstance(row['due_at'], dt) else dt.fromisoformat(str(row['due_at']))
+            now = dt.utcnow() if due.tzinfo is None else dt.now(due.tzinfo)
+            is_late = now > due
+
+        # Feedback summaries
+        try:
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            summary_prompt = f"""A {row['grade_level']} student scored {score}/100 on a {row['subject']} assignment titled "{row['title']}" addressing standards: {', '.join(standards) if standards else 'general reading comprehension'}.
+
+Write two short summaries as JSON: {{"teacher_summary": "2-4 sentences, professional tone, noting strengths and areas for growth, for the teacher", "student_summary": "2-3 sentences, warm and encouraging, student-appropriate language, for the student"}}"""
+            resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": summary_prompt}],
+                temperature=0.5,
+                response_format={"type": "json_object"}
+            )
+            summaries = json.loads(resp.choices[0].message.content)
+        except Exception:
+            summaries = {"teacher_summary": f"Student scored {score}/100.", "student_summary": f"You scored {score}/100. Great effort!"}
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE assignment_deliveries
+                   SET status = 'graded', submitted_at = NOW(), is_late = %s, score = %s,
+                       teacher_feedback_summary = %s, student_feedback_summary = %s,
+                       answers = %s, graded_at = NOW()
+                   WHERE id = %s""",
+                (is_late, score, summaries.get("teacher_summary"), summaries.get("student_summary"),
+                 json.dumps(graded_answers), delivery_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE assignment_deliveries
+                   SET status = 'graded', submitted_at = datetime('now'), is_late = ?, score = ?,
+                       teacher_feedback_summary = ?, student_feedback_summary = ?,
+                       answers = ?, graded_at = datetime('now')
+                   WHERE id = ?""",
+                (is_late, score, summaries.get("teacher_summary"), summaries.get("student_summary"),
+                 json.dumps(graded_answers), delivery_id)
+            )
+        conn.commit()
+
+        return {
+            "success": True, "score": score, "is_late": is_late,
+            "feedback": summaries.get("student_summary")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # ========================================

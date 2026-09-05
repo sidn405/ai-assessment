@@ -1553,6 +1553,8 @@
                               localStorage.setItem('parentToken', data.token);
                               localStorage.setItem('parentUser', JSON.stringify(data.user));
                               window.location.href = '/parent-dashboard';
+                          } else if (data.user.role === 'teacher') {
+                              window.location.href = '/teacher-dashboard';
                           } else {
                               window.location.href = '/dashboard';
                           }

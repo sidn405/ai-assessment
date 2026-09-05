@@ -868,6 +868,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('teachers', event); return false;">
+                        <span>🍎</span> Teachers
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="#" class="nav-link" onclick="showSection('school-codes', event); return false;">
                         <span>🏫</span> School Codes
                     </a>
@@ -1338,6 +1343,65 @@
                 <div id="schoolCodesTable">
                     <p style="color:#888;">Loading...</p>
                 </div>
+        </div>
+
+        <div id="teachers-section" class="content-section hidden">
+            <div class="section-header">
+                <h2>🍎 Teachers</h2>
+                <p>Create teacher accounts. Each teacher is scoped to your school and one grade level — they'll only ever see students in that grade.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h3 style="margin-bottom: 1rem;">Create Teacher Account</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 180px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Full Name</label>
+                        <input type="text" id="newTeacherName" placeholder="Jane Smith"
+                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Email</label>
+                        <input type="email" id="newTeacherEmail" placeholder="jane.smith@school.org"
+                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                    </div>
+                    <div style="flex: 0 0 160px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Temp Password</label>
+                        <input type="text" id="newTeacherPassword" placeholder="At least 6 characters"
+                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                    </div>
+                    <div style="flex: 0 0 160px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Grade Level</label>
+                        <select id="newTeacherGrade" style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                            <option value="pre-k">Pre-K</option>
+                            <option value="kindergarten">Kindergarten</option>
+                            <option value="1st">1st Grade</option>
+                            <option value="2nd">2nd Grade</option>
+                            <option value="3rd">3rd Grade</option>
+                            <option value="4th">4th Grade</option>
+                            <option value="5th">5th Grade</option>
+                            <option value="6th">6th Grade</option>
+                            <option value="7th">7th Grade</option>
+                            <option value="8th">8th Grade</option>
+                            <option value="9th">9th Grade</option>
+                            <option value="10th">10th Grade</option>
+                            <option value="11th">11th Grade</option>
+                            <option value="12th">12th Grade</option>
+                        </select>
+                    </div>
+                    <button onclick="createTeacher()"
+                            style="padding:0.65rem 1.5rem; background:#1e3a5f; color:white; border:none; border-radius:6px; font-size:1rem; font-weight:600; cursor:pointer; white-space:nowrap;">
+                        + Create Teacher
+                    </button>
+                </div>
+                <div id="createTeacherMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom:1rem;">Your Teachers</h3>
+                <div id="teachersTable">
+                    <p style="color:#888;">Loading...</p>
+                </div>
+            </div>
         </div>
 
         </main>
@@ -2117,7 +2181,8 @@
                 'messages': 'messagesSection',
                 'invite admin': 'inviteAdminSection',
                 'inviteAdmin': 'inviteAdminSection',
-                'school-codes': 'school-codes-section'
+                'school-codes': 'school-codes-section',
+                'teachers': 'teachers-section'
             };
 
             document.querySelectorAll('[id$="Section"], [id$="-section"]').forEach(el => el.classList.add('hidden'));
@@ -2154,6 +2219,10 @@
 
             if (section === 'school-codes') {
                 loadSchoolCodes();
+            }
+
+            if (section === 'teachers') {
+                loadTeachers();
             }
 
             if (section === 'session tracking' || section === 'sessionTracking') {
@@ -4187,6 +4256,85 @@
                 msg.style.display = 'block';
                 msg.style.color = '#dc3545';
                 msg.textContent = 'Error creating code.';
+            }
+        }
+
+        async function loadTeachers() {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const container = document.getElementById('teachersTable');
+            try {
+                const resp = await fetch('/api/admin/teachers', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await resp.json();
+                if (!data.teachers || data.teachers.length === 0) {
+                    container.innerHTML = '<p style="color:#888;">No teachers yet — create one above.</p>';
+                    return;
+                }
+                container.innerHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Name</th>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Email</th>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Grade</th>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Added</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.teachers.map(t => `
+                                <tr style="border-bottom:1px solid #f0f0f0;">
+                                    <td style="padding:0.75rem 1rem;">${t.full_name}</td>
+                                    <td style="padding:0.75rem 1rem;">${t.email}</td>
+                                    <td style="padding:0.75rem 1rem;">${t.teacher_grade_level}</td>
+                                    <td style="padding:0.75rem 1rem;">${t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (e) {
+                container.innerHTML = '<p style="color:#dc3545;">Failed to load teachers.</p>';
+            }
+        }
+
+        async function createTeacher() {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const full_name = document.getElementById('newTeacherName').value.trim();
+            const email = document.getElementById('newTeacherEmail').value.trim();
+            const password = document.getElementById('newTeacherPassword').value;
+            const grade_level = document.getElementById('newTeacherGrade').value;
+            const msg = document.getElementById('createTeacherMsg');
+
+            if (!full_name || !email || !password || password.length < 6) {
+                msg.style.display = 'block';
+                msg.style.color = '#dc3545';
+                msg.textContent = 'Name, email, and a password of at least 6 characters are required.';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/admin/create-teacher', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ full_name, email, password, grade_level })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    msg.style.display = 'block';
+                    msg.style.color = '#28A745';
+                    msg.textContent = `✅ Teacher account created for ${data.email}`;
+                    document.getElementById('newTeacherName').value = '';
+                    document.getElementById('newTeacherEmail').value = '';
+                    document.getElementById('newTeacherPassword').value = '';
+                    loadTeachers();
+                } else {
+                    msg.style.display = 'block';
+                    msg.style.color = '#dc3545';
+                    msg.textContent = data.detail || 'Failed to create teacher.';
+                }
+            } catch (e) {
+                msg.style.display = 'block';
+                msg.style.color = '#dc3545';
+                msg.textContent = 'Error creating teacher.';
             }
         }
 

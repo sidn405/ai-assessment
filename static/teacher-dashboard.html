@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teacher Portal - Achieve 365</title>
+<style>
+    :root {
+        --navy-primary: #2A398A;
+        --navy-light: #3d4fa8;
+        --gold: #f5b942;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f4f6f9;
+        color: #1e293b;
+        display: flex;
+        min-height: 100vh;
+    }
+    .sidebar {
+        width: 260px;
+        background: var(--navy-primary);
+        color: white;
+        padding: 1.5rem 1.2rem;
+        flex-shrink: 0;
+        min-height: 100vh;
+    }
+    .logo-container { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.5rem; }
+    .logo-container img { width: 40px; height: 40px; object-fit: contain; }
+    .logo-container .logo-text { font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
+    .user-info { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; }
+    .user-name { font-weight: 700; }
+    .user-level { font-size: 0.85rem; opacity: 0.8; margin-top: 0.2rem; }
+    .sidebar-nav a {
+        display: block; color: rgba(255,255,255,0.85); text-decoration: none;
+        padding: 0.65rem 0.8rem; border-radius: 8px; margin-bottom: 0.3rem; font-size: 0.94rem; cursor: pointer;
+    }
+    .sidebar-nav a:hover, .sidebar-nav a.active { background: rgba(255,255,255,0.15); color: white; font-weight: 600; }
+    .logout-btn {
+        margin-top: 2rem; width: 100%; padding: 0.7rem; border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.4); background: transparent; color: white; cursor: pointer;
+    }
+
+    .main { flex: 1; padding: 2rem; max-width: 1100px; }
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { color: var(--navy-primary); font-size: 1.6rem; margin-bottom: 0.2rem; }
+    .page-header p { color: #64748b; font-size: 0.95rem; }
+    .page { }
+
+    .card { background: white; border-radius: 14px; padding: 1.8rem; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 1.5rem; }
+    h2 { color: var(--navy-primary); margin-bottom: 1rem; }
+    h3 { color: var(--navy-primary); margin-bottom: 0.6rem; }
+    label { font-weight: 600; font-size: 0.9rem; color: #334155; display: block; margin-bottom: 0.3rem; }
+    input, select, textarea {
+        width: 100%; padding: 0.7rem 0.9rem; border: 1px solid #dde3ea; border-radius: 8px;
+        font-size: 1rem; margin-bottom: 0.9rem; font-family: inherit;
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .btn {
+        background: var(--navy-primary); color: white; border: none; padding: 0.75rem 1.4rem;
+        border-radius: 8px; font-size: 0.96rem; font-weight: 600; cursor: pointer;
+    }
+    .btn:hover { background: var(--navy-light); }
+    .btn:disabled { background: #b8bfd6; cursor: not-allowed; }
+    .btn-secondary { background: white; color: var(--navy-primary); border: 1px solid var(--navy-primary); }
+    .btn-secondary:hover { background: #f0f4f8; }
+    .btn-gold { background: var(--gold); color: #4a3400; }
+    .btn-gold:hover { background: #e6a930; }
+    .error-msg { color: #dc3545; font-size: 0.88rem; margin-bottom: 0.8rem; display: none; }
+    .hidden { display: none !important; }
+
+    .step-indicator { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .step-pill {
+        flex: 1; text-align: center; padding: 0.6rem; border-radius: 8px; font-size: 0.85rem;
+        font-weight: 600; background: #eef1f5; color: #94a3b8;
+    }
+    .step-pill.active { background: var(--navy-primary); color: white; }
+    .step-pill.done { background: #d4edda; color: #155724; }
+
+    .passage-box { background: #f5f5f5; border-radius: 8px; padding: 1rem; white-space: pre-wrap; max-height: 260px; overflow-y: auto; margin: 0.5rem 0 1rem; }
+    .question-item { margin-bottom: 1rem; padding: 0.9rem; border-radius: 8px; background: #f5f5f5; }
+    .question-item .qtype { font-size: 0.75rem; text-transform: uppercase; color: var(--navy-primary); font-weight: 700; margin-bottom: 0.3rem; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+    th { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 2px solid #eee; font-size: 0.85rem; color: #555; }
+    td { padding: 0.6rem 0.5rem; border-bottom: 1px solid #f0f0f0; font-size: 0.92rem; }
+    .status-pill { padding: 0.25rem 0.7rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+    .status-draft { background: #fff3cd; color: #856404; }
+    .status-approved { background: #d1ecf1; color: #0c5460; }
+    .status-sent { background: #d4edda; color: #155724; }
+    .status-graded { background: #d4edda; color: #155724; }
+    .status-submitted { background: #d1ecf1; color: #0c5460; }
+    .status-assigned { background: #eef1f5; color: #64748b; }
+    .late-tag { color: #dc3545; font-weight: 600; font-size: 0.8rem; }
+
+    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; }
+    .checkbox-row input { width: auto; margin: 0; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 999; padding: 1rem; }
+    .modal-box { background: white; border-radius: 14px; padding: 1.8rem; max-width: 700px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; }
+    .modal-close { position: absolute; top: 1rem; right: 1.2rem; cursor: pointer; font-size: 1.4rem; color: #888; background: none; border: none; }
+    .empty-state { text-align: center; padding: 2rem 1rem; color: #64748b; }
+
+    @media (max-width: 800px) {
+        body { flex-direction: column; }
+        .sidebar { width: 100%; min-height: auto; }
+        .main { padding: 1.2rem; }
+        .form-row { grid-template-columns: 1fr; }
+    }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="logo-container">
+        <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
+        <div class="logo-text">Achieve 365<br><span style="font-weight:400; opacity:0.8; font-size:0.85rem;">Teacher Portal</span></div>
+    </div>
+    <div class="user-info">
+        <div class="user-name" id="teacherName">Loading...</div>
+        <div class="user-level" id="teacherGradeLabel"></div>
+    </div>
+    <nav class="sidebar-nav">
+        <a id="navBuilder" onclick="showPage('builder')">✏️ Create Assignment</a>
+        <a id="navHistory" onclick="showPage('history')">📋 Assignment History</a>
+        <a id="navStudents" onclick="showPage('students')">🎓 My Students</a>
+    </nav>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+</aside>
+
+<div class="main">
+
+    <!-- ============ BUILDER PAGE ============ -->
+    <div id="page-builder" class="page hidden">
+        <div class="page-header">
+            <h1>Create Assignment</h1>
+            <p>Describe what you need — Achieve 365 will generate a standards-aligned reading passage and assessment for you to review.</p>
+        </div>
+
+        <div class="step-indicator">
+            <div class="step-pill" id="stepPill1">1. Describe</div>
+            <div class="step-pill" id="stepPill2">2. Review &amp; Revise</div>
+            <div class="step-pill" id="stepPill3">3. Send</div>
+        </div>
+
+        <!-- Step 1: Input form -->
+        <div id="builderStep1">
+            <div class="card">
+                <div class="error-msg" id="genError"></div>
+                <div class="form-row">
+                    <div>
+                        <label>Subject / Content Area</label>
+                        <select id="genSubject">
+                            <option>Reading / ELA</option>
+                            <option>Writing</option>
+                            <option>Science</option>
+                            <option>Social Studies</option>
+                            <option>Math (word problems / reading)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Grade Level</label>
+                        <input type="text" id="genGradeLevel" disabled>
+                    </div>
+                </div>
+                <label>Standards to Address <span style="font-weight:400; color:#94a3b8;">(optional — leave blank and we'll suggest relevant standards)</span></label>
+                <input type="text" id="genStandards" placeholder="e.g. CCSS.ELA-LITERACY.RL.5.2, CCSS.ELA-LITERACY.RL.5.3">
+                <div class="form-row">
+                    <div>
+                        <label>Due Date</label>
+                        <input type="date" id="genDueDate">
+                    </div>
+                    <div>
+                        <label>Assessment Format</label>
+                        <select id="genAssessmentType">
+                            <option>Mixed Format</option>
+                            <option>Multiple Choice</option>
+                            <option>True / False</option>
+                            <option>Fill in the Blank</option>
+                            <option>Short Answer</option>
+                            <option>Essay / Extended Response</option>
+                        </select>
+                    </div>
+                </div>
+                <label>Content Description / Topic <span style="font-weight:400; color:#94a3b8;">(optional)</span></label>
+                <textarea id="genContentDescription" placeholder="e.g. A passage about the water cycle, or a story involving teamwork and perseverance"></textarea>
+                <label>Special Instructions <span style="font-weight:400; color:#94a3b8;">(accommodations, themes to include/avoid, reading level adjustments, etc.)</span></label>
+                <textarea id="genSpecialInstructions" placeholder="Optional"></textarea>
+                <button class="btn" onclick="generateAssignment()" id="generateBtn">✨ Generate Assignment</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Review & revise -->
+        <div id="builderStep2" class="hidden">
+            <div class="card">
+                <h2 id="reviewTitle"></h2>
+                <div style="color:#64748b; font-size:0.85rem; margin-bottom:0.5rem;" id="reviewStandards"></div>
+                <h3>Reading Content</h3>
+                <div class="passage-box" id="reviewContent"></div>
+                <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+                    <input type="text" id="reviseContentInput" placeholder="Describe a change to the content (optional)" style="flex:1; min-width:220px; margin-bottom:0;">
+                    <button class="btn btn-secondary" style="width:auto;" onclick="reviseContent()">Revise Content</button>
+                </div>
+
+                <h3>Assessment Questions</h3>
+                <div id="reviewQuestions"></div>
+                <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+                    <input type="text" id="reviseAssessmentInput" placeholder="Describe a change to the questions (optional)" style="flex:1; min-width:220px; margin-bottom:0;">
+                    <button class="btn btn-secondary" style="width:auto;" onclick="reviseAssessment()">Revise Assessment</button>
+                </div>
+
+                <div class="error-msg" id="reviewError"></div>
+                <button class="btn" onclick="approveAssignment()">✅ Approve Assignment</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Send -->
+        <div id="builderStep3" class="hidden">
+            <div class="card">
+                <h2>Send "<span id="sendTitle"></span>"</h2>
+                <p style="color:#64748b; margin-bottom:1rem;">Assignment approved. Choose who should receive it.</p>
+                <div class="error-msg" id="sendError"></div>
+
+                <label style="margin-bottom:0.5rem;">
+                    <input type="radio" name="sendTarget" value="class" checked onchange="toggleSendTarget()" style="width:auto; margin-right:0.4rem;">
+                    Entire Class (all students in my grade)
+                </label>
+                <label style="margin-bottom:0.8rem; display:block;">
+                    <input type="radio" name="sendTarget" value="individual" onchange="toggleSendTarget()" style="width:auto; margin-right:0.4rem;">
+                    Individual Student(s)
+                </label>
+
+                <div id="individualStudentList" class="hidden" style="margin-bottom:1rem; max-height:220px; overflow-y:auto; border:1px solid #eee; border-radius:8px; padding:0.6rem 1rem;"></div>
+
+                <button class="btn" onclick="sendAssignment()">📨 Send Assignment</button>
+                <button class="btn btn-secondary" onclick="resetBuilder()" style="margin-left:0.6rem;">Create Another</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ HISTORY PAGE ============ -->
+    <div id="page-history" class="page hidden">
+        <div class="page-header">
+            <h1>Assignment History</h1>
+            <p>Every assignment you've created, with delivery and grading status</p>
+        </div>
+        <div class="card">
+            <table>
+                <thead><tr><th>Title</th><th>Subject</th><th>Status</th><th>Due</th><th>Delivered</th><th>Graded</th><th></th></tr></thead>
+                <tbody id="historyTableBody"></tbody>
+            </table>
+            <div id="historyEmpty" class="empty-state hidden">No assignments yet — create your first one!</div>
+        </div>
+    </div>
+
+    <!-- ============ STUDENTS PAGE ============ -->
+    <div id="page-students" class="page hidden">
+        <div class="page-header">
+            <h1>My Students</h1>
+            <p id="studentsSubtitle"></p>
+        </div>
+        <div class="card">
+            <table>
+                <thead><tr><th>Name</th><th>Email</th><th>Reading Level</th></tr></thead>
+                <tbody id="studentsTableBody"></tbody>
+            </table>
+            <div id="studentsEmpty" class="empty-state hidden">No students found for your grade yet.</div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Assignment Report Modal -->
+<div id="reportModal" class="modal-overlay hidden">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeReport()">&times;</button>
+        <div id="reportBody"></div>
+    </div>
+</div>
+
+<script>
+    function getToken() { return localStorage.getItem('token'); }
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text == null ? '' : String(text);
+        return div.innerHTML;
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/';
+    }
+
+    let myGradeLevel = '';
+    let myStudents = [];
+    let currentAssignmentId = null;
+    let currentAssignmentTitle = '';
+
+    function showPage(page) {
+        document.querySelectorAll('.page').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.sidebar-nav a').forEach(el => el.classList.remove('active'));
+        document.getElementById(`page-${page}`).classList.remove('hidden');
+        document.getElementById(`nav${page.charAt(0).toUpperCase() + page.slice(1)}`).classList.add('active');
+
+        if (page === 'history') loadHistory();
+        if (page === 'students') loadStudentsPage();
+    }
+
+    async function loadTeacherInfo() {
+        try {
+            const resp = await fetch('/api/teacher/students', { headers: { Authorization: `Bearer ${getToken()}` } });
+            if (resp.status === 401 || resp.status === 403) { logout(); return; }
+            const data = await resp.json();
+            myGradeLevel = data.grade_level;
+            myStudents = data.students || [];
+            document.getElementById('genGradeLevel').value = myGradeLevel;
+            document.getElementById('teacherGradeLabel').textContent = `${myGradeLevel} Grade Teacher`;
+            document.getElementById('studentsSubtitle').textContent = `${myStudents.length} student(s) in ${data.school || 'your school'}, grade ${myGradeLevel}`;
+        } catch (e) {
+            console.error('Failed to load teacher info', e);
+        }
+    }
+
+    // ---------- STEP 1: Generate ----------
+    function setStep(n) {
+        [1, 2, 3].forEach(i => {
+            document.getElementById(`stepPill${i}`).classList.remove('active', 'done');
+            if (i < n) document.getElementById(`stepPill${i}`).classList.add('done');
+            if (i === n) document.getElementById(`stepPill${i}`).classList.add('active');
+        });
+        document.getElementById('builderStep1').classList.toggle('hidden', n !== 1);
+        document.getElementById('builderStep2').classList.toggle('hidden', n !== 2);
+        document.getElementById('builderStep3').classList.toggle('hidden', n !== 3);
+    }
+
+    async function generateAssignment() {
+        const errEl = document.getElementById('genError');
+        errEl.style.display = 'none';
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+        btn.textContent = '✨ Generating...';
+
+        const standardsRaw = document.getElementById('genStandards').value.trim();
+        const standards = standardsRaw ? standardsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+        try {
+            const resp = await fetch('/api/teacher/assignments/generate', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subject: document.getElementById('genSubject').value,
+                    grade_level: myGradeLevel,
+                    standards,
+                    due_at: document.getElementById('genDueDate').value || null,
+                    content_description: document.getElementById('genContentDescription').value.trim(),
+                    special_instructions: document.getElementById('genSpecialInstructions').value.trim(),
+                    assessment_type: document.getElementById('genAssessmentType').value
+                })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Generation failed');
+
+            currentAssignmentId = data.assignment_id;
+            renderReview(data);
+            setStep(2);
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✨ Generate Assignment';
+        }
+    }
+
+    function renderReview(data) {
+        currentAssignmentTitle = data.title;
+        document.getElementById('reviewTitle').textContent = data.title;
+        document.getElementById('reviewStandards').textContent = (data.standards_addressed || []).join(' · ');
+        document.getElementById('reviewContent').textContent = data.content;
+        document.getElementById('reviewQuestions').innerHTML = (data.questions || []).map((q, i) => `
+            <div class="question-item">
+                <div class="qtype">${(q.type || '').replace(/_/g, ' ')}</div>
+                <div style="font-weight:600; margin-bottom:0.3rem;">Q${i + 1}: ${escapeHtml(q.question)}</div>
+                ${q.options ? `<div style="color:#555; font-size:0.9rem;">${q.options.map(o => escapeHtml(o)).join(' &nbsp;|&nbsp; ')}</div>` : ''}
+                ${q.correct_answer ? `<div style="color:#16a34a; font-size:0.85rem; margin-top:0.3rem;">Correct answer: ${escapeHtml(q.correct_answer)}</div>` : ''}
+                ${q.rubric_notes ? `<div style="color:#555; font-size:0.85rem; margin-top:0.3rem; font-style:italic;">Grading guidance: ${escapeHtml(q.rubric_notes)}</div>` : ''}
+            </div>
+        `).join('');
+    }
+
+    async function reviseContent() {
+        const instructions = document.getElementById('reviseContentInput').value.trim();
+        const errEl = document.getElementById('reviewError');
+        errEl.style.display = 'none';
+        if (!instructions) { errEl.textContent = 'Describe what you\'d like changed.'; errEl.style.display = 'block'; return; }
+        try {
+            const resp = await fetch(`/api/teacher/assignments/${currentAssignmentId}/revise-content`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instructions })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Revision failed');
+            renderReview({ title: data.title, content: data.content, questions: data.questions, standards_addressed: (document.getElementById('reviewStandards').textContent || '').split(' · ') });
+            document.getElementById('reviseContentInput').value = '';
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    async function reviseAssessment() {
+        const instructions = document.getElementById('reviseAssessmentInput').value.trim();
+        const errEl = document.getElementById('reviewError');
+        errEl.style.display = 'none';
+        if (!instructions) { errEl.textContent = 'Describe what you\'d like changed.'; errEl.style.display = 'block'; return; }
+        try {
+            const resp = await fetch(`/api/teacher/assignments/${currentAssignmentId}/revise-assessment`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instructions })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Revision failed');
+            document.getElementById('reviewQuestions').innerHTML = (data.questions || []).map((q, i) => `
+                <div class="question-item">
+                    <div class="qtype">${(q.type || '').replace(/_/g, ' ')}</div>
+                    <div style="font-weight:600; margin-bottom:0.3rem;">Q${i + 1}: ${escapeHtml(q.question)}</div>
+                    ${q.options ? `<div style="color:#555; font-size:0.9rem;">${q.options.map(o => escapeHtml(o)).join(' &nbsp;|&nbsp; ')}</div>` : ''}
+                    ${q.correct_answer ? `<div style="color:#16a34a; font-size:0.85rem; margin-top:0.3rem;">Correct answer: ${escapeHtml(q.correct_answer)}</div>` : ''}
+                    ${q.rubric_notes ? `<div style="color:#555; font-size:0.85rem; margin-top:0.3rem; font-style:italic;">Grading guidance: ${escapeHtml(q.rubric_notes)}</div>` : ''}
+                </div>
+            `).join('');
+            document.getElementById('reviseAssessmentInput').value = '';
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    async function approveAssignment() {
+        const errEl = document.getElementById('reviewError');
+        errEl.style.display = 'none';
+        try {
+            const resp = await fetch(`/api/teacher/assignments/${currentAssignmentId}/approve`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}` }
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Approval failed');
+            document.getElementById('sendTitle').textContent = currentAssignmentTitle;
+            renderIndividualStudentList();
+            setStep(3);
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    function renderIndividualStudentList() {
+        const container = document.getElementById('individualStudentList');
+        if (myStudents.length === 0) {
+            container.innerHTML = '<p style="color:#888;">No students found in your grade.</p>';
+            return;
+        }
+        container.innerHTML = myStudents.map(s => `
+            <div class="checkbox-row">
+                <input type="checkbox" value="${s.id}" class="send-student-checkbox">
+                <span>${escapeHtml(s.full_name)}</span>
+            </div>
+        `).join('');
+    }
+
+    function toggleSendTarget() {
+        const target = document.querySelector('input[name="sendTarget"]:checked').value;
+        document.getElementById('individualStudentList').classList.toggle('hidden', target !== 'individual');
+    }
+
+    async function sendAssignment() {
+        const errEl = document.getElementById('sendError');
+        errEl.style.display = 'none';
+        const target = document.querySelector('input[name="sendTarget"]:checked').value;
+        let student_ids = [];
+        if (target === 'individual') {
+            student_ids = Array.from(document.querySelectorAll('.send-student-checkbox:checked')).map(cb => parseInt(cb.value));
+            if (student_ids.length === 0) {
+                errEl.textContent = 'Select at least one student.';
+                errEl.style.display = 'block';
+                return;
+            }
+        }
+        try {
+            const resp = await fetch(`/api/teacher/assignments/${currentAssignmentId}/send`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, student_ids })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Send failed');
+            alert(`Assignment sent to ${data.sent_to_count} student(s)!`);
+            showPage('history');
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    function resetBuilder() {
+        currentAssignmentId = null;
+        document.getElementById('genContentDescription').value = '';
+        document.getElementById('genSpecialInstructions').value = '';
+        document.getElementById('genStandards').value = '';
+        document.getElementById('genDueDate').value = '';
+        setStep(1);
+    }
+
+    // ---------- HISTORY ----------
+    async function loadHistory() {
+        try {
+            const resp = await fetch('/api/teacher/assignments', { headers: { Authorization: `Bearer ${getToken()}` } });
+            const data = await resp.json();
+            const tbody = document.getElementById('historyTableBody');
+            const empty = document.getElementById('historyEmpty');
+            if (!data.assignments || data.assignments.length === 0) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            tbody.innerHTML = data.assignments.map(a => `
+                <tr>
+                    <td>${escapeHtml(a.title)}</td>
+                    <td>${escapeHtml(a.subject)}</td>
+                    <td><span class="status-pill status-${a.status}">${a.status}</span></td>
+                    <td>${a.due_at ? new Date(a.due_at).toLocaleDateString() : '—'}</td>
+                    <td>${a.delivered_count}</td>
+                    <td>${a.graded_count}</td>
+                    <td>${a.delivered_count > 0 ? `<button class="btn btn-secondary" style="width:auto; padding:0.3rem 0.8rem; font-size:0.82rem;" onclick="viewReport(${a.id})">Report</button>` : ''}</td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load history', e);
+        }
+    }
+
+    async function viewReport(assignmentId) {
+        const modal = document.getElementById('reportModal');
+        const body = document.getElementById('reportBody');
+        body.innerHTML = '<p style="color:#888;">Loading...</p>';
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+
+        try {
+            const resp = await fetch(`/api/teacher/assignments/${assignmentId}/report`, { headers: { Authorization: `Bearer ${getToken()}` } });
+            const data = await resp.json();
+            const rows = (data.deliveries || []).map(d => `
+                <tr>
+                    <td>${escapeHtml(d.full_name)}</td>
+                    <td><span class="status-pill status-${d.status}">${d.status}</span> ${d.is_late ? '<span class="late-tag">LATE</span>' : ''}</td>
+                    <td>${d.score != null ? d.score + '%' : '—'}</td>
+                    <td style="max-width:260px; font-size:0.85rem; color:#555;">${escapeHtml(d.teacher_feedback_summary || '')}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" style="text-align:center; color:#888;">No deliveries yet.</td></tr>';
+
+            body.innerHTML = `
+                <h2 style="margin-bottom:0.2rem;">${escapeHtml(data.assignment.title)}</h2>
+                <div style="color:#64748b; font-size:0.88rem; margin-bottom:1rem;">${escapeHtml(data.assignment.subject)} &middot; Grade ${escapeHtml(data.assignment.grade_level)} ${data.assignment.due_at ? '&middot; Due ' + new Date(data.assignment.due_at).toLocaleDateString() : ''}</div>
+                <table>
+                    <thead><tr><th>Student</th><th>Status</th><th>Score</th><th>Feedback</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        } catch (e) {
+            body.innerHTML = '<p style="color:#dc3545;">Failed to load report.</p>';
+        }
+    }
+
+    function closeReport() {
+        const modal = document.getElementById('reportModal');
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+
+    // ---------- STUDENTS ----------
+    function loadStudentsPage() {
+        const tbody = document.getElementById('studentsTableBody');
+        const empty = document.getElementById('studentsEmpty');
+        if (myStudents.length === 0) {
+            tbody.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        tbody.innerHTML = myStudents.map(s => `
+            <tr>
+                <td>${escapeHtml(s.full_name)}</td>
+                <td>${escapeHtml(s.email)}</td>
+                <td>${escapeHtml(s.reading_level || 'Pending')}</td>
+            </tr>
+        `).join('');
+    }
+
+    // On load
+    (function init() {
+        const token = getToken();
+        const userRaw = localStorage.getItem('user');
+        if (!token || !userRaw) { window.location.href = '/'; return; }
+        try {
+            const user = JSON.parse(userRaw);
+            if (user.role !== 'teacher') { window.location.href = '/'; return; }
+            document.getElementById('teacherName').textContent = user.full_name || 'Teacher';
+        } catch (e) {
+            window.location.href = '/';
+            return;
+        }
+        loadTeacherInfo().then(() => showPage('builder'));
+        setStep(1);
+    })();
+</script>
+
+</body>
+</html>
