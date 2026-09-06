@@ -749,6 +749,7 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_game_score INTEGER DEFAULT 0",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS used_at TIMESTAMP",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'",
+                "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS token_hash VARCHAR(255)",
                 "ALTER TABLE admin_invites ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP",
                 "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS session_start TIMESTAMP",
                 "ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
