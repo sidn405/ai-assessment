@@ -125,6 +125,8 @@
         <a id="navBuilder" onclick="showPage('builder')">✏️ Create Assignment</a>
         <a id="navHistory" onclick="showPage('history')">📋 Assignment History</a>
         <a id="navStudents" onclick="showPage('students')">🎓 My Students</a>
+        <a id="navPeriods" onclick="showPage('periods')">🕐 Periods</a>
+        <a id="navMessages" onclick="showPage('messages')">💬 Messages <span id="msgUnreadBadge" class="hidden" style="background:#dc3545; color:white; border-radius:999px; padding:0.1rem 0.5rem; font-size:0.72rem; margin-left:0.3rem;"></span></a>
     </nav>
     <button class="logout-btn" onclick="logout()">Logout</button>
 </aside>
@@ -226,10 +228,18 @@
                     <input type="radio" name="sendTarget" value="class" checked onchange="toggleSendTarget()" style="width:auto; margin-right:0.4rem;">
                     Entire Class (all students in my grade)
                 </label>
+                <label style="margin-bottom:0.5rem; display:block;">
+                    <input type="radio" name="sendTarget" value="period" onchange="toggleSendTarget()" style="width:auto; margin-right:0.4rem;">
+                    A Specific Period
+                </label>
                 <label style="margin-bottom:0.8rem; display:block;">
                     <input type="radio" name="sendTarget" value="individual" onchange="toggleSendTarget()" style="width:auto; margin-right:0.4rem;">
                     Individual Student(s)
                 </label>
+
+                <div id="periodSelectWrapper" class="hidden" style="margin-bottom:1rem;">
+                    <select id="sendPeriodSelect"></select>
+                </div>
 
                 <div id="individualStudentList" class="hidden" style="margin-bottom:1rem; max-height:220px; overflow-y:auto; border:1px solid #eee; border-radius:8px; padding:0.6rem 1rem;"></div>
 
@@ -269,6 +279,64 @@
         </div>
     </div>
 
+    <!-- ============ PERIODS PAGE ============ -->
+    <div id="page-periods" class="page hidden">
+        <div class="page-header">
+            <h1>Class Periods</h1>
+            <p>Organize your roster into periods (e.g. 1st Period, 3rd Period Reading) so you can send assignments to just one class at a time.</p>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom:0.8rem;">Create a Period</h3>
+            <div class="error-msg" id="periodError"></div>
+            <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+                <input type="text" id="newPeriodName" placeholder="e.g. 1st Period" style="flex:1; min-width:200px; margin-bottom:0;">
+                <button class="btn" onclick="createPeriod()">+ Add Period</button>
+            </div>
+        </div>
+
+        <div id="periodsList"></div>
+        <div id="periodsEmpty" class="empty-state hidden">No periods yet — create one above.</div>
+    </div>
+
+    <!-- ============ MESSAGES PAGE ============ -->
+    <div id="page-messages" class="page hidden">
+        <div class="page-header">
+            <h1>Messages</h1>
+            <p>Conversations with your students</p>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 280px 1fr; gap:1.2rem; align-items:start;">
+            <div class="card" style="padding:0.8rem;">
+                <div id="conversationList"></div>
+                <div id="conversationsEmpty" class="empty-state hidden" style="padding:1.5rem 0.5rem;">No students yet.</div>
+            </div>
+
+            <div class="card" id="threadCard" style="min-height:420px; display:flex; flex-direction:column;">
+                <div id="threadEmpty" class="empty-state">Select a student to view your conversation.</div>
+                <div id="threadView" class="hidden" style="display:flex; flex-direction:column; height:100%;">
+                    <h3 id="threadStudentName" style="margin-bottom:0.8rem;"></h3>
+                    <div id="threadMessages" style="flex:1; overflow-y:auto; max-height:320px; margin-bottom:1rem; padding-right:0.4rem;"></div>
+                    <div style="display:flex; gap:0.6rem;">
+                        <input type="text" id="threadReplyInput" placeholder="Type a message..." style="flex:1; margin-bottom:0;" onkeydown="if(event.key==='Enter') sendTeacherReply()">
+                        <button class="btn" style="width:auto;" onclick="sendTeacherReply()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Manage Period Roster Modal -->
+<div id="periodRosterModal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:480px;">
+        <button class="modal-close" onclick="closePeriodRoster()">&times;</button>
+        <h2 id="periodRosterTitle" style="margin-bottom:0.3rem;"></h2>
+        <p style="color:#64748b; font-size:0.88rem; margin-bottom:1rem;">Check the students who are in this period.</p>
+        <div id="periodRosterChecklist" style="max-height:320px; overflow-y:auto; border:1px solid #eee; border-radius:8px; padding:0.6rem 1rem; margin-bottom:1rem;"></div>
+        <button class="btn" onclick="savePeriodRoster()">Save Roster</button>
+    </div>
 </div>
 
 <!-- Assignment Report Modal -->
@@ -306,6 +374,8 @@
 
         if (page === 'history') loadHistory();
         if (page === 'students') loadStudentsPage();
+        if (page === 'periods') loadPeriodsPage();
+        if (page === 'messages') loadMessagesPage();
     }
 
     async function loadTeacherInfo() {
@@ -463,19 +533,27 @@
         const container = document.getElementById('individualStudentList');
         if (myStudents.length === 0) {
             container.innerHTML = '<p style="color:#888;">No students found in your grade.</p>';
-            return;
+        } else {
+            container.innerHTML = myStudents.map(s => `
+                <div class="checkbox-row">
+                    <input type="checkbox" value="${s.id}" class="send-student-checkbox">
+                    <span>${escapeHtml(s.full_name)}</span>
+                </div>
+            `).join('');
         }
-        container.innerHTML = myStudents.map(s => `
-            <div class="checkbox-row">
-                <input type="checkbox" value="${s.id}" class="send-student-checkbox">
-                <span>${escapeHtml(s.full_name)}</span>
-            </div>
-        `).join('');
+
+        const periodSelect = document.getElementById('sendPeriodSelect');
+        if (!myPeriods || myPeriods.length === 0) {
+            periodSelect.innerHTML = '<option value="">No periods created yet</option>';
+        } else {
+            periodSelect.innerHTML = myPeriods.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${p.students.length} students)</option>`).join('');
+        }
     }
 
     function toggleSendTarget() {
         const target = document.querySelector('input[name="sendTarget"]:checked').value;
         document.getElementById('individualStudentList').classList.toggle('hidden', target !== 'individual');
+        document.getElementById('periodSelectWrapper').classList.toggle('hidden', target !== 'period');
     }
 
     async function sendAssignment() {
@@ -483,10 +561,18 @@
         errEl.style.display = 'none';
         const target = document.querySelector('input[name="sendTarget"]:checked').value;
         let student_ids = [];
+        let period_id = null;
         if (target === 'individual') {
             student_ids = Array.from(document.querySelectorAll('.send-student-checkbox:checked')).map(cb => parseInt(cb.value));
             if (student_ids.length === 0) {
                 errEl.textContent = 'Select at least one student.';
+                errEl.style.display = 'block';
+                return;
+            }
+        } else if (target === 'period') {
+            period_id = parseInt(document.getElementById('sendPeriodSelect').value);
+            if (!period_id) {
+                errEl.textContent = 'Select a period, or create one first from the Periods page.';
                 errEl.style.display = 'block';
                 return;
             }
@@ -495,7 +581,7 @@
             const resp = await fetch(`/api/teacher/assignments/${currentAssignmentId}/send`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target, student_ids })
+                body: JSON.stringify({ target, student_ids, period_id })
             });
             const data = await resp.json();
             if (!resp.ok) throw new Error(data.detail || 'Send failed');
@@ -602,6 +688,221 @@
         `).join('');
     }
 
+    // ---------- PERIODS ----------
+    let myPeriods = [];
+    let currentRosterPeriodId = null;
+
+    async function loadPeriodsPage() {
+        try {
+            const resp = await fetch('/api/teacher/periods', { headers: { Authorization: `Bearer ${getToken()}` } });
+            const data = await resp.json();
+            myPeriods = data.periods || [];
+            renderPeriodsList();
+        } catch (e) {
+            console.error('Failed to load periods', e);
+        }
+    }
+
+    function renderPeriodsList() {
+        const container = document.getElementById('periodsList');
+        const empty = document.getElementById('periodsEmpty');
+        if (myPeriods.length === 0) {
+            container.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        container.innerHTML = myPeriods.map(p => `
+            <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+                <div>
+                    <h3 style="margin-bottom:0.2rem;">${escapeHtml(p.name)}</h3>
+                    <div style="color:#64748b; font-size:0.88rem;">${p.students.length} student(s)${p.students.length ? ': ' + p.students.map(s => escapeHtml(s.full_name)).join(', ') : ''}</div>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                    <button class="btn btn-secondary" style="width:auto; padding:0.4rem 0.9rem; font-size:0.85rem;" onclick="openPeriodRoster(${p.id})">Manage Roster</button>
+                    <button class="btn btn-secondary" style="width:auto; padding:0.4rem 0.9rem; font-size:0.85rem; color:#dc3545; border-color:#dc3545;" onclick="deletePeriod(${p.id})">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function createPeriod() {
+        const errEl = document.getElementById('periodError');
+        errEl.style.display = 'none';
+        const nameInput = document.getElementById('newPeriodName');
+        const name = nameInput.value.trim();
+        if (!name) return;
+        try {
+            const resp = await fetch('/api/teacher/periods', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Could not create period');
+            nameInput.value = '';
+            await loadPeriodsPage();
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    async function deletePeriod(periodId) {
+        if (!confirm('Delete this period? This cannot be undone.')) return;
+        try {
+            await fetch(`/api/teacher/periods/${periodId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${getToken()}` }
+            });
+            await loadPeriodsPage();
+        } catch (e) {
+            alert('Failed to delete period.');
+        }
+    }
+
+    function openPeriodRoster(periodId) {
+        currentRosterPeriodId = periodId;
+        const period = myPeriods.find(p => p.id === periodId);
+        document.getElementById('periodRosterTitle').textContent = period.name;
+        const enrolledIds = new Set(period.students.map(s => s.id));
+        document.getElementById('periodRosterChecklist').innerHTML = myStudents.map(s => `
+            <div class="checkbox-row">
+                <input type="checkbox" value="${s.id}" class="period-roster-checkbox" ${enrolledIds.has(s.id) ? 'checked' : ''}>
+                <span>${escapeHtml(s.full_name)}</span>
+            </div>
+        `).join('') || '<p style="color:#888;">No students found in your grade yet.</p>';
+
+        const modal = document.getElementById('periodRosterModal');
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+    }
+
+    function closePeriodRoster() {
+        const modal = document.getElementById('periodRosterModal');
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+
+    async function savePeriodRoster() {
+        const student_ids = Array.from(document.querySelectorAll('.period-roster-checkbox:checked')).map(cb => parseInt(cb.value));
+        try {
+            const resp = await fetch(`/api/teacher/periods/${currentRosterPeriodId}/roster`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_ids })
+            });
+            if (!resp.ok) throw new Error('Failed to save roster');
+            closePeriodRoster();
+            await loadPeriodsPage();
+        } catch (e) {
+            alert('Failed to save roster.');
+        }
+    }
+
+    // ---------- MESSAGES ----------
+    let myConversations = [];
+    let currentThreadStudentId = null;
+
+    async function loadMessagesPage() {
+        try {
+            const resp = await fetch('/api/teacher/conversations', { headers: { Authorization: `Bearer ${getToken()}` } });
+            const data = await resp.json();
+            myConversations = data.conversations || [];
+            renderConversationList();
+            updateUnreadBadge();
+        } catch (e) {
+            console.error('Failed to load conversations', e);
+        }
+    }
+
+    function updateUnreadBadge() {
+        const totalUnread = myConversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+        const badge = document.getElementById('msgUnreadBadge');
+        if (totalUnread > 0) {
+            badge.textContent = totalUnread;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    function renderConversationList() {
+        const container = document.getElementById('conversationList');
+        const empty = document.getElementById('conversationsEmpty');
+        if (myConversations.length === 0) {
+            container.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        container.innerHTML = myConversations.map(c => `
+            <div onclick="openConversation(${c.id})"
+                 style="padding:0.7rem 0.6rem; border-radius:8px; cursor:pointer; margin-bottom:0.3rem;
+                        background:${currentThreadStudentId === c.id ? '#eef1f5' : 'transparent'};">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="font-size:0.92rem;">${escapeHtml(c.full_name)}</strong>
+                    ${c.unread_count > 0 ? `<span style="background:#dc3545; color:white; border-radius:999px; padding:0.05rem 0.45rem; font-size:0.7rem;">${c.unread_count}</span>` : ''}
+                </div>
+                <div style="color:#94a3b8; font-size:0.8rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${c.last_message ? escapeHtml(c.last_message) : 'No messages yet'}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function openConversation(studentId) {
+        currentThreadStudentId = studentId;
+        renderConversationList();
+
+        const conv = myConversations.find(c => c.id === studentId);
+        document.getElementById('threadEmpty').classList.add('hidden');
+        document.getElementById('threadView').classList.remove('hidden');
+        document.getElementById('threadStudentName').textContent = conv ? conv.full_name : '';
+
+        try {
+            const resp = await fetch(`/api/teacher/conversations/${studentId}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+            const data = await resp.json();
+            const container = document.getElementById('threadMessages');
+            container.innerHTML = (data.messages || []).map(m => {
+                const isTeacher = m.sender_type === 'teacher';
+                return `
+                    <div style="margin-bottom:0.7rem; display:flex; justify-content:${isTeacher ? 'flex-end' : 'flex-start'};">
+                        <div style="max-width:75%; padding:0.55rem 0.8rem; border-radius:10px;
+                                    background:${isTeacher ? '#2A398A' : '#f0f2f5'}; color:${isTeacher ? 'white' : '#1e293b'};">
+                            ${escapeHtml(m.content)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            container.scrollTop = container.scrollHeight;
+
+            // Mark-as-read already happened server-side; refresh badge counts
+            await loadMessagesPage();
+            currentThreadStudentId = studentId;
+            renderConversationList();
+        } catch (e) {
+            console.error('Failed to load thread', e);
+        }
+    }
+
+    async function sendTeacherReply() {
+        const input = document.getElementById('threadReplyInput');
+        const content = input.value.trim();
+        if (!content || !currentThreadStudentId) return;
+        input.value = '';
+        try {
+            await fetch('/api/teacher/messages/send', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recipient_id: currentThreadStudentId, content })
+            });
+            await openConversation(currentThreadStudentId);
+        } catch (e) {
+            alert('Failed to send message.');
+        }
+    }
+
     // On load
     (function init() {
         const token = getToken();
@@ -616,6 +917,8 @@
             return;
         }
         loadTeacherInfo().then(() => showPage('builder'));
+        loadPeriodsPage();
+        loadMessagesPage();
         setStep(1);
     })();
 </script>

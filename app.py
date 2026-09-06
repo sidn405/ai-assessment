@@ -799,6 +799,8 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS teacher_grade_level VARCHAR(20)",
                 "CREATE TABLE IF NOT EXISTS assignments (id SERIAL PRIMARY KEY, teacher_id INTEGER REFERENCES users(id), subject VARCHAR(50), grade_level VARCHAR(20), standards TEXT, due_at TIMESTAMP, content_description TEXT, special_instructions TEXT, assessment_type VARCHAR(30), title VARCHAR(255), content TEXT, questions TEXT, status VARCHAR(20) DEFAULT 'draft', approved_at TIMESTAMP, approved_by_name VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS assignments (id INTEGER PRIMARY KEY AUTOINCREMENT, teacher_id INTEGER, subject VARCHAR(50), grade_level VARCHAR(20), standards TEXT, due_at TIMESTAMP, content_description TEXT, special_instructions TEXT, assessment_type VARCHAR(30), title VARCHAR(255), content TEXT, questions TEXT, status VARCHAR(20) DEFAULT 'draft', approved_at TIMESTAMP, approved_by_name VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS assignment_deliveries (id SERIAL PRIMARY KEY, assignment_id INTEGER REFERENCES assignments(id), student_id INTEGER REFERENCES users(id), sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'assigned', submitted_at TIMESTAMP, is_late BOOLEAN DEFAULT FALSE, score REAL, teacher_feedback_summary TEXT, student_feedback_summary TEXT, answers TEXT, graded_at TIMESTAMP, UNIQUE(assignment_id, student_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS assignment_deliveries (id INTEGER PRIMARY KEY AUTOINCREMENT, assignment_id INTEGER, student_id INTEGER, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'assigned', submitted_at TIMESTAMP, is_late BOOLEAN DEFAULT 0, score REAL, teacher_feedback_summary TEXT, student_feedback_summary TEXT, answers TEXT, graded_at TIMESTAMP, UNIQUE(assignment_id, student_id))",
+                "CREATE TABLE IF NOT EXISTS class_periods (id SERIAL PRIMARY KEY, teacher_id INTEGER REFERENCES users(id), name VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS class_periods (id INTEGER PRIMARY KEY AUTOINCREMENT, teacher_id INTEGER, name VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS class_period_students (id SERIAL PRIMARY KEY, period_id INTEGER REFERENCES class_periods(id) ON DELETE CASCADE, student_id INTEGER REFERENCES users(id), UNIQUE(period_id, student_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS class_period_students (id INTEGER PRIMARY KEY AUTOINCREMENT, period_id INTEGER, student_id INTEGER, UNIQUE(period_id, student_id))",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -1569,6 +1571,37 @@ def require_teacher(user: dict = Depends(get_current_user)):
     if user.get("role") != "teacher":
         raise HTTPException(status_code=403, detail="Teacher access required")
     return user
+
+
+def _find_student_teacher(student_id: int, cursor):
+    """Find the teacher assigned to this student (matching school + grade_band).
+    Returns (id, full_name) or None if no teacher is set up for their grade yet —
+    callers should fall back to messaging an admin in that case."""
+    cursor.execute(
+        "SELECT school, grade_band FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, grade_band FROM users WHERE id = ?",
+        (student_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    school = row['school'] if hasattr(row, 'keys') else row[0]
+    grade_band = row['grade_band'] if hasattr(row, 'keys') else row[1]
+
+    if USE_POSTGRES:
+        cursor.execute(
+            "SELECT id, full_name FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(%s, '') AND teacher_grade_level = %s ORDER BY id LIMIT 1",
+            (school, grade_band)
+        )
+    else:
+        cursor.execute(
+            "SELECT id, full_name FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(?, '') AND teacher_grade_level = ? ORDER BY id LIMIT 1",
+            (school, grade_band)
+        )
+    teacher = cursor.fetchone()
+    if not teacher:
+        return None
+    return (teacher['id'] if hasattr(teacher, 'keys') else teacher[0],
+            teacher['full_name'] if hasattr(teacher, 'keys') else teacher[1])
 
 
 def _verify_parent_owns_child(parent_id: int, child_id: int) -> bool:
@@ -3438,52 +3471,47 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
  
 @app.get("/api/messages/my-conversation")
 async def get_student_conversation(current_user: dict = Depends(require_user)):
-    """Get student's conversation with their teacher"""
+    """Get student's conversation with their teacher (falls back to an admin
+    contact if no teacher is set up for their grade yet)."""
     try:
         conn = get_db()
         cursor = get_cursor(conn)
         student_id = current_user['user_id']
-        
-        # Get student's school
-        cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
-        student_row = cursor.fetchone()
-        if student_row:
-            from collections.abc import Mapping
-            student_school = student_row["school"] if isinstance(student_row, Mapping) else student_row[0]
+
+        teacher = _find_student_teacher(student_id, cursor)
+
+        if teacher:
+            contact_id, contact_name = teacher
+            contact_type = 'teacher'
         else:
-            student_school = None
-        
-        # Find admin from student's school, or super admin (school=NULL)
-        if student_school:
-            # Try to find school-specific admin first
-            cursor.execute(
-                "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
-                (student_school,)
-            )
-            admin = cursor.fetchone()
-            
-            # If no school-specific admin, fall back to super admin
-            if not admin:
+            # Fallback: no teacher assigned yet — message an admin instead
+            cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
+            student_row = cursor.fetchone()
+            student_school = (student_row["school"] if hasattr(student_row, 'keys') else student_row[0]) if student_row else None
+
+            if student_school:
                 cursor.execute(
-                    "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                    "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
+                    (student_school,)
                 )
                 admin = cursor.fetchone()
-        else:
-            # Student has no school, find any admin
-            cursor.execute(
-                "SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
-            )
-            admin = cursor.fetchone()
-        
-        if not admin:
-            conn.close()
-            return {
-                "messages": [],
-                "teacher_name": "Your Teacher",
-                "teacher_id": None
-            }
-        
-        # Get all messages
+                if not admin:
+                    cursor.execute(
+                        "SELECT id, full_name as name FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                    )
+                    admin = cursor.fetchone()
+            else:
+                cursor.execute("SELECT id, full_name as name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
+                admin = cursor.fetchone()
+
+            if not admin:
+                conn.close()
+                return {"messages": [], "teacher_name": "Your Teacher", "teacher_id": None}
+
+            contact_id = admin['id'] if hasattr(admin, 'keys') else admin[0]
+            contact_name = admin['name'] if hasattr(admin, 'keys') else admin[1]
+            contact_type = 'admin'
+
         query = """
             SELECT 
                 m.id,
@@ -3494,22 +3522,20 @@ async def get_student_conversation(current_user: dict = Depends(require_user)):
                 m.created_at
             FROM messages m
             WHERE 
-                (m.sender_id = %s AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = 'admin')
+                (m.sender_id = %s AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = %s)
                 OR
-                (m.sender_id = %s AND m.sender_type = 'admin' AND m.recipient_id = %s AND m.recipient_type = 'student')
+                (m.sender_id = %s AND m.sender_type = %s AND m.recipient_id = %s AND m.recipient_type = 'student')
             ORDER BY m.created_at ASC
         """
-        
-        admin_id = admin['id'] if isinstance(admin, Mapping) else admin[0]
-        cursor.execute(query, (student_id, admin_id, admin_id, student_id))
+
+        cursor.execute(query, (student_id, contact_id, contact_type, contact_id, contact_type, student_id))
         messages = cursor.fetchall()
         conn.close()
-        
-        admin_name = admin['name'] if isinstance(admin, Mapping) else admin[1]
+
         return {
             "messages": [dict(m) for m in messages],
-            "teacher_name": admin_name,
-            "teacher_id": admin_id
+            "teacher_name": contact_name,
+            "teacher_id": contact_id
         }
         
     except Exception as e:
@@ -3527,50 +3553,46 @@ async def send_message_to_teacher(
         conn = get_db()
         cursor = get_cursor(conn)
         student_id = current_user["user_id"]
-        
-        # Get student's school
-        cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
-        student_row = cursor.fetchone()
-        if student_row:
-            from collections.abc import Mapping
-            student_school = student_row["school"] if isinstance(student_row, Mapping) else student_row[0]
+
+        teacher = _find_student_teacher(student_id, cursor)
+
+        if teacher:
+            contact_id, _ = teacher
+            contact_type = 'teacher'
         else:
-            student_school = None
-        
-        # Find admin from student's school (SAME LOGIC as my-conversation)
-        if student_school:
-            # Try to find school-specific admin first
-            cursor.execute(
-                "SELECT id FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
-                (student_school,)
-            )
-            admin = cursor.fetchone()
-            
-            # If no school-specific admin, fall back to super admin
-            if not admin:
+            cursor.execute("SELECT school FROM users WHERE id = %s", (student_id,))
+            student_row = cursor.fetchone()
+            student_school = (student_row["school"] if hasattr(student_row, 'keys') else student_row[0]) if student_row else None
+
+            if student_school:
                 cursor.execute(
-                    "SELECT id FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                    "SELECT id FROM users WHERE role = 'admin' AND school = %s ORDER BY id ASC LIMIT 1",
+                    (student_school,)
                 )
                 admin = cursor.fetchone()
-        else:
-            # Student has no school, find any admin
-            cursor.execute(
-                "SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
-            )
-            admin = cursor.fetchone()
- 
-        if not admin:
-            conn.close()
-            raise HTTPException(status_code=404, detail="No administrator found")
- 
+                if not admin:
+                    cursor.execute(
+                        "SELECT id FROM users WHERE role = 'admin' AND school IS NULL ORDER BY id ASC LIMIT 1"
+                    )
+                    admin = cursor.fetchone()
+            else:
+                cursor.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
+                admin = cursor.fetchone()
+
+            if not admin:
+                conn.close()
+                raise HTTPException(status_code=404, detail="No teacher or administrator found")
+
+            contact_id = admin['id'] if hasattr(admin, 'keys') else admin[0]
+            contact_type = 'admin'
+
         query = """
             INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content)
-            VALUES (%s, 'student', %s, 'admin', %s)
+            VALUES (%s, 'student', %s, %s, %s)
             RETURNING id, created_at
         """
- 
-        admin_id = admin["id"] if isinstance(admin, Mapping) else admin[0]
-        cursor.execute(query, (student_id, admin_id, request.content))
+
+        cursor.execute(query, (student_id, contact_id, contact_type, request.content))
         result = cursor.fetchone()
         conn.commit()
         conn.close()
@@ -3581,6 +3603,8 @@ async def send_message_to_teacher(
             "created_at": result["created_at"]
         }
  
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error sending message to teacher: {e}")
         traceback.print_exc()
@@ -9248,12 +9272,207 @@ async def get_teacher_students(teacher=Depends(require_teacher)):
         conn.close()
 
 
+class PeriodCreate(BaseModel):
+    name: str
+
+
+class PeriodRosterUpdate(BaseModel):
+    student_ids: List[int]
+
+
+@app.get("/api/teacher/periods")
+async def list_periods(teacher=Depends(require_teacher)):
+    """List this teacher's class periods with their rosters."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, name, created_at FROM class_periods WHERE teacher_id = %s ORDER BY created_at ASC",
+                (teacher["user_id"],)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, name, created_at FROM class_periods WHERE teacher_id = ? ORDER BY created_at ASC",
+                (teacher["user_id"],)
+            )
+        period_rows = cursor.fetchall()
+        periods = []
+        for p in period_rows:
+            p = dict(p) if hasattr(p, 'keys') else {'id': p[0], 'name': p[1], 'created_at': p[2]}
+            if USE_POSTGRES:
+                cursor.execute(
+                    """SELECT u.id, u.full_name FROM class_period_students cps
+                       JOIN users u ON u.id = cps.student_id WHERE cps.period_id = %s ORDER BY u.full_name""",
+                    (p['id'],)
+                )
+            else:
+                cursor.execute(
+                    """SELECT u.id, u.full_name FROM class_period_students cps
+                       JOIN users u ON u.id = cps.student_id WHERE cps.period_id = ? ORDER BY u.full_name""",
+                    (p['id'],)
+                )
+            student_rows = cursor.fetchall()
+            p['students'] = [{'id': s['id'] if hasattr(s, 'keys') else s[0], 'full_name': s['full_name'] if hasattr(s, 'keys') else s[1]} for s in student_rows]
+            p['created_at'] = str(p['created_at']) if p.get('created_at') else None
+            periods.append(p)
+        return {"periods": periods}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/teacher/periods")
+async def create_period(period: PeriodCreate, teacher=Depends(require_teacher)):
+    """Create a new class period (e.g. 'Period 1', '3rd Period Reading')."""
+    if not period.name.strip():
+        raise HTTPException(status_code=400, detail="Period name is required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "INSERT INTO class_periods (teacher_id, name) VALUES (%s, %s) RETURNING id",
+                (teacher["user_id"], period.name.strip())
+            )
+            period_id = cursor.fetchone()['id']
+        else:
+            cursor.execute(
+                "INSERT INTO class_periods (teacher_id, name) VALUES (?, ?)",
+                (teacher["user_id"], period.name.strip())
+            )
+            period_id = cursor.lastrowid
+        conn.commit()
+        return {"success": True, "period_id": period_id, "name": period.name.strip()}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.put("/api/teacher/periods/{period_id}")
+async def rename_period(period_id: int, period: PeriodCreate, teacher=Depends(require_teacher)):
+    """Rename a period."""
+    if not period.name.strip():
+        raise HTTPException(status_code=400, detail="Period name is required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE class_periods SET name = %s WHERE id = %s AND teacher_id = %s",
+                (period.name.strip(), period_id, teacher["user_id"])
+            )
+        else:
+            cursor.execute(
+                "UPDATE class_periods SET name = ? WHERE id = ? AND teacher_id = ?",
+                (period.name.strip(), period_id, teacher["user_id"])
+            )
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.delete("/api/teacher/periods/{period_id}")
+async def delete_period(period_id: int, teacher=Depends(require_teacher)):
+    """Delete a period and its roster links."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT id FROM class_periods WHERE id = %s AND teacher_id = %s", (period_id, teacher["user_id"]))
+        else:
+            cursor.execute("SELECT id FROM class_periods WHERE id = ? AND teacher_id = ?", (period_id, teacher["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Period not found")
+
+        if USE_POSTGRES:
+            cursor.execute("DELETE FROM class_period_students WHERE period_id = %s", (period_id,))
+            cursor.execute("DELETE FROM class_periods WHERE id = %s", (period_id,))
+        else:
+            cursor.execute("DELETE FROM class_period_students WHERE period_id = ?", (period_id,))
+            cursor.execute("DELETE FROM class_periods WHERE id = ?", (period_id,))
+        conn.commit()
+        return {"success": True}
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.put("/api/teacher/periods/{period_id}/roster")
+async def set_period_roster(period_id: int, roster: PeriodRosterUpdate, teacher=Depends(require_teacher)):
+    """Replace a period's student roster wholesale with the given list of student IDs
+    (all of which must be in the teacher's own school+grade roster)."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT id FROM class_periods WHERE id = %s AND teacher_id = %s", (period_id, teacher["user_id"]))
+        else:
+            cursor.execute("SELECT id FROM class_periods WHERE id = ? AND teacher_id = ?", (period_id, teacher["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Period not found")
+
+        cursor.execute(
+            "SELECT school, teacher_grade_level FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, teacher_grade_level FROM users WHERE id = ?",
+            (teacher["user_id"],)
+        )
+        row = cursor.fetchone()
+        school = row['school'] if hasattr(row, 'keys') else row[0]
+        grade_level = row['teacher_grade_level'] if hasattr(row, 'keys') else row[1]
+
+        if roster.student_ids:
+            if USE_POSTGRES:
+                placeholders = ','.join(['%s'] * len(roster.student_ids))
+                cursor.execute(
+                    f"SELECT id FROM users WHERE id IN ({placeholders}) AND role = 'student' AND COALESCE(school, '') = COALESCE(%s, '') AND grade_band = %s",
+                    (*roster.student_ids, school, grade_level)
+                )
+            else:
+                placeholders = ','.join(['?'] * len(roster.student_ids))
+                cursor.execute(
+                    f"SELECT id FROM users WHERE id IN ({placeholders}) AND role = 'student' AND COALESCE(school, '') = COALESCE(?, '') AND grade_band = ?",
+                    (*roster.student_ids, school, grade_level)
+                )
+            valid_ids = [r['id'] if hasattr(r, 'keys') else r[0] for r in cursor.fetchall()]
+        else:
+            valid_ids = []
+
+        if USE_POSTGRES:
+            cursor.execute("DELETE FROM class_period_students WHERE period_id = %s", (period_id,))
+        else:
+            cursor.execute("DELETE FROM class_period_students WHERE period_id = ?", (period_id,))
+
+        for sid in valid_ids:
+            if USE_POSTGRES:
+                cursor.execute("INSERT INTO class_period_students (period_id, student_id) VALUES (%s, %s)", (period_id, sid))
+            else:
+                cursor.execute("INSERT INTO class_period_students (period_id, student_id) VALUES (?, ?)", (period_id, sid))
+        conn.commit()
+        return {"success": True, "roster_count": len(valid_ids)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.post("/api/teacher/assignments/{assignment_id}/send")
 async def send_assignment(assignment_id: int, request: Request, teacher=Depends(require_teacher)):
-    """Step 3.6: distribute an approved assignment to individual students or the entire (grade-scoped) class."""
+    """Step 3.6: distribute an approved assignment to individual students, a specific
+    class period, or the entire (grade-scoped) roster."""
     data = await request.json()
-    target = data.get("target")  # 'individual' | 'class'
+    target = data.get("target")  # 'individual' | 'period' | 'class'
     student_ids = data.get("student_ids", [])
+    period_id = data.get("period_id")
 
     conn = get_db()
     cursor = get_cursor(conn)
@@ -9262,7 +9481,22 @@ async def send_assignment(assignment_id: int, request: Request, teacher=Depends(
         if assignment["status"] != "approved":
             raise HTTPException(status_code=400, detail="Assignment must be approved before it can be sent")
 
-        if target == "class":
+        if target == "period":
+            if not period_id:
+                raise HTTPException(status_code=400, detail="period_id is required when target is 'period'")
+            if USE_POSTGRES:
+                cursor.execute("SELECT id FROM class_periods WHERE id = %s AND teacher_id = %s", (period_id, teacher["user_id"]))
+            else:
+                cursor.execute("SELECT id FROM class_periods WHERE id = ? AND teacher_id = ?", (period_id, teacher["user_id"]))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Period not found")
+            if USE_POSTGRES:
+                cursor.execute("SELECT student_id FROM class_period_students WHERE period_id = %s", (period_id,))
+            else:
+                cursor.execute("SELECT student_id FROM class_period_students WHERE period_id = ?", (period_id,))
+            student_ids = [r['student_id'] if hasattr(r, 'keys') else r[0] for r in cursor.fetchall()]
+
+        elif target == "class":
             cursor.execute(
                 "SELECT school, teacher_grade_level FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, teacher_grade_level FROM users WHERE id = ?",
                 (teacher["user_id"],)
@@ -9641,6 +9875,195 @@ Write two short summaries as JSON: {{"teacher_summary": "2-4 sentences, professi
             "success": True, "score": score, "is_late": is_late,
             "feedback": summaries.get("student_summary")
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+class SendTeacherMessageRequest(BaseModel):
+    recipient_id: int
+    content: str
+
+
+@app.get("/api/teacher/conversations")
+async def get_teacher_conversations(teacher=Depends(require_teacher)):
+    """List every student in this teacher's roster, with their last message and unread count."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        teacher_id = teacher["user_id"]
+        cursor.execute(
+            "SELECT school, teacher_grade_level FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, teacher_grade_level FROM users WHERE id = ?",
+            (teacher_id,)
+        )
+        row = cursor.fetchone()
+        school = row['school'] if hasattr(row, 'keys') else row[0]
+        grade_level = row['teacher_grade_level'] if hasattr(row, 'keys') else row[1]
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT u.id, u.full_name,
+                          (SELECT content FROM messages m WHERE
+                              (m.sender_id = u.id AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = 'teacher')
+                              OR (m.sender_id = %s AND m.sender_type = 'teacher' AND m.recipient_id = u.id AND m.recipient_type = 'student')
+                           ORDER BY m.created_at DESC LIMIT 1) AS last_message,
+                          (SELECT created_at FROM messages m WHERE
+                              (m.sender_id = u.id AND m.sender_type = 'student' AND m.recipient_id = %s AND m.recipient_type = 'teacher')
+                              OR (m.sender_id = %s AND m.sender_type = 'teacher' AND m.recipient_id = u.id AND m.recipient_type = 'student')
+                           ORDER BY m.created_at DESC LIMIT 1) AS last_message_time,
+                          (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id AND m.sender_type = 'student'
+                              AND m.recipient_id = %s AND m.recipient_type = 'teacher' AND m.read = FALSE) AS unread_count
+                   FROM users u
+                   WHERE u.role = 'student' AND COALESCE(u.school, '') = COALESCE(%s, '') AND u.grade_band = %s
+                   ORDER BY last_message_time DESC NULLS LAST, u.full_name""",
+                (teacher_id, teacher_id, teacher_id, teacher_id, teacher_id, school, grade_level)
+            )
+        else:
+            cursor.execute(
+                """SELECT u.id, u.full_name,
+                          (SELECT content FROM messages m WHERE
+                              (m.sender_id = u.id AND m.sender_type = 'student' AND m.recipient_id = ? AND m.recipient_type = 'teacher')
+                              OR (m.sender_id = ? AND m.sender_type = 'teacher' AND m.recipient_id = u.id AND m.recipient_type = 'student')
+                           ORDER BY m.created_at DESC LIMIT 1) AS last_message,
+                          (SELECT created_at FROM messages m WHERE
+                              (m.sender_id = u.id AND m.sender_type = 'student' AND m.recipient_id = ? AND m.recipient_type = 'teacher')
+                              OR (m.sender_id = ? AND m.sender_type = 'teacher' AND m.recipient_id = u.id AND m.recipient_type = 'student')
+                           ORDER BY m.created_at DESC LIMIT 1) AS last_message_time,
+                          (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id AND m.sender_type = 'student'
+                              AND m.recipient_id = ? AND m.recipient_type = 'teacher' AND m.read = 0) AS unread_count
+                   FROM users u
+                   WHERE u.role = 'student' AND COALESCE(u.school, '') = COALESCE(?, '') AND u.grade_band = ?
+                   ORDER BY last_message_time DESC, u.full_name""",
+                (teacher_id, teacher_id, teacher_id, teacher_id, teacher_id, school, grade_level)
+            )
+        rows = cursor.fetchall()
+        conversations = []
+        for r in rows:
+            r = dict(r) if hasattr(r, 'keys') else {
+                'id': r[0], 'full_name': r[1], 'last_message': r[2], 'last_message_time': r[3], 'unread_count': r[4]
+            }
+            r['last_message_time'] = str(r['last_message_time']) if r.get('last_message_time') else None
+            conversations.append(r)
+        return {"conversations": conversations}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/teacher/conversations/{student_id}")
+async def get_teacher_conversation_thread(student_id: int, teacher=Depends(require_teacher)):
+    """Full message thread with one student, scoped to teacher's own roster. Marks unread as read."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        teacher_id = teacher["user_id"]
+        cursor.execute(
+            "SELECT school, teacher_grade_level FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, teacher_grade_level FROM users WHERE id = ?",
+            (teacher_id,)
+        )
+        row = cursor.fetchone()
+        school = row['school'] if hasattr(row, 'keys') else row[0]
+        grade_level = row['teacher_grade_level'] if hasattr(row, 'keys') else row[1]
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id FROM users WHERE id = %s AND role = 'student' AND COALESCE(school, '') = COALESCE(%s, '') AND grade_band = %s",
+                (student_id, school, grade_level)
+            )
+        else:
+            cursor.execute(
+                "SELECT id FROM users WHERE id = ? AND role = 'student' AND COALESCE(school, '') = COALESCE(?, '') AND grade_band = ?",
+                (student_id, school, grade_level)
+            )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=403, detail="This student is not in your roster")
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """SELECT id, sender_id, sender_type, content, read, created_at FROM messages
+                   WHERE (sender_id = %s AND sender_type = 'student' AND recipient_id = %s AND recipient_type = 'teacher')
+                      OR (sender_id = %s AND sender_type = 'teacher' AND recipient_id = %s AND recipient_type = 'student')
+                   ORDER BY created_at ASC""",
+                (student_id, teacher_id, teacher_id, student_id)
+            )
+        else:
+            cursor.execute(
+                """SELECT id, sender_id, sender_type, content, read, created_at FROM messages
+                   WHERE (sender_id = ? AND sender_type = 'student' AND recipient_id = ? AND recipient_type = 'teacher')
+                      OR (sender_id = ? AND sender_type = 'teacher' AND recipient_id = ? AND recipient_type = 'student')
+                   ORDER BY created_at ASC""",
+                (student_id, teacher_id, teacher_id, student_id)
+            )
+        rows = cursor.fetchall()
+        messages = [dict(r) for r in rows]
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE messages SET read = TRUE WHERE sender_id = %s AND sender_type = 'student' AND recipient_id = %s AND recipient_type = 'teacher' AND read = FALSE",
+                (student_id, teacher_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE messages SET read = 1 WHERE sender_id = ? AND sender_type = 'student' AND recipient_id = ? AND recipient_type = 'teacher' AND read = 0",
+                (student_id, teacher_id)
+            )
+        conn.commit()
+        return {"messages": messages}
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/teacher/messages/send")
+async def send_teacher_message(request: SendTeacherMessageRequest, teacher=Depends(require_teacher)):
+    """Teacher sends a message to a student in their own roster."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        teacher_id = teacher["user_id"]
+        cursor.execute(
+            "SELECT school, teacher_grade_level FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school, teacher_grade_level FROM users WHERE id = ?",
+            (teacher_id,)
+        )
+        row = cursor.fetchone()
+        school = row['school'] if hasattr(row, 'keys') else row[0]
+        grade_level = row['teacher_grade_level'] if hasattr(row, 'keys') else row[1]
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id FROM users WHERE id = %s AND role = 'student' AND COALESCE(school, '') = COALESCE(%s, '') AND grade_band = %s",
+                (request.recipient_id, school, grade_level)
+            )
+        else:
+            cursor.execute(
+                "SELECT id FROM users WHERE id = ? AND role = 'student' AND COALESCE(school, '') = COALESCE(?, '') AND grade_band = ?",
+                (request.recipient_id, school, grade_level)
+            )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=403, detail="This student is not in your roster")
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content) VALUES (%s, 'teacher', %s, 'student', %s) RETURNING id, created_at",
+                (teacher_id, request.recipient_id, request.content)
+            )
+            result = cursor.fetchone()
+            result = dict(result) if hasattr(result, 'keys') else {'id': result[0], 'created_at': result[1]}
+        else:
+            cursor.execute(
+                "INSERT INTO messages (sender_id, sender_type, recipient_id, recipient_type, content) VALUES (?, 'teacher', ?, 'student', ?)",
+                (teacher_id, request.recipient_id, request.content)
+            )
+            result = {"id": cursor.lastrowid, "created_at": None}
+        conn.commit()
+        return {"success": True, "message_id": result["id"]}
     except HTTPException:
         raise
     except Exception as e:
