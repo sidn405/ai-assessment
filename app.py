@@ -2483,6 +2483,17 @@ async def get_assessment_status(request: Request):
 async def me(user=Depends(get_current_user)):
     result = {"user_id": user["user_id"], "role": user["role"]}
 
+    if user["role"] == "admin":
+        conn = get_db()
+        cursor = get_cursor(conn)
+        try:
+            cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (user["user_id"],))
+            row = cursor.fetchone()
+            result["school"] = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+        finally:
+            cursor.close()
+            conn.close()
+
     if user["role"] == "student":
         conn = get_db()
         cursor = get_cursor(conn)
@@ -8905,7 +8916,8 @@ async def stripe_webhook(request: Request):
 
 @app.get("/api/admin/teachers")
 async def list_teachers(admin=Depends(require_admin)):
-    """List teacher accounts at the admin's own school."""
+    """List teacher accounts at the admin's own school, or every teacher
+    across every school if this admin manages multiple schools (no fixed school)."""
     conn = get_db()
     cursor = get_cursor(conn)
     try:
@@ -8913,20 +8925,26 @@ async def list_teachers(admin=Depends(require_admin)):
         row = cursor.fetchone()
         admin_school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
 
-        if USE_POSTGRES:
-            cursor.execute(
-                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(%s, '') ORDER BY teacher_grade_level, full_name",
-                (admin_school,)
-            )
+        if admin_school:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "SELECT id, full_name, email, school, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(%s, '') ORDER BY teacher_grade_level, full_name",
+                    (admin_school,)
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, full_name, email, school, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(?, '') ORDER BY teacher_grade_level, full_name",
+                    (admin_school,)
+                )
         else:
+            # Super-admin managing multiple schools — show everyone, sorted by school
             cursor.execute(
-                "SELECT id, full_name, email, teacher_grade_level, created_at FROM users WHERE role = 'teacher' AND COALESCE(school, '') = COALESCE(?, '') ORDER BY teacher_grade_level, full_name",
-                (admin_school,)
+                "SELECT id, full_name, email, school, teacher_grade_level, created_at FROM users WHERE role = 'teacher' ORDER BY school, teacher_grade_level, full_name"
             )
         rows = cursor.fetchall()
         teachers = []
         for r in rows:
-            r = dict(r) if hasattr(r, 'keys') else {'id': r[0], 'full_name': r[1], 'email': r[2], 'teacher_grade_level': r[3], 'created_at': r[4]}
+            r = dict(r) if hasattr(r, 'keys') else {'id': r[0], 'full_name': r[1], 'email': r[2], 'school': r[3], 'teacher_grade_level': r[4], 'created_at': r[5]}
             r['created_at'] = str(r['created_at']) if r.get('created_at') else None
             teachers.append(r)
         return {"teachers": teachers}
@@ -8937,14 +8955,16 @@ async def list_teachers(admin=Depends(require_admin)):
 
 @app.post("/api/admin/create-teacher")
 async def create_teacher(request: Request, admin=Depends(require_admin)):
-    """Admin creates a teacher account, scoped to the admin's own school and
-    a specific grade level. The teacher will only ever see students in that
-    same school + grade combination."""
+    """Admin creates a teacher account. If the admin is scoped to one school,
+    the teacher automatically inherits it. If the admin manages multiple
+    schools (no fixed school of their own), they must explicitly pick which
+    school this teacher belongs to."""
     data = await request.json()
     email = (data.get("email") or "").strip()
     password = data.get("password") or ""
     full_name = (data.get("full_name") or "").strip()
     grade_level = (data.get("grade_level") or "").strip()
+    requested_school = (data.get("school") or "").strip()
 
     if not email or not password or not full_name or not grade_level:
         raise HTTPException(status_code=400, detail="email, password, full_name, and grade_level are all required")
@@ -8956,6 +8976,13 @@ async def create_teacher(request: Request, admin=Depends(require_admin)):
         admin_row = cursor.fetchone()
         admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
 
+        if admin_school:
+            teacher_school = admin_school
+        else:
+            if not requested_school:
+                raise HTTPException(status_code=400, detail="Select which school this teacher belongs to.")
+            teacher_school = requested_school
+
         email_lc = email.lower()
         cursor.execute("SELECT id FROM users WHERE LOWER(email) = %s" if USE_POSTGRES else "SELECT id FROM users WHERE LOWER(email) = ?", (email_lc,))
         if cursor.fetchone():
@@ -8966,17 +8993,17 @@ async def create_teacher(request: Request, admin=Depends(require_admin)):
         if USE_POSTGRES:
             cursor.execute(
                 "INSERT INTO users (email, password_hash, full_name, role, school, teacher_grade_level) VALUES (%s, %s, %s, 'teacher', %s, %s) RETURNING id",
-                (email, password_hash.decode('utf-8'), full_name, admin_school, grade_level)
+                (email, password_hash.decode('utf-8'), full_name, teacher_school, grade_level)
             )
             teacher_id = cursor.fetchone()['id']
         else:
             cursor.execute(
                 "INSERT INTO users (email, password_hash, full_name, role, school, teacher_grade_level) VALUES (?, ?, ?, 'teacher', ?, ?)",
-                (email, password_hash.decode('utf-8'), full_name, admin_school, grade_level)
+                (email, password_hash.decode('utf-8'), full_name, teacher_school, grade_level)
             )
             teacher_id = cursor.lastrowid
         conn.commit()
-        return {"success": True, "teacher_id": teacher_id, "email": email, "grade_level": grade_level}
+        return {"success": True, "teacher_id": teacher_id, "email": email, "grade_level": grade_level, "school": teacher_school}
     except HTTPException:
         raise
     except Exception as e:

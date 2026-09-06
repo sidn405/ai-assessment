@@ -1353,6 +1353,11 @@
                         <input type="text" id="newTeacherPassword" placeholder="At least 6 characters"
                                style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
                     </div>
+                    <div style="flex: 0 0 180px; display:none;" id="newTeacherSchoolWrapper">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">School</label>
+                        <select id="newTeacherSchool" style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                        </select>
+                    </div>
                     <div style="flex: 0 0 160px;">
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Grade Level</label>
                         <select id="newTeacherGrade" style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
@@ -2207,6 +2212,7 @@
 
             if (section === 'teachers') {
                 loadTeachers();
+                setupTeacherSchoolField();
             }
 
             if (section === 'session tracking' || section === 'sessionTracking') {
@@ -4259,6 +4265,7 @@
                             <tr>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Name</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Email</th>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">School</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Grade</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Added</th>
                             </tr>
@@ -4268,6 +4275,7 @@
                                 <tr style="border-bottom:1px solid #f0f0f0;">
                                     <td style="padding:0.75rem 1rem;">${t.full_name}</td>
                                     <td style="padding:0.75rem 1rem;">${t.email}</td>
+                                    <td style="padding:0.75rem 1rem;">${t.school || '—'}</td>
                                     <td style="padding:0.75rem 1rem;">${t.teacher_grade_level}</td>
                                     <td style="padding:0.75rem 1rem;">${t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}</td>
                                 </tr>
@@ -4280,12 +4288,39 @@
             }
         }
 
+        let adminIsSuperAdmin = false;
+
+        async function setupTeacherSchoolField() {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            try {
+                const meResp = await fetch('/api/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                const me = await meResp.json();
+                adminIsSuperAdmin = !me.school;
+
+                const wrapper = document.getElementById('newTeacherSchoolWrapper');
+                if (!adminIsSuperAdmin) {
+                    wrapper.style.display = 'none';
+                    return;
+                }
+                wrapper.style.display = '';
+
+                const codesResp = await fetch('/api/admin/school-codes', { headers: { 'Authorization': `Bearer ${token}` } });
+                const codesData = await codesResp.json();
+                const schoolNames = [...new Set((codesData.codes || []).map(c => c.school_name))];
+                const select = document.getElementById('newTeacherSchool');
+                select.innerHTML = schoolNames.map(s => `<option value="${s}">${s}</option>`).join('') || '<option value="">No schools found</option>';
+            } catch (e) {
+                console.error('Failed to set up school field', e);
+            }
+        }
+
         async function createTeacher() {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const full_name = document.getElementById('newTeacherName').value.trim();
             const email = document.getElementById('newTeacherEmail').value.trim();
             const password = document.getElementById('newTeacherPassword').value;
             const grade_level = document.getElementById('newTeacherGrade').value;
+            const school = adminIsSuperAdmin ? document.getElementById('newTeacherSchool').value : null;
             const msg = document.getElementById('createTeacherMsg');
 
             if (!full_name || !email || !password || password.length < 6) {
@@ -4295,11 +4330,18 @@
                 return;
             }
 
+            if (adminIsSuperAdmin && !school) {
+                msg.style.display = 'block';
+                msg.style.color = '#dc3545';
+                msg.textContent = 'Select which school this teacher belongs to.';
+                return;
+            }
+
             try {
                 const resp = await fetch('/api/admin/create-teacher', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ full_name, email, password, grade_level })
+                    body: JSON.stringify({ full_name, email, password, grade_level, school })
                 });
                 const data = await resp.json();
                 if (data.success) {
