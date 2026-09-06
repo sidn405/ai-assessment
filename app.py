@@ -8997,10 +8997,22 @@ async def delete_teacher(teacher_id: int, admin=Depends(require_admin)):
         if USE_POSTGRES:
             cursor.execute("DELETE FROM class_period_students WHERE period_id IN (SELECT id FROM class_periods WHERE teacher_id = %s)", (teacher_id,))
             cursor.execute("DELETE FROM class_periods WHERE teacher_id = %s", (teacher_id,))
+            cursor.execute("DELETE FROM messages WHERE sender_id = %s OR recipient_id = %s", (teacher_id, teacher_id))
+            cursor.execute("DELETE FROM wallet_transactions WHERE user_id = %s", (teacher_id,))
+            cursor.execute("DELETE FROM student_wallets WHERE user_id = %s", (teacher_id,))
+            cursor.execute("DELETE FROM user_points WHERE user_id = %s", (teacher_id,))
+            cursor.execute("DELETE FROM user_stats WHERE user_id = %s", (teacher_id,))
+            cursor.execute("DELETE FROM user_streaks WHERE user_id = %s", (teacher_id,))
             cursor.execute("DELETE FROM users WHERE id = %s", (teacher_id,))
         else:
             cursor.execute("DELETE FROM class_period_students WHERE period_id IN (SELECT id FROM class_periods WHERE teacher_id = ?)", (teacher_id,))
             cursor.execute("DELETE FROM class_periods WHERE teacher_id = ?", (teacher_id,))
+            cursor.execute("DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?", (teacher_id, teacher_id))
+            cursor.execute("DELETE FROM wallet_transactions WHERE user_id = ?", (teacher_id,))
+            cursor.execute("DELETE FROM student_wallets WHERE user_id = ?", (teacher_id,))
+            cursor.execute("DELETE FROM user_points WHERE user_id = ?", (teacher_id,))
+            cursor.execute("DELETE FROM user_stats WHERE user_id = ?", (teacher_id,))
+            cursor.execute("DELETE FROM user_streaks WHERE user_id = ?", (teacher_id,))
             cursor.execute("DELETE FROM users WHERE id = ?", (teacher_id,))
         conn.commit()
         return {"success": True}
