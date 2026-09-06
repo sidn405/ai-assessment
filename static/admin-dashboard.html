@@ -4268,6 +4268,7 @@
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">School</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Grade</th>
                                 <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Added</th>
+                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -4278,6 +4279,13 @@
                                     <td style="padding:0.75rem 1rem;">${t.school || '—'}</td>
                                     <td style="padding:0.75rem 1rem;">${t.teacher_grade_level}</td>
                                     <td style="padding:0.75rem 1rem;">${t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}</td>
+                                    <td style="padding:0.75rem 1rem;">
+                                        <button onclick="deleteTeacher(${t.id}, '${t.full_name.replace(/'/g, "\\'")}')"
+                                                style="padding:0.3rem 0.8rem; border-radius:5px; border:1px solid #dc3545;
+                                                       cursor:pointer; font-size:0.82rem; background:white; color:#dc3545;">
+                                            Delete
+                                        </button>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -4289,6 +4297,25 @@
         }
 
         let adminIsSuperAdmin = false;
+
+        async function deleteTeacher(teacherId, teacherName) {
+            if (!confirm(`Delete ${teacherName}'s account? This cannot be undone.`)) return;
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            try {
+                const resp = await fetch(`/api/admin/teachers/${teacherId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    alert(data.detail || 'Failed to delete teacher.');
+                    return;
+                }
+                loadTeachers();
+            } catch (e) {
+                alert('Failed to delete teacher.');
+            }
+        }
 
         async function setupTeacherSchoolField() {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');

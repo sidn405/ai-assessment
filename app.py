@@ -1690,7 +1690,7 @@ async def login(credentials: UserLogin):
 # ============================================
     
 @app.post("/api/auth/forgot-password")
-async def forgot_password(request: dict):
+async def forgot_password(request: dict, http_request: Request):
     """Send password reset email"""
     email = request.get('email')
     
@@ -1729,8 +1729,11 @@ async def forgot_password(request: dict):
             'expires': datetime.now() + timedelta(hours=1)
         }
         
-        # Create reset link need to change to clients url
-        reset_link = f"https://ai-assessment-production-e027.up.railway.app/reset-password?token={reset_token}"
+        # Create reset link, derived from the actual request so this works
+        # correctly on staging, production, or any future environment
+        forwarded_proto = http_request.headers.get("x-forwarded-proto", http_request.url.scheme)
+        forwarded_host = http_request.headers.get("x-forwarded-host", http_request.headers.get("host", http_request.url.netloc))
+        reset_link = f"{forwarded_proto}://{forwarded_host}/reset-password?token={reset_token}"
         
         # Send email via Resend
         try:
@@ -8948,6 +8951,64 @@ async def list_teachers(admin=Depends(require_admin)):
             r['created_at'] = str(r['created_at']) if r.get('created_at') else None
             teachers.append(r)
         return {"teachers": teachers}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.delete("/api/admin/teachers/{teacher_id}")
+async def delete_teacher(teacher_id: int, admin=Depends(require_admin)):
+    """Delete a teacher account. Blocked if they've already created assignments,
+    to protect grade/assignment history — delete those first if truly needed."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT school FROM users WHERE id = %s", (admin["user_id"],))
+        else:
+            cursor.execute("SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        admin_row = cursor.fetchone()
+        admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
+
+        if USE_POSTGRES:
+            cursor.execute("SELECT id, school FROM users WHERE id = %s AND role = 'teacher'", (teacher_id,))
+        else:
+            cursor.execute("SELECT id, school FROM users WHERE id = ? AND role = 'teacher'", (teacher_id,))
+        teacher_row = cursor.fetchone()
+        if not teacher_row:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+
+        teacher_school = teacher_row['school'] if hasattr(teacher_row, 'keys') else teacher_row[1]
+        if admin_school and teacher_school != admin_school:
+            raise HTTPException(status_code=403, detail="You can only delete teachers from your own school")
+
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) AS c FROM assignments WHERE teacher_id = %s", (teacher_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) AS c FROM assignments WHERE teacher_id = ?", (teacher_id,))
+        count_row = cursor.fetchone()
+        assignment_count = count_row['c'] if hasattr(count_row, 'keys') else count_row[0]
+        if assignment_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"This teacher has created {assignment_count} assignment(s). Delete those first to preserve grade history, or contact support."
+            )
+
+        if USE_POSTGRES:
+            cursor.execute("DELETE FROM class_period_students WHERE period_id IN (SELECT id FROM class_periods WHERE teacher_id = %s)", (teacher_id,))
+            cursor.execute("DELETE FROM class_periods WHERE teacher_id = %s", (teacher_id,))
+            cursor.execute("DELETE FROM users WHERE id = %s", (teacher_id,))
+        else:
+            cursor.execute("DELETE FROM class_period_students WHERE period_id IN (SELECT id FROM class_periods WHERE teacher_id = ?)", (teacher_id,))
+            cursor.execute("DELETE FROM class_periods WHERE teacher_id = ?", (teacher_id,))
+            cursor.execute("DELETE FROM users WHERE id = ?", (teacher_id,))
+        conn.commit()
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
