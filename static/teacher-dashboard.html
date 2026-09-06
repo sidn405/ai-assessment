@@ -851,6 +851,23 @@
         `).join('');
     }
 
+    function renderThreadMessages(messages) {
+        const container = document.getElementById('threadMessages');
+        const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+        container.innerHTML = (messages || []).map(m => {
+            const isTeacher = m.sender_type === 'teacher';
+            return `
+                <div style="margin-bottom:0.7rem; display:flex; justify-content:${isTeacher ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width:75%; padding:0.55rem 0.8rem; border-radius:10px;
+                                background:${isTeacher ? '#2A398A' : '#f0f2f5'}; color:${isTeacher ? 'white' : '#1e293b'};">
+                        ${escapeHtml(m.content)}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        if (wasNearBottom) container.scrollTop = container.scrollHeight;
+    }
+
     async function openConversation(studentId) {
         currentThreadStudentId = studentId;
         renderConversationList();
@@ -863,19 +880,7 @@
         try {
             const resp = await fetch(`/api/teacher/conversations/${studentId}`, { headers: { Authorization: `Bearer ${getToken()}` } });
             const data = await resp.json();
-            const container = document.getElementById('threadMessages');
-            container.innerHTML = (data.messages || []).map(m => {
-                const isTeacher = m.sender_type === 'teacher';
-                return `
-                    <div style="margin-bottom:0.7rem; display:flex; justify-content:${isTeacher ? 'flex-end' : 'flex-start'};">
-                        <div style="max-width:75%; padding:0.55rem 0.8rem; border-radius:10px;
-                                    background:${isTeacher ? '#2A398A' : '#f0f2f5'}; color:${isTeacher ? 'white' : '#1e293b'};">
-                            ${escapeHtml(m.content)}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            container.scrollTop = container.scrollHeight;
+            renderThreadMessages(data.messages);
 
             // Mark-as-read already happened server-side; refresh badge counts
             await loadMessagesPage();
@@ -883,6 +888,24 @@
             renderConversationList();
         } catch (e) {
             console.error('Failed to load thread', e);
+        }
+    }
+
+    // Poll for new messages every 10 seconds, same as the student side,
+    // so incoming messages and unread badges update without navigating away.
+    let teacherMessagePollInterval = null;
+    async function pollTeacherMessages() {
+        try {
+            await loadMessagesPage();
+            if (currentThreadStudentId) {
+                const resp = await fetch(`/api/teacher/conversations/${currentThreadStudentId}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+                const data = await resp.json();
+                renderThreadMessages(data.messages);
+                await loadMessagesPage();
+                renderConversationList();
+            }
+        } catch (e) {
+            console.error('Message poll failed', e);
         }
     }
 
@@ -920,6 +943,9 @@
         loadPeriodsPage();
         loadMessagesPage();
         setStep(1);
+
+        // Poll for new messages every 10 seconds, same cadence as the student side
+        teacherMessagePollInterval = setInterval(pollTeacherMessages, 10000);
     })();
 </script>
 
