@@ -12264,7 +12264,7 @@ async def list_admins(admin=Depends(require_admin)):
         conn.close
         
 @app.post("/api/admin/invites")
-async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)):
+async def create_admin_invite(body: InviteAdminReq, http_request: Request, admin=Depends(require_admin)):
     email = (body.email or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
@@ -12303,8 +12303,11 @@ async def create_admin_invite(body: InviteAdminReq, admin=Depends(require_admin)
             ))
             invite_id = cur.lastrowid
 
-        # 2) Build invite link
-        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+        # 2) Build invite link, derived from the actual request so this works
+        # correctly on staging, production, or any future environment
+        forwarded_proto = http_request.headers.get("x-forwarded-proto", http_request.url.scheme)
+        forwarded_host = http_request.headers.get("x-forwarded-host", http_request.headers.get("host", http_request.url.netloc))
+        invite_link = f"{forwarded_proto}://{forwarded_host}/admin-invite?token={raw_token}"
 
         # 3) Send email via Resend (same verified sender style as forgot-password)
         try:
@@ -12563,7 +12566,7 @@ async def list_admin_invites(admin=Depends(require_admin)):
         conn.close()
 
 @app.post("/api/admin/invites/{invite_id}/resend")
-async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
+async def resend_admin_invite(invite_id: int, http_request: Request, admin=Depends(require_admin)):
     conn = get_db()
     cursor = get_cursor(conn)
 
@@ -12624,7 +12627,9 @@ async def resend_admin_invite(invite_id: int, admin=Depends(require_admin)):
 
         conn.commit()
 
-        invite_link = f"{APP_BASE_URL}/admin-invite?token={raw_token}"
+        forwarded_proto = http_request.headers.get("x-forwarded-proto", http_request.url.scheme)
+        forwarded_host = http_request.headers.get("x-forwarded-host", http_request.headers.get("host", http_request.url.netloc))
+        invite_link = f"{forwarded_proto}://{forwarded_host}/admin-invite?token={raw_token}"
         send_resend_email(
             to_email=email,
             subject="Administrator invite link (new)",
