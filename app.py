@@ -3634,7 +3634,7 @@ async def mark_student_messages_as_read(current_user: dict = Depends(require_use
         
         cursor.execute(
             """UPDATE messages
-               SET read = TRUE, updated_at = NOW()
+               SET read = TRUE
                WHERE 
                    recipient_id = %s
                    AND recipient_type = 'student'
