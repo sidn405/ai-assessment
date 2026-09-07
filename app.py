@@ -9090,6 +9090,24 @@ async def resync_school_subscription_quantity(admin=Depends(require_admin)):
 
 
 
+def _get_stripe_period_end(stripe_sub_dict) -> datetime:
+    """
+    Extract current_period_end from a Stripe Subscription object, handling
+    both API shapes: older API versions have it at the top level, while
+    newer versions (this account's API version among them) moved it onto
+    each subscription item instead.
+    """
+    top_level = stripe_sub_dict.get("current_period_end")
+    if top_level:
+        return datetime.utcfromtimestamp(top_level)
+
+    items = stripe_sub_dict.get("items", {}).get("data", [])
+    if items and items[0].get("current_period_end"):
+        return datetime.utcfromtimestamp(items[0]["current_period_end"])
+
+    raise ValueError("Could not find current_period_end on Stripe subscription object (checked both top-level and item-level)")
+
+
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
     """Stripe calls this when a checkout completes. Verifies the signature,
@@ -9203,9 +9221,9 @@ async def stripe_webhook(request: Request):
 
                 import stripe as stripe_module
                 stripe_module.api_key = STRIPE_SECRET_KEY
-                stripe_sub = stripe_module.Subscription.retrieve(stripe_subscription_id)
+                stripe_sub = stripe_module.Subscription.retrieve(stripe_subscription_id).to_dict()
                 stripe_status = stripe_sub["status"]  # 'trialing' | 'active' | ...
-                current_period_end = datetime.utcfromtimestamp(stripe_sub["current_period_end"])
+                current_period_end = _get_stripe_period_end(stripe_sub)
                 our_status = {"trialing": "trial", "active": "active"}.get(stripe_status, "expired")
 
                 conn = get_db()
@@ -9273,7 +9291,11 @@ async def stripe_webhook(request: Request):
             sub = event["data"]["object"].to_dict()
             stripe_subscription_id = sub["id"]
             stripe_status = sub["status"]
-            current_period_end = datetime.utcfromtimestamp(sub["current_period_end"]) if sub.get("current_period_end") else None
+            current_period_end = None
+            try:
+                current_period_end = _get_stripe_period_end(sub)
+            except ValueError:
+                pass  # subscription may be fully canceled with no period info left
             our_status = "expired" if event["type"] == "customer.subscription.deleted" else {"trialing": "trial", "active": "active"}.get(stripe_status, "expired")
 
             print(f"🔔 Stripe webhook received: {event['type']} — sub={stripe_subscription_id} status={stripe_status}")
