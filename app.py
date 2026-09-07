@@ -141,6 +141,7 @@ class UserCreate(BaseModel):
     cultural_identity: Optional[str] = None
     spoken_language: Optional[str] = "en"
     invite_code: Optional[str] = None
+    coupon_code: Optional[str] = None
         
 class UserLogin(BaseModel):
     email: str
@@ -1474,6 +1475,9 @@ async def register(user: UserCreate):
 
             if user.invite_code:
                 _redeem_parent_invite(user.invite_code.strip().upper(), user_id)
+
+            if user.coupon_code:
+                _redeem_coupon_for_new_student(user.coupon_code, user_id)
 
         # Increment student count on the school code
         if school_code and final_role == "student":
@@ -10707,6 +10711,75 @@ def _apply_coupon_effect(coupon, subscriber_type: str, subscriber_ref: str, curs
             )
 
 
+def _redeem_coupon_core(code: str, subscriber_type: str, subscriber_ref: str, redeemed_by_user_id: int, cursor, extra_fields: dict = None):
+    """
+    Core coupon lookup/validate/apply logic, shared by the authenticated
+    /api/redeem-coupon endpoint and the registration-time auto-redeem flow.
+    Raises HTTPException on any validation failure — callers decide whether
+    that should block the caller's whole request or just be logged.
+    """
+    extra_fields = extra_fields or {}
+    upper_code = code.strip().upper()
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM coupon_codes WHERE code = %s AND active = TRUE", (upper_code,))
+    else:
+        cursor.execute("SELECT * FROM coupon_codes WHERE code = ? AND active = 1", (upper_code,))
+    coupon = cursor.fetchone()
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Invalid or inactive coupon code")
+    coupon = dict(coupon)
+
+    if coupon.get('expires_at'):
+        expires = coupon['expires_at'] if isinstance(coupon['expires_at'], datetime) else datetime.fromisoformat(str(coupon['expires_at']))
+        if datetime.utcnow() > expires:
+            raise HTTPException(status_code=400, detail="This coupon code has expired")
+
+    if coupon.get('max_redemptions') is not None and coupon['redemption_count'] >= coupon['max_redemptions']:
+        raise HTTPException(status_code=400, detail="This coupon code has reached its redemption limit")
+
+    _apply_coupon_effect(coupon, subscriber_type, subscriber_ref, cursor, extra_fields)
+
+    if USE_POSTGRES:
+        cursor.execute("UPDATE coupon_codes SET redemption_count = redemption_count + 1 WHERE id = %s", (coupon['id'],))
+        cursor.execute(
+            "INSERT INTO coupon_redemptions (coupon_code_id, subscriber_type, subscriber_ref, redeemed_by) VALUES (%s, %s, %s, %s)",
+            (coupon['id'], subscriber_type, subscriber_ref, redeemed_by_user_id)
+        )
+    else:
+        cursor.execute("UPDATE coupon_codes SET redemption_count = redemption_count + 1 WHERE id = ?", (coupon['id'],))
+        cursor.execute(
+            "INSERT INTO coupon_redemptions (coupon_code_id, subscriber_type, subscriber_ref, redeemed_by) VALUES (?, ?, ?, ?)",
+            (coupon['id'], subscriber_type, subscriber_ref, redeemed_by_user_id)
+        )
+    return coupon
+
+
+def _redeem_coupon_for_new_student(code: str, student_id: int):
+    """
+    Called right after a new student registers with a coupon_code. Never
+    raises — a bad/expired/typo'd coupon should not block registration from
+    succeeding; it's simply skipped, and the student can still redeem a
+    correct code later from their account.
+    """
+    if not code:
+        return
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        _redeem_coupon_core(code, 'individual', str(student_id), student_id, cursor)
+        conn.commit()
+        print(f"🎟️ Coupon {code.strip().upper()} redeemed at registration for new student {student_id}")
+    except HTTPException as e:
+        conn.rollback()
+        print(f"⚠️ Coupon redemption at registration failed for student {student_id}: {e.detail}")
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ Unexpected error redeeming coupon at registration for student {student_id}: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.post("/api/redeem-coupon")
 async def redeem_coupon(body: CouponRedeem, user=Depends(get_current_user)):
     """
@@ -10716,24 +10789,6 @@ async def redeem_coupon(body: CouponRedeem, user=Depends(get_current_user)):
     conn = get_db()
     cursor = get_cursor(conn)
     try:
-        code = body.code.strip().upper()
-        if USE_POSTGRES:
-            cursor.execute("SELECT * FROM coupon_codes WHERE code = %s AND active = TRUE", (code,))
-        else:
-            cursor.execute("SELECT * FROM coupon_codes WHERE code = ? AND active = 1", (code,))
-        coupon = cursor.fetchone()
-        if not coupon:
-            raise HTTPException(status_code=404, detail="Invalid or inactive coupon code")
-        coupon = dict(coupon) if hasattr(coupon, 'keys') else None
-
-        if coupon.get('expires_at'):
-            expires = coupon['expires_at'] if isinstance(coupon['expires_at'], datetime) else datetime.fromisoformat(str(coupon['expires_at']))
-            if datetime.utcnow() > expires:
-                raise HTTPException(status_code=400, detail="This coupon code has expired")
-
-        if coupon.get('max_redemptions') is not None and coupon['redemption_count'] >= coupon['max_redemptions']:
-            raise HTTPException(status_code=400, detail="This coupon code has reached its redemption limit")
-
         extra_fields = {}
         if body.subscriber_type == 'school':
             if user.get('role') != 'admin':
@@ -10762,20 +10817,7 @@ async def redeem_coupon(body: CouponRedeem, user=Depends(get_current_user)):
         else:
             raise HTTPException(status_code=400, detail="subscriber_type must be 'school' or 'individual'")
 
-        _apply_coupon_effect(coupon, body.subscriber_type, subscriber_ref, cursor, extra_fields)
-
-        if USE_POSTGRES:
-            cursor.execute("UPDATE coupon_codes SET redemption_count = redemption_count + 1 WHERE id = %s", (coupon['id'],))
-            cursor.execute(
-                "INSERT INTO coupon_redemptions (coupon_code_id, subscriber_type, subscriber_ref, redeemed_by) VALUES (%s, %s, %s, %s)",
-                (coupon['id'], body.subscriber_type, subscriber_ref, user["user_id"])
-            )
-        else:
-            cursor.execute("UPDATE coupon_codes SET redemption_count = redemption_count + 1 WHERE id = ?", (coupon['id'],))
-            cursor.execute(
-                "INSERT INTO coupon_redemptions (coupon_code_id, subscriber_type, subscriber_ref, redeemed_by) VALUES (?, ?, ?, ?)",
-                (coupon['id'], body.subscriber_type, subscriber_ref, user["user_id"])
-            )
+        coupon = _redeem_coupon_core(body.code, body.subscriber_type, subscriber_ref, user["user_id"], cursor, extra_fields)
         conn.commit()
         return {"success": True, "type": coupon['type'], "trial_days": coupon.get('trial_days')}
     except HTTPException:

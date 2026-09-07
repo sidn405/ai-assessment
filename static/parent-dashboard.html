@@ -254,6 +254,11 @@
                     <div id="subscriptionStatusText">Checking subscription status...</div>
                     <button class="btn" id="subscribeBtn" style="width:auto; display:none;" onclick="startSubscribeCheckout()">Subscribe — $9.71/mo</button>
                 </div>
+                <div id="couponRedeemBox" style="margin-top:0.6rem; display:none; gap:0.6rem; flex-wrap:wrap; align-items:center;">
+                    <input type="text" id="couponCodeInput" placeholder="Have a coupon code?" style="flex:1; min-width:160px; margin-bottom:0; text-transform:uppercase;">
+                    <button class="btn btn-secondary" style="width:auto;" onclick="redeemCouponForChild()">Apply Coupon</button>
+                </div>
+                <div id="couponRedeemMsg" style="font-size:0.85rem; margin-top:0.3rem; display:none;"></div>
                 <div class="stat-grid">
                     <div class="stat-box"><div class="num" id="statLessons">-</div><div class="label">Lessons Completed</div></div>
                     <div class="stat-box"><div class="num" id="statAvg">-</div><div class="label">Avg Score</div></div>
@@ -555,8 +560,11 @@
     async function loadSubscriptionStatus(childId) {
         const textEl = document.getElementById('subscriptionStatusText');
         const btnEl = document.getElementById('subscribeBtn');
+        const couponBox = document.getElementById('couponRedeemBox');
         textEl.textContent = 'Checking subscription status...';
         btnEl.style.display = 'none';
+        couponBox.style.display = 'none';
+        document.getElementById('couponRedeemMsg').style.display = 'none';
         try {
             const resp = await fetch(`/api/parent/child/${childId}/subscription`, { headers: { Authorization: `Bearer ${getToken()}` } });
             const data = await resp.json();
@@ -575,9 +583,36 @@
             } else {
                 textEl.innerHTML = `⚠️ No active subscription — ${escapeHtml(currentChildName)} cannot access lessons until subscribed.`;
                 btnEl.style.display = '';
+                couponBox.style.display = 'flex';
             }
         } catch (e) {
             textEl.textContent = 'Could not load subscription status.';
+        }
+    }
+
+    async function redeemCouponForChild() {
+        const input = document.getElementById('couponCodeInput');
+        const msg = document.getElementById('couponRedeemMsg');
+        const code = input.value.trim();
+        if (!code) return;
+        msg.style.display = 'none';
+        try {
+            const resp = await fetch('/api/redeem-coupon', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, subscriber_type: 'individual', student_id: currentChildId })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Could not redeem coupon');
+            msg.style.display = 'block';
+            msg.style.color = '#16a34a';
+            msg.textContent = data.type === 'lifetime' ? '✅ Lifetime access granted!' : `✅ ${data.trial_days}-day trial activated!`;
+            input.value = '';
+            loadSubscriptionStatus(currentChildId);
+        } catch (e) {
+            msg.style.display = 'block';
+            msg.style.color = '#dc3545';
+            msg.textContent = e.message;
         }
     }
 

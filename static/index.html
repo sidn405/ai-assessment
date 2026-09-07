@@ -1251,6 +1251,12 @@
             <input type="text" id="registerInviteCode" placeholder="e.g. AB12CD" style="text-transform:uppercase;">
             <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Your account will be automatically linked to your parent.</small>
           </div>
+
+          <div class="form-group">
+            <label for="registerCouponCode">Coupon Code <span style="font-weight:400; color:#757575;">(optional)</span></label>
+            <input type="text" id="registerCouponCode" placeholder="e.g. TRIAL30" style="text-transform:uppercase;">
+            <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">Have a coupon for free access? Enter it here.</small>
+          </div>
           </div><!-- /studentOnlyFields -->
 
           <!-- role set dynamically by setRegisterRole() -->
@@ -1809,7 +1815,8 @@
                         school,
                         cultural_identity: culturalIdentity,
                         spoken_language: spokenLanguage,
-                        invite_code: inviteCode || null
+                        invite_code: inviteCode || null,
+                        coupon_code: document.getElementById('registerCouponCode').value.trim() || null
                     })
                 });
 
