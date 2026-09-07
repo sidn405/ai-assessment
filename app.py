@@ -9090,6 +9090,7 @@ async def resync_school_subscription_quantity(admin=Depends(require_admin)):
 
 
 
+@app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
     """Stripe calls this when a checkout completes. Verifies the signature,
     then credits the child's wallet — this is the only place funds actually
