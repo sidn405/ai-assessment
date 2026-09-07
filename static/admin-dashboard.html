@@ -860,6 +860,11 @@
                         <span>🏫</span> School Codes
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('billing', event); return false;">
+                        <span>💳</span> Billing
+                    </a>
+                </li>
             </ul>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </aside>
@@ -1390,6 +1395,26 @@
                 <div id="teachersTable">
                     <p style="color:#888;">Loading...</p>
                 </div>
+            </div>
+        </div>
+
+        <div id="billing-section" class="content-section hidden">
+            <div class="section-header">
+                <h2>💳 Billing</h2>
+                <p>$40 per student, per month — 30-day free trial, then billed monthly for your school's current roster size.</p>
+            </div>
+
+            <div class="card">
+                <div id="billingStatusBox" style="padding:1.2rem; border-radius:10px; background:#f4f6f9; margin-bottom:1rem;">
+                    <p style="color:#888;">Loading billing status...</p>
+                </div>
+                <button class="btn" id="subscribeSchoolBtn" style="display:none; padding:0.65rem 1.5rem; background:#1e3a5f; color:white; border:none; border-radius:6px; font-size:1rem; font-weight:600; cursor:pointer;" onclick="startSchoolCheckout()">
+                    Start 30-Day Free Trial
+                </button>
+                <button class="btn" id="resyncBtn" style="display:none; padding:0.65rem 1.5rem; background:white; color:#1e3a5f; border:1px solid #1e3a5f; border-radius:6px; font-size:1rem; font-weight:600; cursor:pointer; margin-left:0.6rem;" onclick="resyncBillingQuantity()">
+                    Resync Student Count
+                </button>
+                <div id="billingActionMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
             </div>
         </div>
 
@@ -2171,7 +2196,8 @@
                 'invite admin': 'inviteAdminSection',
                 'inviteAdmin': 'inviteAdminSection',
                 'school-codes': 'school-codes-section',
-                'teachers': 'teachers-section'
+                'teachers': 'teachers-section',
+                'billing': 'billing-section'
             };
 
             document.querySelectorAll('[id$="Section"], [id$="-section"]').forEach(el => el.classList.add('hidden'));
@@ -2213,6 +2239,10 @@
             if (section === 'teachers') {
                 loadTeachers();
                 setupTeacherSchoolField();
+            }
+
+            if (section === 'billing') {
+                loadBillingStatus();
             }
 
             if (section === 'session tracking' || section === 'sessionTracking') {
@@ -4338,6 +4368,92 @@
                 select.innerHTML = schoolNames.map(s => `<option value="${s}">${s}</option>`).join('') || '<option value="">No schools found</option>';
             } catch (e) {
                 console.error('Failed to set up school field', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('subscribed')) {
+                setTimeout(() => alert('School subscription started! 🎉'), 300);
+            }
+        });
+
+        async function loadBillingStatus() {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const box = document.getElementById('billingStatusBox');
+            const subscribeBtn = document.getElementById('subscribeSchoolBtn');
+            const resyncBtn = document.getElementById('resyncBtn');
+            subscribeBtn.style.display = 'none';
+            resyncBtn.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/admin/subscription', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await resp.json();
+
+                if (data.reason === 'no_school') {
+                    box.innerHTML = `<p>Your account has no fixed school on file — billing is managed per-school by school-scoped admins.</p>`;
+                    return;
+                }
+
+                if (data.has_access) {
+                    const statusLabel = { trial: 'Free trial active', active: 'Subscription active', lifetime: 'Lifetime access' }[data.status] || data.status;
+                    const expiry = data.expires_at ? ` — renews ${new Date(data.expires_at).toLocaleDateString()}` : '';
+                    box.innerHTML = `
+                        <p>✅ <strong>${statusLabel}</strong> for ${data.school}${expiry}</p>
+                        <p style="margin-top:0.4rem; color:#555; font-size:0.9rem;">Current billed roster: ${data.student_count} student(s) at $40/student/month.</p>
+                    `;
+                    if (data.status !== 'lifetime') resyncBtn.style.display = '';
+                } else {
+                    box.innerHTML = `
+                        <p>⚠️ No active subscription for ${data.school || 'your school'}.</p>
+                        <p style="margin-top:0.4rem; color:#555; font-size:0.9rem;">Students at your school cannot access lessons until this is activated.
+                        ${data.student_count ? `Current roster: ${data.student_count} student(s), $${(data.student_count * 40).toLocaleString()}/month after the trial.` : ''}</p>
+                    `;
+                    subscribeBtn.style.display = '';
+                }
+            } catch (e) {
+                box.innerHTML = '<p style="color:#dc3545;">Failed to load billing status.</p>';
+            }
+        }
+
+        async function startSchoolCheckout() {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const btn = document.getElementById('subscribeSchoolBtn');
+            btn.disabled = true;
+            btn.textContent = 'Redirecting...';
+            try {
+                const resp = await fetch('/api/admin/subscription/create-checkout', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Could not start checkout');
+                window.location.href = data.checkout_url;
+            } catch (e) {
+                alert(e.message);
+                btn.disabled = false;
+                btn.textContent = 'Start 30-Day Free Trial';
+            }
+        }
+
+        async function resyncBillingQuantity() {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const msg = document.getElementById('billingActionMsg');
+            try {
+                const resp = await fetch('/api/admin/subscription/resync', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Resync failed');
+                msg.style.display = 'block';
+                msg.style.color = '#28A745';
+                msg.textContent = `✅ Billed quantity updated to ${data.new_quantity} student(s).`;
+                loadBillingStatus();
+            } catch (e) {
+                msg.style.display = 'block';
+                msg.style.color = '#dc3545';
+                msg.textContent = e.message;
             }
         }
 

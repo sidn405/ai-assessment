@@ -2103,6 +2103,22 @@
 </head>
 <body>
 
+    <!-- Subscription Lockout Overlay -->
+    <div id="subscriptionLockout" class="hidden" style="position:fixed; inset:0; z-index:99999; background:rgba(20,25,50,0.96);
+                display:flex; align-items:center; justify-content:center; padding:1.5rem;">
+        <div style="background:white; border-radius:16px; padding:2.5rem; max-width:460px; width:100%; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <div style="font-size:3rem; margin-bottom:1rem;">🔒</div>
+            <h2 style="color:#2A398A; margin-bottom:0.75rem;">Subscription Needed</h2>
+            <p style="color:#555; line-height:1.5; margin-bottom:1.5rem;">
+                Your account doesn't have an active subscription, trial, or coupon code yet.
+                Ask your parent to subscribe from the Parent Portal, or ask your school to activate your class's subscription — then just log back in here.
+            </p>
+            <button onclick="logoutFromLockout()" style="background:#2A398A; color:white; border:none; padding:0.75rem 1.6rem; border-radius:8px; font-weight:600; cursor:pointer; font-size:1rem;">
+                Log Out
+            </button>
+        </div>
+    </div>
+
     <!-- Profile Photo Display (Upper Right) -->
     <div class="profile-photo-container" onclick="openProfileModal()">
         <div id="profilePhotoDisplay" class="profile-photo default">
@@ -3921,6 +3937,11 @@
                 const data = await resp.json();
                 mySettings.tutor_enabled = data.tutor_enabled !== false;
                 mySettings.read_aloud_enabled = !!data.read_aloud_enabled;
+
+                if (data.has_access === false) {
+                    document.getElementById('subscriptionLockout').classList.remove('hidden');
+                    return;
+                }
             } catch (e) {
                 console.warn('Could not load user settings, using defaults', e);
             }
@@ -3930,6 +3951,11 @@
             }
         }
         document.addEventListener('DOMContentLoaded', loadMySettings);
+
+        function logoutFromLockout() {
+            localStorage.clear();
+            window.location.href = '/';
+        }
 
         let myParentLinkCode = '';
         async function loadParentLinkCode() {

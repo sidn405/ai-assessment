@@ -802,6 +802,10 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS assignment_deliveries (id SERIAL PRIMARY KEY, assignment_id INTEGER REFERENCES assignments(id), student_id INTEGER REFERENCES users(id), sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'assigned', submitted_at TIMESTAMP, is_late BOOLEAN DEFAULT FALSE, score REAL, teacher_feedback_summary TEXT, student_feedback_summary TEXT, answers TEXT, graded_at TIMESTAMP, UNIQUE(assignment_id, student_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS assignment_deliveries (id INTEGER PRIMARY KEY AUTOINCREMENT, assignment_id INTEGER, student_id INTEGER, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'assigned', submitted_at TIMESTAMP, is_late BOOLEAN DEFAULT 0, score REAL, teacher_feedback_summary TEXT, student_feedback_summary TEXT, answers TEXT, graded_at TIMESTAMP, UNIQUE(assignment_id, student_id))",
                 "CREATE TABLE IF NOT EXISTS class_periods (id SERIAL PRIMARY KEY, teacher_id INTEGER REFERENCES users(id), name VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS class_periods (id INTEGER PRIMARY KEY AUTOINCREMENT, teacher_id INTEGER, name VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS class_period_students (id SERIAL PRIMARY KEY, period_id INTEGER REFERENCES class_periods(id) ON DELETE CASCADE, student_id INTEGER REFERENCES users(id), UNIQUE(period_id, student_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS class_period_students (id INTEGER PRIMARY KEY AUTOINCREMENT, period_id INTEGER, student_id INTEGER, UNIQUE(period_id, student_id))",
+                "CREATE TABLE IF NOT EXISTS coupon_codes (id SERIAL PRIMARY KEY, code VARCHAR(50) UNIQUE, type VARCHAR(20), trial_days INTEGER, max_redemptions INTEGER, redemption_count INTEGER DEFAULT 0, active BOOLEAN DEFAULT TRUE, created_by INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS coupon_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code VARCHAR(50) UNIQUE, type VARCHAR(20), trial_days INTEGER, max_redemptions INTEGER, redemption_count INTEGER DEFAULT 0, active BOOLEAN DEFAULT 1, created_by INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS coupon_redemptions (id SERIAL PRIMARY KEY, coupon_code_id INTEGER REFERENCES coupon_codes(id), subscriber_type VARCHAR(20), subscriber_ref VARCHAR(255), redeemed_by INTEGER REFERENCES users(id), redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS coupon_redemptions (id INTEGER PRIMARY KEY AUTOINCREMENT, coupon_code_id INTEGER, subscriber_type VARCHAR(20), subscriber_ref VARCHAR(255), redeemed_by INTEGER, redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS school_subscriptions (id SERIAL PRIMARY KEY, school_name VARCHAR(255) UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER REFERENCES coupon_codes(id), created_by INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS school_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, school_name VARCHAR(255) UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER, created_by INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS student_subscriptions (id SERIAL PRIMARY KEY, student_id INTEGER REFERENCES users(id) UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER REFERENCES coupon_codes(id), paid_by_parent_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS student_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER, paid_by_parent_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
             ]
@@ -1571,6 +1575,25 @@ def require_parent(user: dict = Depends(get_current_user)):
 def require_teacher(user: dict = Depends(get_current_user)):
     if user.get("role") != "teacher":
         raise HTTPException(status_code=403, detail="Teacher access required")
+    return user
+
+
+def require_super_admin(user: dict = Depends(get_current_user)):
+    """A super-admin is an admin with no fixed school (manages multiple schools).
+    Coupon codes and platform-wide billing config are restricted to this level."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (user["user_id"],))
+        row = cursor.fetchone()
+        school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+        if school:
+            raise HTTPException(status_code=403, detail="Super-admin access required")
+    finally:
+        cursor.close()
+        conn.close()
     return user
 
 
@@ -2534,6 +2557,11 @@ async def me(user=Depends(get_current_user)):
             else:
                 result["tutor_enabled"] = True
                 result["read_aloud_enabled"] = False
+
+            access = _get_access_status(user["user_id"], cursor)
+            result["has_access"] = access["has_access"]
+            result["access_reason"] = access["reason"]
+            result["access_expires_at"] = access["expires_at"]
         finally:
             cursor.close()
             conn.close()
@@ -3806,7 +3834,18 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     """Get a reading passage matched to user's level, interests, age, and grade"""
     user_data = verify_token(token)
     user_id = user_data["user_id"]
-    
+
+    if user_data.get("role") == "student":
+        access_conn = get_db()
+        access_cursor = get_cursor(access_conn)
+        try:
+            access_status = _get_access_status(user_id, access_cursor)
+        finally:
+            access_cursor.close()
+            access_conn.close()
+        if not access_status["has_access"]:
+            raise HTTPException(status_code=402, detail="A subscription, trial, or coupon code is required to access lessons.")
+
     conn = get_db()
     
     # FIX: Get dict cursor for both databases
@@ -7797,6 +7836,17 @@ async def get_next_lesson(response: Response, token: str, background_tasks: Back
     user_data = verify_token(token)
     user_id = user_data["user_id"]
 
+    if user_data.get("role") == "student":
+        access_conn = get_db()
+        access_cursor = get_cursor(access_conn)
+        try:
+            access_status = _get_access_status(user_id, access_cursor)
+        finally:
+            access_cursor.close()
+            access_conn.close()
+        if not access_status["has_access"]:
+            raise HTTPException(status_code=402, detail="A subscription, trial, or coupon code is required to access lessons.")
+
     reserved = _consume_reserved_lesson(user_id)
     if reserved:
         print(f"⚡ Served lesson {reserved['id']} from reserve for user {user_id}")
@@ -8804,7 +8854,238 @@ async def create_stripe_checkout(child_id: int, request: Request, parent=Depends
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
 
-@app.post("/api/stripe/webhook")
+INDIVIDUAL_MONTHLY_CENTS = 971  # $8.99 + 8% tax = $9.71/month flat
+
+
+@app.post("/api/parent/child/{child_id}/subscription/create-checkout")
+async def create_individual_subscription_checkout(child_id: int, request: Request, parent=Depends(require_parent)):
+    """Start a $9.71/month (incl. 8% tax) recurring subscription for one child,
+    paid by their parent. Access is granted once the webhook confirms payment."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+    if not _verify_parent_owns_child(parent["user_id"], child_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    request_base_url = f"{forwarded_proto}://{forwarded_host}"
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT full_name FROM users WHERE id = %s" if USE_POSTGRES else "SELECT full_name FROM users WHERE id = ?", (child_id,))
+        child = cursor.fetchone()
+        child_name = (child['full_name'] if hasattr(child, 'keys') else child[0]) if child else "your child"
+    finally:
+        cursor.close()
+        conn.close()
+
+    try:
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": f"Achieve 365 Individual Subscription — {child_name} (incl. tax)"},
+                    "unit_amount": INDIVIDUAL_MONTHLY_CENTS,
+                    "recurring": {"interval": "month"},
+                },
+                "quantity": 1,
+            }],
+            metadata={
+                "subscription_type": "individual",
+                "parent_id": str(parent["user_id"]),
+                "student_id": str(child_id),
+            },
+            success_url=f"{request_base_url}/parent-dashboard?subscribed=1",
+            cancel_url=f"{request_base_url}/parent-dashboard?subscribe_cancelled=1",
+        )
+        return {"checkout_url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+
+@app.get("/api/parent/child/{child_id}/subscription")
+async def get_individual_subscription_status(child_id: int, parent=Depends(require_parent)):
+    if not _verify_parent_owns_child(parent["user_id"], child_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        access = _get_access_status(child_id, cursor)
+        return access
+    finally:
+        cursor.close()
+        conn.close()
+
+
+SCHOOL_MONTHLY_CENTS_PER_STUDENT = 4000  # $40/student/month
+SCHOOL_TRIAL_DAYS = 30
+
+
+@app.post("/api/admin/subscription/create-checkout")
+async def create_school_subscription_checkout(request: Request, admin=Depends(require_admin)):
+    """Start a $40/student/month subscription for the admin's school, with a
+    30-day free trial. Quantity reflects the school's current student count."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    request_base_url = f"{forwarded_proto}://{forwarded_host}"
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        row = cursor.fetchone()
+        school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+        if not school:
+            raise HTTPException(status_code=400, detail="Your account has no school on file. Super-admins should set up billing per school individually.")
+
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = %s", (school,))
+        else:
+            cursor.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = ?", (school,))
+        count_row = cursor.fetchone()
+        student_count = max(1, (count_row['c'] if hasattr(count_row, 'keys') else count_row[0]) or 0)
+    finally:
+        cursor.close()
+        conn.close()
+
+    try:
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": f"Achieve 365 School Subscription — {school}"},
+                    "unit_amount": SCHOOL_MONTHLY_CENTS_PER_STUDENT,
+                    "recurring": {"interval": "month"},
+                },
+                "quantity": student_count,
+            }],
+            subscription_data={"trial_period_days": SCHOOL_TRIAL_DAYS},
+            metadata={
+                "subscription_type": "school",
+                "school_name": school,
+                "admin_id": str(admin["user_id"]),
+            },
+            success_url=f"{request_base_url}/admin-dashboard?subscribed=1",
+            cancel_url=f"{request_base_url}/admin-dashboard?subscribe_cancelled=1",
+        )
+        return {"checkout_url": session.url, "student_count": student_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+
+@app.get("/api/admin/subscription")
+async def get_school_subscription_status(admin=Depends(require_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        row = cursor.fetchone()
+        school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+        if not school:
+            return {"has_access": False, "reason": "no_school", "expires_at": None}
+
+        cursor.execute(
+            "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
+            else "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = ?",
+            (school,)
+        )
+        sub = cursor.fetchone()
+        if not sub:
+            return {"has_access": False, "reason": "none", "expires_at": None, "school": school}
+        sub = dict(sub)
+
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = %s", (school,))
+        else:
+            cursor.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = ?", (school,))
+        count_row = cursor.fetchone()
+        student_count = (count_row['c'] if hasattr(count_row, 'keys') else count_row[0]) or 0
+
+        now = datetime.utcnow()
+        has_access = sub['status'] == 'lifetime'
+        if not has_access and sub['status'] in ('active', 'trial') and sub['current_period_end']:
+            period_end = sub['current_period_end'] if isinstance(sub['current_period_end'], datetime) else datetime.fromisoformat(str(sub['current_period_end']))
+            has_access = period_end > now
+
+        return {
+            "has_access": has_access,
+            "status": sub['status'],
+            "expires_at": str(sub['current_period_end']) if sub['current_period_end'] else None,
+            "school": school,
+            "student_count": student_count
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/admin/subscription/resync")
+async def resync_school_subscription_quantity(admin=Depends(require_admin)):
+    """
+    Manual action: update the Stripe subscription's billed quantity to match
+    the school's current student count. Subscription quantity is only set
+    once at checkout time — if the roster has grown or shrunk since, this
+    brings billing back in line. Run this periodically or after big roster changes.
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        row = cursor.fetchone()
+        school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+        if not school:
+            raise HTTPException(status_code=400, detail="Your account has no school on file")
+
+        cursor.execute(
+            "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
+            else "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+            (school,)
+        )
+        sub = cursor.fetchone()
+        if not sub or not (sub['stripe_subscription_id'] if hasattr(sub, 'keys') else sub[0]):
+            raise HTTPException(status_code=400, detail="No active Stripe subscription found for your school")
+        stripe_subscription_id = sub['stripe_subscription_id'] if hasattr(sub, 'keys') else sub[0]
+
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = %s", (school,))
+        else:
+            cursor.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = ?", (school,))
+        count_row = cursor.fetchone()
+        student_count = max(1, (count_row['c'] if hasattr(count_row, 'keys') else count_row[0]) or 0)
+    finally:
+        cursor.close()
+        conn.close()
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+    try:
+        stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
+        item_id = stripe_sub["items"]["data"][0]["id"]
+        stripe.SubscriptionItem.modify(item_id, quantity=student_count)
+        return {"success": True, "new_quantity": student_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+
+
 async def stripe_webhook(request: Request):
     """Stripe calls this when a checkout completes. Verifies the signature,
     then credits the child's wallet — this is the only place funds actually
@@ -8855,55 +9136,174 @@ async def stripe_webhook(request: Request):
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"].to_dict()
             metadata = session.get("metadata", {}) or {}
-            child_id = metadata.get("child_id")
-            parent_id = metadata.get("parent_id")
-            amount_cents = metadata.get("amount_cents")
+            mode = session.get("mode")
 
-            print(f"🔔 Stripe webhook received: checkout.session.completed — metadata={metadata}")
+            if mode == "payment":
+                child_id = metadata.get("child_id")
+                parent_id = metadata.get("parent_id")
+                amount_cents = metadata.get("amount_cents")
 
-            if child_id and amount_cents:
-                child_id = int(child_id)
-                amount_cents = int(amount_cents)
+                print(f"🔔 Stripe webhook received: checkout.session.completed (payment) — metadata={metadata}")
+
+                if child_id and amount_cents:
+                    child_id = int(child_id)
+                    amount_cents = int(amount_cents)
+                    conn = get_db()
+                    cursor = get_cursor(conn)
+                    try:
+                        get_or_create_wallet(child_id, cursor, conn)
+                        if USE_POSTGRES:
+                            cursor.execute(
+                                """UPDATE student_wallets
+                                   SET balance_cents = balance_cents + %s, total_earned_cents = total_earned_cents + %s, updated_at = NOW()
+                                   WHERE user_id = %s""",
+                                (amount_cents, amount_cents, child_id)
+                            )
+                            cursor.execute(
+                                """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
+                                   VALUES (%s, 'parent_deposit', %s, %s, %s)""",
+                                (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
+                            )
+                        else:
+                            cursor.execute(
+                                """UPDATE student_wallets
+                                   SET balance_cents = balance_cents + ?, total_earned_cents = total_earned_cents + ?, updated_at = datetime('now')
+                                   WHERE user_id = ?""",
+                                (amount_cents, amount_cents, child_id)
+                            )
+                            cursor.execute(
+                                """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
+                                   VALUES (?, 'parent_deposit', ?, ?, ?)""",
+                                (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
+                            )
+                        conn.commit()
+                        print(f"💰 Stripe deposit: ${amount_cents/100:.2f} credited to child {child_id} by parent {parent_id}")
+                    except Exception as e:
+                        conn.rollback()
+                        print(f"❌ Failed to credit wallet from Stripe webhook (DB step): {e}")
+                        import traceback
+                        traceback.print_exc()
+                    finally:
+                        cursor.close()
+                        conn.close()
+                else:
+                    print(f"⚠️ Stripe webhook missing expected metadata — child_id={child_id}, amount_cents={amount_cents}")
+
+            elif mode == "subscription":
+                subscription_type = metadata.get("subscription_type")  # 'school' | 'individual'
+                stripe_subscription_id = session.get("subscription")
+                stripe_customer_id = session.get("customer")
+
+                print(f"🔔 Stripe webhook received: checkout.session.completed (subscription/{subscription_type}) — metadata={metadata}")
+
+                import stripe as stripe_module
+                stripe_module.api_key = STRIPE_SECRET_KEY
+                stripe_sub = stripe_module.Subscription.retrieve(stripe_subscription_id)
+                stripe_status = stripe_sub["status"]  # 'trialing' | 'active' | ...
+                current_period_end = datetime.utcfromtimestamp(stripe_sub["current_period_end"])
+                our_status = {"trialing": "trial", "active": "active"}.get(stripe_status, "expired")
+
                 conn = get_db()
                 cursor = get_cursor(conn)
                 try:
-                    get_or_create_wallet(child_id, cursor, conn)
-                    if USE_POSTGRES:
-                        cursor.execute(
-                            """UPDATE student_wallets
-                               SET balance_cents = balance_cents + %s, total_earned_cents = total_earned_cents + %s, updated_at = NOW()
-                               WHERE user_id = %s""",
-                            (amount_cents, amount_cents, child_id)
-                        )
-                        cursor.execute(
-                            """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
-                               VALUES (%s, 'parent_deposit', %s, %s, %s)""",
-                            (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
-                        )
+                    if subscription_type == "school":
+                        school_name = metadata.get("school_name")
+                        admin_id = metadata.get("admin_id")
+                        if USE_POSTGRES:
+                            cursor.execute(
+                                """INSERT INTO school_subscriptions (school_name, status, plan_type, stripe_subscription_id, stripe_customer_id, current_period_end, created_by)
+                                   VALUES (%s, %s, 'monthly', %s, %s, %s, %s)
+                                   ON CONFLICT (school_name) DO UPDATE SET status = %s, plan_type = 'monthly',
+                                       stripe_subscription_id = %s, stripe_customer_id = %s, current_period_end = %s, updated_at = NOW()""",
+                                (school_name, our_status, stripe_subscription_id, stripe_customer_id, current_period_end, admin_id,
+                                 our_status, stripe_subscription_id, stripe_customer_id, current_period_end)
+                            )
+                        else:
+                            cursor.execute(
+                                """INSERT INTO school_subscriptions (school_name, status, plan_type, stripe_subscription_id, stripe_customer_id, current_period_end, created_by)
+                                   VALUES (?, ?, 'monthly', ?, ?, ?, ?)
+                                   ON CONFLICT (school_name) DO UPDATE SET status = ?, plan_type = 'monthly',
+                                       stripe_subscription_id = ?, stripe_customer_id = ?, current_period_end = ?""",
+                                (school_name, our_status, stripe_subscription_id, stripe_customer_id, current_period_end, admin_id,
+                                 our_status, stripe_subscription_id, stripe_customer_id, current_period_end)
+                            )
+                        conn.commit()
+                        print(f"✅ School subscription active for {school_name}: {our_status}, ends {current_period_end}")
+
+                    elif subscription_type == "individual":
+                        student_id = int(metadata.get("student_id"))
+                        parent_id = metadata.get("parent_id")
+                        if USE_POSTGRES:
+                            cursor.execute(
+                                """INSERT INTO student_subscriptions (student_id, status, plan_type, stripe_subscription_id, stripe_customer_id, current_period_end, paid_by_parent_id)
+                                   VALUES (%s, %s, 'monthly', %s, %s, %s, %s)
+                                   ON CONFLICT (student_id) DO UPDATE SET status = %s, plan_type = 'monthly',
+                                       stripe_subscription_id = %s, stripe_customer_id = %s, current_period_end = %s, updated_at = NOW()""",
+                                (student_id, our_status, stripe_subscription_id, stripe_customer_id, current_period_end, parent_id,
+                                 our_status, stripe_subscription_id, stripe_customer_id, current_period_end)
+                            )
+                        else:
+                            cursor.execute(
+                                """INSERT INTO student_subscriptions (student_id, status, plan_type, stripe_subscription_id, stripe_customer_id, current_period_end, paid_by_parent_id)
+                                   VALUES (?, ?, 'monthly', ?, ?, ?, ?)
+                                   ON CONFLICT (student_id) DO UPDATE SET status = ?, plan_type = 'monthly',
+                                       stripe_subscription_id = ?, stripe_customer_id = ?, current_period_end = ?""",
+                                (student_id, our_status, stripe_subscription_id, stripe_customer_id, current_period_end, parent_id,
+                                 our_status, stripe_subscription_id, stripe_customer_id, current_period_end)
+                            )
+                        conn.commit()
+                        print(f"✅ Individual subscription active for student {student_id}: {our_status}, ends {current_period_end}")
                     else:
-                        cursor.execute(
-                            """UPDATE student_wallets
-                               SET balance_cents = balance_cents + ?, total_earned_cents = total_earned_cents + ?, updated_at = datetime('now')
-                               WHERE user_id = ?""",
-                            (amount_cents, amount_cents, child_id)
-                        )
-                        cursor.execute(
-                            """INSERT INTO wallet_transactions (user_id, type, amount_cents, description, added_by)
-                               VALUES (?, 'parent_deposit', ?, ?, ?)""",
-                            (child_id, amount_cents, "Funds added by parent via Stripe", int(parent_id) if parent_id else None)
-                        )
-                    conn.commit()
-                    print(f"💰 Stripe deposit: ${amount_cents/100:.2f} credited to child {child_id} by parent {parent_id}")
+                        print(f"⚠️ Subscription checkout completed with unknown subscription_type: {subscription_type}")
                 except Exception as e:
                     conn.rollback()
-                    print(f"❌ Failed to credit wallet from Stripe webhook (DB step): {e}")
+                    print(f"❌ Failed to record subscription from webhook: {e}")
                     import traceback
                     traceback.print_exc()
                 finally:
                     cursor.close()
                     conn.close()
-            else:
-                print(f"⚠️ Stripe webhook missing expected metadata — child_id={child_id}, amount_cents={amount_cents}")
+
+        elif event["type"] in ("customer.subscription.updated", "customer.subscription.deleted"):
+            sub = event["data"]["object"].to_dict()
+            stripe_subscription_id = sub["id"]
+            stripe_status = sub["status"]
+            current_period_end = datetime.utcfromtimestamp(sub["current_period_end"]) if sub.get("current_period_end") else None
+            our_status = "expired" if event["type"] == "customer.subscription.deleted" else {"trialing": "trial", "active": "active"}.get(stripe_status, "expired")
+
+            print(f"🔔 Stripe webhook received: {event['type']} — sub={stripe_subscription_id} status={stripe_status}")
+
+            conn = get_db()
+            cursor = get_cursor(conn)
+            try:
+                if USE_POSTGRES:
+                    cursor.execute(
+                        "UPDATE school_subscriptions SET status = %s, current_period_end = %s, updated_at = NOW() WHERE stripe_subscription_id = %s",
+                        (our_status, current_period_end, stripe_subscription_id)
+                    )
+                    cursor.execute(
+                        "UPDATE student_subscriptions SET status = %s, current_period_end = %s, updated_at = NOW() WHERE stripe_subscription_id = %s",
+                        (our_status, current_period_end, stripe_subscription_id)
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE school_subscriptions SET status = ?, current_period_end = ? WHERE stripe_subscription_id = ?",
+                        (our_status, current_period_end, stripe_subscription_id)
+                    )
+                    cursor.execute(
+                        "UPDATE student_subscriptions SET status = ?, current_period_end = ? WHERE stripe_subscription_id = ?",
+                        (our_status, current_period_end, stripe_subscription_id)
+                    )
+                conn.commit()
+                print(f"✅ Synced subscription {stripe_subscription_id} → {our_status}")
+            except Exception as e:
+                conn.rollback()
+                print(f"❌ Failed to sync subscription update: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                cursor.close()
+                conn.close()
     except Exception as e:
         # Never let an unexpected error here bubble into a bare 500 — log the
         # full traceback so it's diagnosable, but still acknowledge receipt.
@@ -10170,6 +10570,294 @@ async def send_teacher_message(request: SendTeacherMessageRequest, teacher=Depen
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+class CouponCreate(BaseModel):
+    code: str
+    type: str  # 'lifetime' | 'trial'
+    trial_days: Optional[int] = None
+    max_redemptions: Optional[int] = None
+    expires_at: Optional[str] = None
+
+
+class CouponRedeem(BaseModel):
+    code: str
+    subscriber_type: str  # 'school' | 'individual'
+    student_id: Optional[int] = None  # required when subscriber_type == 'individual'
+
+
+def _get_access_status(student_id: int, cursor) -> dict:
+    """
+    Determine whether a student currently has access to the platform.
+    Checks the student's SCHOOL subscription first (covers everyone under
+    that school), then falls back to their own individual subscription.
+    Lifetime never expires; active/trial are only valid while
+    current_period_end is still in the future.
+    """
+    cursor.execute(
+        "SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?",
+        (student_id,)
+    )
+    row = cursor.fetchone()
+    school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+
+    now = datetime.utcnow()
+
+    if school:
+        cursor.execute(
+            "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
+            else "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = ?",
+            (school,)
+        )
+        sub = cursor.fetchone()
+        if sub:
+            sub = dict(sub)
+            if sub['status'] == 'lifetime':
+                return {"has_access": True, "reason": "school_lifetime", "expires_at": None}
+            if sub['status'] in ('active', 'trial') and sub['current_period_end']:
+                period_end = sub['current_period_end'] if isinstance(sub['current_period_end'], datetime) else datetime.fromisoformat(str(sub['current_period_end']))
+                if period_end > now:
+                    return {"has_access": True, "reason": f"school_{sub['status']}", "expires_at": str(period_end)}
+
+    cursor.execute(
+        "SELECT status, current_period_end FROM student_subscriptions WHERE student_id = %s" if USE_POSTGRES
+        else "SELECT status, current_period_end FROM student_subscriptions WHERE student_id = ?",
+        (student_id,)
+    )
+    sub = cursor.fetchone()
+    if sub:
+        sub = dict(sub)
+        if sub['status'] == 'lifetime':
+            return {"has_access": True, "reason": "individual_lifetime", "expires_at": None}
+        if sub['status'] in ('active', 'trial') and sub['current_period_end']:
+            period_end = sub['current_period_end'] if isinstance(sub['current_period_end'], datetime) else datetime.fromisoformat(str(sub['current_period_end']))
+            if period_end > now:
+                return {"has_access": True, "reason": f"individual_{sub['status']}", "expires_at": str(period_end)}
+
+    return {"has_access": False, "reason": "none", "expires_at": None}
+
+
+def require_active_access(user: dict = Depends(get_current_user)):
+    """Blocks lesson-consumption endpoints for students with no active
+    subscription/trial/lifetime coupon, per school or individual billing."""
+    if user.get("role") != "student":
+        return user  # only students are metered; other roles pass through
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        status = _get_access_status(user["user_id"], cursor)
+        if not status["has_access"]:
+            raise HTTPException(
+                status_code=402,
+                detail="A subscription, trial, or coupon code is required to access lessons."
+            )
+    finally:
+        cursor.close()
+        conn.close()
+    return user
+
+
+def _apply_coupon_effect(coupon, subscriber_type: str, subscriber_ref: str, cursor, extra_fields: dict):
+    """Write the actual subscription row granted by a coupon (lifetime = permanent,
+    trial = current_period_end set trial_days out from now)."""
+    if coupon['type'] == 'lifetime':
+        status = 'lifetime'
+        period_end = None
+    else:
+        status = 'trial'
+        period_end = datetime.utcnow() + timedelta(days=coupon['trial_days'] or 14)
+
+    if subscriber_type == 'school':
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO school_subscriptions (school_name, status, plan_type, current_period_end, coupon_code_id, created_by)
+                   VALUES (%s, %s, 'coupon', %s, %s, %s)
+                   ON CONFLICT (school_name) DO UPDATE SET status = %s, plan_type = 'coupon', current_period_end = %s, coupon_code_id = %s, updated_at = NOW()""",
+                (subscriber_ref, status, period_end, coupon['id'], extra_fields.get('redeemed_by'),
+                 status, period_end, coupon['id'])
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO school_subscriptions (school_name, status, plan_type, current_period_end, coupon_code_id, created_by)
+                   VALUES (?, ?, 'coupon', ?, ?, ?)
+                   ON CONFLICT (school_name) DO UPDATE SET status = ?, plan_type = 'coupon', current_period_end = ?, coupon_code_id = ?""",
+                (subscriber_ref, status, period_end, coupon['id'], extra_fields.get('redeemed_by'),
+                 status, period_end, coupon['id'])
+            )
+    else:
+        student_id = int(subscriber_ref)
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO student_subscriptions (student_id, status, plan_type, current_period_end, coupon_code_id, paid_by_parent_id)
+                   VALUES (%s, %s, 'coupon', %s, %s, %s)
+                   ON CONFLICT (student_id) DO UPDATE SET status = %s, plan_type = 'coupon', current_period_end = %s, coupon_code_id = %s, updated_at = NOW()""",
+                (student_id, status, period_end, coupon['id'], extra_fields.get('paid_by_parent_id'),
+                 status, period_end, coupon['id'])
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO student_subscriptions (student_id, status, plan_type, current_period_end, coupon_code_id, paid_by_parent_id)
+                   VALUES (?, ?, 'coupon', ?, ?, ?)
+                   ON CONFLICT (student_id) DO UPDATE SET status = ?, plan_type = 'coupon', current_period_end = ?, coupon_code_id = ?""",
+                (student_id, status, period_end, coupon['id'], extra_fields.get('paid_by_parent_id'),
+                 status, period_end, coupon['id'])
+            )
+
+
+@app.post("/api/redeem-coupon")
+async def redeem_coupon(body: CouponRedeem, user=Depends(get_current_user)):
+    """
+    Redeem a coupon code, either for the caller's own school (admin) or for a
+    linked child (parent). Grants either lifetime access or a timed trial.
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        code = body.code.strip().upper()
+        if USE_POSTGRES:
+            cursor.execute("SELECT * FROM coupon_codes WHERE code = %s AND active = TRUE", (code,))
+        else:
+            cursor.execute("SELECT * FROM coupon_codes WHERE code = ? AND active = 1", (code,))
+        coupon = cursor.fetchone()
+        if not coupon:
+            raise HTTPException(status_code=404, detail="Invalid or inactive coupon code")
+        coupon = dict(coupon) if hasattr(coupon, 'keys') else None
+
+        if coupon.get('expires_at'):
+            expires = coupon['expires_at'] if isinstance(coupon['expires_at'], datetime) else datetime.fromisoformat(str(coupon['expires_at']))
+            if datetime.utcnow() > expires:
+                raise HTTPException(status_code=400, detail="This coupon code has expired")
+
+        if coupon.get('max_redemptions') is not None and coupon['redemption_count'] >= coupon['max_redemptions']:
+            raise HTTPException(status_code=400, detail="This coupon code has reached its redemption limit")
+
+        extra_fields = {}
+        if body.subscriber_type == 'school':
+            if user.get('role') != 'admin':
+                raise HTTPException(status_code=403, detail="Only an admin can redeem a school coupon")
+            cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (user["user_id"],))
+            row = cursor.fetchone()
+            school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+            if not school:
+                raise HTTPException(status_code=400, detail="Your account has no school on file")
+            subscriber_ref = school
+            extra_fields['redeemed_by'] = user["user_id"]
+
+        elif body.subscriber_type == 'individual':
+            if not body.student_id:
+                raise HTTPException(status_code=400, detail="student_id is required for an individual coupon")
+            if user.get('role') == 'parent':
+                if not _verify_parent_owns_child(user["user_id"], body.student_id):
+                    raise HTTPException(status_code=403, detail="You are not linked to this student")
+                extra_fields['paid_by_parent_id'] = user["user_id"]
+            elif user.get('role') == 'student':
+                if user["user_id"] != body.student_id:
+                    raise HTTPException(status_code=403, detail="You can only redeem a coupon for your own account")
+            else:
+                raise HTTPException(status_code=403, detail="Only a parent or the student themselves can redeem this coupon")
+            subscriber_ref = str(body.student_id)
+        else:
+            raise HTTPException(status_code=400, detail="subscriber_type must be 'school' or 'individual'")
+
+        _apply_coupon_effect(coupon, body.subscriber_type, subscriber_ref, cursor, extra_fields)
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE coupon_codes SET redemption_count = redemption_count + 1 WHERE id = %s", (coupon['id'],))
+            cursor.execute(
+                "INSERT INTO coupon_redemptions (coupon_code_id, subscriber_type, subscriber_ref, redeemed_by) VALUES (%s, %s, %s, %s)",
+                (coupon['id'], body.subscriber_type, subscriber_ref, user["user_id"])
+            )
+        else:
+            cursor.execute("UPDATE coupon_codes SET redemption_count = redemption_count + 1 WHERE id = ?", (coupon['id'],))
+            cursor.execute(
+                "INSERT INTO coupon_redemptions (coupon_code_id, subscriber_type, subscriber_ref, redeemed_by) VALUES (?, ?, ?, ?)",
+                (coupon['id'], body.subscriber_type, subscriber_ref, user["user_id"])
+            )
+        conn.commit()
+        return {"success": True, "type": coupon['type'], "trial_days": coupon.get('trial_days')}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/superadmin/coupons")
+async def create_coupon(body: CouponCreate, admin=Depends(require_super_admin)):
+    if body.type not in ('lifetime', 'trial'):
+        raise HTTPException(status_code=400, detail="type must be 'lifetime' or 'trial'")
+    if body.type == 'trial' and not body.trial_days:
+        raise HTTPException(status_code=400, detail="trial_days is required for trial coupons")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        code = body.code.strip().upper()
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO coupon_codes (code, type, trial_days, max_redemptions, created_by, expires_at)
+                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+                (code, body.type, body.trial_days, body.max_redemptions, admin["user_id"], body.expires_at)
+            )
+            coupon_id = cursor.fetchone()['id']
+        else:
+            cursor.execute(
+                """INSERT INTO coupon_codes (code, type, trial_days, max_redemptions, created_by, expires_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (code, body.type, body.trial_days, body.max_redemptions, admin["user_id"], body.expires_at)
+            )
+            coupon_id = cursor.lastrowid
+        conn.commit()
+        return {"success": True, "coupon_id": coupon_id, "code": code}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+            raise HTTPException(status_code=400, detail="A coupon with this code already exists")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/superadmin/coupons")
+async def list_coupons(admin=Depends(require_super_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT * FROM coupon_codes ORDER BY created_at DESC")
+        rows = cursor.fetchall()
+        coupons = []
+        for r in rows:
+            r = dict(r)
+            for k in ('created_at', 'expires_at'):
+                if r.get(k) is not None:
+                    r[k] = str(r[k])
+            coupons.append(r)
+        return {"coupons": coupons}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.delete("/api/superadmin/coupons/{coupon_id}")
+async def deactivate_coupon(coupon_id: int, admin=Depends(require_super_admin)):
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute("UPDATE coupon_codes SET active = FALSE WHERE id = %s", (coupon_id,))
+        else:
+            cursor.execute("UPDATE coupon_codes SET active = 0 WHERE id = ?", (coupon_id,))
+        conn.commit()
+        return {"success": True}
     finally:
         cursor.close()
         conn.close()

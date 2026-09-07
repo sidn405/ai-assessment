@@ -250,6 +250,10 @@
                     </div>
                     <button class="btn btn-gold" onclick="openAddFunds()">💰 Add Funds</button>
                 </div>
+                <div id="subscriptionStatusBox" style="margin-top:1rem; padding:1rem; border-radius:10px; background:#f4f6f9; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.8rem;">
+                    <div id="subscriptionStatusText">Checking subscription status...</div>
+                    <button class="btn" id="subscribeBtn" style="width:auto; display:none;" onclick="startSubscribeCheckout()">Subscribe — $9.71/mo</button>
+                </div>
                 <div class="stat-grid">
                     <div class="stat-box"><div class="num" id="statLessons">-</div><div class="label">Lessons Completed</div></div>
                     <div class="stat-box"><div class="num" id="statAvg">-</div><div class="label">Avg Score</div></div>
@@ -508,6 +512,7 @@
         document.getElementById('childrenListView').classList.add('hidden');
         document.getElementById('childDetailView').classList.remove('hidden');
         document.getElementById('childName').textContent = childName;
+        loadSubscriptionStatus(childId);
 
         try {
             const [progressResp, lexileResp] = await Promise.all([
@@ -544,6 +549,54 @@
             }
         } catch (e) {
             console.error('Failed to load child detail', e);
+        }
+    }
+
+    async function loadSubscriptionStatus(childId) {
+        const textEl = document.getElementById('subscriptionStatusText');
+        const btnEl = document.getElementById('subscribeBtn');
+        textEl.textContent = 'Checking subscription status...';
+        btnEl.style.display = 'none';
+        try {
+            const resp = await fetch(`/api/parent/child/${childId}/subscription`, { headers: { Authorization: `Bearer ${getToken()}` } });
+            const data = await resp.json();
+            if (data.has_access) {
+                const reasonLabel = {
+                    school_lifetime: 'Covered by school (lifetime)',
+                    school_active: 'Covered by school subscription',
+                    school_trial: 'Covered by school (trial period)',
+                    individual_lifetime: 'Lifetime access active',
+                    individual_active: 'Subscription active',
+                    individual_trial: 'Trial access active'
+                }[data.reason] || 'Access active';
+                const expiry = data.expires_at ? ` — renews/ends ${new Date(data.expires_at).toLocaleDateString()}` : '';
+                textEl.innerHTML = `✅ <strong>${reasonLabel}</strong>${expiry}`;
+                btnEl.style.display = 'none';
+            } else {
+                textEl.innerHTML = `⚠️ No active subscription — ${escapeHtml(currentChildName)} cannot access lessons until subscribed.`;
+                btnEl.style.display = '';
+            }
+        } catch (e) {
+            textEl.textContent = 'Could not load subscription status.';
+        }
+    }
+
+    async function startSubscribeCheckout() {
+        const btnEl = document.getElementById('subscribeBtn');
+        btnEl.disabled = true;
+        btnEl.textContent = 'Redirecting...';
+        try {
+            const resp = await fetch(`/api/parent/child/${currentChildId}/subscription/create-checkout`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getToken()}` }
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Could not start checkout');
+            window.location.href = data.checkout_url;
+        } catch (e) {
+            alert(e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = 'Subscribe — $9.71/mo';
         }
     }
 
@@ -813,6 +866,9 @@
         const params = new URLSearchParams(window.location.search);
         if (params.get('funds_added')) {
             setTimeout(() => alert('Funds added successfully! 🎉'), 300);
+        }
+        if (params.get('subscribed')) {
+            setTimeout(() => alert('Subscription started! 🎉'), 300);
         }
     })();
 </script>
