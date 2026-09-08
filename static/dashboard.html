@@ -5879,8 +5879,8 @@
                 if (document.getElementById('userPoints')) {
                     document.getElementById('userPoints').textContent = data.points.current_points;
                 }
-                if (typeof checkMissionMilestone === 'function') {
-                    checkMissionMilestone(data.points.current_points);
+                if (typeof checkForMissionUpdates === 'function') {
+                    checkForMissionUpdates();
                 }
                 if (document.getElementById('userLevel')) {
                     document.getElementById('userLevel').textContent = data.points.level;
@@ -11682,123 +11682,137 @@
     });
 
         // ============================================================
-        // MISSION: UNLOCKED — full feature (state machine + rendering)
         // ============================================================
-        // Backend contract (implement server-side; falls back to a local
-        // demo generator until these endpoints exist):
-        //   GET  /api/missions/status?token=...      -> { active, queue_count, archive: [] }
-        //   POST /api/missions/start   {token, role}  -> { mission } (8-stage, calibrated to grade/Lexile)
-        //   POST /api/missions/answer  {token, mission_id, stage, option_index} -> { correct, attempt, points_awarded, next }
-        // Until the backend exists, missions are generated and scored
-        // client-side and persisted in localStorage per user.
+        // MISSION: UNLOCKED — full feature (real backend integration)
+        // ============================================================
+        // Backend (already built in app.py — auth via Authorization: Bearer header):
+        //   GET  /api/student/missions                        -> { current_mission, queued_count, archive_count, reader_roles }
+        //   POST /api/student/missions/{id}/select-role        { role } -> { success, status: 'generating' }
+        //   GET  /api/student/missions/{id}                    -> full stage detail while generating/active/completed
+        //   POST /api/student/missions/{id}/answer             { selected_index } -> correct/hint/revealed/completed
+        //   GET  /api/student/missions/archive                 -> { archive: [...] }
+        // 1,000-point milestone detection, queuing, and promotion to 'role_pending'
+        // all happen server-side inside award_points() — the client only reacts
+        // to status, it never invents mission state itself.
 
         const MISSION_ROLES = {
-            detective: { icon: '🔎', name: 'The Detective', desc: 'Piece together clues from a cold case.', color: '#4a56af',
-                sound: 'click', win: name => `Sharp eyes, ${name} — that's exactly what a great detective would spot.` },
-            explorer: { icon: '🌍', name: 'The Explorer', desc: 'Uncover hidden civilizations and lost artifacts.', color: '#2E8B57',
-                sound: 'chime', win: () => `You're reading the terrain like a pro!` },
-            scientist: { icon: '🔬', name: 'The Scientist', desc: 'Decode an anomaly and crack the puzzle.', color: '#1E90FF',
-                sound: 'beep', win: () => `Data confirmed — your reasoning checks out.` },
-            historian: { icon: '📜', name: 'The Historian', desc: 'Authenticate a discovery before time runs out.', color: '#B8860B',
-                sound: 'creak', win: () => `A scholar's instinct — well reasoned.` },
-            spaceagent: { icon: '🚀', name: 'The Space Agent', desc: 'Decode transmissions from the edge of the universe.', color: '#8A2BE2',
-                sound: 'static', win: () => `Transmission decoded. Nice work, Agent.` }
+            detective: { icon: '🔎', name: 'The Detective', desc: 'Piece together clues from a cold case.' },
+            explorer: { icon: '🌍', name: 'The Explorer', desc: 'Uncover hidden civilizations and lost artifacts.' },
+            scientist: { icon: '🔬', name: 'The Scientist', desc: 'Decode an anomaly and crack the puzzle.' },
+            historian: { icon: '📜', name: 'The Historian', desc: 'Authenticate a discovery before time runs out.' },
+            space_agent: { icon: '🚀', name: 'The Space Agent', desc: 'Decode transmissions from the edge of the universe.' }
         };
-        const MISSION_VISUALS = ['🗺️', '🏺', '🧭', '🔭', '🛰️', '🗝️', '📡', '🧬'];
+        const MISSION_SOUND_BY_ROLE = { detective: 'click', explorer: 'chime', scientist: 'beep', historian: 'creak', space_agent: 'static' };
 
-        function missionUserKey() {
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            return `mission_state_${user.id || user.email || 'guest'}`;
+        function missionAuthHeaders() {
+            return { Authorization: `Bearer ${localStorage.getItem('token') || ''}` };
         }
 
-        function loadMissionState() {
+        // In-memory only — no localStorage. The server is the single source of truth.
+        let currentMissionId = null;
+        let currentMissionDetail = null;
+        let missionPollTimer = null;
+
+        async function fetchMissionStatus() {
             try {
-                return JSON.parse(localStorage.getItem(missionUserKey())) || { lastMilestone: 0, active: null, queue: [], archive: [], pendingRole: false };
+                const resp = await fetch('/api/student/missions', { headers: missionAuthHeaders() });
+                if (!resp.ok) return null;
+                return await resp.json();
             } catch (e) {
-                return { lastMilestone: 0, active: null, queue: [], archive: [], pendingRole: false };
-            }
-        }
-        function saveMissionState(state) {
-            localStorage.setItem(missionUserKey(), JSON.stringify(state));
-        }
-
-        // ---------- SYS-01: milestone detection ----------
-        function checkMissionMilestone(currentPoints) {
-            const state = loadMissionState();
-            const crossed = Math.floor(currentPoints / 1000);
-            if (crossed > Math.floor(state.lastMilestone / 1000)) {
-                state.lastMilestone = crossed * 1000;
-                if (state.active) {
-                    // Mission already in progress — queue it instead (spec: max 1 active at a time)
-                    state.queue.push({ queuedAt: Date.now() });
-                    saveMissionState(state);
-                    showNotification('Mission: Unlocked! Queued — finish your current mission first.', 'success');
-                } else {
-                    state.pendingRole = true;
-                    saveMissionState(state);
-                    showNotification('$1.00 added to School Bucks Wallet — Mission: Unlocked!', 'success');
-                }
-                updateMissionBannerAndBadge();
+                return null;
             }
         }
 
-        function updateMissionBannerAndBadge() {
-            const state = loadMissionState();
+        async function fetchMissionDetail(missionId) {
+            try {
+                const resp = await fetch(`/api/student/missions/${missionId}`, { headers: missionAuthHeaders() });
+                if (!resp.ok) return null;
+                return await resp.json();
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Called on page load and after any point-earning action (lessons,
+        // word games, etc.) so a fresh unlock shows up without a manual refresh.
+        async function checkForMissionUpdates() {
+            const status = await fetchMissionStatus();
+            if (!status) return;
+            updateMissionBannerAndBadge(status);
+        }
+
+        function updateMissionBannerAndBadge(status) {
             const banner = document.getElementById('missionUnlockBanner');
             const badge = document.getElementById('missionQueueBadge');
-            if (banner) banner.classList.toggle('hidden', !(state.pendingRole && !state.active));
+            const overlayOpen = !document.getElementById('missionOverlay').classList.contains('hidden');
+
+            const isPending = status.current_mission && status.current_mission.status === 'role_pending';
+            if (banner) banner.classList.toggle('hidden', !(isPending && !overlayOpen));
+
             if (badge) {
-                const count = state.queue.length;
+                const count = status.queued_count || 0;
                 badge.textContent = count;
                 badge.classList.toggle('hidden', count === 0);
             }
         }
 
         // ---------- Missions section (Discovery Archive page) ----------
-        function renderMissionsSection() {
-            const state = loadMissionState();
+        async function renderMissionsSection() {
+            const status = await fetchMissionStatus();
             const activeCard = document.getElementById('missionActiveCard');
             const queueCard = document.getElementById('missionQueueCard');
             const noneCard = document.getElementById('missionNoneCard');
+            if (!status) return;
 
-            activeCard.style.display = state.active ? '' : 'none';
-            if (state.active) {
-                const role = MISSION_ROLES[state.active.role];
-                document.getElementById('missionActiveTitle').textContent = `${role.icon} ${state.active.title}`;
-                document.getElementById('missionActiveSubtitle').textContent =
-                    state.active.completed ? 'Ready to reveal!' : `Stage ${state.active.stage} of 8`;
+            const mission = status.current_mission;
+            activeCard.style.display = mission ? '' : 'none';
+            if (mission) {
+                const role = MISSION_ROLES[mission.reader_role] || { icon: '🧳', name: 'Mission' };
+                document.getElementById('missionActiveTitle').textContent = `${role.icon} ${mission.title || role.name}`;
+                const subtitles = {
+                    role_pending: 'Ready to begin — choose your Reader Role!',
+                    generating: 'Preparing your mission…',
+                    active: `Stage ${mission.current_stage} of 8`
+                };
+                document.getElementById('missionActiveSubtitle').textContent = subtitles[mission.status] || '';
             }
 
-            queueCard.style.display = state.queue.length > 0 ? '' : 'none';
-            document.getElementById('missionQueueCount').textContent = state.queue.length;
+            queueCard.style.display = status.queued_count > 0 ? '' : 'none';
+            document.getElementById('missionQueueCount').textContent = status.queued_count || 0;
 
-            noneCard.style.display = (!state.active && !state.pendingRole && state.queue.length === 0) ? '' : 'none';
+            noneCard.style.display = (!mission && !status.queued_count) ? '' : 'none';
 
-            if (state.pendingRole && !state.active) {
-                openMissionOverlay('unlockAnim');
-            }
+            updateMissionBannerAndBadge(status);
 
             const grid = document.getElementById('discoveryArchiveGrid');
             const empty = document.getElementById('discoveryArchiveEmpty');
-            if (state.archive.length === 0) {
-                grid.innerHTML = '';
-                empty.style.display = '';
-            } else {
-                empty.style.display = 'none';
-                grid.innerHTML = state.archive.slice().reverse().map(m => {
-                    const role = MISSION_ROLES[m.role];
-                    return `<div class="mission-archive-card">
-                        <div class="thumb">${m.visual}</div>
-                        <h4>${role.icon} ${m.title}</h4>
-                        <div class="meta">${role.name} • ${new Date(m.completedAt).toLocaleDateString()}</div>
-                        <div class="pts">+${m.pointsEarned} pts</div>
-                    </div>`;
-                }).join('');
-            }
+            try {
+                const archResp = await fetch('/api/student/missions/archive', { headers: missionAuthHeaders() });
+                const archData = archResp.ok ? await archResp.json() : { archive: [] };
+                const archive = archData.archive || [];
+                if (archive.length === 0) {
+                    grid.innerHTML = '';
+                    empty.style.display = '';
+                } else {
+                    empty.style.display = 'none';
+                    grid.innerHTML = archive.map(m => {
+                        const role = MISSION_ROLES[m.reader_role] || { icon: '🧳', name: 'Mission' };
+                        const thumb = m.image_url
+                            ? `<img src="${m.image_url}" alt="" style="width:100%; height:80px; object-fit:cover; border-radius:8px;">`
+                            : `<div class="thumb">${role.icon}</div>`;
+                        return `<div class="mission-archive-card">
+                            ${thumb}
+                            <h4>${role.icon} ${m.title || role.name}</h4>
+                            <div class="meta">${role.name} • ${m.completed_at ? new Date(m.completed_at).toLocaleDateString() : ''}</div>
+                            <div class="pts">+${m.points_earned_total} pts</div>
+                        </div>`;
+                    }).join('');
+                }
+            } catch (e) { /* archive stays empty on failure */ }
         }
 
         // ---------- Overlay plumbing ----------
-        let missionSoundOn = localStorage.getItem('missionSoundOn') === 'true'; // SYS-08: off by default
+        let missionSoundOn = localStorage.getItem('missionSoundOn') === 'true'; // off by default
         function toggleMissionSound() {
             missionSoundOn = !missionSoundOn;
             localStorage.setItem('missionSoundOn', missionSoundOn);
@@ -11822,6 +11836,7 @@
 
         function openMissionOverlay(view, payload) {
             document.getElementById('missionUnlockBanner').classList.add('hidden');
+            if (missionPollTimer) { clearInterval(missionPollTimer); missionPollTimer = null; }
             const overlay = document.getElementById('missionOverlay');
             overlay.classList.remove('hidden');
             document.getElementById('missionOverlayClose').classList.toggle('hidden', view === 'unlockAnim' || view === 'generating');
@@ -11830,10 +11845,17 @@
             renderMissionView(view, payload);
         }
         function closeMissionOverlay() {
+            if (missionPollTimer) { clearInterval(missionPollTimer); missionPollTimer = null; }
             document.getElementById('missionOverlay').classList.add('hidden');
             if (window.speechSynthesis) window.speechSynthesis.cancel();
             renderMissionsSection();
-            updateMissionBannerAndBadge();
+        }
+
+        function missionVisualHtml(imageUrl, roleIcon, blurAmount, opacity) {
+            if (imageUrl) {
+                return `<img src="${imageUrl}" alt="" style="width:100%; height:100%; object-fit:cover; filter: blur(${blurAmount}px); opacity:${opacity};">`;
+            }
+            return `<span class="mission-visual-emoji" style="filter: blur(${Math.min(blurAmount, 6)}px); opacity:${opacity};">${roleIcon}</span>`;
         }
 
         function renderMissionView(view, payload) {
@@ -11845,225 +11867,235 @@
                     <div class="mission-unlock-title">Mission: Unlocked</div>
                     <div class="mission-unlock-sub">Your new mission awaits.</div>
                     <div class="mission-wallet-confirm">💰 $1.00 deposited to your School Bucks Wallet</div>`;
-                setTimeout(() => renderMissionView('roleSelect'), 4000);
+                setTimeout(() => renderMissionView('roleSelect', payload), 4000);
             } else if (view === 'roleSelect') {
                 el.innerHTML = `
                     <h2 style="margin-bottom:0.25rem;">Choose Your Reader Role</h2>
                     <p style="color:#cfd3f5;">Pick fresh each mission — explore a new theme!</p>
                     <div class="mission-role-grid">
                         ${Object.entries(MISSION_ROLES).map(([key, r]) => `
-                            <div class="mission-role-card" tabindex="0" onclick="startMission('${key}')" onkeypress="if(event.key==='Enter')startMission('${key}')">
+                            <div class="mission-role-card" tabindex="0" onclick="selectMissionRole('${key}')" onkeypress="if(event.key==='Enter')selectMissionRole('${key}')">
                                 <div class="icon">${r.icon}</div>
                                 <div class="name">${r.name}</div>
                                 <div class="desc">${r.desc}</div>
                             </div>`).join('')}
                     </div>`;
             } else if (view === 'generating') {
+                const role = MISSION_ROLES[payload.role] || { icon: '🧳' };
                 el.innerHTML = `
-                    <div style="font-size:3rem;">${MISSION_ROLES[payload.role].icon}</div>
+                    <div style="font-size:3rem;">${role.icon}</div>
                     <div class="mission-unlock-title" style="font-size:1.4rem;">Preparing your mission…</div>
-                    <div class="mission-generating-spinner"></div>`;
+                    <div class="mission-generating-spinner"></div>
+                    <p style="color:#cfd3f5; margin-top:1rem; font-size:0.85rem;">This can take up to a minute or two.</p>`;
+            } else if (view === 'generationFailed') {
+                el.innerHTML = `
+                    <div style="font-size:3rem;">⚠️</div>
+                    <div class="mission-unlock-title" style="font-size:1.4rem;">Something went wrong</div>
+                    <p style="color:#cfd3f5; margin-top:0.5rem;">We couldn't generate this mission. It's been logged — check back later, or reach out if it keeps happening.</p>
+                    <button class="btn btn-primary" style="margin-top:1rem;" onclick="closeMissionOverlay()">Close</button>`;
             } else if (view === 'stage') {
-                renderStageView(payload.stage);
+                renderStageView();
             } else if (view === 'reveal') {
-                renderRevealView();
+                renderRevealView(payload);
             }
         }
 
-        // ---------- SYS-03: role selection -> SYS-02: mission generation ----------
-        async function startMission(roleKey) {
-            const state = loadMissionState();
-            openMissionOverlay('generating', { role: roleKey });
+        // ---------- Role selection -> generation ----------
+        async function selectMissionRole(roleKey) {
+            const status = await fetchMissionStatus();
+            const mission = status && status.current_mission;
+            if (!mission) return;
+            currentMissionId = mission.id;
 
-            let mission = null;
-            const token = localStorage.getItem('token');
+            openMissionOverlay('generating', { role: roleKey });
             try {
-                const resp = await fetch(`/api/missions/start?token=${encodeURIComponent(token || '')}`, {
+                const resp = await fetch(`/api/student/missions/${mission.id}/select-role`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { ...missionAuthHeaders(), 'Content-Type': 'application/json' },
                     body: JSON.stringify({ role: roleKey })
                 });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (data && data.success && data.mission) mission = data.mission;
-                }
-            } catch (e) { /* backend not available yet — fall through to demo */ }
-
-            if (!mission) mission = generateDemoMission(roleKey);
-
-            state.active = mission;
-            state.pendingRole = false;
-            saveMissionState(state);
-
-            setTimeout(() => {
-                openMissionOverlay('stage', { stage: mission.stage });
-            }, 1400);
-        }
-
-        // Client-side demo generator (stand-in for AI generation until the
-        // backend endpoint above is implemented). Calibration to grade/Lexile
-        // happens server-side per SYS-02 — this local version keeps clues short
-        // and generic so the UI is fully testable today.
-        function generateDemoMission(roleKey) {
-            const STAGE_META = [
-                { name: 'The Hook', q: 'What is most likely going on here?' },
-                { name: 'First Clue', q: 'What does this tell you?' },
-                { name: 'The Complication', q: 'How do you reconcile this contradiction?' },
-                { name: 'The Evidence', q: 'What does this evidence suggest?' },
-                { name: 'The Red Herring', q: 'Which of these doesn\u2019t actually fit?' },
-                { name: 'The Breakthrough', q: 'What do these clues add up to?' },
-                { name: 'The Final Clue', q: 'Given everything so far, what makes sense?' },
-                { name: 'The Reveal', q: 'Using all the clues, what really happened?' }
-            ];
-            const clueBank = {
-                detective: ['You find a torn note wedged behind a desk drawer.', 'A witness recalls a figure in a gray coat near the scene.', 'The timestamp on the receipt doesn\u2019t match the alibi.', 'A faint smell of ink lingers on the envelope.', 'Someone reported seeing the same car twice — two streets apart.', 'Two clues you gathered both point to the same address.', 'The handwriting on the note matches an old case file.', 'The pieces click into place.'],
-                explorer: ['A weathered map fragment shows a coastline that no longer exists.', 'Carvings on the stone mention a hidden chamber.', 'A second map contradicts the first — one may be a fake.', 'A compass needle spins oddly near the ruins.', 'A trail marker points the wrong direction on purpose.', 'The carvings and the compass anomaly line up.', 'An old journal names the chamber\u2019s true location.', 'The lost site comes into full view.'],
-                scientist: ['A sensor logs a spike no one can explain.', 'A sample shows an unexpected chemical signature.', 'A second reading contradicts the first log entry.', 'The lab notebook lists an odd control variable.', 'One data point looks relevant but is actually noise.', 'Two anomalies trace back to the same source.', 'A final calibration reading confirms the pattern.', 'The full result comes together.'],
-                historian: ['A faded letter references an event left out of the records.', 'A ledger entry names an unfamiliar merchant.', 'A second document lists a conflicting date.', 'A wax seal matches a minor noble house.', 'A rumor in the margins looks important but is unrelated.', 'The ledger and the letter reference the same transaction.', 'A final archive entry confirms the timeline.', 'The true history is authenticated.'],
-                spaceagent: ['A garbled transmission repeats one unusual phrase.', 'Telemetry shows a course correction no one ordered.', 'A second signal contradicts the first coordinates.', 'A logged code fragment doesn\u2019t match any known ship.', 'A decoy beacon is broadcasting nearby.', 'Two signals resolve to the same origin point.', 'A final decrypted line reveals the sender.', 'The full transmission is decoded.']
-            };
-            const clues = clueBank[roleKey] || clueBank.detective;
-            const visual = MISSION_VISUALS[Math.floor(Math.random() * MISSION_VISUALS.length)];
-            const stages = STAGE_META.map((meta, i) => {
-                const correct = Math.floor(Math.random() * 3);
-                const opts = ['That\u2019s the key detail', 'That\u2019s unrelated to the case', 'That contradicts an earlier clue'];
-                const shuffled = [opts[correct], ...opts.filter((_, idx) => idx !== correct)];
-                return {
-                    name: meta.name,
-                    clue: clues[i],
-                    question: meta.q,
-                    options: [shuffled[0], shuffled[1], shuffled[2]],
-                    correctIndex: 0 // we always place the correct one first, then shuffle at render time
-                };
-            });
-            return {
-                id: `demo_${Date.now()}`,
-                role: roleKey,
-                title: `${MISSION_ROLES[roleKey].name}'s Mystery`,
-                visual,
-                stage: 1,
-                attemptsOnStage: 0,
-                pointsEarned: 0,
-                completed: false,
-                stages
-            };
-        }
-
-        // ---------- SYS-04: stage rendering & gating ----------
-        function renderStageView(stageNum) {
-            const state = loadMissionState();
-            const mission = state.active;
-            if (!mission) return;
-            const role = MISSION_ROLES[mission.role];
-            const stageData = mission.stages[stageNum - 1];
-            const blurAmount = Math.max(0, 22 - (stageNum - 1) * 3);
-            // shuffle options once per stage render, remember mapping for scoring
-            if (!stageData._shuffled) {
-                const order = [0, 1, 2].sort(() => Math.random() - 0.5);
-                stageData._order = order;
-                stageData._shuffled = true;
+                if (!resp.ok) throw new Error('Failed to start mission');
+                pollMissionGeneration(mission.id);
+            } catch (e) {
+                renderMissionView('generationFailed');
             }
-            const order = stageData._order;
+        }
+
+        function pollMissionGeneration(missionId) {
+            let attempts = 0;
+            const maxAttempts = 60; // ~3 minutes at 3s intervals
+            missionPollTimer = setInterval(async () => {
+                attempts++;
+                const detail = await fetchMissionDetail(missionId);
+                if (detail && detail.status === 'active') {
+                    clearInterval(missionPollTimer); missionPollTimer = null;
+                    currentMissionDetail = detail;
+                    renderMissionView('stage');
+                } else if (detail && detail.status === 'generation_failed') {
+                    clearInterval(missionPollTimer); missionPollTimer = null;
+                    renderMissionView('generationFailed');
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(missionPollTimer); missionPollTimer = null;
+                    renderMissionView('generationFailed');
+                }
+            }, 3000);
+        }
+
+        // ---------- Stage rendering (server-driven) ----------
+        async function renderStageView() {
+            if (!currentMissionDetail) {
+                const detail = await fetchMissionDetail(currentMissionId);
+                if (!detail) return;
+                currentMissionDetail = detail;
+            }
+            const mission = currentMissionDetail;
+            const role = MISSION_ROLES[mission.reader_role] || { icon: '🧳', name: 'Mission' };
+            const stageNum = mission.current_stage;
+
+            if (stageNum >= 8) {
+                renderStage8Ready(mission, role);
+                return;
+            }
+
+            const stageData = mission.stages.find(s => s.stage === stageNum);
+            const priorProgress = (mission.progress || []).find(p => p.stage === stageNum);
+            const onSecondAttempt = priorProgress && priorProgress.attempts >= 1 && !priorProgress.correct;
+
+            const blurAmount = Math.max(0, 22 - (stageNum - 1) * 3);
+            const opacity = 0.5 + (stageNum / 16);
 
             const el = document.getElementById('missionOverlayContent');
             el.innerHTML = `
                 <div class="mission-role-badge">${role.icon} ${role.name}</div>
                 <div class="mission-progress-wrap">
-                    <div class="mission-progress-label">Stage ${stageNum} of 8</div>
+                    <div class="mission-progress-label">Stage ${stageNum} of 8${mission.title ? ' — ' + mission.title : ''}</div>
                     <div class="mission-progress-track"><div class="mission-progress-fill" style="width:${(stageNum-1)/8*100 + 12.5}%"></div></div>
                 </div>
-                <div class="mission-visual-wrap">
-                    <span class="mission-visual-emoji" style="filter: blur(${blurAmount}px); opacity:${0.5 + (stageNum/16)};">${mission.visual}</span>
-                </div>
+                <div class="mission-visual-wrap">${missionVisualHtml(mission.image_url, role.icon, blurAmount, opacity)}</div>
                 <div class="mission-clue-card">
                     <div class="mission-stage-name">${stageData.name}</div>
-                    ${stageData.clue}
+                    ${stageData.clue_text}
                 </div>
                 <div class="mission-question">${stageData.question}</div>
                 <div class="mission-options" id="missionOptions">
-                    ${order.map((origIdx, i) => `<button class="mission-option-btn" onclick="answerStage(${stageNum}, ${origIdx})">${stageData.options[origIdx]}</button>`).join('')}
+                    ${stageData.options.map((opt, i) => `<button class="mission-option-btn" onclick="answerStage(${i})">${opt}</button>`).join('')}
                 </div>
-                <div id="missionFeedbackArea"></div>
+                <div id="missionFeedbackArea">
+                    ${onSecondAttempt ? `<div class="mission-feedback hint">Think about what you know — re-read the clue carefully.</div>` : ''}
+                </div>
             `;
-            playMissionSound(role.sound);
+            playMissionSound(MISSION_SOUND_BY_ROLE[mission.reader_role] || 'click');
         }
 
-        // ---------- SYS-05: answer handling & hint logic ----------
-        function answerStage(stageNum, chosenIndex) {
-            const state = loadMissionState();
-            const mission = state.active;
-            if (!mission) return;
-            const stageData = mission.stages[stageNum - 1];
-            const role = MISSION_ROLES[mission.role];
+        function renderStage8Ready(mission, role) {
+            const el = document.getElementById('missionOverlayContent');
+            el.innerHTML = `
+                <div class="mission-role-badge">${role.icon} ${role.name}</div>
+                <div class="mission-progress-wrap">
+                    <div class="mission-progress-label">Stage 8 of 8 — The Reveal</div>
+                    <div class="mission-progress-track"><div class="mission-progress-fill" style="width:100%"></div></div>
+                </div>
+                <div class="mission-visual-wrap">${missionVisualHtml(mission.image_url, role.icon, 0, 1)}</div>
+                <div class="mission-clue-card">
+                    <div class="mission-stage-name">The Reveal</div>
+                    You've gathered every clue. Ready to see how it all fits together?
+                </div>
+                <button class="btn btn-primary" onclick="submitStage8()">Solve the Mystery →</button>
+            `;
+        }
+
+        // ---------- Answer handling ----------
+        async function answerStage(chosenIndex) {
             const buttons = document.querySelectorAll('#missionOptions .mission-option-btn');
             buttons.forEach(b => b.disabled = true);
-            const isCorrect = chosenIndex === stageData.correctIndex;
             const feedbackArea = document.getElementById('missionFeedbackArea');
+            const role = MISSION_ROLES[currentMissionDetail.reader_role] || {};
 
-            if (isCorrect) {
-                playMissionSound('correct');
-                const pts = mission.attemptsOnStage === 0 ? 50 : 25;
-                mission.pointsEarned += pts;
-                buttons.forEach((b, i) => { if (stageData._order[i] === chosenIndex) b.classList.add('correct'); });
-                feedbackArea.innerHTML = `<div class="mission-feedback correct">${role.win(mission.title)} <strong>+${pts} pts</strong></div>
-                    <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="advanceStage()">Continue →</button>`;
-                mission.attemptsOnStage = 0;
-            } else if (mission.attemptsOnStage === 0) {
-                playMissionSound('wrong');
-                mission.attemptsOnStage = 1;
-                buttons.forEach((b, i) => { if (stageData._order[i] === chosenIndex) b.classList.add('incorrect'); });
+            let data;
+            try {
+                const resp = await fetch(`/api/student/missions/${currentMissionId}/answer`, {
+                    method: 'POST',
+                    headers: { ...missionAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selected_index: chosenIndex })
+                });
+                data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Failed to submit answer');
+            } catch (e) {
+                feedbackArea.innerHTML = `<div class="mission-feedback reveal">Something went wrong submitting that — try again.</div>`;
                 buttons.forEach(b => b.disabled = false);
-                buttons.forEach((b, i) => { if (stageData._order[i] === chosenIndex) b.disabled = true; });
-                feedbackArea.innerHTML = `<div class="mission-feedback hint">Think about what you know — re-read the clue carefully.</div>`;
+                return;
+            }
+
+            if (data.correct) {
+                playMissionSound('correct');
+                buttons[chosenIndex].classList.add('correct');
+                feedbackArea.innerHTML = `<div class="mission-feedback correct">${data.feedback} <strong>+${data.points_awarded} pts</strong></div>
+                    <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="advanceAfterAnswer()">Continue →</button>`;
+            } else if (!data.revealed) {
+                playMissionSound('wrong');
+                buttons[chosenIndex].classList.add('incorrect');
+                buttons.forEach(b => b.disabled = false);
+                buttons[chosenIndex].disabled = true;
+                feedbackArea.innerHTML = `<div class="mission-feedback hint">${data.hint}</div>`;
             } else {
                 playMissionSound('wrong');
-                mission.pointsEarned += 10; // participation credit
-                buttons.forEach((b, i) => { if (stageData._order[i] === stageData.correctIndex) b.classList.add('correct'); if (stageData._order[i] === chosenIndex) b.classList.add('incorrect'); });
-                feedbackArea.innerHTML = `<div class="mission-feedback reveal">This one was tricky — here's the reasoning: ${stageData.options[stageData.correctIndex]} fits every clue gathered so far. <strong>+10 pts</strong></div>
-                    <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="advanceStage()">Continue →</button>`;
-                mission.attemptsOnStage = 0;
-            }
-            saveMissionState(state);
-        }
-
-        function advanceStage() {
-            const state = loadMissionState();
-            const mission = state.active;
-            if (!mission) return;
-            if (mission.stage >= 8) {
-                // Mark completed immediately so a mid-reveal exit resumes at reveal, not a stage replay.
-                mission.completed = true;
-                saveMissionState(state);
-                renderMissionView('reveal');
-            } else {
-                mission.stage += 1;
-                saveMissionState(state);
-                renderMissionView('stage', { stage: mission.stage });
+                buttons[chosenIndex].classList.add('incorrect');
+                buttons.forEach((b, i) => { if (b.textContent.trim() === data.correct_answer) b.classList.add('correct'); });
+                feedbackArea.innerHTML = `<div class="mission-feedback reveal">${data.reveal_message} ${data.correct_answer ? 'The answer: ' + data.correct_answer : ''} <strong>+${data.points_awarded} pts</strong></div>
+                    <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="advanceAfterAnswer()">Continue →</button>`;
             }
         }
 
-        // ---------- SYS-06/07: completion, bonus, archive ----------
-        function renderRevealView() {
-            const state = loadMissionState();
-            const mission = state.active;
-            if (!mission) return;
-            const role = MISSION_ROLES[mission.role];
-            const totalPoints = mission.pointsEarned + 250; // completion bonus
+        async function advanceAfterAnswer() {
+            const detail = await fetchMissionDetail(currentMissionId);
+            if (!detail) return;
+            currentMissionDetail = detail;
+            renderStageView();
+        }
+
+        async function submitStage8() {
             playMissionSound('reveal');
+            const el = document.getElementById('missionOverlayContent');
+            el.innerHTML = `<div class="mission-generating-spinner" style="margin-top:3rem;"></div>`;
+            try {
+                const resp = await fetch(`/api/student/missions/${currentMissionId}/answer`, {
+                    method: 'POST',
+                    headers: { ...missionAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Failed to complete mission');
+                renderMissionView('reveal', data);
+            } catch (e) {
+                renderMissionView('generationFailed');
+            }
+        }
+
+        // ---------- Reveal ----------
+        async function renderRevealView(payload) {
+            const role = MISSION_ROLES[currentMissionDetail.reader_role] || { icon: '🧳', name: 'Mission' };
+            playMissionSound('reveal');
+
+            // Re-fetch for the authoritative running total (includes every stage's points + this completion bonus).
+            const finalDetail = await fetchMissionDetail(currentMissionId);
+            const totalPoints = finalDetail ? finalDetail.points_earned_total : (payload && payload.bonus_points) || 0;
+            const imageUrl = payload.image_url || (finalDetail && finalDetail.image_url);
 
             const el = document.getElementById('missionOverlayContent');
             el.innerHTML = `
                 <div class="mission-unlock-title" style="font-size:1.6rem;">Mystery Solved!</div>
-                <div class="mission-reveal-visual">${mission.visual}</div>
+                <div class="mission-reveal-visual">${imageUrl ? `<img src="${imageUrl}" alt="" style="max-width:100%; max-height:220px; border-radius:12px;">` : role.icon}</div>
                 <div class="mission-reveal-summary">
-                    <strong>${role.icon} ${mission.title}</strong><br>
-                    Using every clue you gathered, you traced the mystery to its source — a satisfying, fully-earned conclusion worthy of ${role.name}.
+                    <strong>${role.icon} ${currentMissionDetail.title || role.name}</strong><br>
+                    ${payload.narrative_summary || ''}
                 </div>
                 <div class="mission-progress-label">Total mission points</div>
                 <div class="mission-points-counter" id="missionPtsCounter">0</div>
-                <button class="btn btn-primary" onclick="finishMission()">Add to Discovery Archive</button>
+                <button class="btn btn-primary" onclick="closeMissionOverlay()">Back to Missions</button>
             `;
             animateCounter(document.getElementById('missionPtsCounter'), totalPoints);
+            currentMissionId = null;
+            currentMissionDetail = null;
         }
 
         function animateCounter(node, target) {
@@ -12076,56 +12108,31 @@
             }, 25);
         }
 
-        function finishMission() {
-            const state = loadMissionState();
-            const mission = state.active;
+        // ---------- Resume — handles every status, including exactly at stage 8 ----------
+        async function resumeMission() {
+            const status = await fetchMissionStatus();
+            const mission = status && status.current_mission;
             if (!mission) return;
-            const totalPoints = mission.pointsEarned + 250;
+            currentMissionId = mission.id;
 
-            state.archive.push({
-                role: mission.role,
-                title: mission.title,
-                visual: mission.visual,
-                pointsEarned: totalPoints,
-                completedAt: Date.now()
-            });
-            state.active = null;
-
-            // SYS-06: pushing past another 1,000-point threshold queues the next mission
-            if (state.queue.length > 0) {
-                state.queue.shift();
-                state.pendingRole = true;
+            if (mission.status === 'role_pending') {
+                openMissionOverlay('unlockAnim');
+            } else if (mission.status === 'generating') {
+                openMissionOverlay('generating', { role: mission.reader_role });
+                pollMissionGeneration(mission.id);
+            } else if (mission.status === 'active') {
+                const detail = await fetchMissionDetail(mission.id);
+                if (!detail) return;
+                currentMissionDetail = detail;
+                openMissionOverlay('stage');
+            } else if (mission.status === 'generation_failed') {
+                openMissionOverlay('generationFailed');
             }
-            saveMissionState(state);
-
-            const token = localStorage.getItem('token');
-            fetch(`/api/missions/complete?token=${encodeURIComponent(token || '')}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mission_id: mission.id, points_earned: totalPoints })
-            }).catch(() => { /* backend not available yet — local state already updated */ });
-
-            closeMissionOverlay();
-            if (state.pendingRole) {
-                setTimeout(() => openMissionOverlay('unlockAnim'), 500);
-            }
-        }
-
-        // ---------- Resume — handles exiting mid-mission, including exactly at stage 8 ----------
-        function resumeMission() {
-            const state = loadMissionState();
-            const mission = state.active;
-            if (!mission) return;
-            openMissionOverlay(mission.completed ? 'reveal' : 'stage', { stage: mission.stage });
         }
 
         // ---------- Init ----------
         document.addEventListener('DOMContentLoaded', function() {
-            updateMissionBannerAndBadge();
-            const state = loadMissionState();
-            if (state.pendingRole && !state.active) {
-                // Show the small banner rather than auto-launching the full overlay on page load.
-                document.getElementById('missionUnlockBanner').classList.remove('hidden');
-            }
+            checkForMissionUpdates();
         });
     </script>
 
