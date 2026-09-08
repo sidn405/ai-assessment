@@ -805,6 +805,7 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS class_period_students (id SERIAL PRIMARY KEY, period_id INTEGER REFERENCES class_periods(id) ON DELETE CASCADE, student_id INTEGER REFERENCES users(id), UNIQUE(period_id, student_id))" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS class_period_students (id INTEGER PRIMARY KEY AUTOINCREMENT, period_id INTEGER, student_id INTEGER, UNIQUE(period_id, student_id))",
                 "CREATE TABLE IF NOT EXISTS coupon_codes (id SERIAL PRIMARY KEY, code VARCHAR(50) UNIQUE, type VARCHAR(20), trial_days INTEGER, max_redemptions INTEGER, redemption_count INTEGER DEFAULT 0, active BOOLEAN DEFAULT TRUE, created_by INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS coupon_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code VARCHAR(50) UNIQUE, type VARCHAR(20), trial_days INTEGER, max_redemptions INTEGER, redemption_count INTEGER DEFAULT 0, active BOOLEAN DEFAULT 1, created_by INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS coupon_redemptions (id SERIAL PRIMARY KEY, coupon_code_id INTEGER REFERENCES coupon_codes(id), subscriber_type VARCHAR(20), subscriber_ref VARCHAR(255), redeemed_by INTEGER REFERENCES users(id), redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS coupon_redemptions (id INTEGER PRIMARY KEY AUTOINCREMENT, coupon_code_id INTEGER, subscriber_type VARCHAR(20), subscriber_ref VARCHAR(255), redeemed_by INTEGER, redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS missions (id SERIAL PRIMARY KEY, student_id INTEGER REFERENCES users(id), status VARCHAR(20) DEFAULT 'queued', reader_role VARCHAR(20), current_stage INTEGER DEFAULT 1, title VARCHAR(255), image_url TEXT, narrative_summary TEXT, stages_json TEXT, progress_json TEXT DEFAULT '[]', points_earned_total INTEGER DEFAULT 0, grade_level VARCHAR(20), lexile_level INTEGER, unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, started_at TIMESTAMP, completed_at TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS missions (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER, status VARCHAR(20) DEFAULT 'queued', reader_role VARCHAR(20), current_stage INTEGER DEFAULT 1, title VARCHAR(255), image_url TEXT, narrative_summary TEXT, stages_json TEXT, progress_json TEXT DEFAULT '[]', points_earned_total INTEGER DEFAULT 0, grade_level VARCHAR(20), lexile_level INTEGER, unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, started_at TIMESTAMP, completed_at TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS school_subscriptions (id SERIAL PRIMARY KEY, school_name VARCHAR(255) UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER REFERENCES coupon_codes(id), created_by INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS school_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, school_name VARCHAR(255) UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER, created_by INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS student_subscriptions (id SERIAL PRIMARY KEY, student_id INTEGER REFERENCES users(id) UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER REFERENCES coupon_codes(id), paid_by_parent_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS student_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER, paid_by_parent_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
@@ -5237,6 +5238,243 @@ WEEKLY_GOAL_TYPES = {
     }
 }
 
+READER_ROLES = {
+    "detective": {"name": "The Detective", "icon": "🔎", "theme": "crime, mystery, cold case",
+                  "description": "A sharp-eyed investigator piecing together clues from a cold case, crime scene, or unsolved disappearance."},
+    "explorer": {"name": "The Explorer", "icon": "🌍", "theme": "archaeology, geography, discovery",
+                 "description": "A fearless adventurer uncovering hidden civilizations, lost artifacts, or uncharted territories."},
+    "scientist": {"name": "The Scientist", "icon": "🔬", "theme": "science, technology, nature",
+                  "description": "A brilliant researcher decoding a scientific anomaly, tracking a rare phenomenon, or solving a lab-based puzzle."},
+    "historian": {"name": "The Historian", "icon": "📜", "theme": "history, culture, social studies",
+                  "description": "A time-sensitive scholar racing to authenticate a historical discovery before it falls into the wrong hands."},
+    "space_agent": {"name": "The Space Agent", "icon": "🚀", "theme": "space, astronomy, future science",
+                    "description": "An elite operative stationed at the edge of the universe, decoding transmissions and navigating extraterrestrial mysteries."},
+}
+
+MISSION_STAGE_NAMES = [
+    "The Hook", "First Clue", "The Complication", "The Evidence",
+    "The Red Herring", "The Breakthrough", "The Final Clue", "The Reveal"
+]
+
+
+async def _generate_mission_content(reader_role: str, grade_level: str, lexile_level: int, previous_titles: list):
+    """
+    AI-generate a full 8-stage Mission: Unlocked mystery. Every clue is 40-80
+    words, written second-person present-tense, calibrated to the student's
+    current grade/Lexile (never above it), with a 3-option deduction
+    challenge per stage. Returns {title, stages: [...], narrative_summary, image_prompt}.
+    """
+    role_info = READER_ROLES[reader_role]
+    avoid_titles = f"Do not reuse any of these previously-used mission titles for this student: {', '.join(previous_titles)}." if previous_titles else ""
+
+    system_prompt = f"""You are writing an 8-stage mystery mini-game called "Mission: Unlocked" for a student reading platform.
+
+Reader Role: {role_info['name']} — {role_info['description']}
+Theme: {role_info['theme']}
+Grade level: {grade_level}
+Lexile level: {lexile_level or 'grade-appropriate'}
+{avoid_titles}
+
+CORE PRINCIPLE: Reading is the tool, thinking is the game. This is a cognitive break, NOT a reading lesson. Clue texts must be short, accessible, and calibrated to (never above) the student's grade/Lexile level. All mental effort should go toward deduction and reasoning, not decoding difficult vocabulary.
+
+Requirements for each of the 8 stages (in order): {', '.join(MISSION_STAGE_NAMES)}
+- Each stage's clue_text is 40-80 words, second person present tense (e.g. "You find a torn note..."), matching its narrative function:
+  1. The Hook: a punchy opening clue that sparks curiosity.
+  2. First Clue: delivers a concrete piece of the puzzle (name, location, date, object).
+  3. The Complication: a contradicting clue that disrupts the obvious theory.
+  4. The Evidence: physical/documented evidence to interpret (code, symbol, list, map label).
+  5. The Red Herring: a deliberately misleading clue that looks relevant but doesn't fit.
+  6. The Breakthrough: connects two+ earlier clues, requires inference across stages.
+  7. The Final Clue: the missing piece — the deduction here requires ALL prior clues.
+  8. The Reveal: no new clue_text needed (leave empty) — this stage is the resolution.
+- Each stage (except stage 8) has a "deduction challenge": a question with exactly 3 options testing reasoning/inference (NOT comprehension recall), one correct_index (0-2), and a "hint" that points back to the clue without giving away the answer. Reasoning complexity should increase across stages — stage 1 simple observation, stage 7 synthesis across all prior clues.
+- Never state the answer directly in the clue text itself.
+
+Also provide:
+- "title": a short, evocative mission title (never seen by this student before).
+- "narrative_summary": a 2-3 sentence resolution paragraph for Stage 8, written second-person, revealing the answer to the mystery.
+- "image_prompt": a short description (1-2 sentences) of a single compelling illustration representing the fully-solved mystery, for AI image generation.
+
+Respond ONLY with valid JSON, no markdown fences, in exactly this shape:
+{{
+  "title": "...",
+  "image_prompt": "...",
+  "narrative_summary": "...",
+  "stages": [
+    {{"stage": 1, "name": "The Hook", "clue_text": "...", "question": "...", "options": ["...","...","..."], "correct_index": 0, "hint": "..."}},
+    ... (stages 2-7 same shape) ...
+    {{"stage": 8, "name": "The Reveal", "clue_text": "", "question": null, "options": null, "correct_index": null, "hint": null}}
+  ]
+}}"""
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": "Generate the mission now."}],
+        temperature=0.85,
+        response_format={"type": "json_object"}
+    )
+    return json.loads(response.choices[0].message.content)
+
+
+def _generate_mission_background(mission_id: int, reader_role: str, grade_level: str, lexile_level: int, previous_titles: list):
+    """
+    Runs in a background thread (mission unlock/role-selection happen in
+    contexts that aren't always async-friendly, so this avoids blocking the
+    triggering request on an OpenAI call + image generation).
+    """
+    import asyncio
+    try:
+        mission_data = asyncio.run(_generate_mission_content(reader_role, grade_level, lexile_level, previous_titles))
+
+        image_url = None
+        try:
+            image_url = content_generator.generate_story_image(
+                title=mission_data.get('title', ''),
+                content=mission_data.get('image_prompt', mission_data.get('narrative_summary', '')),
+                topic=READER_ROLES[reader_role]['theme'],
+                grade_band=grade_level
+            )
+        except Exception as img_err:
+            print(f"⚠️ Mission image generation failed (non-fatal): {img_err}")
+
+        conn = get_db()
+        cursor = get_cursor(conn)
+        try:
+            if USE_POSTGRES:
+                cursor.execute(
+                    """UPDATE missions SET status = 'active', title = %s, image_url = %s,
+                       narrative_summary = %s, stages_json = %s, started_at = NOW()
+                       WHERE id = %s""",
+                    (mission_data['title'], image_url, mission_data['narrative_summary'],
+                     json.dumps(mission_data['stages']), mission_id)
+                )
+            else:
+                cursor.execute(
+                    """UPDATE missions SET status = 'active', title = ?, image_url = ?,
+                       narrative_summary = ?, stages_json = ?, started_at = datetime('now')
+                       WHERE id = ?""",
+                    (mission_data['title'], image_url, mission_data['narrative_summary'],
+                     json.dumps(mission_data['stages']), mission_id)
+                )
+            conn.commit()
+            print(f"✅ Mission {mission_id} generated: \"{mission_data['title']}\"")
+        finally:
+            cursor.close()
+            conn.close()
+    except Exception as e:
+        print(f"❌ Mission generation failed for mission {mission_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        conn = get_db()
+        cursor = get_cursor(conn)
+        try:
+            if USE_POSTGRES:
+                cursor.execute("UPDATE missions SET status = 'generation_failed' WHERE id = %s", (mission_id,))
+            else:
+                cursor.execute("UPDATE missions SET status = 'generation_failed' WHERE id = ?", (mission_id,))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+
+
+def _activate_next_mission_if_needed(student_id: int):
+    """
+    Promote the oldest queued mission to 'role_pending' if the student has no
+    mission currently in progress (role_pending/generating/active).
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id FROM missions WHERE student_id = %s AND status IN ('role_pending', 'generating', 'active')",
+                (student_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT id FROM missions WHERE student_id = ? AND status IN ('role_pending', 'generating', 'active')",
+                (student_id,)
+            )
+        if cursor.fetchone():
+            return  # already has one in progress
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id FROM missions WHERE student_id = %s AND status = 'queued' ORDER BY unlocked_at ASC LIMIT 1",
+                (student_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT id FROM missions WHERE student_id = ? AND status = 'queued' ORDER BY unlocked_at ASC LIMIT 1",
+                (student_id,)
+            )
+        row = cursor.fetchone()
+        if not row:
+            return
+        mission_id = row['id'] if hasattr(row, 'keys') else row[0]
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE missions SET status = 'role_pending' WHERE id = %s", (mission_id,))
+        else:
+            cursor.execute("UPDATE missions SET status = 'role_pending' WHERE id = ?", (mission_id,))
+        conn.commit()
+        print(f"🔓 Mission {mission_id} promoted to role_pending for student {student_id}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _check_and_queue_mission_unlocks(user_id: int, cursor):
+    """
+    Called from award_points() after every point award. Compares total_earned
+    against 1000-point thresholds crossed vs. missions ever created for this
+    student — creates a new queued mission stub for each newly-crossed
+    threshold, and promotes one to role_pending if nothing is in progress.
+    Only applies to students (award_points is called for other roles too via
+    wallet-adjacent flows, though rare).
+    """
+    try:
+        cursor.execute("SELECT role FROM users WHERE id = %s" if USE_POSTGRES else "SELECT role FROM users WHERE id = ?", (user_id,))
+        role_row = cursor.fetchone()
+        if not role_row or (role_row['role'] if hasattr(role_row, 'keys') else role_row[0]) != 'student':
+            return
+
+        cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s" if USE_POSTGRES else "SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+        pts_row = cursor.fetchone()
+        total_earned = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) or 0
+        thresholds_crossed = total_earned // 1000
+
+        cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s" if USE_POSTGRES else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ?", (user_id,))
+        count_row = cursor.fetchone()
+        missions_ever_created = (count_row['c'] if hasattr(count_row, 'keys') else count_row[0]) or 0
+
+        new_missions_needed = thresholds_crossed - missions_ever_created
+        if new_missions_needed <= 0:
+            return
+
+        cursor.execute("SELECT grade_band, lexile_score FROM users WHERE id = %s" if USE_POSTGRES else "SELECT grade_band, lexile_score FROM users WHERE id = ?", (user_id,))
+        student_row = cursor.fetchone()
+        grade_level = (student_row['grade_band'] if hasattr(student_row, 'keys') else student_row[0]) if student_row else None
+        lexile_level = (student_row['lexile_score'] if hasattr(student_row, 'keys') else student_row[1]) if student_row else None
+
+        for _ in range(new_missions_needed):
+            if USE_POSTGRES:
+                cursor.execute(
+                    "INSERT INTO missions (student_id, status, grade_level, lexile_level) VALUES (%s, 'queued', %s, %s)",
+                    (user_id, grade_level, lexile_level)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO missions (student_id, status, grade_level, lexile_level) VALUES (?, 'queued', ?, ?)",
+                    (user_id, grade_level, lexile_level)
+                )
+        print(f"🎁 {new_missions_needed} new Mission: Unlocked queued for student {user_id} (total_earned={total_earned})")
+    except Exception as e:
+        print(f"⚠️ Mission unlock check failed (non-fatal): {e}")
+
+
 def award_points(user_id, points, reason, activity_type='general'):
     """Award points to a user"""
     conn = get_db()
@@ -5303,6 +5541,14 @@ def award_points(user_id, points, reason, activity_type='general'):
             else:
                 cursor.execute("UPDATE user_points SET level = ? WHERE user_id = ?", (new_level, user_id))
             conn.commit()
+
+        # Mission: Unlocked — check for newly-crossed 1000-point thresholds
+        try:
+            _check_and_queue_mission_unlocks(user_id, cursor)
+            conn.commit()
+            _activate_next_mission_if_needed(user_id)
+        except Exception as mission_err:
+            print(f"⚠️ Mission unlock check failed (non-fatal): {mission_err}")
 
         # Credit the wallet — every point award automatically converts to cents
         try:
@@ -10923,6 +11169,348 @@ async def deactivate_coupon(coupon_id: int, admin=Depends(require_super_admin)):
             cursor.execute("UPDATE coupon_codes SET active = 0 WHERE id = ?", (coupon_id,))
         conn.commit()
         return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ========================================
+# MISSION: UNLOCKED ENDPOINTS
+# ========================================
+
+ROLE_CELEBRATIONS = {
+    "detective": ["Sharp eyes — that's exactly what a great detective would spot.", "Case-cracking instincts right there.", "You're reading the scene like a pro investigator."],
+    "explorer": ["You're reading the terrain like a pro!", "Sharp instincts — a true explorer's eye.", "That's how discoveries get made."],
+    "scientist": ["Excellent analysis — that's real scientific thinking.", "Your hypothesis holds up under the evidence.", "That's exactly how a great researcher reasons."],
+    "historian": ["A keen eye for detail — just what history demands.", "That connection is exactly right.", "Your instincts as a scholar are spot on."],
+    "space_agent": ["Transmission decoded correctly, agent.", "Sharp reasoning — mission control is impressed.", "That's exactly the kind of thinking this mission needs."],
+}
+GENERIC_HINT_MESSAGE = "Think about what you know — re-read the clue carefully."
+GENERIC_REVEAL_INTRO = "This one was tricky — here's the reasoning behind it."
+
+
+class RoleSelectRequest(BaseModel):
+    role: str
+
+
+class MissionAnswerRequest(BaseModel):
+    selected_index: Optional[int] = None
+
+
+def _mission_or_404(mission_id: int, student_id: int, cursor):
+    if USE_POSTGRES:
+        cursor.execute("SELECT * FROM missions WHERE id = %s AND student_id = %s", (mission_id, student_id))
+    else:
+        cursor.execute("SELECT * FROM missions WHERE id = ? AND student_id = ?", (mission_id, student_id))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return dict(row)
+
+
+@app.get("/api/student/missions")
+async def get_my_missions(user=Depends(get_current_user)):
+    """Overview: current in-progress mission (if any), queued count, and archive summary."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        student_id = user["user_id"]
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, status, reader_role, title, current_stage FROM missions WHERE student_id = %s AND status IN ('role_pending', 'generating', 'active') ORDER BY unlocked_at ASC LIMIT 1",
+                (student_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, status, reader_role, title, current_stage FROM missions WHERE student_id = ? AND status IN ('role_pending', 'generating', 'active') ORDER BY unlocked_at ASC LIMIT 1",
+                (student_id,)
+            )
+        current = cursor.fetchone()
+        current = dict(current) if current else None
+
+        cursor.execute(
+            "SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status = 'queued'" if USE_POSTGRES
+            else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ? AND status = 'queued'",
+            (student_id,)
+        )
+        queued_row = cursor.fetchone()
+        queued_count = (queued_row['c'] if hasattr(queued_row, 'keys') else queued_row[0]) or 0
+
+        cursor.execute(
+            "SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status = 'completed'" if USE_POSTGRES
+            else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ? AND status = 'completed'",
+            (student_id,)
+        )
+        archive_row = cursor.fetchone()
+        archive_count = (archive_row['c'] if hasattr(archive_row, 'keys') else archive_row[0]) or 0
+
+        return {
+            "current_mission": current,
+            "queued_count": queued_count,
+            "archive_count": archive_count,
+            "reader_roles": READER_ROLES
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/student/missions/{mission_id}/select-role")
+async def select_mission_role(mission_id: int, body: RoleSelectRequest, user=Depends(get_current_user)):
+    """Student picks their Reader Role — triggers background AI generation of the full mission."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    if body.role not in READER_ROLES:
+        raise HTTPException(status_code=400, detail="Invalid reader role")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        student_id = user["user_id"]
+        mission = _mission_or_404(mission_id, student_id, cursor)
+        if mission["status"] != "role_pending":
+            raise HTTPException(status_code=400, detail="This mission is not awaiting a role selection")
+
+        cursor.execute(
+            "SELECT title FROM missions WHERE student_id = %s AND status = 'completed'" if USE_POSTGRES
+            else "SELECT title FROM missions WHERE student_id = ? AND status = 'completed'",
+            (student_id,)
+        )
+        previous_titles = [r['title'] if hasattr(r, 'keys') else r[0] for r in cursor.fetchall() if (r['title'] if hasattr(r, 'keys') else r[0])]
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE missions SET status = 'generating', reader_role = %s WHERE id = %s", (body.role, mission_id))
+        else:
+            cursor.execute("UPDATE missions SET status = 'generating', reader_role = ? WHERE id = ?", (body.role, mission_id))
+        conn.commit()
+
+        import threading
+        threading.Thread(
+            target=_generate_mission_background,
+            args=(mission_id, body.role, mission.get("grade_level"), mission.get("lexile_level"), previous_titles),
+            daemon=True
+        ).start()
+
+        return {"success": True, "status": "generating"}
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/student/missions/{mission_id}")
+async def get_mission_detail(mission_id: int, user=Depends(get_current_user)):
+    """
+    Current mission state — reveals stages up through current_stage only,
+    never future clue text/answers. Image URL is always included; the client
+    handles progressive visual reveal based on current_stage / 8.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        mission = _mission_or_404(mission_id, user["user_id"], cursor)
+
+        if mission["status"] in ("queued", "role_pending", "generating", "generation_failed"):
+            return {
+                "id": mission["id"], "status": mission["status"], "reader_role": mission.get("reader_role")
+            }
+
+        all_stages = json.loads(mission["stages_json"] or "[]")
+        current_stage = mission["current_stage"]
+        progress = json.loads(mission["progress_json"] or "[]")
+
+        visible_stages = []
+        for s in all_stages:
+            if s["stage"] < current_stage:
+                visible_stages.append(s)
+            elif s["stage"] == current_stage:
+                visible_stages.append(s)
+            else:
+                visible_stages.append({"stage": s["stage"], "name": s["name"]})  # name only, for progress bar
+
+        return {
+            "id": mission["id"],
+            "status": mission["status"],
+            "reader_role": mission["reader_role"],
+            "title": mission["title"],
+            "image_url": mission["image_url"],
+            "narrative_summary": mission["narrative_summary"] if mission["status"] == "completed" or current_stage >= 8 else None,
+            "current_stage": current_stage,
+            "total_stages": 8,
+            "stages": visible_stages,
+            "progress": progress,
+            "points_earned_total": mission["points_earned_total"]
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/student/missions/{mission_id}/answer")
+async def answer_mission_stage(mission_id: int, body: MissionAnswerRequest, user=Depends(get_current_user)):
+    """
+    Handles a deduction-challenge answer for the current stage. First wrong
+    answer -> hint, second attempt allowed. Second wrong answer -> reveals
+    reasoning and advances anyway (momentum is never blocked). Stage 8 (The
+    Reveal) has no question — any call here just completes the mission.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        student_id = user["user_id"]
+        mission = _mission_or_404(mission_id, student_id, cursor)
+        if mission["status"] != "active":
+            raise HTTPException(status_code=400, detail="This mission is not currently active")
+
+        stages = json.loads(mission["stages_json"] or "[]")
+        current_stage = mission["current_stage"]
+        progress = json.loads(mission["progress_json"] or "[]")
+        stage_data = next((s for s in stages if s["stage"] == current_stage), None)
+        if not stage_data:
+            raise HTTPException(status_code=400, detail="Stage data not found")
+
+        role = mission["reader_role"]
+
+        # Stage 8: The Reveal — no question, just complete the mission
+        if current_stage == 8:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "UPDATE missions SET status = 'completed', points_earned_total = points_earned_total + 250, completed_at = NOW() WHERE id = %s",
+                    (mission_id,)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE missions SET status = 'completed', points_earned_total = points_earned_total + 250, completed_at = datetime('now') WHERE id = ?",
+                    (mission_id,)
+                )
+            conn.commit()
+            award_points(student_id, 250, "Mission: Unlocked completion bonus", activity_type="mission_unlocked")
+            _activate_next_mission_if_needed(student_id)
+            return {
+                "completed": True,
+                "narrative_summary": mission["narrative_summary"],
+                "image_url": mission["image_url"],
+                "bonus_points": 250
+            }
+
+        existing_progress = next((p for p in progress if p["stage"] == current_stage), None)
+        attempts_used = existing_progress["attempts"] if existing_progress else 0
+        is_correct = body.selected_index == stage_data["correct_index"]
+
+        if is_correct:
+            points = 50 if attempts_used == 0 else 25
+            progress = [p for p in progress if p["stage"] != current_stage]
+            progress.append({"stage": current_stage, "attempts": attempts_used + 1, "correct": True, "points_awarded": points})
+            next_stage = current_stage + 1
+
+            if USE_POSTGRES:
+                cursor.execute(
+                    "UPDATE missions SET current_stage = %s, progress_json = %s, points_earned_total = points_earned_total + %s WHERE id = %s",
+                    (next_stage, json.dumps(progress), points, mission_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE missions SET current_stage = ?, progress_json = ?, points_earned_total = points_earned_total + ? WHERE id = ?",
+                    (next_stage, json.dumps(progress), points, mission_id)
+                )
+            conn.commit()
+            award_points(student_id, points, f"Mission: Unlocked — {stage_data['name']}", activity_type="mission_unlocked")
+
+            import random
+            return {
+                "correct": True,
+                "points_awarded": points,
+                "feedback": random.choice(ROLE_CELEBRATIONS.get(role, ["Nice work!"])),
+                "next_stage": next_stage
+            }
+
+        elif attempts_used == 0:
+            # First wrong answer — hint, one more try, no stage advance yet
+            progress = [p for p in progress if p["stage"] != current_stage]
+            progress.append({"stage": current_stage, "attempts": 1, "correct": False, "points_awarded": 0})
+            if USE_POSTGRES:
+                cursor.execute("UPDATE missions SET progress_json = %s WHERE id = %s", (json.dumps(progress), mission_id))
+            else:
+                cursor.execute("UPDATE missions SET progress_json = ? WHERE id = ?", (json.dumps(progress), mission_id))
+            conn.commit()
+            return {
+                "correct": False,
+                "attempts_remaining": 1,
+                "hint": stage_data.get("hint") or GENERIC_HINT_MESSAGE
+            }
+
+        else:
+            # Second wrong answer — reveal reasoning, award participation credit, advance anyway
+            points = 10
+            progress = [p for p in progress if p["stage"] != current_stage]
+            progress.append({"stage": current_stage, "attempts": 2, "correct": False, "points_awarded": points})
+            next_stage = current_stage + 1
+
+            if USE_POSTGRES:
+                cursor.execute(
+                    "UPDATE missions SET current_stage = %s, progress_json = %s, points_earned_total = points_earned_total + %s WHERE id = %s",
+                    (next_stage, json.dumps(progress), points, mission_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE missions SET current_stage = ?, progress_json = ?, points_earned_total = points_earned_total + ? WHERE id = ?",
+                    (next_stage, json.dumps(progress), points, mission_id)
+                )
+            conn.commit()
+            award_points(student_id, points, f"Mission: Unlocked — {stage_data['name']} (revealed)", activity_type="mission_unlocked")
+
+            correct_option = stage_data["options"][stage_data["correct_index"]] if stage_data.get("options") else None
+            return {
+                "correct": False,
+                "revealed": True,
+                "points_awarded": points,
+                "reveal_message": GENERIC_REVEAL_INTRO,
+                "correct_answer": correct_option,
+                "next_stage": next_stage
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/student/missions/archive")
+async def get_mission_archive(user=Depends(get_current_user)):
+    """The Discovery Archive — all completed missions, permanent for the school year."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, title, reader_role, image_url, points_earned_total, completed_at FROM missions WHERE student_id = %s AND status = 'completed' ORDER BY completed_at DESC",
+                (user["user_id"],)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, title, reader_role, image_url, points_earned_total, completed_at FROM missions WHERE student_id = ? AND status = 'completed' ORDER BY completed_at DESC",
+                (user["user_id"],)
+            )
+        rows = cursor.fetchall()
+        archive = []
+        for r in rows:
+            r = dict(r)
+            r["completed_at"] = str(r["completed_at"]) if r.get("completed_at") else None
+            archive.append(r)
+        return {"archive": archive}
     finally:
         cursor.close()
         conn.close()

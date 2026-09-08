@@ -2251,6 +2251,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showSection('missions', event); return false;">
+                        <span>🧳</span> Missions
+                        <span id="missionQueueBadge" class="mission-queue-badge hidden">0</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="#" class="nav-link" onclick="takeBreak(); return false;">
                         <span>☕</span> Take A Break
                     </a>
@@ -3170,6 +3176,51 @@
                 </div>
             </div>
 
+            <!-- ============================================================
+                 MISSION: UNLOCKED — Discovery Archive Section
+            ============================================================ -->
+            <div id="missionsSection" class="hidden">
+                <div class="header">
+                    <h1>🧳 Mission: Unlocked</h1>
+                    <p>Solve mysteries, earn bonus points, and build your Discovery Archive.</p>
+                </div>
+
+                <div class="card mission-status-card" id="missionActiveCard" style="display:none;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+                        <div>
+                            <div style="font-weight:800; font-size:1.15rem; color:var(--navy-primary);" id="missionActiveTitle">Mission in progress</div>
+                            <div style="color:var(--text-gray);" id="missionActiveSubtitle">Stage 1 of 8</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="resumeMission()">Continue Mission →</button>
+                    </div>
+                </div>
+
+                <div class="card mission-status-card" id="missionQueueCard" style="display:none;">
+                    <div style="display:flex; align-items:center; gap:0.75rem;">
+                        <div style="font-size:1.75rem;">🧳</div>
+                        <div>
+                            <div style="font-weight:700;">You have <span id="missionQueueCount">0</span> mission(s) waiting</div>
+                            <div style="color:var(--text-gray); font-size:0.9rem;">Finish your active mission to unlock the next one.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mission-status-card" id="missionNoneCard">
+                    <div style="text-align:center; padding:1rem;">
+                        <div style="font-size:2.5rem;">🔒</div>
+                        <h3 style="margin:0.5rem 0;">No mission unlocked yet</h3>
+                        <p style="color:var(--text-gray);">Keep reading and earning points — every 1,000 points unlocks a new Mission!</p>
+                    </div>
+                </div>
+
+                <h2 style="margin-top:2rem; color:var(--navy-primary);">📖 Discovery Archive</h2>
+                <p style="color:var(--text-gray);">Mysteries you've already solved.</p>
+                <div id="discoveryArchiveGrid" class="mission-archive-grid"></div>
+                <div id="discoveryArchiveEmpty" class="card" style="text-align:center; color:var(--text-gray); padding:2rem;">
+                    No solved mysteries yet — your first Mission: Unlocked awaits at 1,000 points!
+                </div>
+            </div>
+
         </main>
     </div>
     <footer class="dashboard-footer">
@@ -3216,6 +3267,178 @@
             <p>Made with ❤️ for learners everywhere.</p>
         </div>
     </footer>
+    <style>
+        /* ============================================================
+           MISSION: UNLOCKED — cinematic theme
+        ============================================================ */
+        .mission-queue-badge {
+            display: inline-flex; align-items:center; justify-content:center;
+            min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px;
+            background: var(--gold-accent); color: var(--navy-dark);
+            border-radius: 999px; font-size: 0.7rem; font-weight: 800; vertical-align: middle;
+        }
+        .mission-status-card { margin-bottom: 1rem; }
+        .mission-archive-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem; margin-bottom: 1rem;
+        }
+        .mission-archive-card {
+            background: var(--navy-dark); color: #fff; border-radius: 12px; padding: 1rem;
+            position: relative; overflow: hidden;
+        }
+        .mission-archive-card .thumb { font-size: 2.5rem; text-align:center; margin-bottom: 0.5rem; }
+        .mission-archive-card h4 { margin: 0 0 0.25rem; font-size: 1rem; }
+        .mission-archive-card .meta { font-size: 0.78rem; opacity: 0.75; }
+        .mission-archive-card .pts { color: var(--gold-accent); font-weight: 800; margin-top: 0.4rem; }
+
+        .mission-banner {
+            position: fixed; top: 16px; right: 16px; z-index: 9998;
+            background: linear-gradient(135deg, var(--navy-dark), var(--navy-primary));
+            color: #fff; padding: 0.75rem 1.1rem; border-radius: 999px;
+            display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            animation: missionBannerPulse 1.8s ease-in-out infinite;
+            font-weight: 700; font-size: 0.9rem;
+        }
+        .mission-banner-icon { font-size: 1.2rem; }
+        @keyframes missionBannerPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .mission-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: radial-gradient(ellipse at center, #1a1f3d 0%, #05060f 100%);
+            display: flex; align-items: center; justify-content: center;
+            padding: 1.5rem; overflow-y: auto;
+        }
+        .mission-overlay-inner {
+            width: 100%; max-width: 720px; color: #fff; text-align: center;
+            font-family: inherit;
+        }
+        .mission-overlay-close, .mission-sound-toggle {
+            position: fixed; top: 18px; z-index: 10000;
+            background: rgba(255,255,255,0.1); border: none; color: #fff;
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 1.1rem;
+        }
+        .mission-overlay-close { right: 18px; }
+        .mission-sound-toggle { right: 68px; }
+        .mission-overlay-close:hover, .mission-sound-toggle:hover { background: rgba(255,255,255,0.2); }
+
+        /* Unlock animation */
+        .mission-unlock-box {
+            font-size: 5rem; animation: missionUnlockShake 2.2s ease-in-out, missionUnlockGlow 2.2s ease-in-out;
+        }
+        @keyframes missionUnlockShake {
+            0%, 100% { transform: rotate(0deg); }
+            10%, 30%, 50%, 70% { transform: rotate(-6deg); }
+            20%, 40%, 60%, 80% { transform: rotate(6deg); }
+            90% { transform: rotate(0deg); }
+        }
+        @keyframes missionUnlockGlow {
+            0% { filter: drop-shadow(0 0 0px var(--gold-accent)); }
+            50% { filter: drop-shadow(0 0 40px var(--gold-accent)); }
+            100% { filter: drop-shadow(0 0 10px var(--gold-accent)); }
+        }
+        .mission-unlock-title {
+            font-size: 2rem; font-weight: 900; margin-top: 1rem; letter-spacing: 0.5px;
+            background: linear-gradient(90deg, var(--gold-accent), #fff, var(--gold-accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .mission-unlock-sub { color: #cfd3f5; margin-top: 0.5rem; }
+        .mission-wallet-confirm { margin-top: 1.25rem; font-weight: 700; color: var(--gold-accent); }
+
+        /* Role select */
+        .mission-role-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem; margin-top: 1.5rem;
+        }
+        .mission-role-card {
+            background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 16px; padding: 1.25rem 0.75rem; cursor: pointer;
+            transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+        }
+        .mission-role-card:hover, .mission-role-card:focus-visible {
+            transform: translateY(-4px); border-color: var(--gold-accent);
+            background: rgba(212,175,55,0.12);
+        }
+        .mission-role-card .icon { font-size: 2.2rem; }
+        .mission-role-card .name { font-weight: 800; margin-top: 0.5rem; }
+        .mission-role-card .desc { font-size: 0.78rem; color: #cfd3f5; margin-top: 0.35rem; }
+
+        /* Generating state */
+        .mission-generating-spinner {
+            width: 60px; height: 60px; margin: 1.5rem auto 0;
+            border: 5px solid rgba(255,255,255,0.15); border-top-color: var(--gold-accent);
+            border-radius: 50%; animation: missionSpin 1s linear infinite;
+        }
+        @keyframes missionSpin { to { transform: rotate(360deg); } }
+
+        /* Stage play */
+        .mission-role-badge {
+            display: inline-flex; align-items:center; gap:0.4rem; background: rgba(255,255,255,0.08);
+            padding: 0.35rem 0.8rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .mission-progress-wrap { margin-bottom: 1.25rem; }
+        .mission-progress-label { font-size: 0.8rem; color: #cfd3f5; margin-bottom: 0.4rem; }
+        .mission-progress-track {
+            height: 10px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden;
+        }
+        .mission-progress-fill {
+            height: 100%; border-radius: 999px; transition: width 0.5s ease;
+            background: linear-gradient(90deg, var(--gold-accent), #fff8);
+        }
+        .mission-visual-wrap {
+            width: 100%; max-width: 260px; aspect-ratio: 1; margin: 0 auto 1.25rem;
+            border-radius: 16px; background: rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 5.5rem; overflow: hidden;
+        }
+        .mission-visual-emoji { transition: filter 0.6s ease, opacity 0.6s ease; }
+        .mission-clue-card {
+            background: rgba(255,255,255,0.06); border-left: 4px solid var(--gold-accent);
+            border-radius: 10px; padding: 1rem 1.25rem; text-align: left; margin-bottom: 1.25rem;
+            font-size: 1.02rem; line-height: 1.5; animation: missionFadeIn 0.5s ease;
+        }
+        .mission-stage-name { font-weight: 800; color: var(--gold-accent); margin-bottom: 0.4rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; }
+        @keyframes missionFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .mission-question { font-weight: 700; margin-bottom: 1rem; }
+        .mission-options { display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem; }
+        .mission-option-btn {
+            background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.12);
+            color: #fff; padding: 0.8rem 1rem; border-radius: 10px; text-align: left;
+            cursor: pointer; font-size: 0.95rem; transition: all 0.15s ease;
+        }
+        .mission-option-btn:hover:not(:disabled) { border-color: var(--gold-accent); background: rgba(212,175,55,0.12); }
+        .mission-option-btn:disabled { cursor: default; opacity: 0.6; }
+        .mission-option-btn.correct { border-color: var(--success); background: rgba(40,167,69,0.25); opacity: 1; }
+        .mission-option-btn.incorrect { border-color: var(--danger); background: rgba(220,53,69,0.25); opacity: 1; }
+        .mission-feedback {
+            border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 1rem; text-align: left;
+            font-size: 0.92rem; animation: missionFadeIn 0.4s ease;
+        }
+        .mission-feedback.correct { background: rgba(40,167,69,0.2); border-left: 4px solid var(--success); }
+        .mission-feedback.hint { background: rgba(255,193,7,0.15); border-left: 4px solid var(--warning); }
+        .mission-feedback.reveal { background: rgba(255,255,255,0.08); border-left: 4px solid #cfd3f5; }
+
+        /* Reveal */
+        .mission-reveal-visual { font-size: 7rem; margin-bottom: 1rem; }
+        .mission-points-counter {
+            font-size: 2.4rem; font-weight: 900; color: var(--gold-accent); margin: 0.75rem 0;
+        }
+        .mission-reveal-summary {
+            text-align: left; background: rgba(255,255,255,0.06); border-radius: 10px;
+            padding: 1rem 1.25rem; margin: 1rem 0; line-height: 1.6;
+        }
+
+        @media (max-width: 600px) {
+            .mission-overlay-inner { max-width: 100%; }
+            .mission-unlock-title { font-size: 1.5rem; }
+            .mission-visual-wrap { max-width: 200px; font-size: 4rem; }
+        }
+    </style>
+
     <script>
         let currentUser = null;
         let currentAssessment = [];
@@ -4880,7 +5103,7 @@
             if (event) event.preventDefault();
 
             // Hide all sections
-            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'wordgamesSection', 'ebooksSection', 'messagesSection', 'progressSection', 'walletSection', 'assignmentsSection'];
+            const sections = ['overviewSection', 'assessmentSection', 'placementSection', 'lessonsSection', 'wordgamesSection', 'ebooksSection', 'messagesSection', 'progressSection', 'walletSection', 'assignmentsSection', 'missionsSection'];
             sections.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -4911,6 +5134,10 @@
             // ⭐⭐⭐ ADD THESE 3 LINES ⭐⭐⭐
             if (sectionName === 'overview' || sectionName === 'progress') {
                 updateAssessmentStatus();
+            }
+
+            if (sectionName === 'missions' && typeof renderMissionsSection === 'function') {
+                renderMissionsSection();
             }
 
             // Load data for the section
@@ -5651,6 +5878,9 @@
                 // Update points display
                 if (document.getElementById('userPoints')) {
                     document.getElementById('userPoints').textContent = data.points.current_points;
+                }
+                if (typeof checkMissionMilestone === 'function') {
+                    checkMissionMilestone(data.points.current_points);
                 }
                 if (document.getElementById('userLevel')) {
                     document.getElementById('userLevel').textContent = data.points.level;
@@ -11450,7 +11680,453 @@
             clearInterval(studentMessageInterval);
         }
     });
-    
+
+        // ============================================================
+        // MISSION: UNLOCKED — full feature (state machine + rendering)
+        // ============================================================
+        // Backend contract (implement server-side; falls back to a local
+        // demo generator until these endpoints exist):
+        //   GET  /api/missions/status?token=...      -> { active, queue_count, archive: [] }
+        //   POST /api/missions/start   {token, role}  -> { mission } (8-stage, calibrated to grade/Lexile)
+        //   POST /api/missions/answer  {token, mission_id, stage, option_index} -> { correct, attempt, points_awarded, next }
+        // Until the backend exists, missions are generated and scored
+        // client-side and persisted in localStorage per user.
+
+        const MISSION_ROLES = {
+            detective: { icon: '🔎', name: 'The Detective', desc: 'Piece together clues from a cold case.', color: '#4a56af',
+                sound: 'click', win: name => `Sharp eyes, ${name} — that's exactly what a great detective would spot.` },
+            explorer: { icon: '🌍', name: 'The Explorer', desc: 'Uncover hidden civilizations and lost artifacts.', color: '#2E8B57',
+                sound: 'chime', win: () => `You're reading the terrain like a pro!` },
+            scientist: { icon: '🔬', name: 'The Scientist', desc: 'Decode an anomaly and crack the puzzle.', color: '#1E90FF',
+                sound: 'beep', win: () => `Data confirmed — your reasoning checks out.` },
+            historian: { icon: '📜', name: 'The Historian', desc: 'Authenticate a discovery before time runs out.', color: '#B8860B',
+                sound: 'creak', win: () => `A scholar's instinct — well reasoned.` },
+            spaceagent: { icon: '🚀', name: 'The Space Agent', desc: 'Decode transmissions from the edge of the universe.', color: '#8A2BE2',
+                sound: 'static', win: () => `Transmission decoded. Nice work, Agent.` }
+        };
+        const MISSION_VISUALS = ['🗺️', '🏺', '🧭', '🔭', '🛰️', '🗝️', '📡', '🧬'];
+
+        function missionUserKey() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            return `mission_state_${user.id || user.email || 'guest'}`;
+        }
+
+        function loadMissionState() {
+            try {
+                return JSON.parse(localStorage.getItem(missionUserKey())) || { lastMilestone: 0, active: null, queue: [], archive: [], pendingRole: false };
+            } catch (e) {
+                return { lastMilestone: 0, active: null, queue: [], archive: [], pendingRole: false };
+            }
+        }
+        function saveMissionState(state) {
+            localStorage.setItem(missionUserKey(), JSON.stringify(state));
+        }
+
+        // ---------- SYS-01: milestone detection ----------
+        function checkMissionMilestone(currentPoints) {
+            const state = loadMissionState();
+            const crossed = Math.floor(currentPoints / 1000);
+            if (crossed > Math.floor(state.lastMilestone / 1000)) {
+                state.lastMilestone = crossed * 1000;
+                if (state.active) {
+                    // Mission already in progress — queue it instead (spec: max 1 active at a time)
+                    state.queue.push({ queuedAt: Date.now() });
+                    saveMissionState(state);
+                    showNotification('Mission: Unlocked! Queued — finish your current mission first.', 'success');
+                } else {
+                    state.pendingRole = true;
+                    saveMissionState(state);
+                    showNotification('$1.00 added to School Bucks Wallet — Mission: Unlocked!', 'success');
+                }
+                updateMissionBannerAndBadge();
+            }
+        }
+
+        function updateMissionBannerAndBadge() {
+            const state = loadMissionState();
+            const banner = document.getElementById('missionUnlockBanner');
+            const badge = document.getElementById('missionQueueBadge');
+            if (banner) banner.classList.toggle('hidden', !(state.pendingRole && !state.active));
+            if (badge) {
+                const count = state.queue.length;
+                badge.textContent = count;
+                badge.classList.toggle('hidden', count === 0);
+            }
+        }
+
+        // ---------- Missions section (Discovery Archive page) ----------
+        function renderMissionsSection() {
+            const state = loadMissionState();
+            const activeCard = document.getElementById('missionActiveCard');
+            const queueCard = document.getElementById('missionQueueCard');
+            const noneCard = document.getElementById('missionNoneCard');
+
+            activeCard.style.display = state.active ? '' : 'none';
+            if (state.active) {
+                const role = MISSION_ROLES[state.active.role];
+                document.getElementById('missionActiveTitle').textContent = `${role.icon} ${state.active.title}`;
+                document.getElementById('missionActiveSubtitle').textContent =
+                    state.active.completed ? 'Ready to reveal!' : `Stage ${state.active.stage} of 8`;
+            }
+
+            queueCard.style.display = state.queue.length > 0 ? '' : 'none';
+            document.getElementById('missionQueueCount').textContent = state.queue.length;
+
+            noneCard.style.display = (!state.active && !state.pendingRole && state.queue.length === 0) ? '' : 'none';
+
+            if (state.pendingRole && !state.active) {
+                openMissionOverlay('unlockAnim');
+            }
+
+            const grid = document.getElementById('discoveryArchiveGrid');
+            const empty = document.getElementById('discoveryArchiveEmpty');
+            if (state.archive.length === 0) {
+                grid.innerHTML = '';
+                empty.style.display = '';
+            } else {
+                empty.style.display = 'none';
+                grid.innerHTML = state.archive.slice().reverse().map(m => {
+                    const role = MISSION_ROLES[m.role];
+                    return `<div class="mission-archive-card">
+                        <div class="thumb">${m.visual}</div>
+                        <h4>${role.icon} ${m.title}</h4>
+                        <div class="meta">${role.name} • ${new Date(m.completedAt).toLocaleDateString()}</div>
+                        <div class="pts">+${m.pointsEarned} pts</div>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        // ---------- Overlay plumbing ----------
+        let missionSoundOn = localStorage.getItem('missionSoundOn') === 'true'; // SYS-08: off by default
+        function toggleMissionSound() {
+            missionSoundOn = !missionSoundOn;
+            localStorage.setItem('missionSoundOn', missionSoundOn);
+            document.getElementById('missionSoundToggle').textContent = missionSoundOn ? '🔊' : '🔇';
+        }
+        function playMissionSound(kind) {
+            if (!missionSoundOn || !window.AudioContext) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const freqs = { click: 440, chime: 660, beep: 523, creak: 220, static: 330, correct: 784, wrong: 180, reveal: 988 };
+                osc.frequency.value = freqs[kind] || 440;
+                osc.type = kind === 'creak' ? 'sawtooth' : 'sine';
+                gain.gain.setValueAtTime(0.08, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 0.35);
+            } catch (e) { /* audio not available — fail silently */ }
+        }
+
+        function openMissionOverlay(view, payload) {
+            document.getElementById('missionUnlockBanner').classList.add('hidden');
+            const overlay = document.getElementById('missionOverlay');
+            overlay.classList.remove('hidden');
+            document.getElementById('missionOverlayClose').classList.toggle('hidden', view === 'unlockAnim' || view === 'generating');
+            document.getElementById('missionSoundToggle').classList.remove('hidden');
+            document.getElementById('missionSoundToggle').textContent = missionSoundOn ? '🔊' : '🔇';
+            renderMissionView(view, payload);
+        }
+        function closeMissionOverlay() {
+            document.getElementById('missionOverlay').classList.add('hidden');
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            renderMissionsSection();
+            updateMissionBannerAndBadge();
+        }
+
+        function renderMissionView(view, payload) {
+            const el = document.getElementById('missionOverlayContent');
+            if (view === 'unlockAnim') {
+                playMissionSound('reveal');
+                el.innerHTML = `
+                    <div class="mission-unlock-box">🧳</div>
+                    <div class="mission-unlock-title">Mission: Unlocked</div>
+                    <div class="mission-unlock-sub">Your new mission awaits.</div>
+                    <div class="mission-wallet-confirm">💰 $1.00 deposited to your School Bucks Wallet</div>`;
+                setTimeout(() => renderMissionView('roleSelect'), 4000);
+            } else if (view === 'roleSelect') {
+                el.innerHTML = `
+                    <h2 style="margin-bottom:0.25rem;">Choose Your Reader Role</h2>
+                    <p style="color:#cfd3f5;">Pick fresh each mission — explore a new theme!</p>
+                    <div class="mission-role-grid">
+                        ${Object.entries(MISSION_ROLES).map(([key, r]) => `
+                            <div class="mission-role-card" tabindex="0" onclick="startMission('${key}')" onkeypress="if(event.key==='Enter')startMission('${key}')">
+                                <div class="icon">${r.icon}</div>
+                                <div class="name">${r.name}</div>
+                                <div class="desc">${r.desc}</div>
+                            </div>`).join('')}
+                    </div>`;
+            } else if (view === 'generating') {
+                el.innerHTML = `
+                    <div style="font-size:3rem;">${MISSION_ROLES[payload.role].icon}</div>
+                    <div class="mission-unlock-title" style="font-size:1.4rem;">Preparing your mission…</div>
+                    <div class="mission-generating-spinner"></div>`;
+            } else if (view === 'stage') {
+                renderStageView(payload.stage);
+            } else if (view === 'reveal') {
+                renderRevealView();
+            }
+        }
+
+        // ---------- SYS-03: role selection -> SYS-02: mission generation ----------
+        async function startMission(roleKey) {
+            const state = loadMissionState();
+            openMissionOverlay('generating', { role: roleKey });
+
+            let mission = null;
+            const token = localStorage.getItem('token');
+            try {
+                const resp = await fetch(`/api/missions/start?token=${encodeURIComponent(token || '')}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: roleKey })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data && data.success && data.mission) mission = data.mission;
+                }
+            } catch (e) { /* backend not available yet — fall through to demo */ }
+
+            if (!mission) mission = generateDemoMission(roleKey);
+
+            state.active = mission;
+            state.pendingRole = false;
+            saveMissionState(state);
+
+            setTimeout(() => {
+                openMissionOverlay('stage', { stage: mission.stage });
+            }, 1400);
+        }
+
+        // Client-side demo generator (stand-in for AI generation until the
+        // backend endpoint above is implemented). Calibration to grade/Lexile
+        // happens server-side per SYS-02 — this local version keeps clues short
+        // and generic so the UI is fully testable today.
+        function generateDemoMission(roleKey) {
+            const STAGE_META = [
+                { name: 'The Hook', q: 'What is most likely going on here?' },
+                { name: 'First Clue', q: 'What does this tell you?' },
+                { name: 'The Complication', q: 'How do you reconcile this contradiction?' },
+                { name: 'The Evidence', q: 'What does this evidence suggest?' },
+                { name: 'The Red Herring', q: 'Which of these doesn\u2019t actually fit?' },
+                { name: 'The Breakthrough', q: 'What do these clues add up to?' },
+                { name: 'The Final Clue', q: 'Given everything so far, what makes sense?' },
+                { name: 'The Reveal', q: 'Using all the clues, what really happened?' }
+            ];
+            const clueBank = {
+                detective: ['You find a torn note wedged behind a desk drawer.', 'A witness recalls a figure in a gray coat near the scene.', 'The timestamp on the receipt doesn\u2019t match the alibi.', 'A faint smell of ink lingers on the envelope.', 'Someone reported seeing the same car twice — two streets apart.', 'Two clues you gathered both point to the same address.', 'The handwriting on the note matches an old case file.', 'The pieces click into place.'],
+                explorer: ['A weathered map fragment shows a coastline that no longer exists.', 'Carvings on the stone mention a hidden chamber.', 'A second map contradicts the first — one may be a fake.', 'A compass needle spins oddly near the ruins.', 'A trail marker points the wrong direction on purpose.', 'The carvings and the compass anomaly line up.', 'An old journal names the chamber\u2019s true location.', 'The lost site comes into full view.'],
+                scientist: ['A sensor logs a spike no one can explain.', 'A sample shows an unexpected chemical signature.', 'A second reading contradicts the first log entry.', 'The lab notebook lists an odd control variable.', 'One data point looks relevant but is actually noise.', 'Two anomalies trace back to the same source.', 'A final calibration reading confirms the pattern.', 'The full result comes together.'],
+                historian: ['A faded letter references an event left out of the records.', 'A ledger entry names an unfamiliar merchant.', 'A second document lists a conflicting date.', 'A wax seal matches a minor noble house.', 'A rumor in the margins looks important but is unrelated.', 'The ledger and the letter reference the same transaction.', 'A final archive entry confirms the timeline.', 'The true history is authenticated.'],
+                spaceagent: ['A garbled transmission repeats one unusual phrase.', 'Telemetry shows a course correction no one ordered.', 'A second signal contradicts the first coordinates.', 'A logged code fragment doesn\u2019t match any known ship.', 'A decoy beacon is broadcasting nearby.', 'Two signals resolve to the same origin point.', 'A final decrypted line reveals the sender.', 'The full transmission is decoded.']
+            };
+            const clues = clueBank[roleKey] || clueBank.detective;
+            const visual = MISSION_VISUALS[Math.floor(Math.random() * MISSION_VISUALS.length)];
+            const stages = STAGE_META.map((meta, i) => {
+                const correct = Math.floor(Math.random() * 3);
+                const opts = ['That\u2019s the key detail', 'That\u2019s unrelated to the case', 'That contradicts an earlier clue'];
+                const shuffled = [opts[correct], ...opts.filter((_, idx) => idx !== correct)];
+                return {
+                    name: meta.name,
+                    clue: clues[i],
+                    question: meta.q,
+                    options: [shuffled[0], shuffled[1], shuffled[2]],
+                    correctIndex: 0 // we always place the correct one first, then shuffle at render time
+                };
+            });
+            return {
+                id: `demo_${Date.now()}`,
+                role: roleKey,
+                title: `${MISSION_ROLES[roleKey].name}'s Mystery`,
+                visual,
+                stage: 1,
+                attemptsOnStage: 0,
+                pointsEarned: 0,
+                completed: false,
+                stages
+            };
+        }
+
+        // ---------- SYS-04: stage rendering & gating ----------
+        function renderStageView(stageNum) {
+            const state = loadMissionState();
+            const mission = state.active;
+            if (!mission) return;
+            const role = MISSION_ROLES[mission.role];
+            const stageData = mission.stages[stageNum - 1];
+            const blurAmount = Math.max(0, 22 - (stageNum - 1) * 3);
+            // shuffle options once per stage render, remember mapping for scoring
+            if (!stageData._shuffled) {
+                const order = [0, 1, 2].sort(() => Math.random() - 0.5);
+                stageData._order = order;
+                stageData._shuffled = true;
+            }
+            const order = stageData._order;
+
+            const el = document.getElementById('missionOverlayContent');
+            el.innerHTML = `
+                <div class="mission-role-badge">${role.icon} ${role.name}</div>
+                <div class="mission-progress-wrap">
+                    <div class="mission-progress-label">Stage ${stageNum} of 8</div>
+                    <div class="mission-progress-track"><div class="mission-progress-fill" style="width:${(stageNum-1)/8*100 + 12.5}%"></div></div>
+                </div>
+                <div class="mission-visual-wrap">
+                    <span class="mission-visual-emoji" style="filter: blur(${blurAmount}px); opacity:${0.5 + (stageNum/16)};">${mission.visual}</span>
+                </div>
+                <div class="mission-clue-card">
+                    <div class="mission-stage-name">${stageData.name}</div>
+                    ${stageData.clue}
+                </div>
+                <div class="mission-question">${stageData.question}</div>
+                <div class="mission-options" id="missionOptions">
+                    ${order.map((origIdx, i) => `<button class="mission-option-btn" onclick="answerStage(${stageNum}, ${origIdx})">${stageData.options[origIdx]}</button>`).join('')}
+                </div>
+                <div id="missionFeedbackArea"></div>
+            `;
+            playMissionSound(role.sound);
+        }
+
+        // ---------- SYS-05: answer handling & hint logic ----------
+        function answerStage(stageNum, chosenIndex) {
+            const state = loadMissionState();
+            const mission = state.active;
+            if (!mission) return;
+            const stageData = mission.stages[stageNum - 1];
+            const role = MISSION_ROLES[mission.role];
+            const buttons = document.querySelectorAll('#missionOptions .mission-option-btn');
+            buttons.forEach(b => b.disabled = true);
+            const isCorrect = chosenIndex === stageData.correctIndex;
+            const feedbackArea = document.getElementById('missionFeedbackArea');
+
+            if (isCorrect) {
+                playMissionSound('correct');
+                const pts = mission.attemptsOnStage === 0 ? 50 : 25;
+                mission.pointsEarned += pts;
+                buttons.forEach((b, i) => { if (stageData._order[i] === chosenIndex) b.classList.add('correct'); });
+                feedbackArea.innerHTML = `<div class="mission-feedback correct">${role.win(mission.title)} <strong>+${pts} pts</strong></div>
+                    <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="advanceStage()">Continue →</button>`;
+                mission.attemptsOnStage = 0;
+            } else if (mission.attemptsOnStage === 0) {
+                playMissionSound('wrong');
+                mission.attemptsOnStage = 1;
+                buttons.forEach((b, i) => { if (stageData._order[i] === chosenIndex) b.classList.add('incorrect'); });
+                buttons.forEach(b => b.disabled = false);
+                buttons.forEach((b, i) => { if (stageData._order[i] === chosenIndex) b.disabled = true; });
+                feedbackArea.innerHTML = `<div class="mission-feedback hint">Think about what you know — re-read the clue carefully.</div>`;
+            } else {
+                playMissionSound('wrong');
+                mission.pointsEarned += 10; // participation credit
+                buttons.forEach((b, i) => { if (stageData._order[i] === stageData.correctIndex) b.classList.add('correct'); if (stageData._order[i] === chosenIndex) b.classList.add('incorrect'); });
+                feedbackArea.innerHTML = `<div class="mission-feedback reveal">This one was tricky — here's the reasoning: ${stageData.options[stageData.correctIndex]} fits every clue gathered so far. <strong>+10 pts</strong></div>
+                    <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="advanceStage()">Continue →</button>`;
+                mission.attemptsOnStage = 0;
+            }
+            saveMissionState(state);
+        }
+
+        function advanceStage() {
+            const state = loadMissionState();
+            const mission = state.active;
+            if (!mission) return;
+            if (mission.stage >= 8) {
+                // Mark completed immediately so a mid-reveal exit resumes at reveal, not a stage replay.
+                mission.completed = true;
+                saveMissionState(state);
+                renderMissionView('reveal');
+            } else {
+                mission.stage += 1;
+                saveMissionState(state);
+                renderMissionView('stage', { stage: mission.stage });
+            }
+        }
+
+        // ---------- SYS-06/07: completion, bonus, archive ----------
+        function renderRevealView() {
+            const state = loadMissionState();
+            const mission = state.active;
+            if (!mission) return;
+            const role = MISSION_ROLES[mission.role];
+            const totalPoints = mission.pointsEarned + 250; // completion bonus
+            playMissionSound('reveal');
+
+            const el = document.getElementById('missionOverlayContent');
+            el.innerHTML = `
+                <div class="mission-unlock-title" style="font-size:1.6rem;">Mystery Solved!</div>
+                <div class="mission-reveal-visual">${mission.visual}</div>
+                <div class="mission-reveal-summary">
+                    <strong>${role.icon} ${mission.title}</strong><br>
+                    Using every clue you gathered, you traced the mystery to its source — a satisfying, fully-earned conclusion worthy of ${role.name}.
+                </div>
+                <div class="mission-progress-label">Total mission points</div>
+                <div class="mission-points-counter" id="missionPtsCounter">0</div>
+                <button class="btn btn-primary" onclick="finishMission()">Add to Discovery Archive</button>
+            `;
+            animateCounter(document.getElementById('missionPtsCounter'), totalPoints);
+        }
+
+        function animateCounter(node, target) {
+            let cur = 0;
+            const step = Math.max(1, Math.round(target / 30));
+            const iv = setInterval(() => {
+                cur = Math.min(target, cur + step);
+                node.textContent = cur;
+                if (cur >= target) clearInterval(iv);
+            }, 25);
+        }
+
+        function finishMission() {
+            const state = loadMissionState();
+            const mission = state.active;
+            if (!mission) return;
+            const totalPoints = mission.pointsEarned + 250;
+
+            state.archive.push({
+                role: mission.role,
+                title: mission.title,
+                visual: mission.visual,
+                pointsEarned: totalPoints,
+                completedAt: Date.now()
+            });
+            state.active = null;
+
+            // SYS-06: pushing past another 1,000-point threshold queues the next mission
+            if (state.queue.length > 0) {
+                state.queue.shift();
+                state.pendingRole = true;
+            }
+            saveMissionState(state);
+
+            const token = localStorage.getItem('token');
+            fetch(`/api/missions/complete?token=${encodeURIComponent(token || '')}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mission_id: mission.id, points_earned: totalPoints })
+            }).catch(() => { /* backend not available yet — local state already updated */ });
+
+            closeMissionOverlay();
+            if (state.pendingRole) {
+                setTimeout(() => openMissionOverlay('unlockAnim'), 500);
+            }
+        }
+
+        // ---------- Resume — handles exiting mid-mission, including exactly at stage 8 ----------
+        function resumeMission() {
+            const state = loadMissionState();
+            const mission = state.active;
+            if (!mission) return;
+            openMissionOverlay(mission.completed ? 'reveal' : 'stage', { stage: mission.stage });
+        }
+
+        // ---------- Init ----------
+        document.addEventListener('DOMContentLoaded', function() {
+            updateMissionBannerAndBadge();
+            const state = loadMissionState();
+            if (state.pendingRole && !state.active) {
+                // Show the small banner rather than auto-launching the full overlay on page load.
+                document.getElementById('missionUnlockBanner').classList.remove('hidden');
+            }
+        });
     </script>
 
     <!-- Raise Hand -->
@@ -11497,6 +12173,22 @@
     <button class="tutor-close" onclick="hideTutor()">✕</button>
     <button class="tutor-mute" onclick="toggleTutorMute()"><span id="muteIcon">🔊</span></button>
     </div>
-    
+
+    <!-- ============================================================
+         MISSION: UNLOCKED — Persistent banner + cinematic overlay
+    ============================================================ -->
+    <div id="missionUnlockBanner" class="mission-banner hidden" onclick="openMissionOverlay('unlockAnim')">
+        <span class="mission-banner-icon">🧳</span>
+        <span>Mission: Unlocked — tap to begin!</span>
+    </div>
+
+    <div id="missionOverlay" class="mission-overlay hidden" role="dialog" aria-modal="true" aria-label="Mission Unlocked">
+        <button class="mission-overlay-close hidden" id="missionOverlayClose" onclick="closeMissionOverlay()" aria-label="Close mission">✕</button>
+        <button class="mission-sound-toggle hidden" id="missionSoundToggle" onclick="toggleMissionSound()" aria-label="Toggle mission sound">🔇</button>
+        <div class="mission-overlay-inner" id="missionOverlayContent">
+            <!-- JS injects one of: unlockAnim | roleSelect | generating | stage(1-8) | reveal -->
+        </div>
+    </div>
+
 </body>
 </html>
