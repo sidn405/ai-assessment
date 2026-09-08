@@ -850,6 +850,9 @@
                 <div style="width:360px; height:4px; background:#e0e6f0; border-radius:999px; overflow:hidden;">
                     <div id="loadingProgress" style="height:100%; width:0%; background:linear-gradient(90deg,var(--navy-primary),#667eea,var(--navy-primary)); background-size:200% 100%; border-radius:999px; animation:shimmerBar 1.5s linear infinite; transition:width 0.5s ease;"></div>
                 </div>
+                <button id="loadingSoundHint" onclick="enableLoadingSound()" style="display:none; background:rgba(42,57,138,0.08); border:1px solid var(--navy-primary); color:var(--navy-primary); padding:0.4rem 0.9rem; border-radius:999px; font-size:0.82rem; font-weight:600; cursor:pointer;">
+                    🔈 Tap for sound
+                </button>
             </div>
         </div>
 
@@ -2234,6 +2237,28 @@
         loadingAudio.loop = true;
         loadingAudio.load();
 
+        // Browsers block audio-with-sound unless it's started from a genuine
+        // user gesture — a page 'load' event never counts, so the .play()
+        // call in startLoadingAnimation() below gets silently rejected on
+        // most first visits. Two fallbacks cover that:
+        //   1) any early tap/click/key on the page unlocks + starts it, and
+        //   2) if neither the auto-attempt nor an early gesture caught it,
+        //      a small "tap for sound" hint appears so the student can
+        //      start it deliberately.
+        let loadingAudioUnlocked = false;
+        function enableLoadingSound() {
+            const hint = document.getElementById('loadingSoundHint');
+            if (hint) hint.style.display = 'none';
+            if (loadingAudioUnlocked) return;
+            const stillLoading = document.getElementById('loadingState') &&
+                document.getElementById('loadingState').style.display !== 'none';
+            if (!stillLoading) return;
+            loadingAudio.play().then(() => { loadingAudioUnlocked = true; }).catch(() => {});
+        }
+        ['pointerdown', 'keydown', 'touchstart'].forEach(evt => {
+            document.addEventListener(evt, enableLoadingSound, { once: true, passive: true });
+        });
+
         function startLoadingAnimation() {
             // Pick one randomly
             const chosen = ALL_ANIMATIONS[Math.floor(Math.random() * ALL_ANIMATIONS.length)];
@@ -2264,7 +2289,14 @@
             // Play loading sound on a loop while the animation plays
             try {
                 loadingAudio.currentTime = 0;
-                loadingAudio.play().catch(() => {});
+                loadingAudio.play().then(() => {
+                    loadingAudioUnlocked = true;
+                }).catch(() => {
+                    // Autoplay blocked (no user gesture yet) — invite a tap instead
+                    // of failing silently.
+                    const hint = document.getElementById('loadingSoundHint');
+                    if (hint) hint.style.display = 'inline-block';
+                });
             } catch (e) {}
         }
 
@@ -2278,6 +2310,9 @@
                 loadingAudio.pause();
                 loadingAudio.currentTime = 0;
             } catch (e) {}
+
+            const hint = document.getElementById('loadingSoundHint');
+            if (hint) hint.style.display = 'none';
         }
     </script>
 </body>

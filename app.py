@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
+import asyncio
 import sqlite3
 import psycopg2
 import psycopg2.extras
@@ -3925,7 +3926,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
     
     try:
         # Generate passage with enhanced context
-        passage_data = content_generator.generate_passage(
+        passage_data = await asyncio.to_thread(
+           content_generator.generate_passage,
            topic=topic,
            difficulty_level=difficulty,
            word_count_min=target_words - 15,
@@ -3948,7 +3950,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
         # Generate illustration for ALL readers (not just young learners)
         image_url = None
         print(f"🎨 Generating illustration for passage (grade_band={grade_band})...")
-        image_url = content_generator.generate_story_image(
+        image_url = await asyncio.to_thread(
+            content_generator.generate_story_image,
             title=passage_data.get('title', ''),
             content=passage_data.get('content', ''),
             topic=topic,
@@ -4014,7 +4017,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                     "UPDATE users SET used_character_names = ? WHERE id = ?",
                     (json.dumps(used_names), user_id)
                 )
-        questions = content_generator.generate_comprehension_questions(
+        questions = await asyncio.to_thread(
+            content_generator.generate_comprehension_questions,
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
             num_questions=4, 
@@ -7269,6 +7273,7 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
     import random
     import re
     import hashlib
+    import asyncio
     from difflib import SequenceMatcher
 
     print("=" * 50)
@@ -7563,7 +7568,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
             print(f"   Difficulty: {difficulty}")
             print(f"   Word count range: {word_count_min}-{word_count_max}")
 
-            candidate = content_generator.generate_passage(
+            candidate = await asyncio.to_thread(
+                content_generator.generate_passage,
                 topic=picked_topic,
                 difficulty_level=difficulty,
                 word_count_min=word_count_min,
@@ -7618,7 +7624,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
         lesson_image_url = None
         lesson_grade_band = user.get('grade_band', '')
         print(f"🎨 Generating illustration for passage (grade_band={lesson_grade_band})...")
-        lesson_image_url = content_generator.generate_story_image(
+        lesson_image_url = await asyncio.to_thread(
+            content_generator.generate_story_image,
             title=passage_data.get('title', ''),
             content=passage_data.get('content', ''),
             topic=topic,
@@ -7700,7 +7707,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
         # Step 9: Generate questions
         print("Step 9: Generating comprehension questions...")
         try:
-            questions = content_generator.generate_comprehension_questions(
+            questions = await asyncio.to_thread(
+                content_generator.generate_comprehension_questions,
                 passage_text=passage_data.get('content', ''),
                 passage_title=passage_data.get('title', topic),
                 num_questions=4, 
@@ -12184,7 +12192,8 @@ async def test_openai():
             return {"error": "content_generator is None"}
         
         # Try to generate a simple passage
-        result = content_generator.generate_passage(
+        result = await asyncio.to_thread(
+            content_generator.generate_passage,
             topic="reading",
             difficulty_level="beginner", 
             word_count_min=40,
@@ -12279,7 +12288,8 @@ async def debug_lesson_generation(token: str):
         # Step 6: Test content generator
         debug_info["step"] = "testing_content_generator"
         
-        passage_data = content_generator.generate_passage(
+        passage_data = await asyncio.to_thread(
+            content_generator.generate_passage,
             topic=topic,
             difficulty_level="intermediate",
             word_count_min=75,   # ✅ target_words - 25
