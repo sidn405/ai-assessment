@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Achieve 365 Reading Rewards</title>
+    <title>School Dashboard - Achieve 365 Reading Rewards</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
@@ -27,7 +27,7 @@
     <!-- Android -->
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Achieve 365 - Admin Dashboard</title>
+    <title>Achieve 365 - School Dashboard</title>
     
     
     <!-- Custom Styles for this page -->
@@ -802,7 +802,7 @@
             <div class="logo-container">
                 <img src="/static/graphics/logo.png" alt="Achieve 365" onerror="this.style.display='none'">
                 <div class="logo-text"></div>
-                <span class="admin-badge">ADMIN</span>
+                <span class="admin-badge">SCHOOL</span>
             </div>
 
             <!-- Mobile Menu Toggle (Hidden on desktop) -->
@@ -811,7 +811,7 @@
             </button>
 
             <div class="user-info">
-                <div class="user-name" id="adminName">Administrator</div>
+                <div class="user-name" id="adminName">School Administrator</div>
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
@@ -846,33 +846,8 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('invite admin', event); return false;">
-                        <span>✉️</span> Invite Admin
-                    </a>
-                </li>
-                <li class="nav-item">
                     <a href="#" class="nav-link" onclick="showSection('teachers', event); return false;">
                         <span>🍎</span> Teachers
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('school-codes', event); return false;">
-                        <span>🏫</span> School Codes
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('billing', event); return false;">
-                        <span>💳</span> Billing
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('coupons', event); return false;">
-                        <span>🎟️</span> Coupons
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('school-access', event); return false;">
-                        <span>🔑</span> School Access
                     </a>
                 </li>
             </ul>
@@ -1088,60 +1063,6 @@
           
 
             <!-- Invite Admin Section -->
-            <div id="inviteAdminSection" class="hidden">
-                <div class="header">
-                    <h1>✉️ Invite Administrators</h1>
-                    <p>Send an email invite to grant admin access. Invites expire after 24 hours.</p>
-                </div>
-
-                <div class="card" style="margin-bottom: 1.5rem;">
-                    <h3 style="margin-top: 0;">Send Invite</h3>
-                    <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-                        <input id="inviteAdminEmail" type="email" placeholder="admin@example.com"
-                               style="flex:1; min-width: 260px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
-                        <button class="btn btn-primary" type="button" onclick="sendAdminInvite()">Send Invite</button>
-                    </div>
-                    <div id="inviteAdminMsg" class="form-error" style="margin-top: 0.75rem;"></div>
-                </div>
-
-                <div class="card" style="margin-bottom: 1.5rem;">
-                    <h3 style="margin-top: 0;">Current Admins</h3>
-                    <div style="overflow-x:auto;">
-                        <table class="students-table">
-                            <thead>
-                                <tr>
-                                    <th>Email</th>
-                                    <th>Name</th>
-                                    <th>Created</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminsTableBody">
-                                <tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-top: 0;">Pending Invites</h3>
-                    <div style="overflow-x:auto;">
-                        <table class="students-table">
-                            <thead>
-                                <tr>
-                                    <th>Email</th>
-                                    <th>Invited</th>
-                                    <th>Expires</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminInvitesTableBody">
-                                <tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
 
             <!-- Messages Section -->
             <div id="messagesSection" class="hidden">
@@ -1301,48 +1222,6 @@
             </div>
         </div>
         <!-- School Codes Section -->
-        <div id="school-codes-section" class="content-section hidden">
-            <div class="section-header">
-                <h2>🏫 School Codes</h2>
-                <p>Manage registration codes for each school. Students enter these codes when signing up.</p>
-            </div>
-
-            <!-- Create new code -->
-            <div class="card" style="margin-bottom: 1.5rem;">
-                <h3 style="margin-bottom: 1rem;">Create New Code</h3>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
-                    <div style="flex: 0 0 160px;">
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Code</label>
-                        <input type="text" id="newSchoolCode" placeholder="CAM1900" maxlength="10"
-                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px;
-                                      text-transform:uppercase; font-size:1rem; box-sizing:border-box;"
-                               oninput="this.value=this.value.toUpperCase()">
-                        <small style="color:#888;">2-5 letters + 4 digits</small>
-                    </div>
-                    <div style="flex: 1; min-width: 220px;">
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">School Name</label>
-                        <input type="text" id="newSchoolName" placeholder="Cameron High School"
-                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px;
-                                      font-size:1rem; box-sizing:border-box;">
-                    </div>
-                    <button onclick="createSchoolCode()"
-                            style="padding:0.65rem 1.5rem; background:#1e3a5f; color:white;
-                                   border:none; border-radius:6px; font-size:1rem; font-weight:600;
-                                   cursor:pointer; white-space:nowrap;">
-                        + Add Code
-                    </button>
-                </div>
-                <div id="createCodeMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
-            </div>
-
-            <!-- Codes table -->
-            <div class="card">
-                <h3 style="margin-bottom:1rem;">Active Codes</h3>
-                <div id="schoolCodesTable">
-                    <p style="color:#888;">Loading...</p>
-                </div>
-            </div>
-        </div>
 
         <div id="teachers-section" class="content-section hidden">
             <div class="section-header">
@@ -1408,132 +1287,7 @@
             </div>
         </div>
 
-        <div id="billing-section" class="content-section hidden">
-            <div class="section-header">
-                <h2>💳 Billing</h2>
-                <p>$40 per student, per month — 30-day free trial, then billed monthly for your school's current roster size.</p>
-            </div>
 
-            <div class="card">
-                <div id="billingStatusBox" style="padding:1.2rem; border-radius:10px; background:#f4f6f9; margin-bottom:1rem;">
-                    <p style="color:#888;">Loading billing status...</p>
-                </div>
-                <button class="btn" id="subscribeSchoolBtn" style="display:none; padding:0.65rem 1.5rem; background:#1e3a5f; color:white; border:none; border-radius:6px; font-size:1rem; font-weight:600; cursor:pointer;" onclick="startSchoolCheckout()">
-                    Start 30-Day Free Trial
-                </button>
-                <button class="btn" id="resyncBtn" style="display:none; padding:0.65rem 1.5rem; background:white; color:#1e3a5f; border:1px solid #1e3a5f; border-radius:6px; font-size:1rem; font-weight:600; cursor:pointer; margin-left:0.6rem;" onclick="resyncBillingQuantity()">
-                    Resync Student Count
-                </button>
-                <div id="billingActionMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
-            </div>
-
-            <div class="card">
-                <h3 style="margin-bottom:1rem;">Have a Coupon Code?</h3>
-                <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
-                    <input type="text" id="schoolCouponInput" placeholder="e.g. LIFETIME2026"
-                           style="flex:1; min-width:200px; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; text-transform:uppercase;">
-                    <button class="btn" style="width:auto; padding:0.65rem 1.5rem; background:#1e3a5f; color:white; border:none; border-radius:6px; font-weight:600; cursor:pointer;" onclick="redeemSchoolCoupon()">
-                        Apply Coupon
-                    </button>
-                </div>
-                <div id="schoolCouponMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
-            </div>
-        </div>
-
-        <div id="coupons-section" class="content-section hidden">
-            <div class="section-header">
-                <h2>🎟️ Coupon Codes</h2>
-                <p>Super-admin only. Grant free lifetime access or a timed trial to a school or individual account.</p>
-            </div>
-
-            <div id="couponsAccessDenied" class="card hidden">
-                <p style="color:#dc3545;">Super-admin access required — this page is only available to admin accounts not tied to a single school.</p>
-            </div>
-
-            <div id="couponsManageArea">
-                <div class="card" style="margin-bottom:1.5rem;">
-                    <h3 style="margin-bottom:1rem;">Create Coupon</h3>
-                    <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
-                        <div style="flex:1; min-width:160px;">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Code</label>
-                            <input type="text" id="newCouponCode" placeholder="e.g. LIFETIME2026"
-                                   style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; text-transform:uppercase; box-sizing:border-box;">
-                        </div>
-                        <div style="flex: 0 0 150px;">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Type</label>
-                            <select id="newCouponType" onchange="toggleCouponTrialDays()" style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
-                                <option value="lifetime">Lifetime</option>
-                                <option value="trial">Trial</option>
-                            </select>
-                        </div>
-                        <div style="flex: 0 0 130px;" id="couponTrialDaysWrapper" class="hidden">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Trial Days</label>
-                            <input type="number" id="newCouponTrialDays" value="14" min="1"
-                                   style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
-                        </div>
-                        <div style="flex: 0 0 150px;">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Max Redemptions</label>
-                            <input type="number" id="newCouponMaxRedemptions" placeholder="Unlimited" min="1"
-                                   style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
-                        </div>
-                        <button onclick="createCoupon()"
-                                style="padding:0.65rem 1.5rem; background:#1e3a5f; color:white; border:none; border-radius:6px; font-size:1rem; font-weight:600; cursor:pointer; white-space:nowrap;">
-                            + Create Coupon
-                        </button>
-                    </div>
-                    <div id="createCouponMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom:1rem;">All Coupons</h3>
-                    <div id="couponsTable">
-                        <p style="color:#888;">Loading...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="school-access-section" class="content-section hidden">
-            <div class="section-header">
-                <h2>🔑 School Access</h2>
-                <p>Super-admin only. Most schools pay by check, off-platform — grant or cut a school's access here directly, independent of Stripe billing.</p>
-            </div>
-
-            <div id="schoolAccessDenied" class="card hidden">
-                <p style="color:#dc3545;">Super-admin access required — this page is only available to admin accounts not tied to a single school.</p>
-            </div>
-
-            <div id="schoolAccessManageArea">
-                <div class="card" style="margin-bottom:1.5rem;">
-                    <h3 style="margin-bottom:1rem;">Grant / Update Access</h3>
-                    <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
-                        <div style="flex:1; min-width:200px;">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">School name</label>
-                            <input type="text" id="schoolAccessName" placeholder="e.g. Lincoln Elementary"
-                                   style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
-                        </div>
-                        <div style="flex: 0 0 170px;">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Contract end date</label>
-                            <input type="date" id="schoolAccessEndDate"
-                                   style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
-                        </div>
-                        <div style="flex: 0 0 auto; display:flex; align-items:center; gap:0.4rem; padding-bottom:0.7rem;">
-                            <input type="checkbox" id="schoolAccessLifetime" onchange="document.getElementById('schoolAccessEndDate').disabled = this.checked;">
-                            <label for="schoolAccessLifetime" style="font-size:0.85rem;">Lifetime (no end date)</label>
-                        </div>
-                        <button class="btn btn-primary" style="width:auto;" onclick="activateSchoolAccess()">Activate</button>
-                    </div>
-                    <div id="schoolAccessMsg" style="font-size:0.85rem; margin-top:0.6rem; display:none;"></div>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom:1rem;">All Schools</h3>
-                    <div id="schoolAccessTable">
-                        <p style="color:#888;">Loading...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         </main>
             </div>
@@ -2022,7 +1776,7 @@
         </div>
         
         <div class="footer-bottom">
-            <p>&copy; 2025 Achieve 365. Admin-dashboard All rights reserved.</p>
+            <p>&copy; 2025 Achieve 365. School-dashboard All rights reserved.</p>
             <p>Made with ❤️ for learners everywhere.</p>
         </div>
     </footer>
@@ -2310,13 +2064,7 @@
                 'essay alerts': 'essayAlertsSection',
                 'essayAlerts': 'essayAlertsSection',
                 'messages': 'messagesSection',
-                'invite admin': 'inviteAdminSection',
-                'inviteAdmin': 'inviteAdminSection',
-                'school-codes': 'school-codes-section',
-                'teachers': 'teachers-section',
-                'billing': 'billing-section',
-                'coupons': 'coupons-section',
-                'school-access': 'school-access-section'
+                'teachers': 'teachers-section'
             };
 
             document.querySelectorAll('[id$="Section"], [id$="-section"]').forEach(el => el.classList.add('hidden'));
@@ -2347,29 +2095,9 @@
                 initializeMessaging();
             }
 
-            if (section === 'invite admin' || section === 'inviteAdmin') {
-                loadAdminsAndInvites();
-            }
-
-            if (section === 'school-codes') {
-                loadSchoolCodes();
-            }
-
             if (section === 'teachers') {
                 loadTeachers();
                 setupTeacherSchoolField();
-            }
-
-            if (section === 'billing') {
-                loadBillingStatus();
-            }
-
-            if (section === 'coupons') {
-                loadCoupons();
-            }
-
-            if (section === 'school-access') {
-                loadSchoolAccess();
             }
 
             if (section === 'session tracking' || section === 'sessionTracking') {
@@ -3774,138 +3502,6 @@
 
         // ========== INVITE ADMIN (EMAIL VIA BACKEND) ==========
 
-        async function loadAdminsAndInvites() {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-
-            const adminsBody = document.getElementById('adminsTableBody');
-            const invitesBody = document.getElementById('adminInvitesTableBody');
-
-            if (adminsBody) adminsBody.innerHTML = '<tr><td colspan="3" style="opacity:0.7;">Loading...</td></tr>';
-            if (invitesBody) invitesBody.innerHTML = '<tr><td colspan="5" style="opacity:0.7;">Loading...</td></tr>';
-
-            try {
-                // Current admins
-                const adminsRes = await fetch('/api/admin/admins', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const adminsData = await adminsRes.json();
-
-                if (adminsBody) {
-                    if (!adminsRes.ok) {
-                        adminsBody.innerHTML = `<tr><td colspan="3">Failed to load admins: ${adminsData.detail || adminsRes.status}</td></tr>`;
-                    } else {
-                        const rows = (adminsData.admins || []).map(a => `
-                            <tr>
-                                <td>${a.email || ''}</td>
-                                <td>${a.full_name || ''}</td>
-                                <td>${a.created_at || ''}</td>
-                            </tr>
-                        `).join('');
-                        adminsBody.innerHTML = rows || '<tr><td colspan="3" style="opacity:0.7;">No admins found.</td></tr>';
-                    }
-                }
-
-                // Pending invites
-                const invitesRes = await fetch('/api/admin/invites', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const invitesData = await invitesRes.json();
-
-                if (invitesBody) {
-                    if (!invitesRes.ok) {
-                        invitesBody.innerHTML = `<tr><td colspan="5">Failed to load invites: ${invitesData.detail || invitesRes.status}</td></tr>`;
-                    } else {
-                        const rows = (invitesData.invites || []).map(inv => `
-                            <tr>
-                                <td>${inv.email || ''}</td>
-                                <td>${inv.created_at || ''}</td>
-                                <td>${inv.expires_at || ''}</td>
-                                <td>${inv.status || 'pending'}</td>
-                                <td style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                    <button class="btn btn-secondary" type="button" onclick="resendAdminInvite(${inv.id})">Resend</button>
-                                    <button class="btn btn-danger" type="button" onclick="revokeAdminInvite(${inv.id})">Revoke</button>
-                                </td>
-                            </tr>
-                        `).join('');
-                        invitesBody.innerHTML = rows || '<tr><td colspan="5" style="opacity:0.7;">No pending invites.</td></tr>';
-                    }
-                }
-
-            } catch (err) {
-                if (adminsBody) adminsBody.innerHTML = `<tr><td colspan="3">Error: ${err}</td></tr>`;
-                if (invitesBody) invitesBody.innerHTML = `<tr><td colspan="5">Error: ${err}</td></tr>`;
-            }
-        }
-
-        async function sendAdminInvite() {
-            const token = localStorage.getItem('token');
-            const email = (document.getElementById('inviteAdminEmail')?.value || '').trim();
-            const msg = document.getElementById('inviteAdminMsg');
-
-            if (msg) { msg.textContent = ''; msg.classList.remove('active'); }
-
-            if (!email) {
-                if (msg) { msg.textContent = 'Enter an email address.'; msg.classList.add('active'); }
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/admin/invites', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ email })
-                });
-
-                const data = await res.json();
-
-                if (!res.ok || !data.success) {
-                    if (msg) { msg.textContent = data.detail || 'Failed to send invite.'; msg.classList.add('active'); }
-                    return;
-                }
-
-                if (msg) { msg.textContent = 'Invite sent!'; msg.classList.remove('active'); }
-                document.getElementById('inviteAdminEmail').value = '';
-                await loadAdminsAndInvites();
-
-            } catch (err) {
-                if (msg) { msg.textContent = 'Error sending invite.'; msg.classList.add('active'); }
-            }
-        }
-
-        async function resendAdminInvite(inviteId) {
-            const token = localStorage.getItem('token');
-            try {
-                const res = await fetch(`/api/admin/invites/${inviteId}/resend`, {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) alert(data.detail || 'Failed to resend invite.');
-                await loadAdminsAndInvites();
-            } catch (e) {
-                alert('Error resending invite.');
-            }
-        }
-
-        async function revokeAdminInvite(inviteId) {
-            const token = localStorage.getItem('token');
-            if (!confirm('Revoke this invite?')) return;
-            try {
-                const res = await fetch(`/api/admin/invites/${inviteId}`, {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) alert(data.detail || 'Failed to revoke invite.');
-                await loadAdminsAndInvites();
-            } catch (e) {
-                alert('Error revoking invite.');
-            }
-        }
 
         // ========================================
         // MESSAGING SYSTEM
@@ -4255,88 +3851,6 @@
         // ============================================================
         // SCHOOL CODES MANAGEMENT
         // ============================================================
-        async function loadSchoolCodes() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const container = document.getElementById('schoolCodesTable');
-            try {
-                const resp = await fetch('/api/admin/school-codes', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await resp.json();
-                if (!data.success || data.codes.length === 0) {
-                    container.innerHTML = '<p style="color:#888;">No school codes yet. Create one above.</p>';
-                    return;
-                }
-                container.innerHTML = `
-                    <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
-                        <thead>
-                            <tr style="background:#f5f5f5; text-align:left;">
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee;">Code</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee;">School Name</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Students</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Status</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Tutor</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Read-Aloud (default)</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:center;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.codes.map(c => `
-                                <tr style="border-bottom:1px solid #f0f0f0;">
-                                    <td style="padding:0.75rem 1rem; font-weight:700; font-family:monospace; font-size:1rem; color:#1e3a5f;">${c.code}</td>
-                                    <td style="padding:0.75rem 1rem;">${c.school_name}</td>
-                                    <td style="padding:0.75rem 1rem; text-align:center;">${c.student_count}</td>
-                                    <td style="padding:0.75rem 1rem; text-align:center;">
-                                        <span style="padding:0.25rem 0.75rem; border-radius:999px; font-size:0.82rem; font-weight:600;
-                                                     background:${c.active ? '#d4edda' : '#f8d7da'};
-                                                     color:${c.active ? '#155724' : '#721c24'};">
-                                            ${c.active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td style="padding:0.75rem 1rem; text-align:center;">
-                                        <label style="position:relative; display:inline-block; width:40px; height:22px;">
-                                            <input type="checkbox" ${c.tutor_enabled ? 'checked' : ''}
-                                                   onchange="toggleSchoolSetting(${c.id}, 'tutor_enabled', this.checked)"
-                                                   style="opacity:0; width:0; height:0;">
-                                            <span style="position:absolute; cursor:pointer; inset:0; background:${c.tutor_enabled ? '#1e3a5f' : '#ccc'};
-                                                         border-radius:999px; transition:0.2s;"></span>
-                                            <span style="position:absolute; height:16px; width:16px; left:${c.tutor_enabled ? '21px' : '3px'}; bottom:3px;
-                                                         background:white; border-radius:50%; transition:0.2s;"></span>
-                                        </label>
-                                    </td>
-                                    <td style="padding:0.75rem 1rem; text-align:center;">
-                                        <label style="position:relative; display:inline-block; width:40px; height:22px;">
-                                            <input type="checkbox" ${c.read_aloud_default ? 'checked' : ''}
-                                                   onchange="toggleSchoolSetting(${c.id}, 'read_aloud_default', this.checked)"
-                                                   style="opacity:0; width:0; height:0;">
-                                            <span style="position:absolute; cursor:pointer; inset:0; background:${c.read_aloud_default ? '#1e3a5f' : '#ccc'};
-                                                         border-radius:999px; transition:0.2s;"></span>
-                                            <span style="position:absolute; height:16px; width:16px; left:${c.read_aloud_default ? '21px' : '3px'}; bottom:3px;
-                                                         background:white; border-radius:50%; transition:0.2s;"></span>
-                                        </label>
-                                    </td>
-                                    <td style="padding:0.75rem 1rem; text-align:center;">
-                                        <button onclick="toggleCode(${c.id}, ${!c.active})"
-                                                style="padding:0.3rem 0.8rem; margin-right:0.4rem; border-radius:5px; border:1px solid #ddd;
-                                                       cursor:pointer; font-size:0.82rem; background:white;">
-                                            ${c.active ? 'Deactivate' : 'Activate'}
-                                        </button>
-                                        <button onclick="deleteCode(${c.id}, '${c.code}', ${c.student_count})"
-                                                style="padding:0.3rem 0.8rem; border-radius:5px; border:1px solid #dc3545;
-                                                       cursor:pointer; font-size:0.82rem; background:white; color:#dc3545;">
-                                            Delete
-                                        </button>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } catch (e) {
-                container.innerHTML = '<p style="color:#dc3545;">Failed to load school codes.</p>';
-            }
-        }
-
         async function toggleReadAloud(studentId, checked) {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             try {
@@ -4350,59 +3864,6 @@
             } catch (e) {
                 alert('Failed to update read-aloud setting. Please try again.');
                 loadStudents();
-            }
-        }
-
-        async function toggleSchoolSetting(codeId, field, value) {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            try {
-                await fetch(`/api/admin/school-codes/${codeId}/settings`, {
-                    method: 'PATCH',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ [field]: value })
-                });
-            } catch (e) {
-                alert('Failed to update setting. Please try again.');
-                loadSchoolCodes();
-            }
-        }
-
-        async function createSchoolCode() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const code = document.getElementById('newSchoolCode').value.trim().toUpperCase();
-            const name = document.getElementById('newSchoolName').value.trim();
-            const msg = document.getElementById('createCodeMsg');
-
-            if (!code || !name) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = 'Both code and school name are required.';
-                return;
-            }
-
-            try {
-                const resp = await fetch('/api/admin/school-codes', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code, school_name: name })
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    msg.style.display = 'block';
-                    msg.style.color = '#28A745';
-                    msg.textContent = `✅ Code ${data.code} created for ${data.school_name}`;
-                    document.getElementById('newSchoolCode').value = '';
-                    document.getElementById('newSchoolName').value = '';
-                    loadSchoolCodes();
-                } else {
-                    msg.style.display = 'block';
-                    msg.style.color = '#dc3545';
-                    msg.textContent = data.detail || 'Failed to create code.';
-                }
-            } catch (e) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = 'Error creating code.';
             }
         }
 
@@ -4499,362 +3960,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('subscribed')) {
-                setTimeout(() => alert('School subscription started! 🎉'), 300);
-            }
+            // (No subscription flow in this dashboard — schools are billed
+            // off-platform by check; access is managed from admin-dashboard.)
         });
-
-        async function loadBillingStatus() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const box = document.getElementById('billingStatusBox');
-            const subscribeBtn = document.getElementById('subscribeSchoolBtn');
-            const resyncBtn = document.getElementById('resyncBtn');
-            subscribeBtn.style.display = 'none';
-            resyncBtn.style.display = 'none';
-
-            try {
-                const resp = await fetch('/api/admin/subscription', { headers: { 'Authorization': `Bearer ${token}` } });
-                const data = await resp.json();
-
-                if (data.reason === 'no_school') {
-                    box.innerHTML = `<p>Your account has no fixed school on file — billing is managed per-school by school-scoped admins.</p>`;
-                    return;
-                }
-
-                if (data.has_access) {
-                    const statusLabel = { trial: 'Free trial active', active: 'Subscription active', lifetime: 'Lifetime access' }[data.status] || data.status;
-                    const expiry = data.expires_at ? ` — renews ${new Date(data.expires_at).toLocaleDateString()}` : '';
-                    box.innerHTML = `
-                        <p>✅ <strong>${statusLabel}</strong> for ${data.school}${expiry}</p>
-                        <p style="margin-top:0.4rem; color:#555; font-size:0.9rem;">Current billed roster: ${data.student_count} student(s) at $40/student/month.</p>
-                    `;
-                    if (data.status !== 'lifetime') resyncBtn.style.display = '';
-                } else {
-                    box.innerHTML = `
-                        <p>⚠️ No active subscription for ${data.school || 'your school'}.</p>
-                        <p style="margin-top:0.4rem; color:#555; font-size:0.9rem;">Students at your school cannot access lessons until this is activated.
-                        ${data.student_count ? `Current roster: ${data.student_count} student(s), $${(data.student_count * 40).toLocaleString()}/month after the trial.` : ''}</p>
-                    `;
-                    subscribeBtn.style.display = '';
-                }
-            } catch (e) {
-                box.innerHTML = '<p style="color:#dc3545;">Failed to load billing status.</p>';
-            }
-        }
-
-        async function startSchoolCheckout() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const btn = document.getElementById('subscribeSchoolBtn');
-            btn.disabled = true;
-            btn.textContent = 'Redirecting...';
-            try {
-                const resp = await fetch('/api/admin/subscription/create-checkout', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Could not start checkout');
-                window.location.href = data.checkout_url;
-            } catch (e) {
-                alert(e.message);
-                btn.disabled = false;
-                btn.textContent = 'Start 30-Day Free Trial';
-            }
-        }
-
-        async function resyncBillingQuantity() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const msg = document.getElementById('billingActionMsg');
-            try {
-                const resp = await fetch('/api/admin/subscription/resync', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Resync failed');
-                msg.style.display = 'block';
-                msg.style.color = '#28A745';
-                msg.textContent = `✅ Billed quantity updated to ${data.new_quantity} student(s).`;
-                loadBillingStatus();
-            } catch (e) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = e.message;
-            }
-        }
-
-        async function redeemSchoolCoupon() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const input = document.getElementById('schoolCouponInput');
-            const msg = document.getElementById('schoolCouponMsg');
-            const code = input.value.trim();
-            if (!code) return;
-            msg.style.display = 'none';
-            try {
-                const resp = await fetch('/api/redeem-coupon', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code, subscriber_type: 'school' })
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Could not redeem coupon');
-                msg.style.display = 'block';
-                msg.style.color = '#28A745';
-                msg.textContent = data.type === 'lifetime' ? '✅ Lifetime access granted for your school!' : `✅ ${data.trial_days}-day trial activated for your school!`;
-                input.value = '';
-                loadBillingStatus();
-            } catch (e) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = e.message;
-            }
-        }
-
-        function toggleCouponTrialDays() {
-            const type = document.getElementById('newCouponType').value;
-            document.getElementById('couponTrialDaysWrapper').classList.toggle('hidden', type !== 'trial');
-        }
-
-        async function loadCoupons() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const deniedBox = document.getElementById('couponsAccessDenied');
-            const manageArea = document.getElementById('couponsManageArea');
-            const tableBox = document.getElementById('couponsTable');
-
-            try {
-                const resp = await fetch('/api/superadmin/coupons', { headers: { 'Authorization': `Bearer ${token}` } });
-                if (resp.status === 403) {
-                    deniedBox.classList.remove('hidden');
-                    manageArea.classList.add('hidden');
-                    return;
-                }
-                deniedBox.classList.add('hidden');
-                manageArea.classList.remove('hidden');
-
-                const data = await resp.json();
-                if (!data.coupons || data.coupons.length === 0) {
-                    tableBox.innerHTML = '<p style="color:#888;">No coupons yet — create one above.</p>';
-                    return;
-                }
-                tableBox.innerHTML = `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Code</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Type</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Redemptions</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Status</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Created</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.coupons.map(c => `
-                                <tr style="border-bottom:1px solid #f0f0f0;">
-                                    <td style="padding:0.75rem 1rem; font-family:monospace; font-weight:700;">${c.code}</td>
-                                    <td style="padding:0.75rem 1rem;">${c.type === 'trial' ? `Trial (${c.trial_days}d)` : 'Lifetime'}</td>
-                                    <td style="padding:0.75rem 1rem;">${c.redemption_count}${c.max_redemptions ? ' / ' + c.max_redemptions : ''}</td>
-                                    <td style="padding:0.75rem 1rem;">
-                                        <span style="padding:0.25rem 0.75rem; border-radius:999px; font-size:0.82rem; font-weight:600;
-                                                     background:${c.active ? '#d4edda' : '#f8d7da'}; color:${c.active ? '#155724' : '#721c24'};">
-                                            ${c.active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td style="padding:0.75rem 1rem;">${c.created_at ? new Date(c.created_at).toLocaleDateString() : ''}</td>
-                                    <td style="padding:0.75rem 1rem;">
-                                        ${c.active ? `<button onclick="deactivateCoupon(${c.id})"
-                                            style="padding:0.3rem 0.8rem; border-radius:5px; border:1px solid #dc3545; cursor:pointer; font-size:0.82rem; background:white; color:#dc3545;">
-                                            Deactivate</button>` : '—'}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } catch (e) {
-                tableBox.innerHTML = '<p style="color:#dc3545;">Failed to load coupons.</p>';
-            }
-        }
-
-        async function createCoupon() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const code = document.getElementById('newCouponCode').value.trim();
-            const type = document.getElementById('newCouponType').value;
-            const trial_days = type === 'trial' ? parseInt(document.getElementById('newCouponTrialDays').value) : null;
-            const maxRedemptionsRaw = document.getElementById('newCouponMaxRedemptions').value.trim();
-            const max_redemptions = maxRedemptionsRaw ? parseInt(maxRedemptionsRaw) : null;
-            const msg = document.getElementById('createCouponMsg');
-
-            if (!code) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = 'A coupon code is required.';
-                return;
-            }
-
-            try {
-                const resp = await fetch('/api/superadmin/coupons', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code, type, trial_days, max_redemptions })
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Failed to create coupon');
-                msg.style.display = 'block';
-                msg.style.color = '#28A745';
-                msg.textContent = `✅ Coupon ${data.code} created.`;
-                document.getElementById('newCouponCode').value = '';
-                document.getElementById('newCouponMaxRedemptions').value = '';
-                loadCoupons();
-            } catch (e) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = e.message;
-            }
-        }
-
-        async function deactivateCoupon(couponId) {
-            if (!confirm('Deactivate this coupon? It can no longer be redeemed.')) return;
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            try {
-                await fetch(`/api/superadmin/coupons/${couponId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                loadCoupons();
-            } catch (e) {
-                alert('Failed to deactivate coupon.');
-            }
-        }
-
-        async function loadSchoolAccess() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const deniedBox = document.getElementById('schoolAccessDenied');
-            const manageArea = document.getElementById('schoolAccessManageArea');
-            const tableBox = document.getElementById('schoolAccessTable');
-
-            try {
-                const resp = await fetch('/api/superadmin/schools', { headers: { 'Authorization': `Bearer ${token}` } });
-                if (resp.status === 403) {
-                    deniedBox.classList.remove('hidden');
-                    manageArea.classList.add('hidden');
-                    return;
-                }
-                deniedBox.classList.add('hidden');
-                manageArea.classList.remove('hidden');
-
-                const data = await resp.json();
-                const schools = data.schools || [];
-                if (schools.length === 0) {
-                    tableBox.innerHTML = '<p style="color:#888;">No schools on file yet.</p>';
-                    return;
-                }
-
-                const statusBadge = (s) => {
-                    if (s.status === 'lifetime') return '<span style="color:#28A745; font-weight:600;">✅ Lifetime</span>';
-                    if (s.status === 'active') return `<span style="color:#28A745; font-weight:600;">✅ Active${s.current_period_end ? ' — until ' + new Date(s.current_period_end).toLocaleDateString() : ''}</span>`;
-                    if (s.status === 'trial') return `<span style="color:#D4AF37; font-weight:600;">⏳ Trial${s.current_period_end ? ' — until ' + new Date(s.current_period_end).toLocaleDateString() : ''}</span>`;
-                    if (s.status === 'expired') return '<span style="color:#dc3545; font-weight:600;">🛑 Deactivated</span>';
-                    return '<span style="color:#888;">No access on file</span>';
-                };
-
-                tableBox.innerHTML = `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">School</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Students</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Billing</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Status</th>
-                                <th style="padding:0.75rem 1rem; border-bottom:2px solid #eee; text-align:left;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${schools.map(s => `
-                                <tr>
-                                    <td style="padding:0.75rem 1rem; border-bottom:1px solid #f0f0f0;">${escapeHtml(s.school_name)}</td>
-                                    <td style="padding:0.75rem 1rem; border-bottom:1px solid #f0f0f0;">${s.student_count}</td>
-                                    <td style="padding:0.75rem 1rem; border-bottom:1px solid #f0f0f0;">${s.billed_via_stripe ? 'Stripe' : (s.plan_type === 'manual' ? 'Check (manual)' : '—')}</td>
-                                    <td style="padding:0.75rem 1rem; border-bottom:1px solid #f0f0f0;">${statusBadge(s)}</td>
-                                    <td style="padding:0.75rem 1rem; border-bottom:1px solid #f0f0f0;">
-                                        ${s.status === 'expired' || s.status === 'none'
-                                            ? ''
-                                            : `<button class="btn btn-secondary" style="width:auto; padding:0.4rem 0.8rem; font-size:0.85rem;" onclick="deactivateSchoolAccess('${escapeHtml(s.school_name)}')">🛑 Deactivate</button>`}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } catch (e) {
-                tableBox.innerHTML = '<p style="color:#dc3545;">Failed to load schools.</p>';
-            }
-        }
-
-        async function activateSchoolAccess() {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const nameInput = document.getElementById('schoolAccessName');
-            const endDateInput = document.getElementById('schoolAccessEndDate');
-            const lifetimeCheckbox = document.getElementById('schoolAccessLifetime');
-            const msg = document.getElementById('schoolAccessMsg');
-
-            const schoolName = nameInput.value.trim();
-            const lifetime = lifetimeCheckbox.checked;
-            const contractEndDate = lifetime ? null : endDateInput.value;
-
-            msg.style.display = 'none';
-            if (!schoolName) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = 'Enter a school name.';
-                return;
-            }
-            if (!lifetime && !contractEndDate) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = 'Enter a contract end date, or check Lifetime.';
-                return;
-            }
-
-            try {
-                const resp = await fetch(`/api/superadmin/schools/${encodeURIComponent(schoolName)}/activate`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contract_end_date: contractEndDate, lifetime })
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Could not activate access.');
-                msg.style.display = 'block';
-                msg.style.color = '#28A745';
-                msg.textContent = `✅ Access granted for ${schoolName}.`;
-                nameInput.value = '';
-                endDateInput.value = '';
-                lifetimeCheckbox.checked = false;
-                endDateInput.disabled = false;
-                loadSchoolAccess();
-            } catch (e) {
-                msg.style.display = 'block';
-                msg.style.color = '#dc3545';
-                msg.textContent = e.message;
-            }
-        }
-
-        async function deactivateSchoolAccess(schoolName) {
-            if (!confirm(`Deactivate access for ${schoolName}? This cuts off their platform access immediately, even if their contract end date hasn't passed yet.`)) return;
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            try {
-                const resp = await fetch(`/api/superadmin/schools/${encodeURIComponent(schoolName)}/deactivate`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Could not deactivate access.');
-                loadSchoolAccess();
-            } catch (e) {
-                alert(e.message);
-            }
-        }
 
         async function createTeacher() {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
@@ -4903,35 +4011,6 @@
                 msg.style.display = 'block';
                 msg.style.color = '#dc3545';
                 msg.textContent = 'Error creating teacher.';
-            }
-        }
-
-        async function toggleCode(id, active) {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            await fetch(`/api/admin/school-codes/${id}`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ active })
-            });
-            loadSchoolCodes();
-        }
-
-        async function deleteCode(id, code, studentCount) {
-            if (studentCount > 0) {
-                alert(`Cannot delete ${code} — ${studentCount} student(s) are registered with this code. Deactivate it instead.`);
-                return;
-            }
-            if (!confirm(`Delete code ${code}? This cannot be undone.`)) return;
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const resp = await fetch(`/api/admin/school-codes/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await resp.json();
-            if (data.success) {
-                loadSchoolCodes();
-            } else {
-                alert(data.detail || 'Delete failed.');
             }
         }
 

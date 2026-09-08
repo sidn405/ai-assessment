@@ -811,6 +811,8 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS student_subscriptions (id SERIAL PRIMARY KEY, student_id INTEGER REFERENCES users(id) UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER REFERENCES coupon_codes(id), paid_by_parent_id INTEGER REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" if USE_POSTGRES else "CREATE TABLE IF NOT EXISTS student_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER UNIQUE, status VARCHAR(20) DEFAULT 'inactive', plan_type VARCHAR(20), stripe_subscription_id VARCHAR(255), stripe_customer_id VARCHAR(255), current_period_end TIMESTAMP, coupon_code_id INTEGER, paid_by_parent_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS is_placement BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
+                "ALTER TABLE school_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE student_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
             ]
             for sql in migrations:
                 try:
@@ -1230,6 +1232,8 @@ def init_db():
             "ALTER TABLE messages ADD COLUMN recipient_type TEXT DEFAULT 'student'",
             "ALTER TABLE game_completions ADD COLUMN rounds_completed INTEGER DEFAULT 0",
             "ALTER TABLE game_completions ADD COLUMN time_seconds INTEGER DEFAULT 0",
+            "ALTER TABLE school_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
+            "ALTER TABLE student_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
         ]
         for sql in sqlite_migrations:
             try:
@@ -1354,6 +1358,14 @@ async def serve_admin():
 @app.get("/parent-dashboard", response_class=HTMLResponse)
 async def serve_parent_dashboard():
     response = FileResponse("static/parent-dashboard.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+@app.get("/school-dashboard", response_class=HTMLResponse)
+async def serve_school_dashboard():
+    response = FileResponse("static/school-dashboard.html")
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -9182,6 +9194,71 @@ async def get_individual_subscription_status(child_id: int, parent=Depends(requi
         conn.close()
 
 
+def _set_individual_subscription_cancellation(child_id: int, parent_id: int, cancel: bool) -> dict:
+    """Shared logic for cancel/resume — flips cancel_at_period_end on the live
+    Stripe subscription and mirrors it locally so the UI updates immediately
+    (the webhook will also confirm it on the next customer.subscription.updated)."""
+    if not _verify_parent_owns_child(parent_id, child_id):
+        raise HTTPException(status_code=403, detail="You are not linked to this student")
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT status, stripe_subscription_id FROM student_subscriptions WHERE student_id = %s" if USE_POSTGRES
+            else "SELECT status, stripe_subscription_id FROM student_subscriptions WHERE student_id = ?",
+            (child_id,)
+        )
+        sub = cursor.fetchone()
+        if not sub:
+            raise HTTPException(status_code=404, detail="No subscription found for this student")
+        sub = dict(sub)
+        if sub['status'] not in ('active', 'trial'):
+            raise HTTPException(status_code=400, detail=f"Nothing to {'cancel' if cancel else 'resume'} — subscription status is '{sub['status']}'")
+        if not sub['stripe_subscription_id']:
+            raise HTTPException(status_code=400, detail="This access wasn't purchased through Stripe, so there's nothing to cancel here.")
+
+        import stripe
+        stripe.api_key = STRIPE_SECRET_KEY
+        try:
+            stripe.Subscription.modify(sub['stripe_subscription_id'], cancel_at_period_end=cancel)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE student_subscriptions SET cancel_at_period_end = %s, updated_at = NOW() WHERE student_id = %s",
+                (cancel, child_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE student_subscriptions SET cancel_at_period_end = ? WHERE student_id = ?",
+                (cancel, child_id)
+            )
+        conn.commit()
+        print(f"{'🛑' if cancel else '▶️'} Individual subscription for student {child_id} — cancel_at_period_end set to {cancel}")
+        return _get_access_status(child_id, cursor)
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/parent/child/{child_id}/subscription/cancel")
+async def cancel_individual_subscription(child_id: int, parent=Depends(require_parent)):
+    """Cancel at period end — the student keeps access through the period
+    already paid for, and the card is not charged again after that."""
+    return _set_individual_subscription_cancellation(child_id, parent["user_id"], cancel=True)
+
+
+@app.post("/api/parent/child/{child_id}/subscription/resume")
+async def resume_individual_subscription(child_id: int, parent=Depends(require_parent)):
+    """Undo a pending cancellation before the period ends — billing continues
+    as normal."""
+    return _set_individual_subscription_cancellation(child_id, parent["user_id"], cancel=False)
+
+
 SCHOOL_MONTHLY_CENTS_PER_STUDENT = 4000  # $40/student/month
 SCHOOL_TRIAL_DAYS = 30
 
@@ -9284,12 +9361,80 @@ async def get_school_subscription_status(admin=Depends(require_admin)):
             "has_access": has_access,
             "status": sub['status'],
             "expires_at": str(sub['current_period_end']) if sub['current_period_end'] else None,
+            "cancel_at_period_end": bool(sub.get('cancel_at_period_end')),
             "school": school,
             "student_count": student_count
         }
     finally:
         cursor.close()
         conn.close()
+
+
+def _set_school_subscription_cancellation(admin_id: int, cancel: bool) -> dict:
+    """Shared logic for cancel/resume — mirrors _set_individual_subscription_cancellation
+    for the school-wide plan."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin_id,))
+        row = cursor.fetchone()
+        school = (row["school"] if hasattr(row, 'keys') else row[0]) if row else None
+        if not school:
+            raise HTTPException(status_code=400, detail="Your account has no school on file.")
+        if not STRIPE_SECRET_KEY:
+            raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+        cursor.execute(
+            "SELECT status, stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
+            else "SELECT status, stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+            (school,)
+        )
+        sub = cursor.fetchone()
+        if not sub:
+            raise HTTPException(status_code=404, detail="No subscription found for this school")
+        sub = dict(sub)
+        if sub['status'] not in ('active', 'trial'):
+            raise HTTPException(status_code=400, detail=f"Nothing to {'cancel' if cancel else 'resume'} — subscription status is '{sub['status']}'")
+        if not sub['stripe_subscription_id']:
+            raise HTTPException(status_code=400, detail="This access wasn't purchased through Stripe, so there's nothing to cancel here.")
+
+        import stripe
+        stripe.api_key = STRIPE_SECRET_KEY
+        try:
+            stripe.Subscription.modify(sub['stripe_subscription_id'], cancel_at_period_end=cancel)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE school_subscriptions SET cancel_at_period_end = %s, updated_at = NOW() WHERE school_name = %s",
+                (cancel, school)
+            )
+        else:
+            cursor.execute(
+                "UPDATE school_subscriptions SET cancel_at_period_end = ? WHERE school_name = ?",
+                (cancel, school)
+            )
+        conn.commit()
+        print(f"{'🛑' if cancel else '▶️'} School subscription for {school} — cancel_at_period_end set to {cancel}")
+        return {"success": True, "cancel_at_period_end": cancel}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/admin/subscription/cancel")
+async def cancel_school_subscription(admin=Depends(require_admin)):
+    """Cancel at period end — the school keeps access through the period
+    already paid for, and the card is not charged again after that."""
+    return _set_school_subscription_cancellation(admin["user_id"], cancel=True)
+
+
+@app.post("/api/admin/subscription/resume")
+async def resume_school_subscription(admin=Depends(require_admin)):
+    """Undo a pending cancellation before the period ends — billing continues
+    as normal."""
+    return _set_school_subscription_cancellation(admin["user_id"], cancel=False)
 
 
 @app.post("/api/admin/subscription/resync")
@@ -9342,6 +9487,162 @@ async def resync_school_subscription_quantity(admin=Depends(require_admin)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
+
+# ========================================
+# SCHOOL ACCESS MANAGEMENT (manual — most schools pay by check, off-platform)
+# Achieve 365 staff only (require_super_admin): lets platform operators grant
+# or cut a school's access directly, independent of the Stripe self-serve
+# flow above (which stays available for any school that does pay by card).
+# ========================================
+
+class SchoolAccessActivateBody(BaseModel):
+    contract_end_date: Optional[str] = None  # 'YYYY-MM-DD' — omit if lifetime
+    lifetime: bool = False
+
+
+@app.get("/api/superadmin/schools")
+async def list_schools_access(admin=Depends(require_super_admin)):
+    """All schools Achieve 365 staff can see, with their current access status —
+    drawn from school codes, existing subscription rows, and student rosters,
+    since a school may exist in any of those without yet being in the others."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        names = set()
+        cursor.execute("SELECT DISTINCT school_name FROM school_codes WHERE school_name IS NOT NULL")
+        names |= {(r['school_name'] if hasattr(r, 'keys') else r[0]) for r in cursor.fetchall()}
+        cursor.execute("SELECT DISTINCT school_name FROM school_subscriptions WHERE school_name IS NOT NULL")
+        names |= {(r['school_name'] if hasattr(r, 'keys') else r[0]) for r in cursor.fetchall()}
+        cursor.execute("SELECT DISTINCT school FROM users WHERE school IS NOT NULL AND school != ''")
+        names |= {(r['school'] if hasattr(r, 'keys') else r[0]) for r in cursor.fetchall()}
+
+        schools = []
+        for name in sorted(names):
+            cursor.execute(
+                "SELECT status, plan_type, current_period_end, cancel_at_period_end, stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
+                else "SELECT status, plan_type, current_period_end, cancel_at_period_end, stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+                (name,)
+            )
+            sub = cursor.fetchone()
+            sub = dict(sub) if sub else {}
+
+            cursor.execute(
+                "SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = %s" if USE_POSTGRES
+                else "SELECT COUNT(*) AS c FROM users WHERE role = 'student' AND school = ?",
+                (name,)
+            )
+            count_row = cursor.fetchone()
+            student_count = (count_row['c'] if hasattr(count_row, 'keys') else count_row[0]) or 0
+
+            schools.append({
+                "school_name": name,
+                "status": sub.get("status", "none"),
+                "plan_type": sub.get("plan_type"),
+                "current_period_end": str(sub["current_period_end"]) if sub.get("current_period_end") else None,
+                "cancel_at_period_end": bool(sub.get("cancel_at_period_end")),
+                "billed_via_stripe": bool(sub.get("stripe_subscription_id")),
+                "student_count": student_count,
+            })
+        return {"schools": schools}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/superadmin/schools/{school_name}/activate")
+async def activate_school_access(school_name: str, body: SchoolAccessActivateBody, admin=Depends(require_super_admin)):
+    """Grant a school access outside of Stripe — for the normal case of a
+    school paying by check. Set a contract end date, or mark lifetime for
+    schools with an open-ended agreement."""
+    if not body.lifetime and not body.contract_end_date:
+        raise HTTPException(status_code=400, detail="Provide a contract end date, or mark this school as lifetime.")
+
+    status = "lifetime" if body.lifetime else "active"
+    period_end = None
+    if not body.lifetime:
+        try:
+            period_end = datetime.strptime(body.contract_end_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="contract_end_date must be in YYYY-MM-DD format")
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO school_subscriptions (school_name, status, plan_type, current_period_end, cancel_at_period_end, created_by)
+                   VALUES (%s, %s, 'manual', %s, FALSE, %s)
+                   ON CONFLICT (school_name) DO UPDATE SET status = %s, plan_type = 'manual', current_period_end = %s, cancel_at_period_end = FALSE, updated_at = NOW()""",
+                (school_name, status, period_end, admin["user_id"], status, period_end)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO school_subscriptions (school_name, status, plan_type, current_period_end, cancel_at_period_end, created_by)
+                   VALUES (?, ?, 'manual', ?, 0, ?)
+                   ON CONFLICT (school_name) DO UPDATE SET status = ?, plan_type = 'manual', current_period_end = ?, cancel_at_period_end = 0""",
+                (school_name, status, period_end, admin["user_id"], status, period_end)
+            )
+        conn.commit()
+        print(f"✅ Manually activated school '{school_name}' — status={status}, contract ends {period_end}")
+        return {"success": True, "school_name": school_name, "status": status, "current_period_end": str(period_end) if period_end else None}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/superadmin/schools/{school_name}/deactivate")
+async def deactivate_school_access(school_name: str, admin=Depends(require_super_admin)):
+    """Kill switch — immediately cuts this school's access, regardless of
+    any contract end date on file. Use when a check-paid contract ends (or
+    isn't renewed). If a Stripe subscription is somehow attached (e.g. the
+    school previously used self-serve billing), it's cancelled immediately
+    too, so there's no risk of a further charge going out."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
+            else "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+            (school_name,)
+        )
+        row = cursor.fetchone()
+        stripe_subscription_id = (row['stripe_subscription_id'] if hasattr(row, 'keys') else row[0]) if row else None
+
+        if stripe_subscription_id and STRIPE_SECRET_KEY:
+            import stripe
+            stripe.api_key = STRIPE_SECRET_KEY
+            try:
+                stripe.Subscription.delete(stripe_subscription_id)
+                print(f"🛑 Cancelled live Stripe subscription {stripe_subscription_id} for '{school_name}' as part of kill switch")
+            except Exception as e:
+                print(f"⚠️ Could not cancel Stripe subscription during kill switch: {e}")
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO school_subscriptions (school_name, status, plan_type, created_by)
+                   VALUES (%s, 'expired', 'manual', %s)
+                   ON CONFLICT (school_name) DO UPDATE SET status = 'expired', updated_at = NOW()""",
+                (school_name, admin["user_id"])
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO school_subscriptions (school_name, status, plan_type, created_by)
+                   VALUES (?, 'expired', 'manual', ?)
+                   ON CONFLICT (school_name) DO UPDATE SET status = 'expired'""",
+                (school_name, admin["user_id"])
+            )
+        conn.commit()
+        print(f"🛑 KILL SWITCH: access deactivated for school '{school_name}' by admin {admin['user_id']}")
+        return {"success": True, "school_name": school_name, "status": "expired"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def _get_stripe_period_end(stripe_sub_dict) -> datetime:
@@ -9551,29 +9852,32 @@ async def stripe_webhook(request: Request):
             except ValueError:
                 pass  # subscription may be fully canceled with no period info left
             our_status = "expired" if event["type"] == "customer.subscription.deleted" else {"trialing": "trial", "active": "active"}.get(stripe_status, "expired")
+            # Stripe is the source of truth for this flag — keeps our copy in sync
+            # even if a cancellation/resume happens via Stripe's own billing portal.
+            cancel_at_period_end = bool(sub.get("cancel_at_period_end")) if event["type"] != "customer.subscription.deleted" else False
 
-            print(f"🔔 Stripe webhook received: {event['type']} — sub={stripe_subscription_id} status={stripe_status}")
+            print(f"🔔 Stripe webhook received: {event['type']} — sub={stripe_subscription_id} status={stripe_status} cancel_at_period_end={cancel_at_period_end}")
 
             conn = get_db()
             cursor = get_cursor(conn)
             try:
                 if USE_POSTGRES:
                     cursor.execute(
-                        "UPDATE school_subscriptions SET status = %s, current_period_end = %s, updated_at = NOW() WHERE stripe_subscription_id = %s",
-                        (our_status, current_period_end, stripe_subscription_id)
+                        "UPDATE school_subscriptions SET status = %s, current_period_end = %s, cancel_at_period_end = %s, updated_at = NOW() WHERE stripe_subscription_id = %s",
+                        (our_status, current_period_end, cancel_at_period_end, stripe_subscription_id)
                     )
                     cursor.execute(
-                        "UPDATE student_subscriptions SET status = %s, current_period_end = %s, updated_at = NOW() WHERE stripe_subscription_id = %s",
-                        (our_status, current_period_end, stripe_subscription_id)
+                        "UPDATE student_subscriptions SET status = %s, current_period_end = %s, cancel_at_period_end = %s, updated_at = NOW() WHERE stripe_subscription_id = %s",
+                        (our_status, current_period_end, cancel_at_period_end, stripe_subscription_id)
                     )
                 else:
                     cursor.execute(
-                        "UPDATE school_subscriptions SET status = ?, current_period_end = ? WHERE stripe_subscription_id = ?",
-                        (our_status, current_period_end, stripe_subscription_id)
+                        "UPDATE school_subscriptions SET status = ?, current_period_end = ?, cancel_at_period_end = ? WHERE stripe_subscription_id = ?",
+                        (our_status, current_period_end, cancel_at_period_end, stripe_subscription_id)
                     )
                     cursor.execute(
-                        "UPDATE student_subscriptions SET status = ?, current_period_end = ? WHERE stripe_subscription_id = ?",
-                        (our_status, current_period_end, stripe_subscription_id)
+                        "UPDATE student_subscriptions SET status = ?, current_period_end = ?, cancel_at_period_end = ? WHERE stripe_subscription_id = ?",
+                        (our_status, current_period_end, cancel_at_period_end, stripe_subscription_id)
                     )
                 conn.commit()
                 print(f"✅ Synced subscription {stripe_subscription_id} → {our_status}")
@@ -10897,28 +11201,28 @@ def _get_access_status(student_id: int, cursor) -> dict:
         if sub:
             sub = dict(sub)
             if sub['status'] == 'lifetime':
-                return {"has_access": True, "reason": "school_lifetime", "expires_at": None}
+                return {"has_access": True, "reason": "school_lifetime", "expires_at": None, "cancel_at_period_end": False}
             if sub['status'] in ('active', 'trial') and sub['current_period_end']:
                 period_end = sub['current_period_end'] if isinstance(sub['current_period_end'], datetime) else datetime.fromisoformat(str(sub['current_period_end']))
                 if period_end > now:
-                    return {"has_access": True, "reason": f"school_{sub['status']}", "expires_at": str(period_end)}
+                    return {"has_access": True, "reason": f"school_{sub['status']}", "expires_at": str(period_end), "cancel_at_period_end": False}
 
     cursor.execute(
-        "SELECT status, current_period_end FROM student_subscriptions WHERE student_id = %s" if USE_POSTGRES
-        else "SELECT status, current_period_end FROM student_subscriptions WHERE student_id = ?",
+        "SELECT status, current_period_end, cancel_at_period_end FROM student_subscriptions WHERE student_id = %s" if USE_POSTGRES
+        else "SELECT status, current_period_end, cancel_at_period_end FROM student_subscriptions WHERE student_id = ?",
         (student_id,)
     )
     sub = cursor.fetchone()
     if sub:
         sub = dict(sub)
         if sub['status'] == 'lifetime':
-            return {"has_access": True, "reason": "individual_lifetime", "expires_at": None}
+            return {"has_access": True, "reason": "individual_lifetime", "expires_at": None, "cancel_at_period_end": False}
         if sub['status'] in ('active', 'trial') and sub['current_period_end']:
             period_end = sub['current_period_end'] if isinstance(sub['current_period_end'], datetime) else datetime.fromisoformat(str(sub['current_period_end']))
             if period_end > now:
-                return {"has_access": True, "reason": f"individual_{sub['status']}", "expires_at": str(period_end)}
+                return {"has_access": True, "reason": f"individual_{sub['status']}", "expires_at": str(period_end), "cancel_at_period_end": bool(sub.get('cancel_at_period_end'))}
 
-    return {"has_access": False, "reason": "none", "expires_at": None}
+    return {"has_access": False, "reason": "none", "expires_at": None, "cancel_at_period_end": False}
 
 
 def require_active_access(user: dict = Depends(get_current_user)):
