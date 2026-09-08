@@ -947,23 +947,7 @@
                     </div>
                     
                     <div id="studentsTable" class="hidden" style="overflow-x:auto;">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>School</th>
-                                    <th>Reading Level</th>
-                                    <th>Lexile Score</th>
-                                    <th>Lessons</th>
-                                    <th>Avg Score</th>
-                                    <th>Read-Aloud</th>
-                                    <th>Joined</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="studentsTableBody">
-                            </tbody>
-                        </table>
+                        <div id="studentsGroupedContainer"></div>
                     </div>
                 </div>
             </div>
@@ -1333,6 +1317,48 @@
                     </button>
                 </div>
                 <div id="createCodeMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
+            </div>
+
+            <!-- Create School Account -->
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h3 style="margin-bottom: 0.4rem;">Create School Account</h3>
+                <p style="color:#888; font-size:0.85rem; margin-bottom:1rem;">
+                    Instantly create a school administrator account — no email invite needed. This only creates the login;
+                    grant the school's actual platform access separately from the School Access page.
+                </p>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">School Name</label>
+                        <input type="text" id="newSchoolAccountSchoolName" placeholder="Lincoln Elementary"
+                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                    </div>
+                    <div style="flex: 1; min-width: 180px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Contact Full Name</label>
+                        <input type="text" id="newSchoolAccountName" placeholder="Jane Smith"
+                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Contact Email</label>
+                        <input type="email" id="newSchoolAccountEmail" placeholder="jane@lincolnelementary.edu"
+                               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                    </div>
+                    <div style="flex: 0 0 200px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Temporary Password</label>
+                        <div style="display:flex; gap:0.4rem;">
+                            <input type="text" id="newSchoolAccountPassword" placeholder="At least 6 characters"
+                                   style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; box-sizing:border-box;">
+                            <button type="button" onclick="generateSchoolAccountPassword()" title="Generate a password"
+                                    style="padding:0.6rem 0.7rem; background:#eee; border:1px solid #ddd; border-radius:6px; cursor:pointer;">🎲</button>
+                        </div>
+                    </div>
+                    <button onclick="createSchoolAccount()"
+                            style="padding:0.65rem 1.5rem; background:#1e3a5f; color:white;
+                                   border:none; border-radius:6px; font-size:1rem; font-weight:600;
+                                   cursor:pointer; white-space:nowrap;">
+                        + Create Account
+                    </button>
+                </div>
+                <div id="createSchoolAccountMsg" style="margin-top:0.75rem; font-size:0.9rem; display:none;"></div>
             </div>
 
             <!-- Codes table -->
@@ -3435,16 +3461,46 @@
 
 
         function renderStudentsTable(students) {
-            const tbody = document.getElementById('studentsTableBody');
-            tbody.innerHTML = '';
+            const container = document.getElementById('studentsGroupedContainer');
+            container.innerHTML = '';
 
             if (!students || students.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:2rem;">No students found.</td></tr>';
+                container.innerHTML = '<p style="text-align:center;color:#888;padding:2rem;">No students found.</p>';
                 return;
             }
-            
+
+            // Group by school; students with no school on file go in their own group.
+            const groups = {};
+            const UNASSIGNED_KEY = '__unassigned__';
             students.forEach(student => {
-                const tr = document.createElement('tr');
+                const key = (student.school && student.school.trim()) ? student.school : UNASSIGNED_KEY;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(student);
+            });
+
+            const schoolNames = Object.keys(groups).filter(k => k !== UNASSIGNED_KEY).sort((a, b) => a.localeCompare(b));
+            const orderedKeys = groups[UNASSIGNED_KEY] ? [...schoolNames, UNASSIGNED_KEY] : schoolNames;
+
+            container.innerHTML = orderedKeys.map(key => renderStudentGroup(key === UNASSIGNED_KEY ? null : key, groups[key])).join('');
+        }
+
+        function renderStudentGroup(schoolName, groupStudents) {
+            const count = groupStudents.length;
+            const scored = groupStudents.filter(s => s.comprehension_score != null);
+            const avgScore = scored.length
+                ? Math.round(scored.reduce((sum, s) => sum + s.comprehension_score, 0) / scored.length)
+                : null;
+            const lexiled = groupStudents.filter(s => s.lexile_score != null);
+            const avgLexile = lexiled.length
+                ? Math.round(lexiled.reduce((sum, s) => sum + s.lexile_score, 0) / lexiled.length)
+                : null;
+
+            const isUnassigned = schoolName === null;
+            const headerBg = isUnassigned ? '#fff8e6' : '#f4f6f9';
+            const headerBorder = isUnassigned ? '#D4AF37' : 'var(--navy-primary)';
+            const title = isUnassigned ? '⚠️ Students Without a School' : `🏫 ${escapeHtml(schoolName)}`;
+
+            const rows = groupStudents.map(student => {
                 const levelBadge = student.reading_level ?
                     `<span class="badge badge-info">${student.reading_level}</span>` :
                     `<span class="badge badge-warning">Pending</span>`;
@@ -3454,9 +3510,8 @@
                     : `<span style="color:#aaa;">—</span>`;
 
                 const joinDate = student.created_at ? new Date(student.created_at).toLocaleDateString() : '—';
-                const school = student.school || '—';
                 const lessons = student.total_passages_read || 0;
-                const avgScore = student.comprehension_score ? `${Math.round(student.comprehension_score)}%` : '—';
+                const avg = student.comprehension_score ? `${Math.round(student.comprehension_score)}%` : '—';
 
                 const readAloudChecked = student.read_aloud_override === true;
                 const readAloudCell = `
@@ -3469,30 +3524,54 @@
                         <span style="position:absolute; height:14px; width:14px; left:${readAloudChecked ? '19px' : '3px'}; bottom:3px;
                                      background:white; border-radius:50%; transition:0.2s;"></span>
                     </label>`;
-                
-                tr.innerHTML = `
-                    <td>
-                        <strong>${student.full_name}</strong><br>
-                        <small style="color:#888;">${student.email}</small>
-                    </td>
-                    <td>${school}</td>
-                    <td>${levelBadge}</td>
-                    <td>${lexileDisplay}</td>
-                    <td>${lessons}</td>
-                    <td>${avgScore}</td>
-                    <td>${readAloudCell}</td>
-                    <td>${joinDate}</td>
-                    <td style="display:flex;gap:0.5rem;">
-                        <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
-                            View
-                        </button>
-                        <button class="btn btn-danger btn-small" onclick="confirmDeleteStudent(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
-                            Delete
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+
+                return `
+                    <tr>
+                        <td>
+                            <strong>${student.full_name}</strong><br>
+                            <small style="color:#888;">${student.email}</small>
+                        </td>
+                        <td>${levelBadge}</td>
+                        <td>${lexileDisplay}</td>
+                        <td>${lessons}</td>
+                        <td>${avg}</td>
+                        <td>${readAloudCell}</td>
+                        <td>${joinDate}</td>
+                        <td style="display:flex;gap:0.5rem;">
+                            <button class="btn btn-primary btn-small" onclick="viewStudentProgress(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
+                                View
+                            </button>
+                            <button class="btn btn-danger btn-small" onclick="confirmDeleteStudent(${student.id}, '${student.full_name.replace(/'/g, "\\'")}')">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            return `
+                <div style="margin-bottom:1.5rem; border:1px solid #e5e5e5; border-radius:8px; overflow:hidden;">
+                    <div style="background:${headerBg}; border-left:4px solid ${headerBorder}; padding:0.85rem 1.1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                        <strong style="font-size:1.05rem;">${title}</strong>
+                        <span style="font-size:0.85rem; color:#555;">
+                            ${count} student${count === 1 ? '' : 's'}${avgScore !== null ? ` • avg score ${avgScore}%` : ''}${avgLexile !== null ? ` • avg Lexile ${avgLexile}L` : ''}
+                        </span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Reading Level</th>
+                                <th>Lexile Score</th>
+                                <th>Lessons</th>
+                                <th>Avg Score</th>
+                                <th>Read-Aloud</th>
+                                <th>Joined</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
         }
 
         function formatReadingLevel(level) {
@@ -4403,6 +4482,63 @@
                 msg.style.display = 'block';
                 msg.style.color = '#dc3545';
                 msg.textContent = 'Error creating code.';
+            }
+        }
+
+        function generateSchoolAccountPassword() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+            let pw = '';
+            for (let i = 0; i < 12; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+            document.getElementById('newSchoolAccountPassword').value = pw;
+        }
+
+        async function createSchoolAccount() {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const school_name = document.getElementById('newSchoolAccountSchoolName').value.trim();
+            const full_name = document.getElementById('newSchoolAccountName').value.trim();
+            const email = document.getElementById('newSchoolAccountEmail').value.trim();
+            const password = document.getElementById('newSchoolAccountPassword').value;
+            const msg = document.getElementById('createSchoolAccountMsg');
+
+            msg.style.display = 'none';
+            if (!school_name || !full_name || !email || !password) {
+                msg.style.display = 'block';
+                msg.style.color = '#dc3545';
+                msg.textContent = 'School name, contact name, email, and password are all required.';
+                return;
+            }
+            if (password.length < 6) {
+                msg.style.display = 'block';
+                msg.style.color = '#dc3545';
+                msg.textContent = 'Password must be at least 6 characters.';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/superadmin/create-school-account', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school_name, full_name, email, password })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    msg.style.display = 'block';
+                    msg.style.color = '#28A745';
+                    msg.innerHTML = `✅ Account created for ${escapeHtml(full_name)} (${escapeHtml(email)}) — school: ${escapeHtml(data.school)}.
+                        Share the password with them directly; it won't be shown again here.`;
+                    document.getElementById('newSchoolAccountSchoolName').value = '';
+                    document.getElementById('newSchoolAccountName').value = '';
+                    document.getElementById('newSchoolAccountEmail').value = '';
+                    document.getElementById('newSchoolAccountPassword').value = '';
+                } else {
+                    msg.style.display = 'block';
+                    msg.style.color = '#dc3545';
+                    msg.textContent = data.detail || 'Failed to create account.';
+                }
+            } catch (e) {
+                msg.style.display = 'block';
+                msg.style.color = '#dc3545';
+                msg.textContent = 'Error creating account.';
             }
         }
 

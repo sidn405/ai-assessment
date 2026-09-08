@@ -153,6 +153,12 @@ class ParentCreate(BaseModel):
     password: str
     full_name: str
 
+class SchoolAccountCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str  # contact person's name
+    school_name: str
+
 class InterestOnboarding(BaseModel):
     interests: List[str]
     topics: List[str]
@@ -1723,6 +1729,7 @@ async def login(credentials: UserLogin):
             "reading_level": user.get('reading_level'),
             "interests": user.get('interests'),
             "level_estimate": user.get('level_estimate'),
+            "school": user.get('school'),
             "login_count": new_login_count
         }
     }
@@ -2592,19 +2599,23 @@ async def me(user=Depends(get_current_user)):
     
 @app.get("/api/admin/reading-level-distribution")
 async def get_reading_level_distribution(admin=Depends(require_admin)):
-    """Get distribution of students across reading levels"""
+    """Get distribution of students across reading levels — scoped to the
+    admin's own school; a super-admin (no school on file) sees all schools."""
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        if USE_POSTGRES:
-            cursor.execute("""
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        admin_row = cursor.fetchone()
+        admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
+
+        base_query = """
                 SELECT 
                     COALESCE(reading_level, 'Not Assessed') as level,
                     COUNT(*) as count
                 FROM users 
-                WHERE role = 'student'
+                WHERE role = 'student'{school_clause}
                 GROUP BY reading_level
                 ORDER BY 
                     CASE reading_level
@@ -2613,23 +2624,11 @@ async def get_reading_level_distribution(admin=Depends(require_admin)):
                         WHEN 'advanced' THEN 3
                         ELSE 4
                     END
-            """)
+            """
+        if admin_school:
+            cursor.execute(base_query.format(school_clause=" AND school = %s" if USE_POSTGRES else " AND school = ?"), (admin_school,))
         else:
-            cursor.execute("""
-                SELECT 
-                    COALESCE(reading_level, 'Not Assessed') as level,
-                    COUNT(*) as count
-                FROM users 
-                WHERE role = 'student'
-                GROUP BY reading_level
-                ORDER BY 
-                    CASE reading_level
-                        WHEN 'beginner' THEN 1
-                        WHEN 'intermediate' THEN 2
-                        WHEN 'advanced' THEN 3
-                        ELSE 4
-                    END
-            """)
+            cursor.execute(base_query.format(school_clause=""))
         
         rows = cursor.fetchall()
         distribution = []
@@ -2655,20 +2654,34 @@ async def get_reading_level_distribution(admin=Depends(require_admin)):
 
 @app.get("/api/admin/interest-topics")
 async def get_interest_topics(admin=Depends(require_admin)):
-    """Get breakdown of popular interest topics"""
+    """Get breakdown of popular interest topics — scoped to the admin's own
+    school; a super-admin (no school on file) sees all schools."""
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        if USE_POSTGRES:
-            cursor.execute("""
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        admin_row = cursor.fetchone()
+        admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
+
+        if admin_school:
+            cursor.execute(
+                """
                 SELECT interest_tags 
                 FROM users 
                 WHERE role = 'student' 
                 AND interest_tags IS NOT NULL 
                 AND interest_tags != '[]'
-            """)
+                AND school = %s
+            """ if USE_POSTGRES else """
+                SELECT interest_tags 
+                FROM users 
+                WHERE role = 'student' 
+                AND interest_tags IS NOT NULL 
+                AND interest_tags != '[]'
+                AND school = ?
+            """, (admin_school,))
         else:
             cursor.execute("""
                 SELECT interest_tags 
@@ -8717,6 +8730,89 @@ async def register_parent(parent: ParentCreate):
         conn.close()
 
 
+def _create_school_admin_user(cursor, conn, email: str, password: str, full_name: str, school_name: str):
+    """Shared account-creation logic for a school administrator — used by both
+    the public self-registration endpoint and the staff-initiated 'Create
+    School Account' tool on the School Codes page. Only creates the account;
+    it does not touch school_subscriptions. Actual platform access for that
+    school is granted separately via the School Access panel, since most
+    schools pay by check, off-platform."""
+    email_lc = email.lower().strip()
+    if USE_POSTGRES:
+        cursor.execute("SELECT id FROM users WHERE LOWER(email) = %s", (email_lc,))
+    else:
+        cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email_lc,))
+    if cursor.fetchone():
+        raise HTTPException(status_code=400, detail="An account with this email already exists.")
+
+    school_clean = (school_name or "").strip()
+    if not school_clean:
+        raise HTTPException(status_code=400, detail="School name is required.")
+
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+    if USE_POSTGRES:
+        cursor.execute(
+            "INSERT INTO users (email, password_hash, full_name, role, school) VALUES (%s, %s, %s, 'admin', %s) RETURNING id",
+            (email, password_hash.decode('utf-8'), full_name, school_clean)
+        )
+        user_id = cursor.fetchone()['id']
+    else:
+        cursor.execute(
+            "INSERT INTO users (email, password_hash, full_name, role, school) VALUES (?, ?, ?, 'admin', ?)",
+            (email, password_hash.decode('utf-8'), full_name, school_clean)
+        )
+        user_id = cursor.lastrowid
+    conn.commit()
+    return user_id, school_clean
+
+
+@app.post("/api/register/school")
+async def register_school(body: SchoolAccountCreate):
+    """Public self-service registration for a school administrator account.
+    Creates the account and ties it to the given school name — actual
+    platform access for that school's students is granted separately by
+    Achieve 365 staff via the School Access panel in admin-dashboard."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        user_id, school_clean = _create_school_admin_user(cursor, conn, body.email, body.password, body.full_name, body.school_name)
+        token = create_token(user_id, "admin")
+        return {
+            "success": True,
+            "token": token,
+            "user": {"id": user_id, "email": body.email, "full_name": body.full_name, "role": "admin", "school": school_clean}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/superadmin/create-school-account")
+async def create_school_account(body: SchoolAccountCreate, admin=Depends(require_super_admin)):
+    """Staff-initiated equivalent of /api/register/school, from the School
+    Codes page — instantly creates a school administrator account without
+    the school needing to self-register."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        user_id, school_clean = _create_school_admin_user(cursor, conn, body.email, body.password, body.full_name, body.school_name)
+        return {"success": True, "user_id": user_id, "school": school_clean}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.get("/api/student/link-code")
 async def get_my_link_code(user=Depends(get_current_user)):
     """A student's own code to share with a parent so they can link accounts."""
@@ -13209,51 +13305,68 @@ async def delete_student(student_id: int, admin=Depends(require_admin)):
 
 @app.get("/api/admin/analytics")
 async def get_analytics(admin=Depends(require_admin)):
-    """Get basic analytics (Phase 1 compatibility)"""
-    
+    """Get basic analytics (Phase 1 compatibility) — scoped to the admin's
+    own school; a super-admin (no school on file) sees platform-wide totals."""
+
     conn = get_db()
     cursor = get_cursor(conn)
 
-    
+    # Get admin's school (same pattern as /api/admin/students)
+    cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+    admin_row = cursor.fetchone()
+    admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
+
     # Total students
-    cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'")
+    if admin_school:
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student' AND school = %s" if USE_POSTGRES
+                        else "SELECT COUNT(*) as count FROM users WHERE role = 'student' AND school = ?", (admin_school,))
+    else:
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'")
     result = cursor.fetchone()
-    total_students = result['count'] if USE_POSTGRES else result[0]
-    
+    total_students = result['count'] if hasattr(result, 'keys') else result[0]
+
     # Total lessons completed
-    if USE_POSTGRES:
-        cursor.execute("SELECT COUNT(*) as count FROM session_logs WHERE completion_status = 'completed'")
-        result = cursor.fetchone()
-        total_completed = result['count']
+    if admin_school:
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.completion_status = 'completed' AND u.school = %s" if USE_POSTGRES
+            else "SELECT COUNT(*) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.completion_status = 'completed' AND u.school = ?",
+            (admin_school,)
+        )
     else:
         cursor.execute("SELECT COUNT(*) as count FROM session_logs WHERE completion_status = 'completed'")
-        result = cursor.fetchone()
-        total_completed = result[0] if result else 0
-    
-    # Average score
-    cursor.execute("SELECT AVG(comprehension_score) as avg_score FROM session_logs WHERE comprehension_score IS NOT NULL")
     result = cursor.fetchone()
-    if USE_POSTGRES:
-        avg_score = result['avg_score'] if result['avg_score'] is not None else 0
+    total_completed = (result['count'] if hasattr(result, 'keys') else result[0]) if result else 0
+
+    # Average score
+    if admin_school:
+        cursor.execute(
+            "SELECT AVG(sl.comprehension_score) as avg_score FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.comprehension_score IS NOT NULL AND u.school = %s" if USE_POSTGRES
+            else "SELECT AVG(sl.comprehension_score) as avg_score FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.comprehension_score IS NOT NULL AND u.school = ?",
+            (admin_school,)
+        )
     else:
-        avg_score = result[0] if result and result[0] is not None else 0
-    
+        cursor.execute("SELECT AVG(comprehension_score) as avg_score FROM session_logs WHERE comprehension_score IS NOT NULL")
+    result = cursor.fetchone()
+    avg_score = (result['avg_score'] if hasattr(result, 'keys') else result[0]) if result else 0
+    avg_score = avg_score if avg_score is not None else 0
+
     # Active students (completed in last 7 days)
-    if USE_POSTGRES:
+    if admin_school:
         cursor.execute(
-            "SELECT COUNT(DISTINCT user_id) as count FROM session_logs WHERE started_at >= NOW() - INTERVAL '7 days'"
+            "SELECT COUNT(DISTINCT sl.user_id) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.started_at >= NOW() - INTERVAL '7 days' AND u.school = %s" if USE_POSTGRES
+            else "SELECT COUNT(DISTINCT sl.user_id) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE DATE(sl.started_at) >= DATE('now', '-7 days') AND u.school = ?",
+            (admin_school,)
         )
-        result = cursor.fetchone()
-        active_students = result['count']
     else:
-        cursor.execute(
-            "SELECT COUNT(DISTINCT user_id) as count FROM session_logs WHERE DATE(started_at) >= DATE('now', '-7 days')"
-        )
-        result = cursor.fetchone()
-        active_students = result[0] if result else 0
-    
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as count FROM session_logs WHERE started_at >= NOW() - INTERVAL '7 days'")
+        else:
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as count FROM session_logs WHERE DATE(started_at) >= DATE('now', '-7 days')")
+    result = cursor.fetchone()
+    active_students = (result['count'] if hasattr(result, 'keys') else result[0]) if result else 0
+
     conn.close()
-    
+
     return {
         "total_students": total_students,
         "total_lessons_completed": total_completed,
@@ -13326,44 +13439,83 @@ async def get_platform_activity(days: int = 7, admin=Depends(require_admin)):
 
 @app.get("/api/admin/sessions/active")
 async def get_active_sessions(admin=Depends(require_admin)):
-    """Get all active sessions (admin only)"""
+    """Get all active sessions — scoped to the admin's own school; a
+    super-admin (no school on file) sees all schools."""
     try:
         
         conn = get_db()
         cursor = get_cursor(conn)
+
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        admin_row = cursor.fetchone()
+        admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
         
         if USE_POSTGRES:
-            cursor.execute("""
-                SELECT
-                    us.id,
-                    us.user_id,
-                    u.full_name,
-                    u.email,
-                    us.status,
-                    us.session_start,
-                    us.last_activity,
-                    us.break_start
-                FROM user_sessions us
-                JOIN users u ON u.id = us.user_id
-                WHERE us.session_end IS NULL
-                ORDER BY us.last_activity DESC NULLS LAST, us.session_start DESC
-            """)
+            if admin_school:
+                cursor.execute("""
+                    SELECT
+                        us.id,
+                        us.user_id,
+                        u.full_name,
+                        u.email,
+                        us.status,
+                        us.session_start,
+                        us.last_activity,
+                        us.break_start
+                    FROM user_sessions us
+                    JOIN users u ON u.id = us.user_id
+                    WHERE us.session_end IS NULL AND u.school = %s
+                    ORDER BY us.last_activity DESC NULLS LAST, us.session_start DESC
+                """, (admin_school,))
+            else:
+                cursor.execute("""
+                    SELECT
+                        us.id,
+                        us.user_id,
+                        u.full_name,
+                        u.email,
+                        us.status,
+                        us.session_start,
+                        us.last_activity,
+                        us.break_start
+                    FROM user_sessions us
+                    JOIN users u ON u.id = us.user_id
+                    WHERE us.session_end IS NULL
+                    ORDER BY us.last_activity DESC NULLS LAST, us.session_start DESC
+                """)
         else:
-            cursor.execute("""
-                SELECT
-                    us.id,
-                    us.user_id,
-                    u.full_name,
-                    u.email,
-                    us.status,
-                    us.session_start,
-                    us.last_activity,
-                    us.break_start
-                FROM user_sessions us
-                JOIN users u ON u.id = us.user_id
-                WHERE us.session_end IS NULL
-                ORDER BY us.last_activity DESC, us.session_start DESC
-            """)
+            if admin_school:
+                cursor.execute("""
+                    SELECT
+                        us.id,
+                        us.user_id,
+                        u.full_name,
+                        u.email,
+                        us.status,
+                        us.session_start,
+                        us.last_activity,
+                        us.break_start
+                    FROM user_sessions us
+                    JOIN users u ON u.id = us.user_id
+                    WHERE us.session_end IS NULL AND u.school = ?
+                    ORDER BY us.last_activity DESC, us.session_start DESC
+                """, (admin_school,))
+            else:
+                cursor.execute("""
+                    SELECT
+                        us.id,
+                        us.user_id,
+                        u.full_name,
+                        u.email,
+                        us.status,
+                        us.session_start,
+                        us.last_activity,
+                        us.break_start
+                    FROM user_sessions us
+                    JOIN users u ON u.id = us.user_id
+                    WHERE us.session_end IS NULL
+                    ORDER BY us.last_activity DESC, us.session_start DESC
+                """)
         
         rows = cursor.fetchall()
         sessions = []
@@ -13410,46 +13562,87 @@ async def get_active_sessions(admin=Depends(require_admin)):
 
 @app.get("/api/admin/activity/recent")
 async def get_recent_activity(hours: int = 24, admin=Depends(require_admin)):
-    """Get recent activity logs (admin only)"""
+    """Get recent activity logs — scoped to the admin's own school; a
+    super-admin (no school on file) sees all schools."""
     try:
         
         conn = get_db()
         cursor = get_cursor(conn)
+
+        cursor.execute("SELECT school FROM users WHERE id = %s" if USE_POSTGRES else "SELECT school FROM users WHERE id = ?", (admin["user_id"],))
+        admin_row = cursor.fetchone()
+        admin_school = (admin_row["school"] if hasattr(admin_row, 'keys') else admin_row[0]) if admin_row else None
         
         if USE_POSTGRES:
-            cursor.execute("""
-                SELECT 
-                    a.id,
-                    a.user_id,
-                    a.session_id,
-                    a.activity_type,
-                    a.activity_details,
-                    a.timestamp,
-                    u.full_name,
-                    u.email
-                FROM activity_log a
-                JOIN users u ON a.user_id = u.id
-                WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour')
-                ORDER BY a.timestamp DESC
-                LIMIT 100
-            """, (hours,))
+            if admin_school:
+                cursor.execute("""
+                    SELECT 
+                        a.id,
+                        a.user_id,
+                        a.session_id,
+                        a.activity_type,
+                        a.activity_details,
+                        a.timestamp,
+                        u.full_name,
+                        u.email
+                    FROM activity_log a
+                    JOIN users u ON a.user_id = u.id
+                    WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour') AND u.school = %s
+                    ORDER BY a.timestamp DESC
+                    LIMIT 100
+                """, (hours, admin_school))
+            else:
+                cursor.execute("""
+                    SELECT 
+                        a.id,
+                        a.user_id,
+                        a.session_id,
+                        a.activity_type,
+                        a.activity_details,
+                        a.timestamp,
+                        u.full_name,
+                        u.email
+                    FROM activity_log a
+                    JOIN users u ON a.user_id = u.id
+                    WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour')
+                    ORDER BY a.timestamp DESC
+                    LIMIT 100
+                """, (hours,))
         else:
-            cursor.execute("""
-                SELECT 
-                    a.id,
-                    a.user_id,
-                    a.session_id,
-                    a.activity_type,
-                    a.activity_details,
-                    a.timestamp,
-                    u.full_name,
-                    u.email
-                FROM activity_log a
-                JOIN users u ON a.user_id = u.id
-                WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
-                ORDER BY a.timestamp DESC
-                LIMIT 100
-            """, (hours,))
+            if admin_school:
+                cursor.execute("""
+                    SELECT 
+                        a.id,
+                        a.user_id,
+                        a.session_id,
+                        a.activity_type,
+                        a.activity_details,
+                        a.timestamp,
+                        u.full_name,
+                        u.email
+                    FROM activity_log a
+                    JOIN users u ON a.user_id = u.id
+                    WHERE a.timestamp > datetime('now', '-' || ? || ' hours') AND u.school = ?
+                    ORDER BY a.timestamp DESC
+                    LIMIT 100
+                """, (hours, admin_school))
+            else:
+                cursor.execute("""
+                    SELECT 
+                        a.id,
+                        a.user_id,
+                        a.session_id,
+                        a.activity_type,
+                        a.activity_details,
+                        a.timestamp,
+                        u.full_name,
+                        u.email
+                    FROM activity_log a
+                    JOIN users u ON a.user_id = u.id
+                    WHERE a.timestamp > datetime('now', '-' || ? || ' hours')
+                    ORDER BY a.timestamp DESC
+                    LIMIT 100
+                """, (hours,))
         
         rows = cursor.fetchall()
         activities = []

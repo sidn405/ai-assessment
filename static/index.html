@@ -1119,6 +1119,10 @@
                     style="flex:1; padding:0.6rem; border:none; border-radius:8px; cursor:pointer; font-weight:600; background:transparent; color:var(--navy-primary);">
                 I'm a Parent
             </button>
+            <button type="button" id="roleToggleSchool" onclick="setRegisterRole('school')"
+                    style="flex:1; padding:0.6rem; border:none; border-radius:8px; cursor:pointer; font-weight:600; background:transparent; color:var(--navy-primary);">
+                I'm a School
+            </button>
           </div>
 
           <div class="form-group">
@@ -1154,6 +1158,16 @@
             </button>
           </div>
          
+          <div id="schoolOnlyFields" style="display:none;">
+            <div class="form-group">
+                <label for="registerSchoolName">School Name</label>
+                <input type="text" id="registerSchoolName" placeholder="e.g. Lincoln Elementary">
+                <small style="display: block; margin-top: 6px; color: #757575; font-size: 13px;">
+                    This creates your school's administrator account. Achieve 365 staff will follow up to activate your school's access and set up your school code.
+                </small>
+            </div>
+          </div>
+
           <div id="studentOnlyFields">
           <div class="form-group" id="ageFieldWrapper">
             <label for="registerAge">Age</label>
@@ -1324,16 +1338,20 @@
         function setRegisterRole(role) {
             document.getElementById('registerRole').value = role;
             const studentFields = document.getElementById('studentOnlyFields');
+            const schoolFields = document.getElementById('schoolOnlyFields');
             const studentBtn = document.getElementById('roleToggleStudent');
             const parentBtn = document.getElementById('roleToggleParent');
+            const schoolBtn = document.getElementById('roleToggleSchool');
 
             const isStudent = role === 'student';
+            const isSchool = role === 'school';
             studentFields.style.display = isStudent ? '' : 'none';
+            schoolFields.style.display = isSchool ? '' : 'none';
 
-            studentBtn.style.background = isStudent ? 'var(--navy-primary)' : 'transparent';
-            studentBtn.style.color = isStudent ? 'white' : 'var(--navy-primary)';
-            parentBtn.style.background = isStudent ? 'transparent' : 'var(--navy-primary)';
-            parentBtn.style.color = isStudent ? 'var(--navy-primary)' : 'white';
+            [[studentBtn, isStudent], [parentBtn, role === 'parent'], [schoolBtn, isSchool]].forEach(([btn, active]) => {
+                btn.style.background = active ? 'var(--navy-primary)' : 'transparent';
+                btn.style.color = active ? 'white' : 'var(--navy-primary)';
+            });
 
             // Only require student-only fields when actually registering as a student
             const gradeLevel = document.getElementById('registerGradeLevel');
@@ -1342,6 +1360,9 @@
             [gradeLevel, schoolCode, culturalIdentity].forEach(el => {
                 if (el) el.required = isStudent;
             });
+
+            const schoolNameInput = document.getElementById('registerSchoolName');
+            if (schoolNameInput) schoolNameInput.required = isSchool;
         }
 
         function togglePassword(inputId) {
@@ -1554,7 +1575,7 @@
                           await playLoginChime();
 
                           if (data.user.role === 'admin') {
-                              window.location.href = '/admin-dashboard';
+                              window.location.href = data.user.school ? '/school-dashboard' : '/admin-dashboard';
                           } else if (data.user.role === 'parent') {
                               localStorage.setItem('parentToken', data.token);
                               localStorage.setItem('parentUser', JSON.stringify(data.user));
@@ -1746,6 +1767,39 @@
                     }
                 } catch (error) {
                     console.error('Parent registration error:', error);
+                    errorDiv.textContent = 'Registration failed. Please try again.';
+                    errorDiv.style.display = 'block';
+                }
+                return;
+            }
+
+            // School registration — also a separate, simpler path. Creates the
+            // school administrator account; Achieve 365 staff activate the
+            // school's actual access and set up its school code afterward.
+            if (role === 'school') {
+                const schoolName = document.getElementById('registerSchoolName').value.trim();
+                if (!schoolName) {
+                    errorDiv.textContent = 'Please enter your school name';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                try {
+                    const response = await fetch('/api/register/school', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ full_name: full_name.trim(), email: email.trim(), password, school_name: schoolName })
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        window.location.href = '/school-dashboard';
+                    } else {
+                        errorDiv.textContent = data.detail || 'Registration failed';
+                        errorDiv.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('School registration error:', error);
                     errorDiv.textContent = 'Registration failed. Please try again.';
                     errorDiv.style.display = 'block';
                 }
