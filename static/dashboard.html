@@ -2622,9 +2622,15 @@
                 <div id="lessonContentCard" class="card hidden">
                     <div class="lesson-header" style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 2px solid var(--light-gray);">
                         <h2 id="lessonTitle" style="color: var(--navy-primary); margin-bottom: 0.5rem;"></h2>
-                        <div style="display: flex; gap: 2rem; color: var(--text-gray); font-size: 0.9rem;">
+                        <div style="display: flex; gap: 2rem; align-items: center; color: var(--text-gray); font-size: 0.9rem;">
                             <span>📊 Level: <span id="lessonLevel" style="font-weight: 600;"></span></span>
                             <span>📝 <span id="lessonWords" style="font-weight: 600;"></span> words</span>
+                            <button id="lessonReadAloudBtn" class="hidden" onclick="toggleLessonReadAloud()"
+                                    style="margin-left: auto; display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.9rem;
+                                           background: var(--navy-primary); color: white; border: none; border-radius: 999px;
+                                           cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                <span id="lessonReadAloudIcon">🔊</span> <span id="lessonReadAloudLabel">Read Aloud</span>
+                            </button>
                         </div>
                     </div>
 
@@ -4161,6 +4167,9 @@
                 mySettings.tutor_enabled = data.tutor_enabled !== false;
                 mySettings.read_aloud_enabled = !!data.read_aloud_enabled;
 
+                const readAloudBtn = document.getElementById('lessonReadAloudBtn');
+                if (readAloudBtn) readAloudBtn.classList.toggle('hidden', !mySettings.read_aloud_enabled);
+
                 if (data.has_access === false) {
                     document.getElementById('subscriptionLockout').classList.remove('hidden');
                     return;
@@ -4174,6 +4183,95 @@
             }
         }
         document.addEventListener('DOMContentLoaded', loadMySettings);
+
+        // Read the current lesson passage aloud using the tutor's own Polly
+        // voice — same voice/engine as speakTutorMessage() — falling back to
+        // browser speech synthesis if Polly isn't ready or fails. Uses its
+        // own audio reference (not currentAudio) so it doesn't interfere with
+        // the tutor's own dialogue if that speaks at the same time.
+        // Only shown when mySettings.read_aloud_enabled is true (resolved
+        // server-side from the student's individual override or their
+        // school's default).
+        let lessonReadAloudAudio = null;
+        async function toggleLessonReadAloud() {
+            const icon = document.getElementById('lessonReadAloudIcon');
+            const label = document.getElementById('lessonReadAloudLabel');
+
+            // Stop if currently playing (either Polly audio or browser fallback)
+            if (lessonReadAloudAudio || window.speechSynthesis.speaking) {
+                if (lessonReadAloudAudio) {
+                    try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
+                    lessonReadAloudAudio = null;
+                }
+                if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+                icon.textContent = '🔊';
+                label.textContent = 'Read Aloud';
+                return;
+            }
+
+            const textEl = document.getElementById('lessonText');
+            const text = textEl ? textEl.textContent : '';
+            if (!text || !text.trim()) return;
+
+            icon.textContent = '⏳';
+            label.textContent = 'Loading...';
+
+            if (awsReady && polly) {
+                try {
+                    const data = await polly.synthesizeSpeech({
+                        Text: text,
+                        OutputFormat: 'mp3',
+                        VoiceId: TUTOR_VOICE.voiceId,
+                        Engine: TUTOR_VOICE.engine,
+                        LanguageCode: 'en-US'
+                    }).promise();
+
+                    const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+
+                    lessonReadAloudAudio = new Audio(audioUrl);
+                    lessonReadAloudAudio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        lessonReadAloudAudio = null;
+                        icon.textContent = '🔊';
+                        label.textContent = 'Read Aloud';
+                    };
+                    lessonReadAloudAudio.onerror = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        lessonReadAloudAudio = null;
+                        icon.textContent = '🔊';
+                        label.textContent = 'Read Aloud';
+                    };
+
+                    icon.textContent = '⏹️';
+                    label.textContent = 'Stop';
+                    await lessonReadAloudAudio.play();
+                    return;
+                } catch (error) {
+                    console.error('❌ Polly error reading lesson aloud, falling back to browser speech:', error);
+                    lessonReadAloudAudio = null;
+                }
+            }
+
+            // Fallback: browser speech synthesis, using the same voice-matching
+            // heuristic as the tutor's own fallback so it stays as close to the
+            // tutor's voice as possible when Polly isn't available.
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.9;
+            utterance.pitch = 1.1;
+            utterance.volume = 1.0;
+            const voices = window.speechSynthesis.getVoices() || [];
+            const preferred = voices.find(v => /Google US English|Samantha|Female/i.test(v.name));
+            if (preferred) utterance.voice = preferred;
+            utterance.onend = () => {
+                icon.textContent = '🔊';
+                label.textContent = 'Read Aloud';
+            };
+
+            icon.textContent = '⏹️';
+            label.textContent = 'Stop';
+            window.speechSynthesis.speak(utterance);
+        }
 
         function logoutFromLockout() {
             localStorage.clear();
@@ -6646,6 +6744,19 @@
                     lessonImageWrap.classList.add('hidden');
                 }
                 
+                // A new lesson is loading — stop any read-aloud left over from
+                // the previous one and reset the button so it doesn't look
+                // like it's still reading stale content.
+                if (lessonReadAloudAudio) {
+                    try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
+                    lessonReadAloudAudio = null;
+                }
+                if (speechSynthesis.speaking) speechSynthesis.cancel();
+                const readAloudIcon = document.getElementById('lessonReadAloudIcon');
+                const readAloudLabel = document.getElementById('lessonReadAloudLabel');
+                if (readAloudIcon) readAloudIcon.textContent = '🔊';
+                if (readAloudLabel) readAloudLabel.textContent = 'Read Aloud';
+
                 // Display content
                 const contentEl = document.getElementById('lessonText');
                 if (contentEl && lesson.content) {
