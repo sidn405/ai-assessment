@@ -783,6 +783,21 @@
         .activity-meta { font-size: 12px; opacity: 0.7; margin-top: 4px; }
         .activity-details { font-size: 13px; margin-top: 6px; opacity: 0.9; }
 
+        /* Read-aloud toggle — track/knob react live to the checkbox's actual
+           :checked state via CSS, instead of being baked in at render time. */
+        .rt-toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .rt-toggle input { opacity: 0; width: 0; height: 0; }
+        .rt-toggle .rt-track {
+            position: absolute; inset: 0; background: #ccc; border-radius: 999px;
+            transition: background 0.2s; cursor: pointer;
+        }
+        .rt-toggle .rt-knob {
+            position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px;
+            background: white; border-radius: 50%; transition: left 0.2s; pointer-events: none;
+        }
+        .rt-toggle input:checked ~ .rt-track { background: #1e3a5f; }
+        .rt-toggle input:checked ~ .rt-knob { left: 19px; }
+
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -3188,14 +3203,11 @@
 
                 const readAloudChecked = student.read_aloud_override === true;
                 const readAloudCell = `
-                    <label style="position:relative; display:inline-block; width:36px; height:20px;" title="Override: on for this student regardless of school default">
+                    <label class="rt-toggle" title="Override: on for this student regardless of school default">
                         <input type="checkbox" ${readAloudChecked ? 'checked' : ''}
-                               onchange="toggleReadAloud(${student.id}, this.checked)"
-                               style="opacity:0; width:0; height:0;">
-                        <span style="position:absolute; cursor:pointer; inset:0; background:${readAloudChecked ? '#1e3a5f' : '#ccc'};
-                                     border-radius:999px; transition:0.2s;"></span>
-                        <span style="position:absolute; height:14px; width:14px; left:${readAloudChecked ? '19px' : '3px'}; bottom:3px;
-                                     background:white; border-radius:50%; transition:0.2s;"></span>
+                               onchange="toggleReadAloud(${student.id}, this.checked)">
+                        <span class="rt-track"></span>
+                        <span class="rt-knob"></span>
                     </label>`;
                 
                 tr.innerHTML = `
