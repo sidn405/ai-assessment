@@ -2556,7 +2556,7 @@ async def me(user=Depends(get_current_user)):
                               COALESCE(sc.tutor_enabled, TRUE) AS tutor_enabled,
                               COALESCE(sc.read_aloud_default, FALSE) AS read_aloud_default
                        FROM users u
-                       LEFT JOIN school_codes sc ON sc.school_name = u.school
+                       LEFT JOIN school_codes sc ON UPPER(TRIM(sc.school_name)) = UPPER(TRIM(u.school))
                        WHERE u.id = %s""",
                     (user["user_id"],)
                 )
@@ -2566,7 +2566,7 @@ async def me(user=Depends(get_current_user)):
                               COALESCE(sc.tutor_enabled, 1) AS tutor_enabled,
                               COALESCE(sc.read_aloud_default, 0) AS read_aloud_default
                        FROM users u
-                       LEFT JOIN school_codes sc ON sc.school_name = u.school
+                       LEFT JOIN school_codes sc ON UPPER(TRIM(sc.school_name)) = UPPER(TRIM(u.school))
                        WHERE u.id = ?""",
                     (user["user_id"],)
                 )
@@ -3456,7 +3456,7 @@ async def get_admin_conversations(current_user: dict = Depends(require_admin)):
                 LEFT JOIN unread_counts uc
                     ON uc.student_id = u.id
                 WHERE u.role = 'student'
-                  AND u.school = %s
+                  AND UPPER(TRIM(u.school)) = UPPER(TRIM(%s))
                 ORDER BY 
                     lm.last_message_time DESC NULLS LAST, 
                     u.full_name ASC
@@ -5455,12 +5455,16 @@ def _activate_next_mission_if_needed(student_id: int):
         conn.close()
 
 
+MISSION_UNLOCK_THRESHOLD = 100  # TESTING: normally 1000 — change back before production
+
+
 def _check_and_queue_mission_unlocks(user_id: int, cursor):
     """
     Called from award_points() after every point award. Compares total_earned
-    against 1000-point thresholds crossed vs. missions ever created for this
-    student — creates a new queued mission stub for each newly-crossed
-    threshold, and promotes one to role_pending if nothing is in progress.
+    against MISSION_UNLOCK_THRESHOLD-point thresholds crossed vs. missions
+    ever created for this student — creates a new queued mission stub for
+    each newly-crossed threshold, and promotes one to role_pending if
+    nothing is in progress.
     Only applies to students (award_points is called for other roles too via
     wallet-adjacent flows, though rare).
     """
@@ -5473,7 +5477,7 @@ def _check_and_queue_mission_unlocks(user_id: int, cursor):
         cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s" if USE_POSTGRES else "SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
         pts_row = cursor.fetchone()
         total_earned = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) or 0
-        thresholds_crossed = total_earned // 1000
+        thresholds_crossed = total_earned // MISSION_UNLOCK_THRESHOLD
 
         cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s" if USE_POSTGRES else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ?", (user_id,))
         count_row = cursor.fetchone()
@@ -11101,7 +11105,7 @@ async def get_teacher_conversations(teacher=Depends(require_teacher)):
                           (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id AND m.sender_type = 'student'
                               AND m.recipient_id = %s AND m.recipient_type = 'teacher' AND m.read = FALSE) AS unread_count
                    FROM users u
-                   WHERE u.role = 'student' AND COALESCE(u.school, '') = COALESCE(%s, '') AND u.grade_band = %s
+                   WHERE u.role = 'student' AND UPPER(TRIM(COALESCE(u.school, ''))) = UPPER(TRIM(COALESCE(%s, ''))) AND u.grade_band = %s
                    ORDER BY last_message_time DESC NULLS LAST, u.full_name""",
                 (teacher_id, teacher_id, teacher_id, teacher_id, teacher_id, school, grade_level)
             )
@@ -11119,7 +11123,7 @@ async def get_teacher_conversations(teacher=Depends(require_teacher)):
                           (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id AND m.sender_type = 'student'
                               AND m.recipient_id = ? AND m.recipient_type = 'teacher' AND m.read = 0) AS unread_count
                    FROM users u
-                   WHERE u.role = 'student' AND COALESCE(u.school, '') = COALESCE(?, '') AND u.grade_band = ?
+                   WHERE u.role = 'student' AND UPPER(TRIM(COALESCE(u.school, ''))) = UPPER(TRIM(COALESCE(?, ''))) AND u.grade_band = ?
                    ORDER BY last_message_time DESC, u.full_name""",
                 (teacher_id, teacher_id, teacher_id, teacher_id, teacher_id, school, grade_level)
             )
@@ -13328,8 +13332,8 @@ async def get_analytics(admin=Depends(require_admin)):
     # Total lessons completed
     if admin_school:
         cursor.execute(
-            "SELECT COUNT(*) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.completion_status = 'completed' AND u.school = %s" if USE_POSTGRES
-            else "SELECT COUNT(*) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.completion_status = 'completed' AND u.school = ?",
+            "SELECT COUNT(*) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.completion_status = 'completed' AND UPPER(TRIM(u.school)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT COUNT(*) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.completion_status = 'completed' AND UPPER(TRIM(u.school)) = UPPER(TRIM(?))",
             (admin_school,)
         )
     else:
@@ -13340,8 +13344,8 @@ async def get_analytics(admin=Depends(require_admin)):
     # Average score
     if admin_school:
         cursor.execute(
-            "SELECT AVG(sl.comprehension_score) as avg_score FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.comprehension_score IS NOT NULL AND u.school = %s" if USE_POSTGRES
-            else "SELECT AVG(sl.comprehension_score) as avg_score FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.comprehension_score IS NOT NULL AND u.school = ?",
+            "SELECT AVG(sl.comprehension_score) as avg_score FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.comprehension_score IS NOT NULL AND UPPER(TRIM(u.school)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT AVG(sl.comprehension_score) as avg_score FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.comprehension_score IS NOT NULL AND UPPER(TRIM(u.school)) = UPPER(TRIM(?))",
             (admin_school,)
         )
     else:
@@ -13353,8 +13357,8 @@ async def get_analytics(admin=Depends(require_admin)):
     # Active students (completed in last 7 days)
     if admin_school:
         cursor.execute(
-            "SELECT COUNT(DISTINCT sl.user_id) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.started_at >= NOW() - INTERVAL '7 days' AND u.school = %s" if USE_POSTGRES
-            else "SELECT COUNT(DISTINCT sl.user_id) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE DATE(sl.started_at) >= DATE('now', '-7 days') AND u.school = ?",
+            "SELECT COUNT(DISTINCT sl.user_id) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE sl.started_at >= NOW() - INTERVAL '7 days' AND UPPER(TRIM(u.school)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT COUNT(DISTINCT sl.user_id) as count FROM session_logs sl JOIN users u ON sl.user_id = u.id WHERE DATE(sl.started_at) >= DATE('now', '-7 days') AND UPPER(TRIM(u.school)) = UPPER(TRIM(?))",
             (admin_school,)
         )
     else:
@@ -13464,7 +13468,7 @@ async def get_active_sessions(admin=Depends(require_admin)):
                         us.break_start
                     FROM user_sessions us
                     JOIN users u ON u.id = us.user_id
-                    WHERE us.session_end IS NULL AND u.school = %s
+                    WHERE us.session_end IS NULL AND UPPER(TRIM(u.school)) = UPPER(TRIM(%s))
                     ORDER BY us.last_activity DESC NULLS LAST, us.session_start DESC
                 """, (admin_school,))
             else:
@@ -13497,7 +13501,7 @@ async def get_active_sessions(admin=Depends(require_admin)):
                         us.break_start
                     FROM user_sessions us
                     JOIN users u ON u.id = us.user_id
-                    WHERE us.session_end IS NULL AND u.school = ?
+                    WHERE us.session_end IS NULL AND UPPER(TRIM(u.school)) = UPPER(TRIM(?))
                     ORDER BY us.last_activity DESC, us.session_start DESC
                 """, (admin_school,))
             else:
@@ -13587,7 +13591,7 @@ async def get_recent_activity(hours: int = 24, admin=Depends(require_admin)):
                         u.email
                     FROM activity_log a
                     JOIN users u ON a.user_id = u.id
-                    WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour') AND u.school = %s
+                    WHERE a.timestamp > NOW() - (%s * INTERVAL '1 hour') AND UPPER(TRIM(u.school)) = UPPER(TRIM(%s))
                     ORDER BY a.timestamp DESC
                     LIMIT 100
                 """, (hours, admin_school))
@@ -13622,7 +13626,7 @@ async def get_recent_activity(hours: int = 24, admin=Depends(require_admin)):
                         u.email
                     FROM activity_log a
                     JOIN users u ON a.user_id = u.id
-                    WHERE a.timestamp > datetime('now', '-' || ? || ' hours') AND u.school = ?
+                    WHERE a.timestamp > datetime('now', '-' || ? || ' hours') AND UPPER(TRIM(u.school)) = UPPER(TRIM(?))
                     ORDER BY a.timestamp DESC
                     LIMIT 100
                 """, (hours, admin_school))
