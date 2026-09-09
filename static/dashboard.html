@@ -11839,7 +11839,6 @@
             if (missionPollTimer) { clearInterval(missionPollTimer); missionPollTimer = null; }
             const overlay = document.getElementById('missionOverlay');
             overlay.classList.remove('hidden');
-            document.getElementById('missionOverlayClose').classList.toggle('hidden', view === 'unlockAnim' || view === 'generating');
             document.getElementById('missionSoundToggle').classList.remove('hidden');
             document.getElementById('missionSoundToggle').textContent = missionSoundOn ? '🔊' : '🔇';
             renderMissionView(view, payload);
@@ -11859,6 +11858,13 @@
         }
 
         function renderMissionView(view, payload) {
+            // Close button is hidden only during the two views a student
+            // shouldn't be able to skip mid-transition (the unlock celebration
+            // and active generation) — every other view can be closed. This
+            // runs on every call, including internal transitions like the
+            // roleSelect auto-advance below, not just the initial open.
+            document.getElementById('missionOverlayClose').classList.toggle('hidden', view === 'unlockAnim' || view === 'generating');
+
             const el = document.getElementById('missionOverlayContent');
             if (view === 'unlockAnim') {
                 playMissionSound('reveal');
