@@ -1535,8 +1535,12 @@
                     <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
                         <div style="flex:1; min-width:200px;">
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">School name</label>
-                            <input type="text" id="schoolAccessName" placeholder="e.g. Lincoln Elementary"
+                            <input type="text" id="schoolAccessName" list="schoolAccessNameOptions" placeholder="e.g. Lincoln Elementary"
                                    style="width:100%; padding:0.6rem 0.8rem; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                            <datalist id="schoolAccessNameOptions"></datalist>
+                            <small style="display:block; margin-top:0.3rem; color:#888; font-size:0.78rem;">
+                                Pick from the list if this school already exists — a mismatched name (extra space, different capitalization) will lock its students out even with a valid school code.
+                            </small>
                         </div>
                         <div style="flex: 0 0 170px;">
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Contract end date</label>
@@ -4882,6 +4886,12 @@
 
                 const data = await resp.json();
                 const schools = data.schools || [];
+
+                const datalist = document.getElementById('schoolAccessNameOptions');
+                if (datalist) {
+                    datalist.innerHTML = schools.map(s => `<option value="${escapeHtml(s.school_name)}"></option>`).join('');
+                }
+
                 if (schools.length === 0) {
                     tableBox.innerHTML = '<p style="color:#888;">No schools on file yet.</p>';
                     return;

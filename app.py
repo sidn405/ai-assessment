@@ -9431,8 +9431,8 @@ async def get_school_subscription_status(admin=Depends(require_admin)):
             return {"has_access": False, "reason": "no_school", "expires_at": None}
 
         cursor.execute(
-            "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
-            else "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = ?",
+            "SELECT status, current_period_end FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT status, current_period_end FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(?))",
             (school,)
         )
         sub = cursor.fetchone()
@@ -9481,8 +9481,8 @@ def _set_school_subscription_cancellation(admin_id: int, cancel: bool) -> dict:
             raise HTTPException(status_code=503, detail="Payments are not configured yet.")
 
         cursor.execute(
-            "SELECT status, stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
-            else "SELECT status, stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+            "SELECT status, stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT status, stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(?))",
             (school,)
         )
         sub = cursor.fetchone()
@@ -9503,12 +9503,12 @@ def _set_school_subscription_cancellation(admin_id: int, cancel: bool) -> dict:
 
         if USE_POSTGRES:
             cursor.execute(
-                "UPDATE school_subscriptions SET cancel_at_period_end = %s, updated_at = NOW() WHERE school_name = %s",
+                "UPDATE school_subscriptions SET cancel_at_period_end = %s, updated_at = NOW() WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(%s))",
                 (cancel, school)
             )
         else:
             cursor.execute(
-                "UPDATE school_subscriptions SET cancel_at_period_end = ? WHERE school_name = ?",
+                "UPDATE school_subscriptions SET cancel_at_period_end = ? WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(?))",
                 (cancel, school)
             )
         conn.commit()
@@ -9554,8 +9554,8 @@ async def resync_school_subscription_quantity(admin=Depends(require_admin)):
             raise HTTPException(status_code=400, detail="Your account has no school on file")
 
         cursor.execute(
-            "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
-            else "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+            "SELECT stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(?))",
             (school,)
         )
         sub = cursor.fetchone()
@@ -9615,8 +9615,8 @@ async def list_schools_access(admin=Depends(require_super_admin)):
         schools = []
         for name in sorted(names):
             cursor.execute(
-                "SELECT status, plan_type, current_period_end, cancel_at_period_end, stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
-                else "SELECT status, plan_type, current_period_end, cancel_at_period_end, stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+                "SELECT status, plan_type, current_period_end, cancel_at_period_end, stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(%s))" if USE_POSTGRES
+                else "SELECT status, plan_type, current_period_end, cancel_at_period_end, stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(?))",
                 (name,)
             )
             sub = cursor.fetchone()
@@ -9700,8 +9700,8 @@ async def deactivate_school_access(school_name: str, admin=Depends(require_super
     cursor = get_cursor(conn)
     try:
         cursor.execute(
-            "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
-            else "SELECT stripe_subscription_id FROM school_subscriptions WHERE school_name = ?",
+            "SELECT stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT stripe_subscription_id FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(?))",
             (school_name,)
         )
         row = cursor.fetchone()
@@ -11289,8 +11289,8 @@ def _get_access_status(student_id: int, cursor) -> dict:
 
     if school:
         cursor.execute(
-            "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = %s" if USE_POSTGRES
-            else "SELECT status, current_period_end FROM school_subscriptions WHERE school_name = ?",
+            "SELECT status, current_period_end FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(%s))" if USE_POSTGRES
+            else "SELECT status, current_period_end FROM school_subscriptions WHERE UPPER(TRIM(school_name)) = UPPER(TRIM(?))",
             (school,)
         )
         sub = cursor.fetchone()
