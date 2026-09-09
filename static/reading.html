@@ -2000,8 +2000,22 @@
                         console.log('Calculated level:', readingLevel);
                         
                         // Save reading level
-                        await saveReadingLevel(token, readingLevel, avgScore);
-                        
+                        const saved = await saveReadingLevel(token, readingLevel, avgScore);
+
+                        if (!saved) {
+                            window._pendingPlacementSave = { token, readingLevel, avgScore };
+                            showNotification({
+                                type: 'warning',
+                                icon: '⚠️',
+                                title: 'Could Not Save Results',
+                                message: `We finished scoring your reading level (<strong>${readingLevel.toUpperCase()}</strong>), but couldn't save it to your account. Please check your connection and try again.`,
+                                buttons: [
+                                    { text: 'Retry', className: 'btn-primary', action: 'retryPlacementSave()' }
+                                ]
+                            });
+                            return;
+                        }
+
                         // Clear placement test data
                         sessionStorage.removeItem('isPlacementTest');
                         sessionStorage.removeItem('placementPassagesCompleted');
@@ -2128,7 +2142,12 @@
                         final_challenge: finalChallenge
                     })
                 });
-                
+
+                if (!response.ok) {
+                    const errorBody = await response.json().catch(() => ({}));
+                    throw new Error(errorBody.detail || `Server returned ${response.status}`);
+                }
+
                 const result = await response.json();
                 console.log('✅ Reading level saved to database:', result);
                 
@@ -2154,9 +2173,42 @@
                 playedMessages.bothComplete = false;
                 localStorage.setItem('voiceNavigationPlayed', JSON.stringify(playedMessages));
                 console.log('✅ Reset voice navigation for dashboard');
-                
+
+                return true;
+
             } catch (error) {
                 console.error('❌ Error saving reading level:', error);
+                return false;
+            }
+        }
+
+        async function retryPlacementSave() {
+            const pending = window._pendingPlacementSave;
+            if (!pending) return;
+            const saved = await saveReadingLevel(pending.token, pending.readingLevel, pending.avgScore);
+            if (saved) {
+                delete window._pendingPlacementSave;
+                document.querySelectorAll('.notification.warning').forEach(n => n.remove());
+                sessionStorage.removeItem('isPlacementTest');
+                sessionStorage.removeItem('placementPassagesCompleted');
+                sessionStorage.removeItem('placementScores');
+                sessionStorage.removeItem('placementFeedbacks');
+                showSuccess(
+                    'Placement Test Complete! 🎉',
+                    `Your reading level: <strong>${pending.readingLevel.toUpperCase()}</strong><br>Average score: ${pending.avgScore.toFixed(0)}%<br><br>Returning to dashboard...`,
+                    5000
+                );
+                setTimeout(() => { window.location.href = '/dashboard'; }, 5000);
+            } else {
+                showNotification({
+                    type: 'warning',
+                    icon: '⚠️',
+                    title: 'Still Could Not Save',
+                    message: 'That retry also failed. Please check your connection and try again in a moment.',
+                    buttons: [
+                        { text: 'Retry', className: 'btn-primary', action: 'retryPlacementSave()' }
+                    ]
+                });
             }
         }
 
