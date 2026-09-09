@@ -11713,6 +11713,39 @@ async def select_mission_role(mission_id: int, body: RoleSelectRequest, user=Dep
         conn.close()
 
 
+@app.get("/api/student/missions/archive")
+async def get_mission_archive(user=Depends(get_current_user)):
+    """The Discovery Archive — all completed missions, permanent for the school year.
+    Registered before /api/student/missions/{mission_id} on purpose: routes are
+    matched in registration order, and a later {mission_id}: int route would
+    otherwise catch "archive" first and fail int-coercion with a 422."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT id, title, reader_role, image_url, points_earned_total, completed_at FROM missions WHERE student_id = %s AND status = 'completed' ORDER BY completed_at DESC",
+                (user["user_id"],)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, title, reader_role, image_url, points_earned_total, completed_at FROM missions WHERE student_id = ? AND status = 'completed' ORDER BY completed_at DESC",
+                (user["user_id"],)
+            )
+        rows = cursor.fetchall()
+        archive = []
+        for r in rows:
+            r = dict(r)
+            r["completed_at"] = str(r["completed_at"]) if r.get("completed_at") else None
+            archive.append(r)
+        return {"archive": archive}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.get("/api/student/missions/{mission_id}")
 async def get_mission_detail(mission_id: int, user=Depends(get_current_user)):
     """
@@ -11897,35 +11930,6 @@ async def answer_mission_stage(mission_id: int, body: MissionAnswerRequest, user
         cursor.close()
         conn.close()
 
-
-@app.get("/api/student/missions/archive")
-async def get_mission_archive(user=Depends(get_current_user)):
-    """The Discovery Archive — all completed missions, permanent for the school year."""
-    if user.get("role") != "student":
-        raise HTTPException(status_code=403, detail="Student access required")
-    conn = get_db()
-    cursor = get_cursor(conn)
-    try:
-        if USE_POSTGRES:
-            cursor.execute(
-                "SELECT id, title, reader_role, image_url, points_earned_total, completed_at FROM missions WHERE student_id = %s AND status = 'completed' ORDER BY completed_at DESC",
-                (user["user_id"],)
-            )
-        else:
-            cursor.execute(
-                "SELECT id, title, reader_role, image_url, points_earned_total, completed_at FROM missions WHERE student_id = ? AND status = 'completed' ORDER BY completed_at DESC",
-                (user["user_id"],)
-            )
-        rows = cursor.fetchall()
-        archive = []
-        for r in rows:
-            r = dict(r)
-            r["completed_at"] = str(r["completed_at"]) if r.get("completed_at") else None
-            archive.append(r)
-        return {"archive": archive}
-    finally:
-        cursor.close()
-        conn.close()
 
 
 # ========================================
