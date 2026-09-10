@@ -2625,12 +2625,20 @@
                         <div style="display: flex; gap: 2rem; align-items: center; color: var(--text-gray); font-size: 0.9rem;">
                             <span>📊 Level: <span id="lessonLevel" style="font-weight: 600;"></span></span>
                             <span>📝 <span id="lessonWords" style="font-weight: 600;"></span> words</span>
-                            <button id="lessonReadAloudBtn" class="hidden" onclick="toggleLessonReadAloud()"
-                                    style="margin-left: auto; display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.9rem;
-                                           background: var(--navy-primary); color: white; border: none; border-radius: 999px;
-                                           cursor: pointer; font-size: 0.85rem; font-weight: 600;">
-                                <span id="lessonReadAloudIcon">🔊</span> <span id="lessonReadAloudLabel">Read Aloud</span>
-                            </button>
+                            <div id="lessonReadAloudControls" class="hidden" style="margin-left: auto; display: flex; align-items: center; gap: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <label for="lessonReadSpeed" style="font-size: 0.8rem;">Speed:</label>
+                                    <input type="range" id="lessonReadSpeed" min="0.5" max="1.5" step="0.1" value="1"
+                                           oninput="updateLessonReadSpeed(this.value)" style="width: 90px;">
+                                    <span id="lessonReadSpeedValue" style="font-size: 0.8rem; min-width: 2.4em;">1.0x</span>
+                                </div>
+                                <button id="lessonReadAloudBtn" onclick="toggleLessonReadAloud()"
+                                        style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.9rem;
+                                               background: var(--navy-primary); color: white; border: none; border-radius: 999px;
+                                               cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                    <span id="lessonReadAloudIcon">🔊</span> <span id="lessonReadAloudLabel">Read Aloud</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -3974,7 +3982,7 @@
             // DO NOT use reading_level — it gets set at registration from grade/age
             // and doesn't mean the student actually sat the placement test.
             let hasCompletedReading = false;
-            if (userData && userData.placement_completed === true) {
+            if (userData && !!userData.placement_completed) {
                 hasCompletedReading = true;
                 localStorage.setItem('hasCompletedReadingAssessment', 'true');
             } else {
@@ -4166,9 +4174,10 @@
                 const data = await resp.json();
                 mySettings.tutor_enabled = data.tutor_enabled !== false;
                 mySettings.read_aloud_enabled = !!data.read_aloud_enabled;
+                console.log('🔊 Read-aloud resolved:', mySettings.read_aloud_enabled, '(raw /api/me value:', data.read_aloud_enabled, ')');
 
-                const readAloudBtn = document.getElementById('lessonReadAloudBtn');
-                if (readAloudBtn) readAloudBtn.classList.toggle('hidden', !mySettings.read_aloud_enabled);
+                const readAloudControls = document.getElementById('lessonReadAloudControls');
+                if (readAloudControls) readAloudControls.classList.toggle('hidden', !mySettings.read_aloud_enabled);
 
                 if (data.has_access === false) {
                     document.getElementById('subscriptionLockout').classList.remove('hidden');
@@ -4193,6 +4202,14 @@
         // server-side from the student's individual override or their
         // school's default).
         let lessonReadAloudAudio = null;
+        let lessonReadSpeed = 1;
+        function updateLessonReadSpeed(value) {
+            lessonReadSpeed = parseFloat(value);
+            document.getElementById('lessonReadSpeedValue').textContent = lessonReadSpeed.toFixed(1) + 'x';
+            // Apply live if something is already playing, so the student
+            // doesn't have to stop and restart to hear the new speed.
+            if (lessonReadAloudAudio) lessonReadAloudAudio.playbackRate = lessonReadSpeed;
+        }
         async function toggleLessonReadAloud() {
             const icon = document.getElementById('lessonReadAloudIcon');
             const label = document.getElementById('lessonReadAloudLabel');
@@ -4230,6 +4247,7 @@
                     const audioUrl = URL.createObjectURL(audioBlob);
 
                     lessonReadAloudAudio = new Audio(audioUrl);
+                    lessonReadAloudAudio.playbackRate = lessonReadSpeed;
                     lessonReadAloudAudio.onended = () => {
                         URL.revokeObjectURL(audioUrl);
                         lessonReadAloudAudio = null;
@@ -4257,7 +4275,7 @@
             // heuristic as the tutor's own fallback so it stays as close to the
             // tutor's voice as possible when Polly isn't available.
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.9;
+            utterance.rate = lessonReadSpeed;
             utterance.pitch = 1.1;
             utterance.volume = 1.0;
             const voices = window.speechSynthesis.getVoices() || [];
@@ -4464,7 +4482,7 @@
             // Use placement_completed flag - NOT reading_level which is set at registration.
             const hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true' ||
                                        localStorage.getItem('readingAssessmentCompleted') === 'true' ||
-                                       user.placement_completed === true;
+                                       !!user.placement_completed;
             
             console.log('Voice Navigation Check:', {
                 hasInterests,
