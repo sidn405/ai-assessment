@@ -6613,8 +6613,13 @@
                 // ⭐ Handle placement required (409 error)
                 if (response.status === 409) {
                     if (loading) loading.classList.add('hidden');
+                    // Cancel the tutor's pending "here's your next reading" message —
+                    // it was already scheduled by startTutorForLesson() above, before
+                    // we knew this fetch would fail.
+                    tutorTimers.forEach(t => clearTimeout(t));
+                    tutorTimers = [];
                     const errorData = await response.json();
-                    if (errorData.detail === "Placement required") {
+                    if (errorData.detail === "Placement required" || errorData.detail === "Reading level assessment required") {
                         showPlacementRequiredModal();
                         return;
                     }
