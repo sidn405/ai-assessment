@@ -8365,7 +8365,8 @@
 
             // ✅ Check BOTH assessments
             const hasInterests = hasCompletedAssessment(progressData);  // Interest Assessment
-            const hasCompletedReading = localStorage.getItem('hasCompletedReadingAssessment') === 'true';
+            const hasCompletedReading = !!progressData?.user?.placement_completed ||
+                                       localStorage.getItem('hasCompletedReadingAssessment') === 'true';
             
             const bothComplete = hasInterests && hasCompletedReading;
             
