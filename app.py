@@ -345,6 +345,25 @@ def init_db():
             conn.commit()
             print("✓ session_logs table ready")
 
+            # Placement attempts — referenced by /api/placement/next, /api/placement/submit,
+            # and /api/placement/retake, but had no CREATE TABLE anywhere until this was
+            # found missing on a fresh staging deploy (psycopg2.errors.UndefinedTable).
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS placement_attempts (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    passage_id INTEGER REFERENCES passages(id),
+                    difficulty_level VARCHAR(20),
+                    word_count INTEGER,
+                    time_spent_seconds INTEGER,
+                    wpm REAL,
+                    comprehension_score REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ placement_attempts table ready")
+
             # User sessions (login tracking)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_sessions (
@@ -918,6 +937,24 @@ def init_db():
                 comprehension_score REAL,
                 answers TEXT,
                 notes TEXT
+            )
+        """)
+
+        # Placement attempts — referenced by /api/placement/next, /api/placement/submit,
+        # and /api/placement/retake, but had no CREATE TABLE anywhere until this was
+        # found missing on a fresh staging deploy (psycopg2.errors.UndefinedTable there;
+        # added here too for SQLite/local-dev parity).
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS placement_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                passage_id INTEGER REFERENCES passages(id),
+                difficulty_level TEXT,
+                word_count INTEGER,
+                time_spent_seconds INTEGER,
+                wpm REAL,
+                comprehension_score REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
