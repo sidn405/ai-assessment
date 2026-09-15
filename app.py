@@ -5492,7 +5492,7 @@ def _activate_next_mission_if_needed(student_id: int):
         conn.close()
 
 
-MISSION_UNLOCK_THRESHOLD = 100  # TESTING: normally 1000 — change back before production
+MISSION_UNLOCK_THRESHOLD = 500  # TESTING: normally 1000 — change back before production
 
 
 def _check_and_queue_mission_unlocks(user_id: int, cursor):
