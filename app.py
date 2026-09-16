@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 import openai
 import os
 import json
+import re
 from pathlib import Path
 import random
 import traceback
@@ -363,6 +364,74 @@ def init_db():
             """)
             conn.commit()
             print("✓ placement_attempts table ready")
+
+            # WordBank & WordWise — vocabulary system (see Achieve365_FeatureSpec_WordBank_WordWise).
+            # word_bank_words is a global, reusable cache of AI-enriched vocabulary
+            # (definition + image-match concepts), keyed per word+grade_band since a
+            # conversational definition should match the reader's grade level. Caching
+            # here avoids re-calling OpenAI for common words every student encounters.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS word_bank_words (
+                    id SERIAL PRIMARY KEY,
+                    word VARCHAR(100) NOT NULL,
+                    grade_band VARCHAR(20) NOT NULL,
+                    definition TEXT,
+                    correct_image_concept VARCHAR(255),
+                    distractor_image_concepts TEXT,
+                    correct_image_url TEXT,
+                    distractor_image_urls TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(word, grade_band)
+                )
+            """)
+            conn.commit()
+            print("✓ word_bank_words table ready")
+
+            # student_word_list — per-student record of every word introduced through
+            # WordBank. This IS the student's profile Word List, and is the source pool
+            # WordWise challenges draw from.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS student_word_list (
+                    id SERIAL PRIMARY KEY,
+                    student_id INTEGER REFERENCES users(id),
+                    word_bank_word_id INTEGER REFERENCES word_bank_words(id),
+                    passage_id INTEGER REFERENCES passages(id),
+                    context_sentence TEXT,
+                    first_attempt_correct BOOLEAN,
+                    attempts_used INTEGER DEFAULT 0,
+                    points_earned INTEGER DEFAULT 0,
+                    introduced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ student_word_list table ready")
+
+            # wordwise_challenges — one row per 3-session-triggered challenge cycle.
+            # word_pool is finalized at announcement (WW-02) and does not change during
+            # the 5-day window; attempt_*_words/results are independently randomized draws
+            # from that same pool (WW-03).
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS wordwise_challenges (
+                    id SERIAL PRIMARY KEY,
+                    student_id INTEGER REFERENCES users(id),
+                    status VARCHAR(20) DEFAULT 'announced',
+                    word_pool TEXT,
+                    announced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    attempt_1_words TEXT,
+                    attempt_1_results TEXT,
+                    attempt_1_score INTEGER,
+                    attempt_1_completed_at TIMESTAMP,
+                    attempt_2_words TEXT,
+                    attempt_2_results TEXT,
+                    attempt_2_score INTEGER,
+                    attempt_2_completed_at TIMESTAMP,
+                    points_deposited INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            print("✓ wordwise_challenges table ready")
 
             # User sessions (login tracking)
             cursor.execute("""
@@ -838,6 +907,7 @@ def init_db():
                 "ALTER TABLE session_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
                 "ALTER TABLE school_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE student_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE passages ADD COLUMN IF NOT EXISTS vocabulary_words TEXT",
             ]
             for sql in migrations:
                 try:
@@ -954,6 +1024,57 @@ def init_db():
                 time_spent_seconds INTEGER,
                 wpm REAL,
                 comprehension_score REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # WordBank & WordWise — vocabulary system (see Achieve365_FeatureSpec_WordBank_WordWise).
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS word_bank_words (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word TEXT NOT NULL,
+                grade_band TEXT NOT NULL,
+                definition TEXT,
+                correct_image_concept TEXT,
+                distractor_image_concepts TEXT,
+                correct_image_url TEXT,
+                distractor_image_urls TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(word, grade_band)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS student_word_list (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER REFERENCES users(id),
+                word_bank_word_id INTEGER REFERENCES word_bank_words(id),
+                passage_id INTEGER REFERENCES passages(id),
+                context_sentence TEXT,
+                first_attempt_correct BOOLEAN,
+                attempts_used INTEGER DEFAULT 0,
+                points_earned INTEGER DEFAULT 0,
+                introduced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wordwise_challenges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER REFERENCES users(id),
+                status TEXT DEFAULT 'announced',
+                word_pool TEXT,
+                announced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                attempt_1_words TEXT,
+                attempt_1_results TEXT,
+                attempt_1_score INTEGER,
+                attempt_1_completed_at TIMESTAMP,
+                attempt_2_words TEXT,
+                attempt_2_results TEXT,
+                attempt_2_score INTEGER,
+                attempt_2_completed_at TIMESTAMP,
+                points_deposited INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -1277,6 +1398,7 @@ def init_db():
             "ALTER TABLE game_completions ADD COLUMN time_seconds INTEGER DEFAULT 0",
             "ALTER TABLE school_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
             "ALTER TABLE student_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
+            "ALTER TABLE passages ADD COLUMN vocabulary_words TEXT",
         ]
         for sql in sqlite_migrations:
             try:
@@ -4027,8 +4149,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             cursor.execute(
                 """INSERT INTO passages 
                 (title, content, source, topic_tags, word_count, readability_score, flesch_ease, 
-                    difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                    difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score, vocabulary_words)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (passage_data['title'], 
                 passage_data['content'], 
                 passage_data.get('source', 'AI Generated'),
@@ -4038,7 +4160,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                 passage_data.get('flesch_ease'),
                 passage_data.get('difficulty_level', difficulty),
                 passage_data.get('estimated_minutes', 2),
-                True, 1, image_url, passage_lexile)
+                True, 1, image_url, passage_lexile, json.dumps(passage_data.get('vocabulary_words', [])))
             )
             result = cursor.fetchone()
             passage_id = result['id']
@@ -4047,8 +4169,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             cursor.execute(
                 """INSERT INTO passages 
                 (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                    difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score, vocabulary_words)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (passage_data['title'], 
                 passage_data['content'], 
                 passage_data.get('source', 'AI Generated'),
@@ -4058,7 +4180,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
                 passage_data.get('flesch_ease'),
                 passage_data.get('difficulty_level', difficulty),
                 passage_data.get('estimated_minutes', 2),
-                True, 1, image_url, passage_lexile)
+                True, 1, image_url, passage_lexile, json.dumps(passage_data.get('vocabulary_words', [])))
             )
             passage_id = cursor.lastrowid
 
@@ -4607,6 +4729,14 @@ async def submit_reading_feedback(request: Request):
             cursor.execute("UPDATE users SET level_estimate = ? WHERE id = ?", (new_level, user_id))
     
     conn.commit()
+
+    # WW-01: check whether this completion pushes the student past the
+    # 3-session threshold for a new WordWise Challenge. Only meaningful for
+    # genuinely completed (not partial) sessions.
+    if completed:
+        _check_and_trigger_wordwise_challenge(user_id, cursor)
+        conn.commit()
+
     conn.close()
     
     return {"success": True, "message": "Feedback recorded"}
@@ -5304,6 +5434,957 @@ WEEKLY_GOAL_TYPES = {
     }
 }
 
+# ============================================================
+# WORDBANK & WORDWISE — vocabulary system helpers
+# See Achieve365_FeatureSpec_WordBank_WordWise for the full spec.
+# Phase 1 (this function): word enrichment + caching. WordBank/WordWise
+# session logic, endpoints, and frontend are later phases.
+# ============================================================
+
+def _generate_wordbank_images_background(word_normalized: str, grade_band: str, correct_concept: str, distractor_concepts: list):
+    """
+    Runs in a background thread — generates one image per concept (1 correct +
+    up to 2 distractors) and stores the URLs on the already-cached
+    word_bank_words row. Never blocks a WordBank session: the first time any
+    given word+grade_band is encountered, the game runs on the text concept
+    cards Phase 3 already supports; every encounter after this completes gets
+    real images instead, for any student, since the cache is global.
+    """
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+
+        def _gen_one(concept: str):
+            try:
+                prompt = (
+                    f"A simple, clear, friendly illustration for a K-12 educational vocabulary app, "
+                    f"depicting: {concept}. Style: clean flat digital illustration, bright colors, "
+                    f"no text or letters anywhere in the image, culturally inclusive, age-appropriate "
+                    f"for {grade_band} students. Single clear subject, uncluttered background."
+                )
+                response = client.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
+                return response.data[0].url
+            except Exception as img_err:
+                print(f"⚠️ WordBank image generation failed for concept '{concept}': {img_err}")
+                return None
+
+        correct_url = _gen_one(correct_concept) if correct_concept else None
+        distractor_urls = [u for u in (_gen_one(c) for c in (distractor_concepts or [])) if u]
+
+        conn = get_db()
+        cursor = get_cursor(conn)
+        try:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "UPDATE word_bank_words SET correct_image_url = %s, distractor_image_urls = %s WHERE word = %s AND grade_band = %s",
+                    (correct_url, json.dumps(distractor_urls), word_normalized, grade_band)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE word_bank_words SET correct_image_url = ?, distractor_image_urls = ? WHERE word = ? AND grade_band = ?",
+                    (correct_url, json.dumps(distractor_urls), word_normalized, grade_band)
+                )
+            conn.commit()
+            print(f"✓ WordBank images ready for '{word_normalized}' ({grade_band})")
+        finally:
+            cursor.close()
+            conn.close()
+    except Exception as e:
+        print(f"⚠️ WordBank background image generation failed entirely for '{word_normalized}': {e}")
+
+
+def enrich_vocabulary_word(word: str, grade_band: str, context_sentence: str = "") -> dict:
+    """
+    Returns {word, definition, correct_image_concept, distractor_image_concepts,
+    correct_image_url, distractor_image_urls} for a single vocabulary word,
+    calibrated to grade_band.
+
+    Cached in word_bank_words (keyed on word+grade_band) — the same word is
+    only ever sent to OpenAI once per grade band, not once per student per
+    story, since common vocabulary (e.g. "exhausted", "curious") recurs
+    across many students' stories.
+
+    Images are generated in a background thread on first encounter (see
+    _generate_wordbank_images_background) so this function — and the
+    WordBank session it's called from — never blocks on slow image
+    generation. correct_image_url/distractor_image_urls are null until that
+    background job finishes; the frontend falls back to text concept cards
+    until then.
+    """
+    word_normalized = word.strip().lower()
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT * FROM word_bank_words WHERE word = %s AND grade_band = %s" if USE_POSTGRES
+            else "SELECT * FROM word_bank_words WHERE word = ? AND grade_band = ?",
+            (word_normalized, grade_band)
+        )
+        cached = cursor.fetchone()
+        if cached:
+            cached = dict(cached)
+            return {
+                "word": word_normalized,
+                "definition": cached.get("definition"),
+                "correct_image_concept": cached.get("correct_image_concept"),
+                "distractor_image_concepts": json.loads(cached.get("distractor_image_concepts") or "[]"),
+                "correct_image_url": cached.get("correct_image_url"),
+                "distractor_image_urls": json.loads(cached.get("distractor_image_urls") or "[]") if cached.get("distractor_image_urls") else []
+            }
+
+        # Not cached — generate via OpenAI
+        context_clause = f', as used in this sentence: "{context_sentence}"' if context_sentence else ""
+        system_prompt = f"""You are writing vocabulary support material for a K-12 reading platform.
+For the word "{word_normalized}" (grade band: {grade_band}{context_clause}), provide:
+1. A warm, conversational, grade-appropriate definition — NOT dictionary language. Example style for 'exhausted': "When you are exhausted, you are so tired that you can barely move."
+2. A short visual concept (a few words) describing an image that clearly represents this word's meaning — concrete and unambiguous.
+3. Two distractor visual concepts — plausible, same general category as the correct concept, but clearly distinct in meaning, so a student who knows the word can tell them apart from the correct one.
+
+Return ONLY valid JSON in exactly this format:
+{{"definition": "...", "correct_image_concept": "...", "distractor_image_concepts": ["...", "..."]}}"""
+
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Generate vocabulary support for '{word_normalized}' now."}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(response.choices[0].message.content)
+
+        definition = data.get("definition", "")
+        correct_concept = data.get("correct_image_concept", "")
+        distractor_concepts = data.get("distractor_image_concepts", [])
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """INSERT INTO word_bank_words (word, grade_band, definition, correct_image_concept, distractor_image_concepts)
+                   VALUES (%s, %s, %s, %s, %s)
+                   ON CONFLICT (word, grade_band) DO UPDATE SET
+                       definition = EXCLUDED.definition,
+                       correct_image_concept = EXCLUDED.correct_image_concept,
+                       distractor_image_concepts = EXCLUDED.distractor_image_concepts""",
+                (word_normalized, grade_band, definition, correct_concept, json.dumps(distractor_concepts))
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO word_bank_words (word, grade_band, definition, correct_image_concept, distractor_image_concepts)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT (word, grade_band) DO UPDATE SET
+                       definition = excluded.definition,
+                       correct_image_concept = excluded.correct_image_concept,
+                       distractor_image_concepts = excluded.distractor_image_concepts""",
+                (word_normalized, grade_band, definition, correct_concept, json.dumps(distractor_concepts))
+            )
+        conn.commit()
+
+        import threading
+        threading.Thread(
+            target=_generate_wordbank_images_background,
+            args=(word_normalized, grade_band, correct_concept, distractor_concepts),
+            daemon=True
+        ).start()
+
+        return {
+            "word": word_normalized,
+            "definition": definition,
+            "correct_image_concept": correct_concept,
+            "distractor_image_concepts": distractor_concepts,
+            "correct_image_url": None,
+            "distractor_image_urls": []
+        }
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ Vocabulary enrichment failed for '{word}': {e}")
+        # Fail gracefully — a usable fallback rather than blocking WordBank entirely
+        return {
+            "word": word_normalized,
+            "definition": f"A word from your story: {word_normalized}.",
+            "correct_image_concept": word_normalized,
+            "distractor_image_concepts": [],
+            "correct_image_url": None,
+            "distractor_image_urls": []
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _find_context_sentence(content: str, word: str) -> str:
+    """First sentence in `content` that contains `word` (case-insensitive) — used
+    for both WordBank enrichment context and WordWise's context sentence (WW-02)."""
+    if not content or not word:
+        return ""
+    sentences = re.split(r'(?<=[.!?])\s+', content)
+    word_lower = word.strip().lower()
+    for s in sentences:
+        if word_lower in s.lower():
+            return s.strip()
+    return ""
+
+
+class WordBankSessionStart(BaseModel):
+    passage_id: int
+
+
+class WordBankAnswerSubmit(BaseModel):
+    word_list_id: int
+    selected_concept: str
+
+
+@app.post("/api/wordbank/session/start")
+async def start_wordbank_session(body: WordBankSessionStart, user=Depends(get_current_user)):
+    """
+    WB-01/WB-02: prepares the WordBank warm-up for an already-fetched passage.
+    The frontend calls this with the passage_id it already has from
+    /api/lessons/next (or /api/read/*), BEFORE showing the story — this is
+    intentionally additive and doesn't touch the existing lesson-delivery
+    endpoints at all.
+
+    Selects up to 5 words from the passage's vocabulary_words, deprioritizing
+    words the student has already mastered (correct on first attempt
+    previously), enriches each (from cache where possible), and creates
+    student_word_list rows. Re-calling this for a passage the student has
+    already started returns the same rows rather than duplicating them.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT grade_band FROM users WHERE id = %s" if USE_POSTGRES
+            else "SELECT grade_band FROM users WHERE id = ?",
+            (student_id,)
+        )
+        student_row = cursor.fetchone()
+        grade_band = (dict(student_row).get("grade_band") if student_row else None) or "elementary"
+
+        cursor.execute(
+            "SELECT content, vocabulary_words FROM passages WHERE id = %s" if USE_POSTGRES
+            else "SELECT content, vocabulary_words FROM passages WHERE id = ?",
+            (body.passage_id,)
+        )
+        passage = cursor.fetchone()
+        if not passage:
+            raise HTTPException(status_code=404, detail="Passage not found")
+        passage = dict(passage)
+        content = passage.get("content") or ""
+        vocab_words = json.loads(passage.get("vocabulary_words") or "[]")
+
+        if not vocab_words:
+            return {"words": [], "message": "No vocabulary words available for this passage."}
+
+        # Already started for this student+passage? Return the existing rows
+        # instead of creating duplicates (covers refresh/re-entry).
+        cursor.execute(
+            """SELECT swl.id AS word_list_id, wbw.word, wbw.definition, wbw.correct_image_concept,
+                      wbw.distractor_image_concepts, wbw.correct_image_url, wbw.distractor_image_urls,
+                      swl.attempts_used, swl.first_attempt_correct
+               FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = %s AND swl.passage_id = %s
+               ORDER BY swl.id""" if USE_POSTGRES else
+            """SELECT swl.id AS word_list_id, wbw.word, wbw.definition, wbw.correct_image_concept,
+                      wbw.distractor_image_concepts, wbw.correct_image_url, wbw.distractor_image_urls,
+                      swl.attempts_used, swl.first_attempt_correct
+               FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = ? AND swl.passage_id = ?
+               ORDER BY swl.id""",
+            (student_id, body.passage_id)
+        )
+        existing = cursor.fetchall()
+        if existing:
+            return {"words": [_format_wordbank_word(dict(r)) for r in existing]}
+
+        # Deprioritize words this student has already mastered (correct on
+        # first attempt, any prior passage) in favor of new/unmastered ones.
+        cursor.execute(
+            """SELECT wbw.word FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = %s AND swl.first_attempt_correct = TRUE""" if USE_POSTGRES else
+            """SELECT wbw.word FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = ? AND swl.first_attempt_correct = 1""",
+            (student_id,)
+        )
+        mastered = {dict(r)["word"].lower() for r in cursor.fetchall()}
+
+        candidate_words = [w for w in vocab_words if w.strip().lower() not in mastered]
+        candidate_words += [w for w in vocab_words if w.strip().lower() in mastered]
+        selected_words = candidate_words[:5]
+
+        result_words = []
+        for word in selected_words:
+            context_sentence = _find_context_sentence(content, word)
+            enriched = enrich_vocabulary_word(word, grade_band, context_sentence)
+
+            cursor.execute(
+                "SELECT id FROM word_bank_words WHERE word = %s AND grade_band = %s" if USE_POSTGRES
+                else "SELECT id FROM word_bank_words WHERE word = ? AND grade_band = ?",
+                (enriched["word"], grade_band)
+            )
+            row = cursor.fetchone()
+            word_bank_word_id = dict(row)["id"]
+
+            if USE_POSTGRES:
+                cursor.execute(
+                    """INSERT INTO student_word_list (student_id, word_bank_word_id, passage_id, context_sentence)
+                       VALUES (%s, %s, %s, %s) RETURNING id""",
+                    (student_id, word_bank_word_id, body.passage_id, context_sentence)
+                )
+                word_list_id = cursor.fetchone()["id"]
+            else:
+                cursor.execute(
+                    """INSERT INTO student_word_list (student_id, word_bank_word_id, passage_id, context_sentence)
+                       VALUES (?, ?, ?, ?)""",
+                    (student_id, word_bank_word_id, body.passage_id, context_sentence)
+                )
+                word_list_id = cursor.lastrowid
+
+            result_words.append(_format_wordbank_word({
+                "word_list_id": word_list_id,
+                "word": enriched["word"],
+                "definition": enriched["definition"],
+                "correct_image_concept": enriched["correct_image_concept"],
+                "distractor_image_concepts": json.dumps(enriched["distractor_image_concepts"]),
+                "correct_image_url": enriched.get("correct_image_url"),
+                "distractor_image_urls": json.dumps(enriched.get("distractor_image_urls") or []),
+                "attempts_used": 0,
+                "first_attempt_correct": None
+            }))
+
+        conn.commit()
+        return {"words": result_words}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _format_wordbank_word(row: dict) -> dict:
+    """Shapes a student_word_list+word_bank_words row for the frontend —
+    pairs each concept with its image URL (null until the background image
+    job finishes; the frontend falls back to a text card per-option when
+    null) and shuffles the 3 options so the correct one isn't always in the
+    same position. No server-side shuffle-state tracking needed: the client
+    submits back the concept text it picked, not a position index."""
+    distractors = row.get("distractor_image_concepts")
+    if isinstance(distractors, str):
+        distractors = json.loads(distractors or "[]")
+    distractor_urls = row.get("distractor_image_urls")
+    if isinstance(distractor_urls, str):
+        distractor_urls = json.loads(distractor_urls or "[]")
+    distractor_urls = distractor_urls or []
+
+    options = [{"concept": row["correct_image_concept"], "image_url": row.get("correct_image_url")}]
+    for i, concept in enumerate(distractors or []):
+        options.append({"concept": concept, "image_url": distractor_urls[i] if i < len(distractor_urls) else None})
+    random.shuffle(options)
+
+    return {
+        "word_list_id": row["word_list_id"],
+        "word": row["word"],
+        "definition": row["definition"],
+        "options": options,
+        "attempts_used": row.get("attempts_used", 0),
+        "already_answered": row.get("first_attempt_correct") is not None
+    }
+
+
+@app.post("/api/wordbank/answer")
+async def submit_wordbank_answer(body: WordBankAnswerSubmit, user=Depends(get_current_user)):
+    """
+    WB — image-match submission. First attempt correct: +10 points, done.
+    First attempt wrong: hint, no points yet, one more try allowed.
+    Second attempt (correct or wrong): +0 points, reveal correct answer, advance.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            """SELECT swl.id, swl.student_id, swl.attempts_used, swl.first_attempt_correct,
+                      wbw.word, wbw.correct_image_concept, wbw.definition
+               FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.id = %s""" if USE_POSTGRES else
+            """SELECT swl.id, swl.student_id, swl.attempts_used, swl.first_attempt_correct,
+                      wbw.word, wbw.correct_image_concept, wbw.definition
+               FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.id = ?""",
+            (body.word_list_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Word not found")
+        row = dict(row)
+        if row["student_id"] != student_id:
+            raise HTTPException(status_code=403, detail="Not your word")
+
+        attempts_used = row["attempts_used"] or 0
+        if attempts_used >= 2:
+            raise HTTPException(status_code=400, detail="Already completed — no attempts remaining")
+
+        is_correct = body.selected_concept.strip().lower() == (row["correct_image_concept"] or "").strip().lower()
+        new_attempts = attempts_used + 1
+
+        if is_correct and new_attempts == 1:
+            points = 10
+            first_attempt_correct = True
+            done = True
+        elif not is_correct and new_attempts == 1:
+            points = 0
+            first_attempt_correct = None  # not yet resolved — one more try
+            done = False
+        else:
+            # Second attempt, correct or not — no points either way, always done
+            points = 0
+            first_attempt_correct = False
+            done = True
+
+        if USE_POSTGRES:
+            cursor.execute(
+                "UPDATE student_word_list SET attempts_used = %s, first_attempt_correct = %s, points_earned = points_earned + %s WHERE id = %s",
+                (new_attempts, first_attempt_correct, points, body.word_list_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE student_word_list SET attempts_used = ?, first_attempt_correct = ?, points_earned = points_earned + ? WHERE id = ?",
+                (new_attempts, first_attempt_correct, points, body.word_list_id)
+            )
+        conn.commit()
+
+        if points > 0:
+            award_points(student_id, points, f"WordBank: matched '{row['word']}'", activity_type="wordbank")
+
+        response = {"correct": is_correct, "attempts_used": new_attempts, "points_awarded": points, "done": done}
+        if not done:
+            response["hint"] = "Not quite — read the definition again and look carefully at all three images."
+        if done:
+            response["correct_image_concept"] = row["correct_image_concept"]
+            response["definition"] = row["definition"]
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/wordbank/wordlist")
+async def get_student_word_list(user=Depends(get_current_user)):
+    """WB-06 — the student's permanent Word List, shown in their profile. Also
+    the source data Phase 4 (WordWise) will draw its challenge pool from."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            """SELECT swl.id, wbw.word, wbw.definition, swl.context_sentence,
+                      p.title AS story_title, swl.first_attempt_correct, swl.attempts_used,
+                      swl.points_earned, swl.introduced_at
+               FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               LEFT JOIN passages p ON p.id = swl.passage_id
+               WHERE swl.student_id = %s
+               ORDER BY swl.introduced_at DESC""" if USE_POSTGRES else
+            """SELECT swl.id, wbw.word, wbw.definition, swl.context_sentence,
+                      p.title AS story_title, swl.first_attempt_correct, swl.attempts_used,
+                      swl.points_earned, swl.introduced_at
+               FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               LEFT JOIN passages p ON p.id = swl.passage_id
+               WHERE swl.student_id = ?
+               ORDER BY swl.introduced_at DESC""",
+            (student_id,)
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            r["introduced_at"] = str(r["introduced_at"]) if r.get("introduced_at") else None
+        return {"words": rows}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# WORDWISE — periodic spelling challenge (WW-01 through WW-08)
+# ============================================================
+
+WORDWISE_WINDOW_DAYS = 5
+WORDWISE_SESSIONS_PER_CHALLENGE = 3
+
+
+def _create_wordwise_challenge(student_id: int, cursor):
+    """
+    WW-02: builds the challenge word pool from all words added to the
+    student's Word List since the last challenge (min 10; supplemented from
+    word_bank_words for that grade band if short — e.g. early in the school
+    year). Pool is frozen here and does not change during the 5-day window.
+    """
+    cursor.execute(
+        "SELECT created_at FROM wordwise_challenges WHERE student_id = %s ORDER BY created_at DESC LIMIT 1" if USE_POSTGRES
+        else "SELECT created_at FROM wordwise_challenges WHERE student_id = ? ORDER BY created_at DESC LIMIT 1",
+        (student_id,)
+    )
+    last = cursor.fetchone()
+    last_challenge_at = dict(last)["created_at"] if last else None
+
+    if last_challenge_at:
+        cursor.execute(
+            """SELECT DISTINCT wbw.word FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = %s AND swl.introduced_at > %s""" if USE_POSTGRES else
+            """SELECT DISTINCT wbw.word FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = ? AND swl.introduced_at > ?""",
+            (student_id, last_challenge_at)
+        )
+    else:
+        cursor.execute(
+            """SELECT DISTINCT wbw.word FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = %s""" if USE_POSTGRES else
+            """SELECT DISTINCT wbw.word FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = ?""",
+            (student_id,)
+        )
+    pool = [dict(r)["word"] for r in cursor.fetchall()]
+
+    if len(pool) < 10:
+        cursor.execute(
+            "SELECT grade_band FROM users WHERE id = %s" if USE_POSTGRES else "SELECT grade_band FROM users WHERE id = ?",
+            (student_id,)
+        )
+        row = cursor.fetchone()
+        grade_band = (dict(row).get("grade_band") if row else None) or "elementary"
+        cursor.execute(
+            "SELECT word FROM word_bank_words WHERE grade_band = %s" if USE_POSTGRES
+            else "SELECT word FROM word_bank_words WHERE grade_band = ?",
+            (grade_band,)
+        )
+        candidates = [dict(r)["word"] for r in cursor.fetchall() if dict(r)["word"] not in pool]
+        random.shuffle(candidates)
+        pool += candidates[:10 - len(pool)]
+
+    expires_at = datetime.utcnow() + timedelta(days=WORDWISE_WINDOW_DAYS)
+    if USE_POSTGRES:
+        cursor.execute(
+            "INSERT INTO wordwise_challenges (student_id, status, word_pool, expires_at) VALUES (%s, 'announced', %s, %s)",
+            (student_id, json.dumps(pool), expires_at)
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO wordwise_challenges (student_id, status, word_pool, expires_at) VALUES (?, 'announced', ?, ?)",
+            (student_id, json.dumps(pool), expires_at)
+        )
+    print(f"📝 WordWise Challenge announced for student {student_id} — pool of {len(pool)} words")
+
+
+def _check_and_trigger_wordwise_challenge(student_id: int, cursor):
+    """
+    WW-01: called after a non-placement reading session is marked completed
+    (from /api/read/feedback). Session count is derived directly from
+    session_logs rather than tracked as a separate counter — the same
+    pattern used for Mission: Unlocked's point-threshold detection — to
+    avoid a class of sync bugs where a counter drifts from reality.
+    """
+    try:
+        cursor.execute(
+            "SELECT id, status FROM wordwise_challenges WHERE student_id = %s ORDER BY created_at DESC LIMIT 1" if USE_POSTGRES
+            else "SELECT id, status FROM wordwise_challenges WHERE student_id = ? ORDER BY created_at DESC LIMIT 1",
+            (student_id,)
+        )
+        latest = cursor.fetchone()
+        if latest:
+            latest = dict(latest)
+            if latest["status"] in ("announced", "attempt_1_done"):
+                return  # already has one pending — don't stack another
+
+        cursor.execute(
+            "SELECT created_at FROM wordwise_challenges WHERE student_id = %s ORDER BY created_at DESC LIMIT 1" if USE_POSTGRES
+            else "SELECT created_at FROM wordwise_challenges WHERE student_id = ? ORDER BY created_at DESC LIMIT 1",
+            (student_id,)
+        )
+        last = cursor.fetchone()
+        last_challenge_at = dict(last)["created_at"] if last else None
+
+        placement_clause = "(is_placement IS NULL OR is_placement = FALSE)" if USE_POSTGRES else "(is_placement IS NULL OR is_placement = 0)"
+        if last_challenge_at:
+            cursor.execute(
+                f"SELECT COUNT(*) AS c FROM session_logs WHERE user_id = %s AND completion_status = 'completed' AND {placement_clause} AND started_at > %s" if USE_POSTGRES
+                else f"SELECT COUNT(*) AS c FROM session_logs WHERE user_id = ? AND completion_status = 'completed' AND {placement_clause} AND started_at > ?",
+                (student_id, last_challenge_at)
+            )
+        else:
+            cursor.execute(
+                f"SELECT COUNT(*) AS c FROM session_logs WHERE user_id = %s AND completion_status = 'completed' AND {placement_clause}" if USE_POSTGRES
+                else f"SELECT COUNT(*) AS c FROM session_logs WHERE user_id = ? AND completion_status = 'completed' AND {placement_clause}",
+                (student_id,)
+            )
+        row = cursor.fetchone()
+        count = (dict(row)["c"] if row else 0) or 0
+
+        if count >= WORDWISE_SESSIONS_PER_CHALLENGE:
+            _create_wordwise_challenge(student_id, cursor)
+    except Exception as e:
+        print(f"⚠️ WordWise trigger check failed for student {student_id}: {e}")
+
+
+def _get_active_wordwise_challenge(student_id: int, cursor):
+    """Returns the student's current challenge row, lazily marking it
+    'expired' if the 5-day window has passed without both attempts used
+    (WW-05) — there's no background scheduler in this deployment, so
+    expiration is evaluated on read rather than on a timer."""
+    cursor.execute(
+        "SELECT * FROM wordwise_challenges WHERE student_id = %s ORDER BY created_at DESC LIMIT 1" if USE_POSTGRES
+        else "SELECT * FROM wordwise_challenges WHERE student_id = ? ORDER BY created_at DESC LIMIT 1",
+        (student_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    row = dict(row)
+    if row["status"] in ("announced", "attempt_1_done"):
+        expires_at = row["expires_at"] if isinstance(row["expires_at"], datetime) else datetime.fromisoformat(str(row["expires_at"]))
+        if datetime.utcnow() > expires_at:
+            if USE_POSTGRES:
+                cursor.execute("UPDATE wordwise_challenges SET status = 'expired' WHERE id = %s", (row["id"],))
+            else:
+                cursor.execute("UPDATE wordwise_challenges SET status = 'expired' WHERE id = ?", (row["id"],))
+            row["status"] = "expired"
+    return row
+
+
+@app.get("/api/wordwise/status")
+async def get_wordwise_status(user=Depends(get_current_user)):
+    """Current challenge state for the student's nav badge / announcement banner."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        challenge = _get_active_wordwise_challenge(user["user_id"], cursor)
+        conn.commit()
+        if not challenge:
+            return {"has_challenge": False}
+        pool = json.loads(challenge.get("word_pool") or "[]")
+        return {
+            "has_challenge": True,
+            "challenge_id": challenge["id"],
+            "status": challenge["status"],
+            "word_count": len(pool),
+            "announced_at": str(challenge["announced_at"]),
+            "expires_at": str(challenge["expires_at"]),
+            "attempt_1_score": challenge.get("attempt_1_score"),
+            "attempt_2_score": challenge.get("attempt_2_score")
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/wordwise/study-list")
+async def get_wordwise_study_list(user=Depends(get_current_user)):
+    """WW-04: the full frozen pool, with definition + context sentence + WordBank
+    image for study, available anytime during the 5-day window."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        challenge = _get_active_wordwise_challenge(student_id, cursor)
+        conn.commit()
+        if not challenge or challenge["status"] not in ("announced", "attempt_1_done"):
+            return {"words": []}
+
+        pool = json.loads(challenge.get("word_pool") or "[]")
+        cursor.execute(
+            "SELECT grade_band FROM users WHERE id = %s" if USE_POSTGRES else "SELECT grade_band FROM users WHERE id = ?",
+            (student_id,)
+        )
+        row = cursor.fetchone()
+        grade_band = (dict(row).get("grade_band") if row else None) or "elementary"
+
+        words = []
+        for word in pool:
+            cursor.execute(
+                "SELECT definition, correct_image_url FROM word_bank_words WHERE word = %s AND grade_band = %s" if USE_POSTGRES
+                else "SELECT definition, correct_image_url FROM word_bank_words WHERE word = ? AND grade_band = ?",
+                (word, grade_band)
+            )
+            wrow = cursor.fetchone()
+            wrow = dict(wrow) if wrow else {}
+            cursor.execute(
+                """SELECT swl.context_sentence FROM student_word_list swl
+                   JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+                   WHERE swl.student_id = %s AND wbw.word = %s ORDER BY swl.introduced_at DESC LIMIT 1""" if USE_POSTGRES else
+                """SELECT swl.context_sentence FROM student_word_list swl
+                   JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+                   WHERE swl.student_id = ? AND wbw.word = ? ORDER BY swl.introduced_at DESC LIMIT 1""",
+                (student_id, word)
+            )
+            srow = cursor.fetchone()
+            context_sentence = dict(srow).get("context_sentence") if srow else ""
+            words.append({
+                "word": word,
+                "definition": wrow.get("definition"),
+                "context_sentence": context_sentence,
+                "image_url": wrow.get("correct_image_url")
+            })
+        return {"words": words}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+class WordWiseStartRequest(BaseModel):
+    challenge_id: int
+
+
+class WordWiseAnswerSubmit(BaseModel):
+    challenge_id: int
+    word_index: int
+    submitted_spelling: str
+
+
+class WordWiseCompleteRequest(BaseModel):
+    challenge_id: int
+
+
+@app.post("/api/wordwise/start")
+async def start_wordwise_attempt(body: WordWiseStartRequest, user=Depends(get_current_user)):
+    """
+    WW-03: randomly selects 10 words from the frozen pool for this attempt —
+    a fresh draw and order for Attempt 2, same pool. Returns the full set
+    with definitions/sentences up front (same pattern as WordBank's
+    session/start) — the frontend paces the reveal one word at a time and
+    never displays the word text itself, only speaks it (WW-06).
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT * FROM wordwise_challenges WHERE id = %s" if USE_POSTGRES else "SELECT * FROM wordwise_challenges WHERE id = ?",
+            (body.challenge_id,)
+        )
+        challenge = cursor.fetchone()
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        challenge = dict(challenge)
+        if challenge["student_id"] != student_id:
+            raise HTTPException(status_code=403, detail="Not your challenge")
+        if challenge["status"] == "announced":
+            attempt_number = 1
+        elif challenge["status"] == "attempt_1_done":
+            attempt_number = 2
+        else:
+            raise HTTPException(status_code=400, detail=f"Challenge is {challenge['status']} — cannot start an attempt")
+
+        pool = json.loads(challenge.get("word_pool") or "[]")
+        if len(pool) < 10:
+            raise HTTPException(status_code=400, detail="Word pool too small to start a challenge")
+        selected = random.sample(pool, 10)
+
+        cursor.execute(
+            "SELECT grade_band FROM users WHERE id = %s" if USE_POSTGRES else "SELECT grade_band FROM users WHERE id = ?",
+            (student_id,)
+        )
+        row = cursor.fetchone()
+        grade_band = (dict(row).get("grade_band") if row else None) or "elementary"
+
+        words_payload = []
+        for word in selected:
+            cursor.execute(
+                "SELECT definition FROM word_bank_words WHERE word = %s AND grade_band = %s" if USE_POSTGRES
+                else "SELECT definition FROM word_bank_words WHERE word = ? AND grade_band = ?",
+                (word, grade_band)
+            )
+            wrow = cursor.fetchone()
+            definition = dict(wrow).get("definition") if wrow else ""
+            cursor.execute(
+                """SELECT swl.context_sentence FROM student_word_list swl
+                   JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+                   WHERE swl.student_id = %s AND wbw.word = %s ORDER BY swl.introduced_at DESC LIMIT 1""" if USE_POSTGRES else
+                """SELECT swl.context_sentence FROM student_word_list swl
+                   JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+                   WHERE swl.student_id = ? AND wbw.word = ? ORDER BY swl.introduced_at DESC LIMIT 1""",
+                (student_id, word)
+            )
+            srow = cursor.fetchone()
+            context_sentence = dict(srow).get("context_sentence") if srow else ""
+            words_payload.append({"word": word, "definition": definition, "context_sentence": context_sentence})
+
+        words_col = f"attempt_{attempt_number}_words"
+        if USE_POSTGRES:
+            cursor.execute(f"UPDATE wordwise_challenges SET {words_col} = %s WHERE id = %s", (json.dumps(selected), body.challenge_id))
+        else:
+            cursor.execute(f"UPDATE wordwise_challenges SET {words_col} = ? WHERE id = ?", (json.dumps(selected), body.challenge_id))
+        conn.commit()
+
+        return {"attempt_number": attempt_number, "words": words_payload}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/wordwise/answer")
+async def submit_wordwise_answer(body: WordWiseAnswerSubmit, user=Depends(get_current_user)):
+    """WW: single-submission spelling check for one word within the active attempt."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT * FROM wordwise_challenges WHERE id = %s" if USE_POSTGRES else "SELECT * FROM wordwise_challenges WHERE id = ?",
+            (body.challenge_id,)
+        )
+        challenge = cursor.fetchone()
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        challenge = dict(challenge)
+        if challenge["student_id"] != student_id:
+            raise HTTPException(status_code=403, detail="Not your challenge")
+
+        attempt_number = 1 if challenge["status"] == "announced" else 2 if challenge["status"] == "attempt_1_done" else None
+        if attempt_number is None:
+            raise HTTPException(status_code=400, detail=f"Challenge is {challenge['status']} — no attempt in progress")
+
+        words = json.loads(challenge.get(f"attempt_{attempt_number}_words") or "[]")
+        if body.word_index < 0 or body.word_index >= len(words):
+            raise HTTPException(status_code=400, detail="Invalid word index")
+        correct_word = words[body.word_index]["word"]
+        is_correct = body.submitted_spelling.strip().lower() == correct_word.strip().lower()
+
+        results = json.loads(challenge.get(f"attempt_{attempt_number}_results") or "[]")
+        results.append({"word": correct_word, "submitted": body.submitted_spelling, "correct": is_correct})
+
+        results_col = f"attempt_{attempt_number}_results"
+        if USE_POSTGRES:
+            cursor.execute(f"UPDATE wordwise_challenges SET {results_col} = %s WHERE id = %s", (json.dumps(results), body.challenge_id))
+        else:
+            cursor.execute(f"UPDATE wordwise_challenges SET {results_col} = ? WHERE id = ?", (json.dumps(results), body.challenge_id))
+        conn.commit()
+
+        return {"correct": is_correct, "correct_spelling": correct_word}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/wordwise/complete")
+async def complete_wordwise_attempt(body: WordWiseCompleteRequest, user=Depends(get_current_user)):
+    """
+    WW-07: scores the just-finished attempt (+20/word on Attempt 1, +10/word
+    on Attempt 2 — 50% reduction per spec section 10), deposits only the
+    higher of the two attempt scores (never both, never a penalty for
+    retrying), and closes the challenge after Attempt 2 or leaves it at
+    attempt_1_done so a second attempt remains available within the window.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT * FROM wordwise_challenges WHERE id = %s" if USE_POSTGRES else "SELECT * FROM wordwise_challenges WHERE id = ?",
+            (body.challenge_id,)
+        )
+        challenge = cursor.fetchone()
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        challenge = dict(challenge)
+        if challenge["student_id"] != student_id:
+            raise HTTPException(status_code=403, detail="Not your challenge")
+
+        attempt_number = 1 if challenge["status"] == "announced" else 2 if challenge["status"] == "attempt_1_done" else None
+        if attempt_number is None:
+            raise HTTPException(status_code=400, detail=f"Challenge is {challenge['status']} — nothing to complete")
+
+        results = json.loads(challenge.get(f"attempt_{attempt_number}_results") or "[]")
+        correct_count = sum(1 for r in results if r["correct"])
+        points_per_word = 20 if attempt_number == 1 else 10
+        score = correct_count * points_per_word
+
+        already_deposited = challenge.get("points_deposited") or 0
+        to_deposit = max(0, score - already_deposited)
+
+        score_col = f"attempt_{attempt_number}_score"
+        completed_col = f"attempt_{attempt_number}_completed_at"
+        new_status = "attempt_1_done" if attempt_number == 1 else "completed"
+
+        if USE_POSTGRES:
+            cursor.execute(
+                f"UPDATE wordwise_challenges SET {score_col} = %s, {completed_col} = NOW(), status = %s, points_deposited = %s WHERE id = %s",
+                (score, new_status, max(already_deposited, score), body.challenge_id)
+            )
+        else:
+            cursor.execute(
+                f"UPDATE wordwise_challenges SET {score_col} = ?, {completed_col} = CURRENT_TIMESTAMP, status = ?, points_deposited = ? WHERE id = ?",
+                (score, new_status, max(already_deposited, score), body.challenge_id)
+            )
+        conn.commit()
+
+        if to_deposit > 0:
+            award_points(student_id, to_deposit, f"WordWise Challenge attempt {attempt_number}", activity_type="wordwise")
+
+        return {
+            "attempt_number": attempt_number,
+            "correct_count": correct_count,
+            "total_words": len(results),
+            "score": score,
+            "points_awarded": to_deposit,
+            "status": new_status,
+            "can_retry": new_status == "attempt_1_done"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 READER_ROLES = {
     "detective": {"name": "The Detective", "icon": "🔎", "theme": "crime, mystery, cold case",
                   "description": "A sharp-eyed investigator piecing together clues from a cold case, crime scene, or unsolved disappearance."},
@@ -5492,7 +6573,7 @@ def _activate_next_mission_if_needed(student_id: int):
         conn.close()
 
 
-MISSION_UNLOCK_THRESHOLD = 500  # TESTING: normally 1000 — change back before production
+MISSION_UNLOCK_THRESHOLD = 1000
 
 
 def _check_and_queue_mission_unlocks(user_id: int, cursor):
@@ -7716,8 +8797,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                 cursor.execute(
                     """INSERT INTO passages
                        (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                        difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score, vocabulary_words)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        RETURNING id""",
                     (
                         passage_data.get('title'),
@@ -7732,7 +8813,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                         True,
                         user_id,
                         lesson_image_url,
-                        lesson_passage_lexile
+                        lesson_passage_lexile,
+                        json.dumps(passage_data.get('vocabulary_words', []))
                     )
                 )
                 result = cursor.fetchone()
@@ -7741,8 +8823,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                 cursor.execute(
                     """INSERT INTO passages
                        (title, content, source, topic_tags, word_count, readability_score, flesch_ease,
-                        difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        difficulty_level, estimated_minutes, approved, created_by, image_url, lexile_score, vocabulary_words)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         passage_data.get('title'),
                         passage_data.get('content'),
@@ -7756,7 +8838,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                         True,
                         user_id,
                         lesson_image_url,
-                        lesson_passage_lexile
+                        lesson_passage_lexile,
+                        json.dumps(passage_data.get('vocabulary_words', []))
                     )
                 )
                 lesson_id = cursor.lastrowid
