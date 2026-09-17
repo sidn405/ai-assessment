@@ -5675,6 +5675,12 @@ async def start_wordbank_session(body: WordBankSessionStart, user=Depends(get_cu
         passage = dict(passage)
         content = passage.get("content") or ""
         vocab_words = json.loads(passage.get("vocabulary_words") or "[]")
+        # content_generator may return vocabulary_words as plain strings OR as
+        # {"word": ..., "definition": ...} objects (the latter is what the
+        # passage's own "Key Vocabulary" panel already uses) -- WordBank only
+        # needs the word itself.
+        vocab_words = [w.get("word", "") if isinstance(w, dict) else w for w in vocab_words]
+        vocab_words = [w for w in vocab_words if w]
 
         if not vocab_words:
             return {"words": [], "message": "No vocabulary words available for this passage."}
