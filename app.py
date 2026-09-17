@@ -5484,7 +5484,10 @@ def _generate_wordbank_images_background(word_normalized: str, grade_band: str, 
                     (correct_url, json.dumps(distractor_urls), word_normalized, grade_band)
                 )
             conn.commit()
-            print(f"✓ WordBank images ready for '{word_normalized}' ({grade_band})")
+            if correct_url or distractor_urls:
+                print(f"✓ WordBank images ready for '{word_normalized}' ({grade_band}) — correct: {bool(correct_url)}, distractors: {len(distractor_urls)}/2")
+            else:
+                print(f"⚠️ WordBank images all failed for '{word_normalized}' ({grade_band}) — falling back to text concept cards")
         finally:
             cursor.close()
             conn.close()
