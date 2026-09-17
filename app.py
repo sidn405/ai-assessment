@@ -6573,7 +6573,7 @@ def _activate_next_mission_if_needed(student_id: int):
         conn.close()
 
 
-MISSION_UNLOCK_THRESHOLD = 1000
+MISSION_UNLOCK_THRESHOLD = 500
 
 
 def _check_and_queue_mission_unlocks(user_id: int, cursor):
@@ -9150,7 +9150,7 @@ def _consume_reserved_lesson(user_id: int):
             'difficulty_level': p.get('difficulty_level'),
             'word_count': p.get('word_count', 0),
             'key_points': [],
-            'vocabulary': [],
+            'vocabulary': json.loads(p.get('vocabulary_words') or '[]') if isinstance(p.get('vocabulary_words'), str) else (p.get('vocabulary_words') or []),
             'image_url': p.get('image_url'),
             'questions': questions,
             'topic_tags': topic_tags,
