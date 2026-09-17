@@ -5461,8 +5461,11 @@ def _generate_wordbank_images_background(word_normalized: str, grade_band: str, 
                     f"no text or letters anywhere in the image, culturally inclusive, age-appropriate "
                     f"for {grade_band} students. Single clear subject, uncluttered background."
                 )
-                response = client.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
-                return response.data[0].url
+                response = client.images.generate(model="gpt-image-1", prompt=prompt, size="1024x1024", quality="medium", n=1)
+                b64_data = response.data[0].b64_json
+                if not b64_data:
+                    return None
+                return f"data:image/png;base64,{b64_data}"
             except Exception as img_err:
                 print(f"⚠️ WordBank image generation failed for concept '{concept}': {img_err}")
                 return None
