@@ -7263,6 +7263,14 @@ async def save_lesson_progress(request: Request, background_tasks: BackgroundTas
                 (user_id,)
             )
         
+        # WW-01: check whether this completion pushes the student past the
+        # 3-session threshold for a new WordWise Challenge. This is the real
+        # completion path for regular lessons (unlike /api/read/feedback,
+        # which is placement-test only) — the trigger was previously only
+        # wired into that endpoint and so had no real path to fire.
+        if completed:
+            _check_and_trigger_wordwise_challenge(user_id, cursor)
+
         conn.commit()
         conn.close()
         
