@@ -6186,6 +6186,16 @@ class WordWiseCompleteRequest(BaseModel):
     challenge_id: int
 
 
+def _mask_word_in_sentence(sentence: str, word: str) -> str:
+    """WW-06: the target word must never be visible on screen during a
+    challenge — only heard. The context sentence is otherwise a direct
+    giveaway, since it naturally contains the word in its original spelling."""
+    if not sentence or not word:
+        return sentence
+    pattern = re.compile(re.escape(word), re.IGNORECASE)
+    return pattern.sub('_____', sentence)
+
+
 @app.post("/api/wordwise/start")
 async def start_wordwise_attempt(body: WordWiseStartRequest, user=Depends(get_current_user)):
     """
@@ -6250,7 +6260,7 @@ async def start_wordwise_attempt(body: WordWiseStartRequest, user=Depends(get_cu
             )
             srow = cursor.fetchone()
             context_sentence = dict(srow).get("context_sentence") if srow else ""
-            words_payload.append({"word": word, "definition": definition, "context_sentence": context_sentence})
+            words_payload.append({"word": word, "definition": definition, "context_sentence": _mask_word_in_sentence(context_sentence, word)})
 
         words_col = f"attempt_{attempt_number}_words"
         if USE_POSTGRES:
@@ -6297,7 +6307,7 @@ async def submit_wordwise_answer(body: WordWiseAnswerSubmit, user=Depends(get_cu
         words = json.loads(challenge.get(f"attempt_{attempt_number}_words") or "[]")
         if body.word_index < 0 or body.word_index >= len(words):
             raise HTTPException(status_code=400, detail="Invalid word index")
-        correct_word = words[body.word_index]["word"]
+        correct_word = words[body.word_index]
         is_correct = body.submitted_spelling.strip().lower() == correct_word.strip().lower()
 
         results = json.loads(challenge.get(f"attempt_{attempt_number}_results") or "[]")

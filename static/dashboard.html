@@ -3562,8 +3562,8 @@
         .wordwise-overlay {
             position: fixed; inset: 0; z-index: 9999;
             background: radial-gradient(ellipse at center, #0d3b3e 0%, #06181a 100%);
-            display: flex; align-items: center; justify-content: center;
-            padding: 1.5rem; overflow-y: auto;
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 3rem 1.5rem; overflow-y: auto;
         }
         .wordwise-overlay-inner { width: 100%; max-width: 600px; text-align: center; color: white; }
         .ww-overlay-close {
@@ -12794,9 +12794,9 @@
                 <div class="ww-mic-pulse">🎤</div>
                 <div class="ww-title">WordWise Challenge — 10 words</div>
                 <div class="ww-sub">Listen carefully. Type what you hear.</div>
-                <div class="ww-countdown" id="wwCountdown">3</div>
+                <div class="ww-countdown" id="wwCountdown">10</div>
             `;
-            let n = 3;
+            let n = 10;
             const countdownEl = document.getElementById('wwCountdown');
             const tick = setInterval(() => {
                 n--;
@@ -12806,7 +12806,7 @@
                 } else if (countdownEl) {
                     countdownEl.textContent = n;
                 }
-            }, 800);
+            }, 1000);
         }
 
         async function startWordWiseAttempt() {
