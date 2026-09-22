@@ -6249,6 +6249,7 @@ async def start_wordwise_attempt(body: WordWiseStartRequest, user=Depends(get_cu
             )
             wrow = cursor.fetchone()
             definition = dict(wrow).get("definition") if wrow else ""
+            definition = _mask_word_in_sentence(definition, word)
             cursor.execute(
                 """SELECT swl.context_sentence FROM student_word_list swl
                    JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
