@@ -6627,6 +6627,12 @@ def _check_and_queue_mission_unlocks(user_id: int, cursor):
         new_missions_needed = thresholds_crossed - missions_ever_created
         if new_missions_needed <= 0:
             return
+        # Cap to one new mission per check, no matter how many thresholds
+        # have technically been crossed — missions release one at a time as
+        # each prior one is completed, never as a retroactive batch. Any
+        # extra crossed thresholds simply produce the next mission on a
+        # later check instead of flooding the queue all at once.
+        new_missions_needed = min(new_missions_needed, 1)
 
         cursor.execute("SELECT grade_band, lexile_score FROM users WHERE id = %s" if USE_POSTGRES else "SELECT grade_band, lexile_score FROM users WHERE id = ?", (user_id,))
         student_row = cursor.fetchone()
