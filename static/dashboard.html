@@ -3465,9 +3465,12 @@
         ============================================================ */
         .wordbank-overlay {
             position: fixed; inset: 0; z-index: 9999;
-            background: radial-gradient(ellipse at center, #fff8e6 0%, #fdf0cf 100%);
-            display: flex; align-items: center; justify-content: center;
-            padding: 1.5rem; overflow-y: auto;
+            /* Item #5: was a light cream/gold background — switched to navy
+               (matching --navy-primary, the same blue already used for the
+               word text on the card) with gold accents kept for contrast. */
+            background: radial-gradient(ellipse at center, #1e2a6b 0%, #0d1440 100%);
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 3rem 1.5rem; overflow-y: auto;
         }
         .wordbank-overlay-inner { width: 100%; max-width: 600px; text-align: center; }
         .wb-launch-icon { font-size: 4.5rem; animation: wbCoinBounce 1.2s ease-in-out infinite; }
@@ -3475,8 +3478,12 @@
             0%, 100% { transform: translateY(0) rotate(0deg); }
             50% { transform: translateY(-10px) rotate(8deg); }
         }
-        .wb-title { font-size: 1.9rem; font-weight: 900; color: #8a6200; margin-top: 1rem; }
-        .wb-sub { color: #a67c00; margin-top: 0.5rem; font-size: 1.05rem; }
+        .wb-title {
+            font-size: 1.9rem; font-weight: 900; margin-top: 1rem;
+            background: linear-gradient(90deg, var(--gold-accent), #fff, var(--gold-accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .wb-sub { color: #c7cdf0; margin-top: 0.5rem; font-size: 1.05rem; }
         .wb-word-card {
             background: white; border-radius: 20px; padding: 2rem;
             box-shadow: 0 10px 40px rgba(212,175,55,0.25); margin-top: 1.5rem;
@@ -6843,7 +6850,6 @@
                 
                 wordbankWordsForStrip = [];  // reset from any prior lesson
                 await startWordBankThenDisplay(lesson);
-                requestAnimationFrame(() => startTutorForLesson());
                 
             } catch (error) {
                 console.error('Error loading lesson:', error);
@@ -6927,6 +6933,15 @@
                 const loading = document.getElementById('lessonLoading');
                 if (loading) loading.classList.add('hidden');
                 stopDashLoadingAnimation();
+
+                // Item #3: fire the tutor's "time to read" message exactly
+                // when the passage actually appears — displayLesson() is the
+                // single place that's true regardless of whether WordBank ran
+                // first. (Previously called from the outer loadNextLesson()
+                // caller, but that await resolved as soon as the WordBank
+                // overlay OPENED, not when the student actually finished it,
+                // so the tutor was speaking over the WordBank screen.)
+                requestAnimationFrame(() => startTutorForLesson());
                 
                 // Show content card
                 const contentCard = document.getElementById('lessonContentCard');

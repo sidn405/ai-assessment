@@ -5517,22 +5517,35 @@ def _generate_wordbank_images_background(word_normalized: str, grade_band: str, 
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
 
-        def _gen_one(concept: str):
-            try:
-                prompt = (
-                    f"A simple, clear, friendly illustration for a K-12 educational vocabulary app, "
-                    f"depicting: {concept}. Style: clean flat digital illustration, bright colors, "
-                    f"no text or letters anywhere in the image, culturally inclusive, age-appropriate "
-                    f"for {grade_band} students. Single clear subject, uncluttered background."
-                )
-                response = client.images.generate(model="gpt-image-1", prompt=prompt, size="1024x1024", quality="medium", n=1)
-                b64_data = response.data[0].b64_json
-                if not b64_data:
+        def _gen_one(concept: str, max_retries: int = 2):
+            import time
+            for attempt in range(max_retries + 1):
+                try:
+                    prompt = (
+                        f"A simple, clear, friendly illustration for a K-12 educational vocabulary app, "
+                        f"depicting: {concept}. Style: clean flat digital illustration, bright colors, "
+                        f"no text or letters anywhere in the image, culturally inclusive, age-appropriate "
+                        f"for {grade_band} students. Single clear subject, uncluttered background."
+                    )
+                    response = client.images.generate(model="gpt-image-1", prompt=prompt, size="1024x1024", quality="medium", n=1)
+                    b64_data = response.data[0].b64_json
+                    if not b64_data:
+                        return None
+                    return f"data:image/png;base64,{b64_data}"
+                except Exception as img_err:
+                    is_rate_limit = "rate_limit" in str(img_err).lower() or "429" in str(img_err)
+                    if is_rate_limit and attempt < max_retries:
+                        # This account's cap is 5 images/min — the API itself
+                        # suggests ~12s; wait a bit longer to be safe, since
+                        # other words' background threads may also be
+                        # generating images concurrently right now.
+                        wait_seconds = 15
+                        print(f"⏳ WordBank image rate-limited for '{concept}' — waiting {wait_seconds}s before retry {attempt + 1}/{max_retries}")
+                        time.sleep(wait_seconds)
+                        continue
+                    print(f"⚠️ WordBank image generation failed for concept '{concept}': {img_err}")
                     return None
-                return f"data:image/png;base64,{b64_data}"
-            except Exception as img_err:
-                print(f"⚠️ WordBank image generation failed for concept '{concept}': {img_err}")
-                return None
+            return None
 
         correct_url = _gen_one(correct_concept) if correct_concept else None
         distractor_urls = [u for u in (_gen_one(c) for c in (distractor_concepts or [])) if u]
