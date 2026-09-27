@@ -6408,6 +6408,55 @@ async def complete_wordwise_attempt(body: WordWiseCompleteRequest, user=Depends(
         conn.close()
 
 
+class WordWiseAcceptRequest(BaseModel):
+    challenge_id: int
+
+
+@app.post("/api/wordwise/accept")
+async def accept_wordwise_score(body: WordWiseAcceptRequest, user=Depends(get_current_user)):
+    """
+    Item #11: a third option alongside "Study List" and "Retry" on the
+    post-attempt-1 screen — accept the current score and close the
+    challenge without taking attempt 2. Doesn't change points_deposited
+    (attempt 1's points were already awarded); just moves status straight
+    to 'completed' so the retry offer stops showing.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT student_id, status FROM wordwise_challenges WHERE id = %s" if USE_POSTGRES
+            else "SELECT student_id, status FROM wordwise_challenges WHERE id = ?",
+            (body.challenge_id,)
+        )
+        challenge = cursor.fetchone()
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        challenge = dict(challenge)
+        if challenge["student_id"] != student_id:
+            raise HTTPException(status_code=403, detail="Not your challenge")
+        if challenge["status"] != "attempt_1_done":
+            raise HTTPException(status_code=400, detail=f"Challenge is {challenge['status']} — nothing to accept")
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE wordwise_challenges SET status = 'completed' WHERE id = %s", (body.challenge_id,))
+        else:
+            cursor.execute("UPDATE wordwise_challenges SET status = 'completed' WHERE id = ?", (body.challenge_id,))
+        conn.commit()
+        return {"status": "completed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 READER_ROLES = {
     "detective": {"name": "The Detective", "icon": "🔎", "theme": "crime, mystery, cold case",
                   "description": "A sharp-eyed investigator piecing together clues from a cold case, crime scene, or unsolved disappearance."},

@@ -2203,7 +2203,6 @@
 
             <div class="user-info">
                 <div class="user-name" id="userName">Loading...</div>
-                <div class="user-level" id="userLevel">Getting started</div>
             </div>
             
             <!-- Rest of sidebar content -->
@@ -2224,8 +2223,8 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('ebooks', event); return false;">
-                        <span>📖</span> eBooks Library
+                    <a href="#" class="nav-link" style="opacity: 0.5; cursor: default;" onclick="return false;" title="Coming soon">
+                        <span>📖</span> eBooks Library <span style="font-size: 0.75rem;">(Coming Soon)</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -3257,7 +3256,7 @@
                     <li><a href="#" onclick="showSection('overview', event); return false;">Dashboard</a></li>
                     <li><a href="#" onclick="showSection('lessons', event); return false;">My Lessons</a></li>
                     <li><a href="#" onclick="showSection('word games', event); return false;">Word Games</a></li>
-                    <li><a href="#" onclick="showSection('ebooks library', event); return false;">eBooks Library</a></li>
+                    <li><a href="#" style="opacity: 0.5; cursor: default;" onclick="return false;" title="Coming soon">eBooks Library (Coming Soon)</a></li>
                     <li><a href="#" onclick="showSection('messages', event); return false;">Messages</a></li>
                     <li><a href="#" onclick="showSection('progress', event); return false;">Progress</a></li>
                 </ul>
@@ -3368,12 +3367,15 @@
         .mission-unlock-sub { color: #cfd3f5; margin-top: 0.5rem; }
         .mission-wallet-confirm { margin-top: 1.25rem; font-weight: 700; color: var(--gold-accent); }
 
-        /* Role select */
+        /* Role select — item #14: fixed 3-per-row so 5 roles wrap as 3+2
+           rather than "however many fit" (was 4 then 1). Flexbox (not Grid)
+           so the shorter second row centers itself naturally. */
         .mission-role-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            display: flex; flex-wrap: wrap; justify-content: center;
             gap: 1rem; margin-top: 1.5rem;
         }
         .mission-role-card {
+            flex: 0 1 170px; min-width: 150px;
             background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.1);
             border-radius: 16px; padding: 1.25rem 0.75rem; cursor: pointer;
             transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
@@ -4100,11 +4102,6 @@
                     const userNameEl = document.getElementById('userName');
                     if (userNameEl) {
                         userNameEl.textContent = data.user.name || data.user.email;
-                    }
-                    
-                    const userLevelEl = document.getElementById('userLevel');
-                    if (userLevelEl) {
-                        userLevelEl.textContent = data.user.reading_level ? capitalizeFirst(data.user.reading_level) : 'Not Set';
                     }
                 }
 
@@ -5313,7 +5310,6 @@
             document.getElementById('welcomeName').textContent = user.full_name.split(' ')[0];
             
             if (user.reading_level) {
-                document.getElementById('userLevel').textContent = `Reading Level: ${user.reading_level}`;
                 document.getElementById('currentLevel').textContent = user.reading_level;
             }
             
@@ -5875,7 +5871,6 @@
             `;
             
             // Update UI
-            document.getElementById('userLevel').textContent = `Reading Level: ${formatReadingLevel(analysis.reading_level)}`;
             document.getElementById('currentLevel').textContent = formatReadingLevel(analysis.reading_level);
             document.getElementById('gettingStarted').classList.add('hidden');
             
@@ -10346,6 +10341,20 @@
         }
     }
 
+    // Item #16: lets a student move past a word they don't know instead of
+    // being stuck with only "Check Answer" (which just keeps failing) or
+    // exiting the game entirely. No points awarded; breaks the streak the
+    // same way a wrong answer would, then advances like a normal round.
+    function skipWordScrambleWord() {
+        if (wordScrambleTimer) {
+            clearInterval(wordScrambleTimer);
+            wordScrambleTimer = null;
+        }
+        gameState.streak = 0;
+        gameState.round++;
+        nextGameRound();
+    }
+
     function generateWordMatchQuestion(vocab) {
         // Create 4 options: 1 correct + 3 distractors
         const allVocab = gameState.vocabulary;
@@ -11200,6 +11209,7 @@
                 <div style="text-align: center; margin-top: 2rem;">
                     <button class="btn btn-primary" onclick="checkWordScrambleAnswer()" style="font-size: 1.2rem; padding: 1rem 2rem;">Check Answer</button>
                     <button class="btn btn-secondary" onclick="resetWordScramble()" style="font-size: 1rem; padding: 0.75rem 1.5rem; margin-left: 1rem;">Reset</button>
+                    <button class="btn btn-secondary" onclick="skipWordScrambleWord()" style="font-size: 1rem; padding: 0.75rem 1.5rem; margin-left: 1rem;">Skip →</button>
                 </div>
             </div>
         `;
@@ -12076,13 +12086,36 @@
             updateMissionBannerAndBadge(status);
         }
 
+        // The banner should announce a mission unlocking once, then go away —
+        // not sit in the corner for as long as the mission stays role_pending.
+        // Tracked per mission_id in sessionStorage so a genuinely new unlock
+        // still gets announced, but re-checking status (which happens often)
+        // doesn't keep resurfacing the same one.
+        const MISSION_BANNER_DISPLAY_MS = 8000;
+        let missionBannerAutoHideTimer = null;
+
         function updateMissionBannerAndBadge(status) {
             const banner = document.getElementById('missionUnlockBanner');
             const badge = document.getElementById('missionQueueBadge');
             const overlayOpen = !document.getElementById('missionOverlay').classList.contains('hidden');
 
             const isPending = status.current_mission && status.current_mission.status === 'role_pending';
-            if (banner) banner.classList.toggle('hidden', !(isPending && !overlayOpen));
+            const missionId = isPending ? status.current_mission.id : null;
+
+            if (banner) {
+                if (isPending && !overlayOpen) {
+                    const seenKey = `missionBannerShown_${missionId}`;
+                    if (!sessionStorage.getItem(seenKey)) {
+                        sessionStorage.setItem(seenKey, 'true');
+                        banner.classList.remove('hidden');
+                        clearTimeout(missionBannerAutoHideTimer);
+                        missionBannerAutoHideTimer = setTimeout(() => banner.classList.add('hidden'), MISSION_BANNER_DISPLAY_MS);
+                    }
+                    // else: already announced this mission this session — stay hidden/as-is
+                } else {
+                    banner.classList.add('hidden');
+                }
+            }
 
             if (badge) {
                 const count = status.queued_count || 0;
@@ -12779,7 +12812,25 @@
                 </div>
                 <button class="ww-btn secondary" onclick="renderWordWiseView('studyList')">📖 View Study List</button>
                 <button class="ww-btn" onclick="renderWordWiseView('launch')">🎙️ Begin Challenge</button>
+                ${isRetry ? `<button class="ww-btn secondary" onclick="acceptWordWiseScore()">✅ Accept ${s.attempt_1_score} pts &amp; End</button>` : ''}
             `;
+        }
+
+        // Item #11: lets the student keep their attempt-1 score and close the
+        // challenge out instead of being funneled into either studying or
+        // retaking it — so they can move on if they choose to.
+        async function acceptWordWiseScore() {
+            try {
+                await fetch('/api/wordwise/accept', {
+                    method: 'POST',
+                    headers: { ...wordwiseAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ challenge_id: wordwiseChallengeId })
+                });
+            } catch (e) {
+                console.warn('WordWise accept failed:', e);
+            }
+            closeWordWiseOverlay();
+            checkForWordWiseUpdates();
         }
 
         async function renderWordWiseStudyList() {
@@ -12967,7 +13018,8 @@
                 ${result.can_retry
                     ? `<div class="ww-sub" style="margin-bottom:0.5rem;">Study your words and try again for up to 50% of full points.</div>
                        <button class="ww-btn secondary" onclick="closeWordWiseOverlay()">Maybe Later</button>
-                       <button class="ww-btn" onclick="renderWordWiseView('studyList')">Study &amp; Retry</button>`
+                       <button class="ww-btn" onclick="renderWordWiseView('studyList')">Study &amp; Retry</button>
+                       <button class="ww-btn secondary" onclick="acceptWordWiseScore()">✅ Accept ${result.score} pts &amp; End</button>`
                     : `<button class="ww-btn" onclick="closeWordWiseOverlay()">Done</button>`}
             `;
             checkForWordWiseUpdates();
