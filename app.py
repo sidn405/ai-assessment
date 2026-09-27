@@ -433,6 +433,26 @@ def init_db():
             conn.commit()
             print("✓ wordwise_challenges table ready")
 
+            # Item #17: grade-level word bank — Tier 2 fill source for all
+            # word games (see Achieve365_WordGames_DeveloperInstruction
+            # section 5). Tier 1 is the student's own WordBank word list
+            # (student_word_list, already exists, no changes needed).
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS grade_level_word_bank (
+                    id SERIAL PRIMARY KEY,
+                    word VARCHAR(100) NOT NULL,
+                    grade_band VARCHAR(20) NOT NULL,
+                    lexile INTEGER,
+                    pos VARCHAR(20),
+                    definition TEXT,
+                    length INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(word, grade_band)
+                )
+            """)
+            conn.commit()
+            print("✓ grade_level_word_bank table ready")
+
             # User sessions (login tracking)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_sessions (
@@ -923,6 +943,10 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_band VARCHAR(20) DEFAULT 'standard'",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS consecutive_scores TEXT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_type_counts TEXT",
+                # Item #17: per-game rolling word history (see
+                # Achieve365_WordGames_DeveloperInstruction section 3) — avoids
+                # repeating the same words back-to-back within a game type.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_game_history TEXT",
             ]
             for sql in migrations:
                 try:
@@ -1091,6 +1115,20 @@ def init_db():
                 attempt_2_completed_at TIMESTAMP,
                 points_deposited INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS grade_level_word_bank (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word TEXT NOT NULL,
+                grade_band TEXT NOT NULL,
+                lexile INTEGER,
+                pos TEXT,
+                definition TEXT,
+                length INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(word, grade_band)
             )
         """)
 
@@ -1424,6 +1462,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN word_count_band VARCHAR(20) DEFAULT 'standard'",
             "ALTER TABLE users ADD COLUMN consecutive_scores TEXT",
             "ALTER TABLE users ADD COLUMN text_type_counts TEXT",
+            "ALTER TABLE users ADD COLUMN word_game_history TEXT",
         ]
         for sql in sqlite_migrations:
             try:
@@ -11045,6 +11084,89 @@ class SchoolAccessActivateBody(BaseModel):
     lifetime: bool = False
 
 
+VALID_GRADE_BANDS = [
+    'pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th', 'elementary',
+    '6th', '7th', '8th', 'middle', '9th', '10th', '11th', '12th', 'high',
+    'adult', 'college', 'professional'
+]
+
+
+class SeedWordBankRequest(BaseModel):
+    grade_band: str
+    count: int = 40
+
+
+@app.post("/api/superadmin/seed-word-bank")
+async def seed_word_bank(body: SeedWordBankRequest, admin=Depends(require_super_admin)):
+    """
+    Item #17 (spec section 5) — one-time setup action to populate
+    grade_level_word_bank, the Tier 2 fill source for word games. Safe to
+    re-run for the same grade_band: UNIQUE(word, grade_band) means any
+    words already present are just skipped, not duplicated, so this can be
+    called repeatedly to grow the bank over time rather than needing one
+    giant seeding run.
+    """
+    if body.grade_band not in VALID_GRADE_BANDS:
+        raise HTTPException(status_code=400, detail=f"grade_band must be one of {VALID_GRADE_BANDS}")
+    if body.count < 1 or body.count > 100:
+        raise HTTPException(status_code=400, detail="count must be between 1 and 100 per call")
+
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        prompt = f"""Generate {body.count} vocabulary words appropriate for a student in grade band "{body.grade_band}" on a K-12 reading platform.
+For each word, provide: the word itself, its part of speech (noun/verb/adjective/adverb), an approximate Lexile value for the word, and a short, conversational, grade-appropriate definition (not dictionary language).
+Prefer high-utility, concrete, image-representable words over overly abstract ones. No duplicates.
+Return ONLY valid JSON in exactly this format:
+{{"words": [{{"word": "...", "pos": "...", "lexile": 000, "definition": "..."}}, ...]}}"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are building a grade-level vocabulary bank for a K-12 reading platform."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(response.choices[0].message.content)
+        words = data.get("words", [])
+
+        conn = get_db()
+        cursor = get_cursor(conn)
+        inserted = 0
+        try:
+            for w in words:
+                word = (w.get("word") or "").strip().lower()
+                if not word:
+                    continue
+                if USE_POSTGRES:
+                    cursor.execute(
+                        """INSERT INTO grade_level_word_bank (word, grade_band, lexile, pos, definition, length)
+                           VALUES (%s, %s, %s, %s, %s, %s)
+                           ON CONFLICT (word, grade_band) DO NOTHING""",
+                        (word, body.grade_band, w.get("lexile"), w.get("pos"), w.get("definition"), len(word))
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO grade_level_word_bank (word, grade_band, lexile, pos, definition, length)
+                           VALUES (?, ?, ?, ?, ?, ?)
+                           ON CONFLICT (word, grade_band) DO NOTHING""",
+                        (word, body.grade_band, w.get("lexile"), w.get("pos"), w.get("definition"), len(word))
+                    )
+                if cursor.rowcount and cursor.rowcount > 0:
+                    inserted += 1
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+
+        return {"grade_band": body.grade_band, "requested": body.count, "generated": len(words), "inserted": inserted}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/superadmin/schools")
 async def list_schools_access(admin=Depends(require_super_admin)):
     """All schools Achieve 365 staff can see, with their current access status —
@@ -13604,45 +13726,139 @@ async def delete_school_code(code_id: int, admin=Depends(require_admin)):
 # WORD GAMES ENDPOINTS
 # ========================================
 
-@router.get("/vocabulary")
-async def get_game_vocabulary(user: dict = Depends(get_current_user)):
-    """Get vocabulary for word games"""
-    user_id = user['user_id']
-    print(f"🎮 Getting vocabulary for user {user_id}")
-    
+# Item #17 game-specific word count / minimum length constraints, per
+# Achieve365_WordGames_DeveloperInstruction section 2.
+GAME_WORD_REQUIREMENTS = {
+    "word-scramble": {"words_needed": 1, "min_length": 4},
+    "word-tower": {"words_needed": 10, "min_length": 4},
+    "word-search": {"words_needed": 12, "min_length": 4},
+    "word-match": {"words_needed": 8, "min_length": 4},
+    "word-fits": {"words_needed": 8, "min_length": 4},
+}
+DEFAULT_GAME_WORD_REQUIREMENTS = {"words_needed": 10, "min_length": 4}
+
+
+def select_game_words(student_id: int, game_type: str, words_needed: int = None, min_length: int = None) -> list:
+    """
+    Two-tier word selection for word games (spec section 4's selectGameWords,
+    ported to this platform's schema). Tier 1: the student's own WordBank
+    Word List (student_word_list) — already grade-appropriate since it's
+    drawn from THEIR OWN generated passages. Tier 2 (fill): grade_level_word_bank,
+    filtered to the student's grade band. This replaces the old vocabulary
+    endpoint, which pulled randomly from vocabulary_tracker across ALL
+    students platform-wide with no grade filtering at all — the direct cause
+    of games serving words well above a student's level.
+
+    Returns a list of {word, definition} dicts, length up to words_needed.
+    Also updates word_game_history[game_type] so the same words don't repeat
+    back-to-back in this game type for this student.
+    """
+    reqs = GAME_WORD_REQUIREMENTS.get(game_type, DEFAULT_GAME_WORD_REQUIREMENTS)
+    words_needed = words_needed or reqs["words_needed"]
+    min_length = min_length or reqs["min_length"]
+
     conn = get_db()
-    cursor = conn.cursor()
-    
+    cursor = get_cursor(conn)
     try:
-        # Get ALL vocabulary regardless of user
-        cursor.execute("""
-            SELECT word, definition
-            FROM vocabulary_tracker
-            ORDER BY RANDOM()
-            LIMIT 200
-        """)
-        
-        rows = cursor.fetchall()
-        print(f"🎮 Found {len(rows)} total words in vocabulary_tracker")
-        
+        cursor.execute(
+            "SELECT grade_band, word_game_history FROM users WHERE id = %s" if USE_POSTGRES
+            else "SELECT grade_band, word_game_history FROM users WHERE id = ?",
+            (student_id,)
+        )
+        row = cursor.fetchone()
+        row = dict(row) if row else {}
+        grade_band = row.get("grade_band") or "elementary"
+
+        try:
+            history = json.loads(row.get("word_game_history") or "{}")
+        except Exception:
+            history = {}
+        history_key = f"{game_type}_last_words"
+        last_words = set(w.lower() for w in history.get(history_key, []))
+
+        # ── Tier 1: student's own WordBank Word List ──
+        cursor.execute(
+            """SELECT DISTINCT wbw.word, wbw.definition FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = %s""" if USE_POSTGRES else
+            """SELECT DISTINCT wbw.word, wbw.definition FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = ?""",
+            (student_id,)
+        )
+        tier1_candidates = [
+            {"word": r["word"], "definition": r.get("definition") or ""}
+            for r in (dict(x) for x in cursor.fetchall())
+            if len(r["word"]) >= min_length and r["word"].lower() not in last_words
+        ]
+        random.shuffle(tier1_candidates)
+        selected = tier1_candidates[:words_needed]
+
+        # ── Tier 2: grade-level word bank fill ──
+        if len(selected) < words_needed:
+            remaining = words_needed - len(selected)
+            already_picked = set(w["word"].lower() for w in selected)
+            cursor.execute(
+                "SELECT word, definition FROM grade_level_word_bank WHERE grade_band = %s AND length >= %s" if USE_POSTGRES
+                else "SELECT word, definition FROM grade_level_word_bank WHERE grade_band = ? AND length >= ?",
+                (grade_band, min_length)
+            )
+            tier2_candidates = [
+                {"word": r["word"], "definition": r.get("definition") or ""}
+                for r in (dict(x) for x in cursor.fetchall())
+                if r["word"].lower() not in last_words and r["word"].lower() not in already_picked
+            ]
+            random.shuffle(tier2_candidates)
+            selected += tier2_candidates[:remaining]
+
+        # ── Update rolling history for this game type ──
+        history[history_key] = [w["word"] for w in selected]
+        if USE_POSTGRES:
+            cursor.execute("UPDATE users SET word_game_history = %s WHERE id = %s", (json.dumps(history), student_id))
+        else:
+            cursor.execute("UPDATE users SET word_game_history = ? WHERE id = ?", (json.dumps(history), student_id))
+        conn.commit()
+
+        return selected
+    except Exception as e:
+        print(f"⚠️ select_game_words failed: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/vocabulary")
+async def get_game_vocabulary(game_type: str = "word-tower", user: dict = Depends(get_current_user)):
+    """
+    Get vocabulary for word games — item #17: was previously pulling randomly
+    from ALL students' vocabulary platform-wide with no grade filtering at
+    all (the direct cause of games serving words well above a student's
+    level). Now uses select_game_words()'s two-tier system: the student's
+    own WordBank Word List first, grade-level word bank as fill, scoped to
+    game_type's word count/length requirements and rotation history.
+    """
+    user_id = user['user_id']
+    print(f"🎮 Getting {game_type} vocabulary for user {user_id}")
+
+    try:
+        selected = select_game_words(user_id, game_type)
+
         vocabulary = [
             {
-                "word": row[0], 
-                "definition": row[1], 
-                "sentence": f"Example sentence with {row[0].lower()}."
+                "word": w["word"],
+                "definition": w["definition"],
+                "sentence": f"Example sentence with {w['word'].lower()}."
             }
-            for row in rows
+            for w in selected
         ]
-        
-        print(f"✅ Returning {len(vocabulary)} words")
+
+        print(f"✅ Returning {len(vocabulary)} words for {game_type}")
         return {"vocabulary": vocabulary, "count": len(vocabulary)}
         
     except Exception as e:
         print(f"❌ Vocabulary error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
 
 @router.get("/used-words")
 async def get_used_words(game_type: str, user: dict = Depends(get_current_user)):

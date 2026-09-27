@@ -10069,7 +10069,7 @@
                 throw new Error('No auth token');
             }
             
-            const response = await fetch('/api/word-games/vocabulary', {
+            const response = await fetch(`/api/word-games/vocabulary?game_type=${encodeURIComponent(currentGame || 'word-tower')}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
