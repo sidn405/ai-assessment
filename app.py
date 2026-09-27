@@ -908,6 +908,21 @@ def init_db():
                 "ALTER TABLE school_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE student_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE passages ADD COLUMN IF NOT EXISTS vocabulary_words TEXT",
+                # Item #8: story generation diversity/track-rotation fields (see
+                # Achieve365_Developer_QuickReference — Story Generation Prompt
+                # System v3.1). Rolling-history arrays and track counters that
+                # drive genre/structure/perspective/topic rotation so stories
+                # stop repeating the same handful of interest-based patterns.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS track_counts TEXT DEFAULT '{\"1\":0,\"2\":0,\"3\":0}'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS genres_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS structures_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS perspectives_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS interest_modes_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_types_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS track_2_topics_used TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_band VARCHAR(20) DEFAULT 'standard'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS consecutive_scores TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_type_counts TEXT",
             ]
             for sql in migrations:
                 try:
@@ -1399,6 +1414,16 @@ def init_db():
             "ALTER TABLE school_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
             "ALTER TABLE student_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
             "ALTER TABLE passages ADD COLUMN vocabulary_words TEXT",
+            "ALTER TABLE users ADD COLUMN track_counts TEXT DEFAULT '{\"1\":0,\"2\":0,\"3\":0}'",
+            "ALTER TABLE users ADD COLUMN genres_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN structures_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN perspectives_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN interest_modes_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN text_types_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN track_2_topics_used TEXT",
+            "ALTER TABLE users ADD COLUMN word_count_band VARCHAR(20) DEFAULT 'standard'",
+            "ALTER TABLE users ADD COLUMN consecutive_scores TEXT",
+            "ALTER TABLE users ADD COLUMN text_type_counts TEXT",
         ]
         for sql in sqlite_migrations:
             try:
@@ -8495,6 +8520,173 @@ async def retake_placement(request: Request):
 
 
 # ============================================
+# STORY GENERATION — TRACK SYSTEM (item #8)
+# See Achieve365_Developer_QuickReference (Story Generation Prompt System v3.1)
+# ============================================
+# TRACK_2_TOPICS is the standards-aligned topic pool for Track 2 — student
+# interests are NOT the driver here; standards coverage is.
+TRACK_2_TOPICS = [
+    "life-science", "physical-science-technology", "history-us", "history-world-culture",
+    "civics-government-economics", "arts-humanities", "health-human-body",
+    "environmental-science", "biography-memoir"
+]
+TRACK_2_TEXT_TYPES = ["narrative", "informational", "historical", "biographical", "argumentative", "scientific", "literary"]
+TRACK_3_TEXT_TYPES = ["argumentative", "scientific"]  # spec: prioritize for assessment readiness
+DIVERSITY_GENRES = [
+    "realistic-fiction", "mystery-suspense", "humor-comedy", "historical-fiction", "science-fiction",
+    "documentary-nonfiction", "adventure", "dialogue-driven", "epistolary", "day-in-the-life"
+]
+DIVERSITY_STRUCTURES = [
+    "discovery", "reversal", "collaboration", "consequence", "observation",
+    "misunderstanding-resolution", "goal-pursuit", "unexpected-connection", "humor-and-mishap", "challenge-overcome"
+]
+DIVERSITY_PERSPECTIVES = ["first-person", "third-person-limited", "second-person"]
+DIVERSITY_INTEREST_MODES = ["DIRECT", "PERIPHERAL", "THEMATIC", "CULTURAL-HISTORICAL", "ADJACENT", "ABSENT"]
+
+
+def _rolling_list(raw_json: str, new_value: str = None, max_len: int = 5) -> list:
+    """Reads a JSON-encoded rolling-history array; if new_value is given,
+    appends it and trims to the last max_len entries (oldest dropped first)."""
+    try:
+        items = json.loads(raw_json or "[]")
+        if not isinstance(items, list):
+            items = []
+    except Exception:
+        items = []
+    if new_value is not None:
+        items.append(new_value)
+        items = items[-max_len:]
+    return items
+
+
+def select_reading_track(user_row: dict) -> int:
+    """
+    Spec section 3 (selectTrack): 1=Interest-Connected, 2=Standards-Aligned,
+    3=Cold Reading, targeting a 40/40/20 split over the student's history.
+    Always starts a brand-new student on Track 1 so their very first lessons
+    stay firmly interest-connected before other tracks are introduced.
+    """
+    try:
+        track_counts = json.loads(user_row.get("track_counts") or '{"1":0,"2":0,"3":0}')
+    except Exception:
+        track_counts = {"1": 0, "2": 0, "3": 0}
+    total = sum(track_counts.get(str(k), 0) for k in (1, 2, 3))
+    if total == 0:
+        return 1
+    gaps = [
+        (1, 0.40 - track_counts.get("1", 0) / total),
+        (2, 0.40 - track_counts.get("2", 0) / total),
+        (3, 0.20 - track_counts.get("3", 0) / total),
+    ]
+    gaps.sort(key=lambda g: g[1], reverse=True)
+    return gaps[0][0]
+
+
+def select_word_count_band(user_row: dict) -> str:
+    """
+    Spec section 3 (selectWordCountBand): 'extended' once the rolling last-5
+    comprehension average hits 80%+, steps back down to 'standard' below
+    60%. This is layered as a modifier on the EXISTING word_count_min/max
+    range (not a replacement for it) — see the note on why the platform
+    keeps its current beginner/intermediate/advanced word-count system
+    rather than switching to the spec's separate per-grade table.
+    """
+    try:
+        scores = json.loads(user_row.get("consecutive_scores") or "[]")
+    except Exception:
+        scores = []
+    if len(scores) < 5:
+        return "standard"
+    avg = sum(scores) / len(scores)
+    if avg >= 80:
+        return "extended"
+    if avg < 60:
+        return "standard"
+    return user_row.get("word_count_band") or "standard"
+
+
+def select_track2_topic(user_row: dict) -> str:
+    """Picks a Track 2 topic not in the student's last-3 used (rolling)."""
+    used = _rolling_list(user_row.get("track_2_topics_used"), max_len=3)
+    candidates = [t for t in TRACK_2_TOPICS if t not in used]
+    if not candidates:
+        candidates = TRACK_2_TOPICS
+    return random.choice(candidates)
+
+
+def select_diversity_element(user_row: dict, field: str, pool: list) -> str:
+    """Picks an element from `pool` not in the student's rolling last-5
+    history for that field (genre, structure, perspective, interest_mode,
+    text_type) — the core mechanism that stops stories from repeating the
+    same handful of patterns even within Track 1."""
+    used = _rolling_list(user_row.get(field), max_len=5)
+    candidates = [p for p in pool if p not in used]
+    if not candidates:
+        candidates = pool
+    return random.choice(candidates)
+
+
+def record_generation_history(user_id: int, track: int, genre: str, structure: str,
+                               perspective: str, interest_mode: str, text_type: str,
+                               topic_area: str):
+    """Post-session update (spec section 8): appends this story's rotation
+    fields to the student's rolling history and increments track_counts, so
+    the NEXT generation's diversity/track selection sees it. Called right
+    after a passage is generated — self-contained (opens its own
+    connection) since the caller's own connection is typically already
+    closed by the time generation succeeds."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT track_counts, genres_used_recently, structures_used_recently, perspectives_used_recently, "
+            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used FROM users WHERE id = %s"
+            if USE_POSTGRES else
+            "SELECT track_counts, genres_used_recently, structures_used_recently, perspectives_used_recently, "
+            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used FROM users WHERE id = ?",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        row = dict(row) if row else {}
+
+        try:
+            track_counts = json.loads(row.get("track_counts") or '{"1":0,"2":0,"3":0}')
+        except Exception:
+            track_counts = {"1": 0, "2": 0, "3": 0}
+        track_counts[str(track)] = track_counts.get(str(track), 0) + 1
+
+        genres = _rolling_list(row.get("genres_used_recently"), genre, 5)
+        structures = _rolling_list(row.get("structures_used_recently"), structure, 5)
+        perspectives = _rolling_list(row.get("perspectives_used_recently"), perspective, 5)
+        interest_modes = _rolling_list(row.get("interest_modes_used_recently"), interest_mode, 5)
+        text_types = _rolling_list(row.get("text_types_used_recently"), text_type, 5)
+        track2_topics = _rolling_list(row.get("track_2_topics_used"), topic_area if track == 2 else None, 3)
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE users SET track_counts = %s, genres_used_recently = %s, structures_used_recently = %s,
+                   perspectives_used_recently = %s, interest_modes_used_recently = %s,
+                   text_types_used_recently = %s, track_2_topics_used = %s WHERE id = %s""",
+                (json.dumps(track_counts), json.dumps(genres), json.dumps(structures), json.dumps(perspectives),
+                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics), user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE users SET track_counts = ?, genres_used_recently = ?, structures_used_recently = ?,
+                   perspectives_used_recently = ?, interest_modes_used_recently = ?,
+                   text_types_used_recently = ?, track_2_topics_used = ? WHERE id = ?""",
+                (json.dumps(track_counts), json.dumps(genres), json.dumps(structures), json.dumps(perspectives),
+                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics), user_id)
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️ record_generation_history failed (non-fatal): {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================
 # LESSONS ENDPOINTS (Phase 2 - AI Generated)
 # ============================================
 
@@ -8739,57 +8931,77 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
         print(f"✓ Difficulty: {difficulty}")
         print(f"✓ Word count range: {word_count_min}-{word_count_max} words")
 
-        # Step 6: Select topic with ROTATION (not random)
-        print("Step 6: Selecting topic with rotation...")
-        
-        # ✅ Get last used interest index for rotation
-        last_index = user.get('last_interest_index') or 0
-        
-        # ✅ Rotate through interests instead of random selection
-        current_index = last_index % len(interests)
-        topic = interests[current_index]
-        
-        # ✅ Update index for next lesson
-        next_index = (current_index + 1) % len(interests)
-        
-        print(f"✓ Selected topic: {topic} (interest {current_index + 1}/{len(interests)})")
-        print(f"✓ Next lesson will use: {interests[next_index]}")
-        
-        # ✅ Save the updated index back to database
-        conn_update = get_db()
-        cursor_update = get_cursor(conn_update)
-        try:
-            if USE_POSTGRES:
-                cursor_update.execute(
-                    "UPDATE users SET last_interest_index = %s WHERE id = %s",
-                    (next_index, user_id)
-                )
-            else:
-                cursor_update.execute(
-                    "UPDATE users SET last_interest_index = ? WHERE id = ?",
-                    (next_index, user_id)
-                )
-            conn_update.commit()
-            print(f"✓ Updated last_interest_index to {next_index}")
-        except Exception as e:
-            print(f"Warning: Could not update interest index: {e}")
-        finally:
-            conn_update.close()
+        # Step 6: Select reading track + topic (item #8 — was always
+        # interest-rotation; now branches to Track 2/3 so stories stop being
+        # restricted to the student's 10 interests).
+        print("Step 6: Selecting reading track + topic...")
+
+        reading_track = select_reading_track(user)
+        print(f"✓ Reading track: {reading_track}")
+
+        genre_pick = select_diversity_element(user, "genres_used_recently", DIVERSITY_GENRES)
+        structure_pick = select_diversity_element(user, "structures_used_recently", DIVERSITY_STRUCTURES)
+        perspective_pick = select_diversity_element(user, "perspectives_used_recently", DIVERSITY_PERSPECTIVES)
+        word_count_band = select_word_count_band(user)
+
+        if reading_track == 1:
+            # ── Existing interest-rotation logic, unchanged ──
+            last_index = user.get('last_interest_index') or 0
+            current_index = last_index % len(interests)
+            topic = interests[current_index]
+            next_index = (current_index + 1) % len(interests)
+
+            print(f"✓ Selected topic: {topic} (interest {current_index + 1}/{len(interests)})")
+            print(f"✓ Next lesson will use: {interests[next_index]}")
+
+            conn_update = get_db()
+            cursor_update = get_cursor(conn_update)
+            try:
+                if USE_POSTGRES:
+                    cursor_update.execute("UPDATE users SET last_interest_index = %s WHERE id = %s", (next_index, user_id))
+                else:
+                    cursor_update.execute("UPDATE users SET last_interest_index = ? WHERE id = ?", (next_index, user_id))
+                conn_update.commit()
+                print(f"✓ Updated last_interest_index to {next_index}")
+            except Exception as e:
+                print(f"Warning: Could not update interest index: {e}")
+            finally:
+                conn_update.close()
+
+            topic_area = None
+            interest_mode_pick = select_diversity_element(user, "interest_modes_used_recently", DIVERSITY_INTEREST_MODES)
+            text_type_pick = None  # Track 1 stays narrative, matching current behavior
+
+            topics_to_try = available_interests[:]
+            random.shuffle(topics_to_try)
+            if topic in topics_to_try:
+                topics_to_try.remove(topic)
+            topics_to_try = [topic] + topics_to_try
+            topics_to_try = topics_to_try[:3]
+
+        elif reading_track == 2:
+            topic_area = select_track2_topic(user)
+            text_type_pick = select_diversity_element(user, "text_types_used_recently", TRACK_2_TEXT_TYPES)
+            interest_mode_pick = None
+            # The student's current rotating interest, offered only as an
+            # OPTIONAL unforced bridge in the Track 2 prompt — not the subject.
+            topic = interests[(user.get('last_interest_index') or 0) % len(interests)]
+            print(f"✓ Track 2 (Standards-Aligned) topic area: {topic_area} | text type: {text_type_pick}")
+            topics_to_try = [topic_area]
+
+        else:  # Track 3 — Cold Reading
+            topic_area = None
+            topic = ""
+            text_type_pick = select_diversity_element(user, "text_types_used_recently", TRACK_3_TEXT_TYPES)
+            interest_mode_pick = None
+            print(f"✓ Track 3 (Cold Reading) | text type: {text_type_pick}")
+            topics_to_try = ["cold-reading"]
 
         # Done with DB reads
         conn.close()
 
         # Step 7: Generate passage (duplicates-only retries)
         print("Step 7: Generating passage...")
-
-        # Try up to 3 topics max (duplicates only). No word-count retry storms here.
-        topics_to_try = available_interests[:]
-        random.shuffle(topics_to_try)
-
-        if topic in topics_to_try:
-            topics_to_try.remove(topic)
-        topics_to_try = [topic] + topics_to_try
-        topics_to_try = topics_to_try[:3]
 
         passage_data = None
         picked_topic = None
@@ -8803,16 +9015,24 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
 
             candidate = await asyncio.to_thread(
                 content_generator.generate_passage,
-                topic=picked_topic,
+                topic=(picked_topic if reading_track == 1 else topic),
                 difficulty_level=difficulty,
                 word_count_min=word_count_min,
                 word_count_max=word_count_max,
-                user_interests=[picked_topic],
+                user_interests=[picked_topic] if reading_track == 1 else interests,
                 age=user.get('age'),
                 grade_band=user.get('grade_band') or 'elementary',
                 cultural_identity=user.get('cultural_identity'),
                 student_name=user.get('full_name'),
-                used_names=json.loads(user.get('used_character_names') or '[]')
+                used_names=json.loads(user.get('used_character_names') or '[]'),
+                reading_track=reading_track,
+                genre=genre_pick,
+                structure=structure_pick,
+                perspective=perspective_pick,
+                interest_mode=interest_mode_pick,
+                text_type=text_type_pick,
+                topic_area=picked_topic if reading_track == 2 else None,
+                word_count_band=word_count_band
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
@@ -8849,6 +9069,20 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
             if not passage_data:
                 raise HTTPException(status_code=500, detail="Failed to generate lesson content.")
             print("⚠️ Could not find a non-duplicate quickly; accepting last candidate.")
+
+        # Item #8: record this generation's track/diversity picks so the
+        # NEXT call to select_reading_track()/select_diversity_element() for
+        # this student sees them and avoids repeating the same pattern.
+        record_generation_history(
+            user_id=user_id,
+            track=reading_track,
+            genre=genre_pick,
+            structure=structure_pick,
+            perspective=perspective_pick,
+            interest_mode=interest_mode_pick,
+            text_type=text_type_pick or "narrative",
+            topic_area=topic_area
+        )
 
         topic = picked_topic or topic
         passage_data = normalize_passage(passage_data, topic, difficulty)

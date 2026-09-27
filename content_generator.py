@@ -214,11 +214,29 @@ class ContentGenerator:
             txt = txt.split("```")[1].split("```")[0].strip()
         return json.loads(txt)
     
-    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests, age=None, grade_band=None, cultural_identity=None, student_name=None, used_names=None):
-        """Generate educational passage using GPT-4 with dynamic word count"""
+    def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests,
+                          age=None, grade_band=None, cultural_identity=None, student_name=None, used_names=None,
+                          reading_track=1, genre=None, structure=None, perspective=None, interest_mode=None,
+                          text_type=None, topic_area=None, word_count_band='standard'):
+        """
+        Generate educational passage using GPT-4 with dynamic word count.
+
+        Item #8 (story generation variety) additions — all optional, default
+        to Track 1 / current behavior so existing callers (e.g. the
+        placement-test passage generator) work unchanged:
+          reading_track: 1=Interest-Connected (default) | 2=Standards-Aligned | 3=Cold Reading
+          genre/structure/perspective/interest_mode: pre-selected diversity picks
+              (see select_diversity_element() in app.py) — when given, these
+              replace the old random story_angle list with history-aware variety.
+          text_type: narrative|informational|historical|biographical|argumentative|scientific|literary
+          topic_area: the Track 2 standards topic (e.g. "life-science") — used
+              INSTEAD of `topic`/interests when reading_track == 2.
+          word_count_band: 'standard' (default) | 'extended' — extended nudges
+              target_words toward word_count_max rather than the range midpoint.
+        """
         
         import random
-        target_words = (word_count_min + word_count_max) // 2
+        target_words = word_count_max if word_count_band == 'extended' else (word_count_min + word_count_max) // 2
         if used_names is None:
             used_names = []
 
@@ -257,38 +275,88 @@ class ContentGenerator:
 
         # Pick a random story angle to prevent the AI defaulting to the same
         # scenario (e.g. "pizza party at school") for the same topic every time
-        story_angles = [
-            "a surprising discovery",
-            "a friendly competition",
-            "helping someone in need",
-            "learning something new for the first time",
-            "a problem that needs creative solving",
-            "an unexpected friendship",
-            "a goal that takes practice to achieve",
-            "a funny misunderstanding",
-            "a challenge that builds confidence",
-            "a day that doesn't go as planned — but turns out great",
-            "working together as a team",
-            "a special talent being discovered",
-            "overcoming fear of trying something new",
-            "a mystery to solve",
-            "celebrating an achievement",
-        ]
-        story_angle = random.choice(story_angles)
-        
+        # Item #8: track/diversity-aware story angle. Falls back to the
+        # original random list when called without a pre-selected
+        # `structure` (e.g. the placement-test passage path), so that
+        # caller keeps working unchanged.
+        if structure:
+            story_angle = structure.replace('-', ' ')
+        else:
+            story_angles = [
+                "a surprising discovery",
+                "a friendly competition",
+                "helping someone in need",
+                "learning something new for the first time",
+                "a problem that needs creative solving",
+                "an unexpected friendship",
+                "a goal that takes practice to achieve",
+                "a funny misunderstanding",
+                "a challenge that builds confidence",
+                "a day that doesn't go as planned — but turns out great",
+                "working together as a team",
+                "a special talent being discovered",
+                "overcoming fear of trying something new",
+                "a mystery to solve",
+                "celebrating an achievement",
+            ]
+            story_angle = random.choice(story_angles)
+
+        genre_instruction = f"- Genre: write this as a {genre.replace('-', ' ')} story." if genre else ""
+        perspective_instruction = f"- Point of view: write in {perspective.replace('-', ' ')}." if perspective else ""
+        interest_mode_instruction = ""
+        if interest_mode and interest_mode != "ABSENT":
+            mode_guidance = {
+                "DIRECT": f"{topic} is the direct subject of the story.",
+                "PERIPHERAL": f"{topic} appears in the background or as a minor detail, not the main focus.",
+                "THEMATIC": f"the style or feel of {topic} shapes the story's tone, without {topic} being explicitly named as the plot.",
+                "CULTURAL-HISTORICAL": f"explore the history, culture, or community around {topic} rather than a typical scene from it.",
+                "ADJACENT": f"connect to something bordering {topic} — a related field, skill, or community — rather than {topic} itself.",
+            }
+            interest_mode_instruction = f"- Interest connection ({interest_mode}): {mode_guidance.get(interest_mode, '')}"
+
+        text_type_val = text_type or "narrative"
+
+        # Track-specific topic/subject framing (item #8's core fix: Track 2/3
+        # break out of the "always one of the student's 10 interests" loop).
+        if reading_track == 2 and topic_area:
+            topic_focus_header = f"Write a {text_type_val.upper()} piece with {topic_area.replace('-', ' ')} as the primary subject."
+            topic_line = f"- PRIMARY SUBJECT (standards-aligned, not an interest topic): {topic_area.replace('-', ' ')}"
+            track_note = (
+                f"        - This is Track 2 (Standards-Aligned): standards coverage is the primary driver, not student interest.\n"
+                f"        - If a natural, unforced connection to {topic} exists, you may include ONE thread to it — never force it.\n"
+                f"        - Apply strong narrative voice, concrete details, and a compelling opener even though the subject is {topic_area.replace('-', ' ')}."
+            )
+        elif reading_track == 3:
+            topic_focus_header = f"Write a {text_type_val.upper()} piece for cold reading practice — assessment-style, with NO connection to any of the student's stated interests."
+            topic_line = "- NO interest connection — this is Track 3 (Cold Reading)"
+            track_note = (
+                "        - Mirror standardized assessment passage tone and style.\n"
+                "        - Prioritize argumentative or scientific writing for assessment readiness.\n"
+                "        - Apply strong craft (voice, concrete detail, compelling opener) but with NO interest connection at all."
+            )
+        else:
+            topic_focus_header = f"Write a {text_type_val.upper()} about {topic} featuring characters from the student's cultural background."
+            topic_line = f"- PRIMARY INTEREST/TOPIC: {topic}"
+            track_note = ""
+
         # ========== PASSAGE PROMPT ==========
-        prompt = f"""Write a SHORT STORY (narrative) about {topic} featuring characters from the student's cultural background.
+        prompt = f"""{topic_focus_header}
 
         Student Profile:
         - Age: {age} years old
         - Grade Level: {grade_band}
         - Reading Difficulty: {difficulty_level}
-        - PRIMARY INTEREST/TOPIC: {topic}
+        {topic_line}
         - Cultural Background: {cultural_identity or 'diverse/inclusive'}
+
+{track_note}
 
         STORY ANGLE (make it fresh and different every time):
         - Story concept: {story_angle}
-        - Apply this angle to {topic} — avoid repeating the same scenario
+        - Apply this angle to the subject above — avoid repeating the same scenario
+        {genre_instruction}
+        {perspective_instruction}
+        {interest_mode_instruction}
         
         CULTURAL AUTHENTICITY — IMPORTANT:
         - {cultural_ctx['cultural_notes']}
@@ -310,9 +378,9 @@ class ContentGenerator:
         - Avoid overused defaults like "community center"
         
         IMPORTANT - TOPIC FOCUS:
-        - The ONLY topic for this story is: {topic}
-        - Do NOT introduce other topics not related to {topic}
-        - Stay 100% on topic — the student chose {topic} because it interests them
+        {f"- The ONLY topic for this story is: {topic}" if reading_track == 1 else f"- The ONLY subject for this piece is: {topic_area.replace('-', ' ') if topic_area else 'the assigned subject'}"}
+        - Do NOT introduce other topics not related to the subject above
+        {f"- Stay 100% on topic — the student chose {topic} because it interests them" if reading_track == 1 else "- Stay fully on-subject"}
         
         HARD WORD COUNT RULE:
         - The "content" field MUST be EXACTLY {target_words} words.
@@ -345,49 +413,41 @@ class ContentGenerator:
             ]
         }}
         
-        REMINDER: This story should feel real and relatable to an African American student from an urban community. Focus on positive experiences, community strength, and educational growth."""
+        REMINDER: This story should feel real and relatable to THIS student's actual cultural background and lived experience. Focus on positive experiences, community strength, and educational growth."""
         
         try:
             # NEW API SYNTAX
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are an expert educational content creator specializing in culturally relevant, trauma-informed content for African American students from underserved communities.
-                        
+            # Was previously hardcoded to always describe "an African American
+            # student from underserved communities" regardless of the actual
+            # student's cultural_identity — cultural_ctx (built above, per
+            # student) is now used here instead, matching what the user
+            # prompt already does. Fixed alongside item #8 since this system
+            # message needed rewriting for track-awareness anyway.
+            system_message = f"""You are an expert educational content creator specializing in culturally relevant, trauma-informed content for K-12 students.
+
                         CRITICAL CULTURAL GUIDELINES:
-                        1. **Authentic Representation**: 
-                           - Use diverse Black characters with authentic names and experiences
+                        1. **Authentic Representation**:
+                           - {cultural_ctx['cultural_notes']}
                            - Include positive role models from the community (teachers, coaches, entrepreneurs, artists)
                            - Show families with different structures (single parents, grandparents, extended family)
-                           - Represent urban/neighborhood settings authentically and positively
-                        
+                           - Represent settings authentically and positively: {', '.join(cultural_ctx['settings'][:4])}
+
                         2. **TRAUMA-INFORMED - AVOID**:
                            - Police encounters or criminal justice system references
                            - Violence, gangs, or crime as plot elements
                            - Poverty as a defining characteristic (it's context, not identity)
                            - Deficit narratives or stereotypes
                            - Drug-related content
-                        
+                           - {' | '.join(cultural_ctx['avoid'])}
+
                         3. **EMPOWERING THEMES**:
-                           - Community strength and mutual support
+                           - {', '.join(cultural_ctx['themes'][:6])}
                            - Overcoming challenges through creativity and resilience
-                           - Cultural pride and heritage
                            - Educational and career success
-                           - Arts, music, sports as pathways
+                           - Arts, music, sports, and STEM as pathways
                            - Entrepreneurship and innovation
-                           - STEM and creative fields
-                        
-                        4. **RELATABLE CONTEXTS**:
-                           - Urban neighborhoods, public transportation, corner stores
-                           - Community centers, parks, libraries, churches
-                           - Barbershops, hair salons, family gatherings
-                           - Basketball courts, community gardens
-                           - Local heroes and mentors
-                           - Music (hip-hop, R&B), art, fashion, sports culture
-                        
-                        5. **VOCABULARY EXTRACTION**:
+
+                        4. **VOCABULARY EXTRACTION**:
                            Extract ALL challenging words from your passage. A good passage should have AT LEAST 5-10 vocabulary words.
                            
                            Examples by level:
@@ -395,14 +455,21 @@ class ContentGenerator:
                            - Intermediate: "phenomenon", "inevitable", "perspective", "substantial", "comprehensive"  
                            - High School: "culmination", "juxtaposition", "paradigm", "synthesis", "nuance"
                            - Adult: "epistemology", "hegemony", "empirical", "ubiquitous", "pragmatic"
-                        
-                        STORY REQUIREMENTS:
-                        - Focus on ONE topic at a time
-                        - Include a character, setting, and plot (beginning → problem → resolution)
+
+                        STORY/PIECE REQUIREMENTS:
+                        - Focus on ONE subject at a time
+                        - For narrative text types: include a character, setting, and plot (beginning → problem → resolution) with at least one line of dialogue
+                        - For informational/historical/biographical/argumentative/scientific text types: still use a strong, concrete, non-textbook voice with a compelling opener — never a flat lecture
                         - Make it engaging and age-appropriate
-                        - Show positive outcomes through effort, creativity, or community support
-                        - Include at least one line of dialogue
-                        - NO articles, definitions, or lectures - tell a STORY"""
+                        - Show positive outcomes through effort, creativity, or community support where the text type allows it
+                        - NO articles, definitions, or lectures written in a flat textbook voice — bring the subject to life"""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_message
                     },
                     {"role": "user", "content": prompt}
                 ],
@@ -711,54 +778,60 @@ class ContentGenerator:
                               When provided, one question will always be a vocab question.
         """
         
-        # Pick one vocab word for a dedicated vocabulary question.
-        # We generate num_questions - 1 comprehension questions from the AI
-        # then append the vocab question at the end so it's always present.
-        vocab_question = None
+        # Pick up to 2 vocab words for dedicated vocabulary questions.
+        # We generate num_questions - len(vocab_questions) comprehension
+        # questions from the AI then append the vocab questions at the end
+        # so they're always present (item #2: 5 total questions, 2 of them
+        # vocabulary — was 4 total / 1 vocabulary).
+        vocab_questions = []
         comprehension_count = num_questions
 
         if vocabulary_words and len(vocabulary_words) > 0:
             import random
-            # Pick a word — prefer words with clean single-word definitions
             candidates = [v for v in vocabulary_words if v.get('word') and v.get('definition')]
+            generic = [
+                "A type of weather condition",
+                "Something you eat for breakfast",
+                "A place where people swim",
+                "A very loud sound",
+                "Moving very slowly",
+            ]
             if candidates:
-                vocab_entry = random.choice(candidates)
-                vocab_word = vocab_entry['word'].strip()
-                correct_def = vocab_entry['definition'].strip()
+                # Pick up to 2 distinct words — prefer words with clean definitions
+                pool = candidates[:]
+                random.shuffle(pool)
+                chosen = pool[:2]
 
-                # Build 3 distractor definitions from other vocab words in the list
-                other_defs = [
-                    v['definition'].strip() for v in candidates
-                    if v['word'] != vocab_word and v.get('definition')
-                ]
-                random.shuffle(other_defs)
-                distractors = other_defs[:3]
+                for vocab_entry in chosen:
+                    vocab_word = vocab_entry['word'].strip()
+                    correct_def = vocab_entry['definition'].strip()
 
-                # Pad with generic distractors if not enough vocab words
-                generic = [
-                    "A type of weather condition",
-                    "Something you eat for breakfast",
-                    "A place where people swim",
-                    "A very loud sound",
-                    "Moving very slowly",
-                ]
-                while len(distractors) < 3:
-                    distractors.append(generic[len(distractors)])
+                    # Build 3 distractor definitions from other vocab words in the list
+                    other_defs = [
+                        v['definition'].strip() for v in candidates
+                        if v['word'] != vocab_word and v.get('definition')
+                    ]
+                    random.shuffle(other_defs)
+                    distractors = other_defs[:3]
 
-                options = [correct_def] + distractors
-                random.shuffle(options)
+                    # Pad with generic distractors if not enough vocab words
+                    while len(distractors) < 3:
+                        distractors.append(generic[len(distractors)])
 
-                vocab_question = {
-                    "question": f'What does the word "{vocab_word}" mean in the story?',
-                    "type": "multiple_choice",
-                    "options": options,
-                    "correct_answer": correct_def,
-                    "explanation": f'"{vocab_word}" means: {correct_def}',
-                    "difficulty": 1,
-                    "is_vocabulary": True
-                }
-                # Generate one fewer from AI so total stays at num_questions
-                comprehension_count = num_questions - 1
+                    options = [correct_def] + distractors
+                    random.shuffle(options)
+
+                    vocab_questions.append({
+                        "question": f'What does the word "{vocab_word}" mean in the story?',
+                        "type": "multiple_choice",
+                        "options": options,
+                        "correct_answer": correct_def,
+                        "explanation": f'"{vocab_word}" means: {correct_def}',
+                        "difficulty": 1,
+                        "is_vocabulary": True
+                    })
+                # Generate fewer from AI so total stays at num_questions
+                comprehension_count = num_questions - len(vocab_questions)
 
         if allow_fill_blank:
             # Mix of question types for lessons
@@ -885,12 +958,12 @@ class ContentGenerator:
                     
                     validated.append(q)
 
-                # Append vocabulary question as the last question
-                if vocab_question:
-                    validated.append(vocab_question)
+                # Append vocabulary questions as the last questions
+                if vocab_questions:
+                    validated.extend(vocab_questions)
 
                 question_types = "mixed" if allow_fill_blank else "MC only"
-                vocab_note = " + 1 vocab" if vocab_question else ""
+                vocab_note = f" + {len(vocab_questions)} vocab" if vocab_questions else ""
                 print(f"✓ Generated {len(validated)} questions ({question_types}{vocab_note})")
                 return validated
                 
@@ -959,9 +1032,9 @@ class ContentGenerator:
                     }
                 ]
 
-            # Always append vocab question if available, even in fallback
-            if vocab_question:
-                fallback.append(vocab_question)
+            # Always append vocab questions if available, even in fallback
+            if vocab_questions:
+                fallback.extend(vocab_questions)
 
             return fallback[:num_questions]
         """
