@@ -12567,6 +12567,7 @@
                 };
                 await waitForMinimumLoadingTime();
                 document.getElementById('lessonLoading')?.classList.add('hidden');
+                stopDashLoadingAnimation();  // graphic AND music stop together — was previously only hiding the graphic here, leaving the music looping through the whole WordBank session
                 openWordBankOverlay();
             } catch (e) {
                 console.warn('WordBank unavailable — loading story directly:', e);
