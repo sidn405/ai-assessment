@@ -2678,7 +2678,7 @@
                         <strong>🎉 Great Job!</strong>
                         <p id="resultsMessage" style="margin-top: 0.5rem;"></p>
                     </div>
-                    <button class="btn btn-primary" onclick="handleNextLesson()">Next Lesson</button>
+                    <button class="btn btn-primary" onclick="handleNextLesson()">Next</button>
                 </div>
                 
                 <!-- No Lessons Yet -->
@@ -6708,7 +6708,22 @@
         dashLoadingAudio.load();
 
         // ── Lesson Loading Animation ───────────────────────────────────────
+        // Item #4: the loading graphic + music must stay visible for at least
+        // 10 seconds before the vocabulary activity (or the story, if a passage
+        // has no WordBank words) appears — even when the lesson is served
+        // instantly from the pre-generated reserve, so it doesn't flash by and
+        // give away that nothing was actually "generated" this time.
+        let dashLoadingStartedAt = 0;
+        const DASH_MIN_LOADING_MS = 10000;
+        async function waitForMinimumLoadingTime() {
+            const remaining = DASH_MIN_LOADING_MS - (Date.now() - dashLoadingStartedAt);
+            if (remaining > 0) {
+                await new Promise(resolve => setTimeout(resolve, remaining));
+            }
+        }
+
         function startDashLoadingAnimation() {
+            dashLoadingStartedAt = Date.now();
             // Safety net: preload here too in case this runs before DOMContentLoaded
             preloadDashAnimations();
 
@@ -6776,7 +6791,6 @@
             startDashLoadingAnimation();
             
             lessonStartTime = Date.now();
-            startTutorForLesson();
             
             try {
                 console.log('Fetching lesson from API...');
@@ -6905,10 +6919,15 @@
             }
         }
 
-        function displayLesson(lesson) {
+        async function displayLesson(lesson) {
             console.log('=== displayLesson START ===', lesson);
             
             try {
+                // Item #4: guarantee at least 10s of visible loading (with music)
+                // before content appears, even on an instant reserve-hit. No-op
+                // if we've already been "loading" this long or longer.
+                await waitForMinimumLoadingTime();
+
                 // Hide loading
                 const loading = document.getElementById('lessonLoading');
                 if (loading) loading.classList.add('hidden');
@@ -8320,7 +8339,7 @@
             // NEW (CORRECT):
             console.log('🔊 Speaking congratulatory message...');
             if (typeof displayTutorMessage === 'function') {
-                const congratsMessage = `${userName}, now that you have completed a lesson and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
+                const congratsMessage = `${userName}, you've completed a lesson. What would you like to do next?`;
                 displayTutorMessage(congratsMessage, 'excited');
                 console.log('✅ Tutor speech triggered with name:', userName);
             } else {
@@ -12187,8 +12206,7 @@
                 el.innerHTML = `
                     <div class="mission-unlock-box">🧳</div>
                     <div class="mission-unlock-title">Mission: Unlocked</div>
-                    <div class="mission-unlock-sub">Your new mission awaits.</div>
-                    <div class="mission-wallet-confirm">💰 $1.00 deposited to your School Bucks Wallet</div>`;
+                    <div class="mission-unlock-sub">Your new mission awaits.</div>`;
                 setTimeout(() => renderMissionView('roleSelect', payload), 4000);
             } else if (view === 'roleSelect') {
                 el.innerHTML = `
@@ -12499,6 +12517,7 @@
                     wordbankWordsForStrip = words;
                     displayLesson(lesson);
                 };
+                await waitForMinimumLoadingTime();
                 document.getElementById('lessonLoading')?.classList.add('hidden');
                 openWordBankOverlay();
             } catch (e) {
@@ -12752,7 +12771,7 @@
             const el = document.getElementById('wordwiseOverlayContent');
             el.innerHTML = `
                 <div class="ww-mic-pulse">🎙️</div>
-                <div class="ww-title">${isRetry ? 'Ready to try again?' : 'Your WordWise Spelling Challenge is ready!'}</div>
+                <div class="ww-title">${isRetry ? 'Ready to try again?' : 'You now have access to a WordWise Spelling Challenge!'}</div>
                 <div class="ww-sub">
                     ${isRetry
                         ? `You scored ${s.attempt_1_score} points on your first try. Study your words and try again for up to 50% of full points.`
@@ -12841,7 +12860,6 @@
                     <button class="ww-hear-again-btn" onclick="replayWordWiseAudio()">🔁 Hear it again</button>
                     <div class="ww-definition">
                         ${word.definition || ''}
-                        ${word.context_sentence ? `<div class="ww-sentence">"${word.context_sentence}"</div>` : ''}
                     </div>
                     <input type="text" class="ww-spell-input" id="wwSpellInput" placeholder="Type the spelling…"
                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"

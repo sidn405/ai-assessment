@@ -4205,7 +4205,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             content_generator.generate_comprehension_questions,
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
-            num_questions=4, 
+            num_questions=5,  # item #2: 5 total (2 vocabulary + 3 comprehension)
             allow_fill_blank=False,  # ✅ No fill-in-blank
             vocabulary_words=passage_data.get('vocabulary_words', [])
         )
@@ -8897,7 +8897,7 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                 content_generator.generate_comprehension_questions,
                 passage_text=passage_data.get('content', ''),
                 passage_title=passage_data.get('title', topic),
-                num_questions=4, 
+                num_questions=5,  # item #2: 5 total (2 vocabulary + 3 comprehension)
                 allow_fill_blank=True,  # ✅ Include fill-in-blank
                 vocabulary_words=passage_data.get('vocabulary_words', [])
             )
@@ -9461,18 +9461,23 @@ async def get_wallet(response: Response, token: str):
                 print(f"⚠️ Wallet backfill skipped: {backfill_err}")
                 conn.rollback()
 
-        # Recent transactions (last 10)
+        # Recent transactions (last 10) — item #15: only genuine cash events
+        # (admin credits, gift-card redemptions) are shown here. Per-task
+        # earning credits are excluded entirely (not just hidden client-side)
+        # so a student inspecting the raw API response can't see which
+        # actions/tasks earn how much and start optimizing for money instead
+        # of learning.
         if USE_POSTGRES:
             cursor.execute(
                 """SELECT type, amount_cents, points_converted, description, created_at
-                   FROM wallet_transactions WHERE user_id = %s
+                   FROM wallet_transactions WHERE user_id = %s AND type IN ('admin_credit', 'redemption')
                    ORDER BY created_at DESC LIMIT 10""",
                 (user_id,)
             )
         else:
             cursor.execute(
                 """SELECT type, amount_cents, points_converted, description, created_at
-                   FROM wallet_transactions WHERE user_id = ?
+                   FROM wallet_transactions WHERE user_id = ? AND type IN ('admin_credit', 'redemption')
                    ORDER BY created_at DESC LIMIT 10""",
                 (user_id,)
             )
