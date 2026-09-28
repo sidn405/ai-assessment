@@ -31,7 +31,7 @@ import requests
 
 # Import our new utilities
 from readability import analyze_readability, get_difficulty_for_user, flesch_kincaid_grade_to_lexile, calculate_student_lexile
-from content_generator import ContentGenerator
+from content_generator import ContentGenerator, randomize_question_set
 
 # Initialize FastAPI
 app = FastAPI(title="Achieve 365 - Phase 2")
@@ -5505,6 +5505,16 @@ WEEKLY_GOAL_TYPES = {
 # session logic, endpoints, and frontend are later phases.
 # ============================================================
 
+# Item #6: WordBank is words-only for now. Pictures were only ever generated for
+# some options (the wrong-answer images kept failing on the image rate limit),
+# so when one option showed a picture it was the CORRECT one — a giveaway that
+# also broke the card layout. While False: no image jobs are started (saves
+# API cost and rate-limit budget for the story illustrations), and no image
+# URLs are sent to the browser. Flip to True only once every option reliably
+# gets an image.
+WORDBANK_IMAGES_ENABLED = False
+
+
 def _generate_wordbank_images_background(word_normalized: str, grade_band: str, correct_concept: str, distractor_concepts: list):
     """
     Runs in a background thread — generates one image per concept (1 correct +
@@ -5663,12 +5673,13 @@ Return ONLY valid JSON in exactly this format:
             )
         conn.commit()
 
-        import threading
-        threading.Thread(
-            target=_generate_wordbank_images_background,
-            args=(word_normalized, grade_band, correct_concept, distractor_concepts),
-            daemon=True
-        ).start()
+        if WORDBANK_IMAGES_ENABLED:
+            import threading
+            threading.Thread(
+                target=_generate_wordbank_images_background,
+                args=(word_normalized, grade_band, correct_concept, distractor_concepts),
+                daemon=True
+            ).start()
 
         return {
             "word": word_normalized,
@@ -5875,9 +5886,11 @@ def _format_wordbank_word(row: dict) -> dict:
         distractor_urls = json.loads(distractor_urls or "[]")
     distractor_urls = distractor_urls or []
 
-    options = [{"concept": row["correct_image_concept"], "image_url": row.get("correct_image_url")}]
+    options = [{"concept": row["correct_image_concept"],
+                "image_url": row.get("correct_image_url") if WORDBANK_IMAGES_ENABLED else None}]
     for i, concept in enumerate(distractors or []):
-        options.append({"concept": concept, "image_url": distractor_urls[i] if i < len(distractor_urls) else None})
+        options.append({"concept": concept,
+                        "image_url": (distractor_urls[i] if i < len(distractor_urls) else None) if WORDBANK_IMAGES_ENABLED else None})
     random.shuffle(options)
 
     return {
@@ -6241,7 +6254,7 @@ async def get_wordwise_study_list(user=Depends(get_current_user)):
                 "word": word,
                 "definition": wrow.get("definition"),
                 "context_sentence": context_sentence,
-                "image_url": wrow.get("correct_image_url")
+                "image_url": wrow.get("correct_image_url") if WORDBANK_IMAGES_ENABLED else None
             })
         return {"words": words}
     finally:
@@ -6269,8 +6282,9 @@ def _mask_word_in_sentence(sentence: str, word: str) -> str:
     giveaway, since it naturally contains the word in its original spelling."""
     if not sentence or not word:
         return sentence
-    pattern = re.compile(re.escape(word), re.IGNORECASE)
-    return pattern.sub('_____', sentence)
+    # Shared word-boundary/inflection-aware masker (was a plain substring
+    # replace, which also chopped up unrelated words containing the target).
+    return _mask_target_word(sentence, word)
 
 
 @app.post("/api/wordwise/start")
@@ -6675,6 +6689,49 @@ def _generate_mission_background(mission_id: int, reader_role: str, grade_level:
             conn.close()
 
 
+MISSION_POINT_ACTIVITY = "mission_unlocked"  # activity_type on every award made inside a mission
+
+
+def _mission_eligible_points(user_id: int, cursor) -> int:
+    """
+    Lifetime points that count toward unlocking missions: everything EXCEPT
+    the points earned inside missions themselves (stage rewards plus the
+    completion bonus). A mission pays ~550 points, more than the 500 needed for
+    the next one — if those counted, every mission would instantly fund the
+    next and a completed mission would never lock out. Computed as
+    total_earned minus mission points so any points that never got a history
+    row still count.
+    """
+    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s" if USE_POSTGRES
+                   else "SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    total = ((row['total_earned'] if hasattr(row, 'keys') else row[0]) if row else 0) or 0
+    cursor.execute("SELECT COALESCE(SUM(points), 0) AS s FROM points_history WHERE user_id = %s AND activity_type = %s"
+                   if USE_POSTGRES else
+                   "SELECT COALESCE(SUM(points), 0) AS s FROM points_history WHERE user_id = ? AND activity_type = ?",
+                   (user_id, MISSION_POINT_ACTIVITY))
+    row = cursor.fetchone()
+    mission_pts = ((row['s'] if hasattr(row, 'keys') else row[0]) if row else 0) or 0
+    return max(0, total - mission_pts)
+
+
+def _missions_earned(user_id: int, cursor) -> int:
+    """How many missions the student has earned so far (one per threshold)."""
+    return _mission_eligible_points(user_id, cursor) // MISSION_UNLOCK_THRESHOLD
+
+
+def _missions_started(user_id: int, cursor) -> int:
+    """Missions that have used up an earned unlock: in progress or finished.
+    A mission whose content failed to generate (generation_failed) never
+    reached the student, so it doesn't count — they're still owed one."""
+    cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status IN ('role_pending', 'generating', 'active', 'completed')"
+                   if USE_POSTGRES else
+                   "SELECT COUNT(*) AS c FROM missions WHERE student_id = ? AND status IN ('role_pending', 'generating', 'active', 'completed')",
+                   (user_id,))
+    row = cursor.fetchone()
+    return ((row['c'] if hasattr(row, 'keys') else row[0]) if row else 0) or 0
+
+
 def _activate_next_mission_if_needed(student_id: int):
     """
     Promote the oldest queued mission to 'role_pending' if the student has no
@@ -6695,6 +6752,13 @@ def _activate_next_mission_if_needed(student_id: int):
             )
         if cursor.fetchone():
             return  # already has one in progress
+
+        # Item #2: a mission may only START if the student has EARNED it — one
+        # per MISSION_UNLOCK_THRESHOLD points of non-mission activity. Without
+        # this gate, finishing a mission immediately promoted the next queued
+        # one, so a mission was never "locked out" after completion.
+        if _missions_started(student_id, cursor) >= _missions_earned(student_id, cursor):
+            return
 
         if USE_POSTGRES:
             cursor.execute(
@@ -6741,12 +6805,14 @@ def _check_and_queue_mission_unlocks(user_id: int, cursor):
         if not role_row or (role_row['role'] if hasattr(role_row, 'keys') else role_row[0]) != 'student':
             return
 
-        cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s" if USE_POSTGRES else "SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
-        pts_row = cursor.fetchone()
-        total_earned = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) or 0
+        # Item #2: count only points earned OUTSIDE missions (see
+        # _mission_eligible_points) so a mission's own reward can't unlock the next.
+        total_earned = _mission_eligible_points(user_id, cursor)
         thresholds_crossed = total_earned // MISSION_UNLOCK_THRESHOLD
 
-        cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s" if USE_POSTGRES else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ?", (user_id,))
+        # Rows that failed to generate never reached the student, so they don't
+        # count as "created" — otherwise a failure would permanently burn an unlock.
+        cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status != 'generation_failed'" if USE_POSTGRES else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ? AND status != 'generation_failed'", (user_id,))
         count_row = cursor.fetchone()
         missions_ever_created = (count_row['c'] if hasattr(count_row, 'keys') else count_row[0]) or 0
 
@@ -6776,7 +6842,7 @@ def _check_and_queue_mission_unlocks(user_id: int, cursor):
                     "INSERT INTO missions (student_id, status, grade_level, lexile_level) VALUES (?, 'queued', ?, ?)",
                     (user_id, grade_level, lexile_level)
                 )
-        print(f"🎁 {new_missions_needed} new Mission: Unlocked queued for student {user_id} (total_earned={total_earned})")
+        print(f"🎁 {new_missions_needed} new Mission: Unlocked queued for student {user_id} (non-mission points={total_earned})")
     except Exception as e:
         print(f"⚠️ Mission unlock check failed (non-fatal): {e}")
 
@@ -9502,6 +9568,11 @@ def _consume_reserved_lesson(user_id: int):
                 "explanation": q['explanation'],
                 "difficulty": q.get('difficulty', 1)
             })
+
+        # Item #3: lessons generated before the randomizer existed are stored in
+        # story order with the correct answer first — mix them at serve time too.
+        # (Safe here: the dashboard grades by option TEXT, not position.)
+        questions = randomize_question_set(questions)
 
         # Mark this reserve slot consumed
         if USE_POSTGRES:
@@ -13229,6 +13300,11 @@ async def get_my_missions(user=Depends(get_current_user)):
         )
         queued_row = cursor.fetchone()
         queued_count = (queued_row['c'] if hasattr(queued_row, 'keys') else queued_row[0]) or 0
+        # Item #2: only advertise missions the student has actually earned. Older
+        # accounts hold a backlog of queued rows created under the old counting
+        # (mission points funding more missions); those stay locked, not "waiting".
+        earned_waiting = max(0, _missions_earned(student_id, cursor) - _missions_started(student_id, cursor))
+        queued_count = min(queued_count, earned_waiting)
 
         cursor.execute(
             "SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status = 'completed'" if USE_POSTGRES
@@ -13739,6 +13815,43 @@ async def delete_school_code(code_id: int, admin=Depends(require_admin)):
 # WORD GAMES ENDPOINTS
 # ========================================
 
+def _mask_target_word(text: str, word: str, blank: str = "_____") -> str:
+    """
+    Replace `word` and its common inflections in `text` with a blank.
+
+    Definitions here are written in a natural style that reuses the word
+    ("When you depict something, you show it clearly"), which is great when
+    the word is shown alongside its definition (WordBank) but hands over the
+    answer when the definition IS the question or the hint (Word Tower, Word
+    Match, Word Scramble, WordWise). Matches whole words only, so masking
+    "art" leaves "start" alone, and covers -s/-ed/-ing, e->-ing, y->-ied,
+    doubled consonants and (for longer words) -ment/-ly/-er/-ation forms.
+    """
+    import re as _re
+    if not text or not word:
+        return text
+    w = word.strip().lower()
+    if not w:
+        return text
+
+    stems = {w}
+    if w.endswith("e"):
+        stems.add(w[:-1])                 # encourage -> encourag(ing)
+    if w.endswith("y") and len(w) > 2:
+        stems.add(w[:-1] + "i")           # amplify   -> amplifi(ed/es)
+    if len(w) <= 5 and _re.search(r"[^aeiou][aeiou][^aeiouwxy]$", w):
+        stems.add(w + w[-1])              # stop      -> stopp(ed/ing)
+
+    if len(w) >= 5:
+        suffix = r"(?:s|es|ed|d|ing|ings|ly|er|ers|ment|ments|ion|ions|ation|ations|ies|ied)?"
+    else:
+        suffix = r"(?:s|es|ed|d|ing)?"     # short words: keep it tight ("rat" != "ration")
+
+    alternatives = "|".join(_re.escape(x) for x in sorted(stems, key=len, reverse=True))
+    pattern = _re.compile(r"\b(?:" + alternatives + r")" + suffix + r"\b", _re.IGNORECASE)
+    return pattern.sub(blank, text)
+
+
 # Item #17 game-specific word count / minimum length constraints, per
 # Achieve365_WordGames_DeveloperInstruction section 2.
 GAME_WORD_REQUIREMENTS = {
@@ -13860,7 +13973,10 @@ async def get_game_vocabulary(game_type: str = "word-tower", user: dict = Depend
         vocabulary = [
             {
                 "word": w["word"],
-                "definition": w["definition"],
+                # Item #4: never send a definition that contains its own word —
+                # in Word Tower the correct option was the only one containing
+                # the target word, so it gave the answer away.
+                "definition": _mask_target_word(w["definition"], w["word"]),
                 "sentence": f"Example sentence with {w['word'].lower()}."
             }
             for w in selected

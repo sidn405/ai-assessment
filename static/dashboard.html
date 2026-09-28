@@ -4382,6 +4382,13 @@
         // school's default).
         let lessonReadAloudAudio = null;
         let lessonReadSpeed = 1;
+        // Item #7: every start/cancel bumps this token. A speech request that was
+        // already in flight remembers the token it started with and throws its
+        // result away if the token has moved on — otherwise a request started for
+        // story A could finish after story B loaded and start reading A over B.
+        let lessonReadAloudToken = 0;
+        let lessonReadAloudLoading = false;
+
         function updateLessonReadSpeed(value) {
             lessonReadSpeed = parseFloat(value);
             document.getElementById('lessonReadSpeedValue').textContent = lessonReadSpeed.toFixed(1) + 'x';
@@ -4389,19 +4396,38 @@
             // doesn't have to stop and restart to hear the new speed.
             if (lessonReadAloudAudio) lessonReadAloudAudio.playbackRate = lessonReadSpeed;
         }
-        async function toggleLessonReadAloud() {
+
+        function setLessonReadAloudButton(state) {
             const icon = document.getElementById('lessonReadAloudIcon');
             const label = document.getElementById('lessonReadAloudLabel');
+            if (!icon || !label) return;
+            if (state === 'loading') { icon.textContent = '⏳'; label.textContent = 'Loading...'; }
+            else if (state === 'playing') { icon.textContent = '⏹️'; label.textContent = 'Stop'; }
+            else { icon.textContent = '🔊'; label.textContent = 'Read Aloud'; }
+        }
 
-            // Stop if currently playing (either Polly audio or browser fallback)
-            if (lessonReadAloudAudio || window.speechSynthesis.speaking) {
-                if (lessonReadAloudAudio) {
-                    try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
-                    lessonReadAloudAudio = null;
-                }
-                if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-                icon.textContent = '🔊';
-                label.textContent = 'Read Aloud';
+        // Stops everything read-aloud related — audio that's playing, browser
+        // speech, AND a request that's still loading — and resets the button.
+        // Called when the student presses Stop, when a new lesson starts loading,
+        // when a lesson is displayed, and when they leave the lessons page.
+        function cancelLessonReadAloud() {
+            lessonReadAloudToken++;
+            lessonReadAloudLoading = false;
+            if (lessonReadAloudAudio) {
+                try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
+                lessonReadAloudAudio = null;
+            }
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            setLessonReadAloudButton('idle');
+        }
+
+        async function toggleLessonReadAloud() {
+            // Pressing the button while it's loading, playing, or speaking = Stop.
+            // (Loading used to be ignored here, so "stop" during the few seconds
+            // it takes to generate the speech did nothing and the audio still
+            // started afterwards.)
+            if (lessonReadAloudLoading || lessonReadAloudAudio || window.speechSynthesis.speaking) {
+                cancelLessonReadAloud();
                 return;
             }
 
@@ -4409,8 +4435,9 @@
             const text = textEl ? textEl.textContent : '';
             if (!text || !text.trim()) return;
 
-            icon.textContent = '⏳';
-            label.textContent = 'Loading...';
+            const myToken = ++lessonReadAloudToken;
+            lessonReadAloudLoading = true;
+            setLessonReadAloudButton('loading');
 
             if (awsReady && polly) {
                 try {
@@ -4422,33 +4449,40 @@
                         LanguageCode: 'en-US'
                     }).promise();
 
+                    // Stopped, or a different story loaded, while this was generating.
+                    if (myToken !== lessonReadAloudToken) return;
+                    lessonReadAloudLoading = false;
+
                     const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
                     const audioUrl = URL.createObjectURL(audioBlob);
 
-                    lessonReadAloudAudio = new Audio(audioUrl);
-                    lessonReadAloudAudio.playbackRate = lessonReadSpeed;
-                    lessonReadAloudAudio.onended = () => {
+                    const thisAudio = new Audio(audioUrl);
+                    lessonReadAloudAudio = thisAudio;
+                    thisAudio.playbackRate = lessonReadSpeed;
+                    const finished = () => {
                         URL.revokeObjectURL(audioUrl);
-                        lessonReadAloudAudio = null;
-                        icon.textContent = '🔊';
-                        label.textContent = 'Read Aloud';
+                        // Only reset the UI if this is still the current audio.
+                        if (lessonReadAloudAudio === thisAudio) {
+                            lessonReadAloudAudio = null;
+                            setLessonReadAloudButton('idle');
+                        }
                     };
-                    lessonReadAloudAudio.onerror = () => {
-                        URL.revokeObjectURL(audioUrl);
-                        lessonReadAloudAudio = null;
-                        icon.textContent = '🔊';
-                        label.textContent = 'Read Aloud';
-                    };
+                    thisAudio.onended = finished;
+                    thisAudio.onerror = finished;
 
-                    icon.textContent = '⏹️';
-                    label.textContent = 'Stop';
-                    await lessonReadAloudAudio.play();
+                    setLessonReadAloudButton('playing');
+                    await thisAudio.play();
                     return;
                 } catch (error) {
+                    if (myToken !== lessonReadAloudToken) return;
                     console.error('❌ Polly error reading lesson aloud, falling back to browser speech:', error);
                     lessonReadAloudAudio = null;
+                    lessonReadAloudLoading = false;
                 }
             }
+
+            if (myToken !== lessonReadAloudToken) return;
+            lessonReadAloudLoading = false;
 
             // Fallback: browser speech synthesis, using the same voice-matching
             // heuristic as the tutor's own fallback so it stays as close to the
@@ -4461,12 +4495,10 @@
             const preferred = voices.find(v => /Google US English|Samantha|Female/i.test(v.name));
             if (preferred) utterance.voice = preferred;
             utterance.onend = () => {
-                icon.textContent = '🔊';
-                label.textContent = 'Read Aloud';
+                if (myToken === lessonReadAloudToken) setLessonReadAloudButton('idle');
             };
 
-            icon.textContent = '⏹️';
-            label.textContent = 'Stop';
+            setLessonReadAloudButton('playing');
             window.speechSynthesis.speak(utterance);
         }
 
@@ -5390,6 +5422,7 @@
 
             // Stop tutor speech when navigating away from lessons
             if (sectionName !== 'lessons') {
+                cancelLessonReadAloud();
                 if (window.speechSynthesis) window.speechSynthesis.cancel();
                 if (window._tutorInterval) { clearInterval(window._tutorInterval); window._tutorInterval = null; }
                 document.getElementById('wordbankStrip')?.classList.add('hidden');
@@ -6773,6 +6806,11 @@
 
         async function loadNextLesson() {            
             console.log('=== loadNextLesson START ===');
+
+            // Item #7: silence the previous story right away. The loading screen
+            // holds for 10+ seconds, and a speech request started for the old
+            // story could otherwise finish during that time and play over the new one.
+            cancelLessonReadAloud();
             
             const token = localStorage.getItem('token');
             if (!token) {
@@ -6920,6 +6958,109 @@
             }
         }
 
+        // ------------------------------------------------------------------
+        // Sentence splitting for paragraph layout (client item #8).
+        //
+        // The old splitter treated every ". ! ?" followed by a space as the end
+        // of a sentence, so "Mr. Johnson" became two "sentences" and a
+        // paragraph break could land between "Mr." and "Johnson"; likewise a
+        // "?" inside a quotation split the quote across two paragraphs.
+        //
+        // This one won't end a sentence on:
+        //   - an abbreviation ("Mr.", "Mrs.", "Dr.", "St.", initials like "J.")
+        //   - punctuation inside an open quotation
+        //   - a dialogue tag after a quote:  "Where are you?" Mom asked.
+        //   - a period followed by a lowercase word ("...", "p.m. today") or
+        //     glued to a digit/letter ("3.50", "e.g.,")
+        // When unsure it errs toward NOT splitting — a slightly longer paragraph
+        // is harmless; a break in the middle of a sentence is the bug.
+        // ------------------------------------------------------------------
+        const SENTENCE_ABBREVIATIONS = new Set(['mr','mrs','ms','mx','dr','prof','sr','jr','st','mt','vs','etc','inc','ltd','co','gen','sen','rep','gov','capt','col','lt','sgt','rev','hon','fig','dept','approx']);
+        const SPEECH_TAG = new RegExp('^(?:(?:Mr|Mrs|Ms|Mx|Dr|Miss)\\.?\\s+)?[A-Z][a-z]+(?:\\s[A-Z][a-z]+)?\\s+(?:said|asked|replied|called|shouted|whispered|exclaimed|cried|answered|added|yelled|laughed|sighed|cheered|announced|suggested|explained|continued|mumbled|muttered|offered|wondered|declared|urged|insisted|thought|smiled|grinned|nodded)\\b');
+
+        function splitIntoSentences(text) {
+            const src = (text || '').replace(/\s+/g, ' ').trim();
+            if (!src) return [];
+
+            const run = (quoteAware) => {
+                const out = [];
+                let start = 0;
+                let inQuote = false;
+                for (let i = 0; i < src.length; i++) {
+                    const ch = src[i];
+                    if (quoteAware) {
+                        if (ch === '"') inQuote = !inQuote;
+                        else if (ch === '\u201C') inQuote = true;
+                        else if (ch === '\u201D') inQuote = false;
+                    }
+                    if (ch !== '.' && ch !== '!' && ch !== '?') continue;
+
+                    // Take the whole terminator run ("?!", "...") plus any closing quote/bracket.
+                    let j = i + 1;
+                    while (j < src.length && /[.!?]/.test(src[j])) j++;
+                    const runEnd = j;
+                    let closedQuote = false;
+                    while (j < src.length && /["\u201D'\u2019)\]]/.test(src[j])) {
+                        if (quoteAware && src[j] === '"') { inQuote = !inQuote; closedQuote = true; }
+                        else if (quoteAware && src[j] === '\u201D') { inQuote = false; closedQuote = true; }
+                        else if (src[j] === '"' || src[j] === '\u201D') closedQuote = true;
+                        j++;
+                    }
+
+                    let boundary = true;
+                    if (j < src.length && src[j] !== ' ') boundary = false;          // "3.50", "e.g.,"
+                    if (boundary && quoteAware && inQuote) boundary = false;         // still inside a quotation
+
+                    // Abbreviations / initials ("Mr.", "Dr.", "J.") — single period only.
+                    if (boundary && ch === '.' && runEnd === i + 1) {
+                        const m = src.slice(Math.max(0, i - 12), i).match(/([A-Za-z][A-Za-z.]*)$/);
+                        if (m) {
+                            const tok = m[1];
+                            if (SENTENCE_ABBREVIATIONS.has(tok.toLowerCase())) boundary = false;
+                            else if (/^[B-HJ-Z]$/.test(tok)) boundary = false;       // initial (not "I"/"A", which can end a sentence)
+                        }
+                    }
+
+                    if (boundary && j < src.length) {
+                        let k = j;
+                        while (k < src.length && src[k] === ' ') k++;
+                        const rest = src.slice(k);
+                        if (/^[a-z]/.test(rest)) boundary = false;                   // continues in lowercase: '" he asked', '... maybe'
+                        else if (closedQuote && SPEECH_TAG.test(rest)) boundary = false; // '" Mom asked.'
+                    }
+
+                    if (boundary) {
+                        const piece = src.slice(start, j).trim();
+                        if (piece) out.push(piece);
+                        start = j;
+                    }
+                    i = j - 1;
+                }
+                const tail = src.slice(start).trim();
+                if (tail) out.push(tail);
+                return { out, endedInQuote: inQuote };
+            };
+
+            let res = run(true);
+            if (res.endedInQuote) res = run(false);   // odd number of quote marks: don't trust quote tracking
+            return res.out;
+        }
+
+        // True if `str` ends at a real sentence boundary (not after "Mr.", not
+        // inside an open quotation) — used by the single-newline path.
+        function endsAtSentenceBoundary(str) {
+            const s = (str || '').trim();
+            if (!s) return false;
+            // An odd number of quote marks means this fragment ends inside a quotation.
+            // (splitIntoSentences ignores quote tracking for a whole story with a stray
+            // quote mark, but for a fragment "open quote" is exactly what we must respect.)
+            const straight = (s.match(/"/g) || []).length;
+            const opens = (s.match(/\u201C/g) || []).length, closes = (s.match(/\u201D/g) || []).length;
+            if (straight % 2 === 1 || opens > closes) return false;
+            const parts = splitIntoSentences(s + ' Next');
+            return parts.length > 0 && parts[parts.length - 1] === 'Next';
+        }
+
         async function displayLesson(lesson) {
             console.log('=== displayLesson START ===', lesson);
             
@@ -6980,15 +7121,7 @@
                 // A new lesson is loading — stop any read-aloud left over from
                 // the previous one and reset the button so it doesn't look
                 // like it's still reading stale content.
-                if (lessonReadAloudAudio) {
-                    try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
-                    lessonReadAloudAudio = null;
-                }
-                if (speechSynthesis.speaking) speechSynthesis.cancel();
-                const readAloudIcon = document.getElementById('lessonReadAloudIcon');
-                const readAloudLabel = document.getElementById('lessonReadAloudLabel');
-                if (readAloudIcon) readAloudIcon.textContent = '🔊';
-                if (readAloudLabel) readAloudLabel.textContent = 'Read Aloud';
+                cancelLessonReadAloud();
 
                 // Display content
                 const contentEl = document.getElementById('lessonText');
@@ -7007,8 +7140,8 @@
                         let current = '';
                         lines.forEach(line => {
                             current = current ? current + ' ' + line : line;
-                            // Only break paragraph at sentence-ending punctuation
-                            if (/[.!?]["']?\s*$/.test(line)) {
+                            // Only break paragraph at a REAL sentence end (not after "Mr.", not mid-quote)
+                            if (endsAtSentenceBoundary(current)) {
                                 paragraphs.push(current);
                                 current = '';
                             }
@@ -7016,11 +7149,10 @@
                         if (current) paragraphs.push(current);
                     } else {
                         // One big block — split into ~4-sentence chunks on proper sentence boundaries
-                        const sentenceRegex = /[^.!?]*[.!?]["']?(?:\s|$)/g;
-                        const sentences = content.match(sentenceRegex) || [content];
+                        const sentences = splitIntoSentences(content);
                         const chunkSize = Math.max(3, Math.ceil(sentences.length / 4));
                         for (let i = 0; i < sentences.length; i += chunkSize) {
-                            const chunk = sentences.slice(i, i + chunkSize).join('').trim();
+                            const chunk = sentences.slice(i, i + chunkSize).join(' ').trim();
                             if (chunk) paragraphs.push(chunk);
                         }
                     }
@@ -7029,10 +7161,10 @@
                     const final = [];
                     paragraphs.forEach(p => {
                         if (p.length > 500) {
-                            const sents = p.match(/[^.!?]*[.!?]["']?(?:\s|$)/g) || [p];
+                            const sents = splitIntoSentences(p);
                             const mid = Math.ceil(sents.length / 2);
-                            final.push(sents.slice(0, mid).join('').trim());
-                            if (sents.length > mid) final.push(sents.slice(mid).join('').trim());
+                            final.push(sents.slice(0, mid).join(' ').trim());
+                            if (sents.length > mid) final.push(sents.slice(mid).join(' ').trim());
                         } else {
                             final.push(p);
                         }
@@ -12593,6 +12725,8 @@
             `;
         }
 
+        const WORDBANK_SHOW_IMAGES = false;
+
         function renderWordBankWord() {
             const word = wordbankWords[wordbankIndex];
             const el = document.getElementById('wordbankOverlayContent');
@@ -12615,7 +12749,9 @@
                 const optsEl = document.getElementById('wbOptions');
                 optsEl.innerHTML = word.options.map(opt => {
                     const concept = opt.concept || opt;  // supports both {concept,image_url} and plain-string fallback
-                    const inner = opt.image_url
+                    // Item #6: words-only for now (see WORDBANK_IMAGES_ENABLED in app.py). A picture
+                    // on just one option was always the correct one — an answer giveaway.
+                    const inner = (WORDBANK_SHOW_IMAGES && opt.image_url)
                         ? `<img src="${opt.image_url}" alt="${concept}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:10px; margin-bottom:0.5rem;"><span style="font-size:0.8rem;">${concept}</span>`
                         : concept;
                     return `<button class="wb-option-card" onclick="answerWordBankOption(this, '${concept.replace(/'/g, "\\'")}')">${inner}</button>`;
