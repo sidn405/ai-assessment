@@ -4432,7 +4432,17 @@
             }
 
             const textEl = document.getElementById('lessonText');
-            const text = textEl ? textEl.textContent : '';
+            // Each paragraph is its own <p>, joined with no separator when the HTML
+            // is built (`.map(p => \`<p>${p}</p>\`).join('')`). Reading .textContent
+            // on the container collapses that into "...park.One day..." with zero
+            // space at every paragraph boundary -- which Polly (and browser speech)
+            // reads as "park DOT One day", since a period glued directly to the next
+            // word looks like a domain/filename ("site.com") rather than a sentence
+            // end. Reading each <p> separately and joining with a space keeps the
+            // gap TTS needs.
+            const text = textEl
+                ? Array.from(textEl.querySelectorAll('p')).map(p => p.textContent.trim()).filter(Boolean).join(' ') || textEl.textContent
+                : '';
             if (!text || !text.trim()) return;
 
             const myToken = ++lessonReadAloudToken;

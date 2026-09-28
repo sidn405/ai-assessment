@@ -2317,7 +2317,16 @@
 
         // Text-to-Speech Functions
         function readAloud() {
-            const text = document.getElementById('passageContent').textContent;
+            // See the matching fix in dashboard.html: each paragraph is its own <p>
+            // joined with no separator, so .textContent on the container collapses
+            // "...park.One day..." with zero space at every paragraph boundary --
+            // which speech synthesis reads as "park DOT One day" (a spaceless period
+            // looks like a domain/filename, not a sentence end). Read each <p>
+            // separately and join with a space to keep the gap.
+            const passageEl = document.getElementById('passageContent');
+            const text = passageEl
+                ? Array.from(passageEl.querySelectorAll('p')).map(p => p.textContent.trim()).filter(Boolean).join(' ') || passageEl.textContent
+                : '';
             const speed = document.getElementById('readingSpeed').value;
 
             if (utterance) {
