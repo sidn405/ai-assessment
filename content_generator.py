@@ -87,45 +87,50 @@ class ContentGenerator:
         cultural identity. Defaults to inclusive/diverse if not specified.
         """
         # ── Culture-specific character name pools ──────────────────────────
+        # Item (new): tagged by gender so protagonist_gender selection (see
+        # select_diversity_element() in app.py, field "protagonist_genders_used_recently")
+        # can actually be honored — previously the AI was told "PREFER {gender}
+        # protagonist" but handed a single mixed-gender list, so the instruction
+        # was routinely ignored and stories skewed toward one gender.
         name_pools = {
-            'black_african_american': [
-                'Jamal', 'Marcus', 'Aaliyah', 'Devon', 'Jordan', 'Imani', 'Malik',
-                'Destiny', 'Andre', 'Jasmine', 'Elijah', 'Simone', 'Isaiah', 'Nia',
-                'Jaylen', 'Amara', 'Darius', 'Keisha', 'Trey', 'Brianna', 'Kofi',
-                'Sanaa', 'DeShawn', 'Raven', 'Miles', 'Zara', 'Cameron', 'Jade'
-            ],
-            'hispanic_latino': [
-                'Sofia', 'Mateo', 'Isabella', 'Diego', 'Valentina', 'Sebastián',
-                'Camila', 'Alejandro', 'Lucia', 'Miguel', 'Gabriela', 'Carlos',
-                'Daniela', 'Andrés', 'Valeria', 'Emilio', 'Natalia', 'Rafael',
-                'Mariana', 'Javier', 'Fernanda', 'Luis', 'Paola', 'Rodrigo'
-            ],
-            'asian': [
-                'Mei', 'Kenji', 'Priya', 'Jin', 'Aiko', 'Raj', 'Yuki', 'Arjun',
-                'Sakura', 'Wei', 'Anya', 'Hiroshi', 'Ananya', 'Kaito', 'Sunita',
-                'Min-jun', 'Divya', 'Takeshi', 'Nadia', 'Ravi', 'Yuna', 'Sanjay',
-                'Leila', 'Haruto', 'Pooja', 'Tenzin', 'Amira', 'Park', 'Chen'
-            ],
-            'native_american': [
-                'Aiyana', 'Chayton', 'Kimi', 'Takoda', 'Winona', 'Suni',
-                'Dakota', 'Sequoia', 'Cochise', 'Ahanu', 'Cheyenne', 'Tala',
-                'Waya', 'Nadie', 'Shilah', 'Kaya', 'Elan', 'Lomasi'
-            ],
-            'pacific_islander': [
-                'Kalani', 'Moana', 'Kekai', 'Leilani', 'Kai', 'Hina',
-                'Makoa', 'Nalani', 'Keola', 'Mahina', 'Koa', 'Ikaika',
-                'Pua', 'Alika', 'Mele', 'Noelani'
-            ],
-            'white': [
-                'Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Ethan', 'Sophia',
-                'Mason', 'Isabella', 'Logan', 'Mia', 'Lucas', 'Harper', 'Aiden',
-                'Ella', 'Jackson', 'Scarlett', 'Owen', 'Grace', 'Sebastian'
-            ],
-            'middle_eastern': [
-                'Layla', 'Omar', 'Fatima', 'Khalid', 'Amira', 'Yousef',
-                'Nour', 'Hassan', 'Sara', 'Tariq', 'Rania', 'Ahmad',
-                'Yasmin', 'Kareem', 'Hana', 'Ziad', 'Samira', 'Ali'
-            ],
+            'black_african_american': {
+                'male': ['Jamal', 'Marcus', 'Devon', 'Malik', 'Andre', 'Elijah', 'Isaiah',
+                         'Jaylen', 'Darius', 'Trey', 'Kofi', 'DeShawn', 'Miles', 'Cameron', 'Jordan'],
+                'female': ['Aaliyah', 'Imani', 'Destiny', 'Jasmine', 'Simone', 'Nia', 'Amara',
+                           'Keisha', 'Brianna', 'Sanaa', 'Raven', 'Zara', 'Jade'],
+            },
+            'hispanic_latino': {
+                'male': ['Mateo', 'Diego', 'Sebastián', 'Alejandro', 'Miguel', 'Carlos',
+                         'Andrés', 'Emilio', 'Rafael', 'Javier', 'Luis', 'Rodrigo'],
+                'female': ['Sofia', 'Isabella', 'Valentina', 'Camila', 'Lucia', 'Gabriela',
+                           'Daniela', 'Valeria', 'Natalia', 'Mariana', 'Fernanda', 'Paola'],
+            },
+            'asian': {
+                'male': ['Kenji', 'Jin', 'Raj', 'Arjun', 'Wei', 'Hiroshi', 'Kaito', 'Min-jun',
+                         'Takeshi', 'Ravi', 'Sanjay', 'Haruto', 'Tenzin', 'Park', 'Chen'],
+                'female': ['Mei', 'Priya', 'Aiko', 'Yuki', 'Sakura', 'Anya', 'Ananya', 'Sunita',
+                           'Divya', 'Nadia', 'Yuna', 'Leila', 'Pooja', 'Amira'],
+            },
+            'native_american': {
+                'male': ['Chayton', 'Takoda', 'Dakota', 'Cochise', 'Ahanu', 'Waya', 'Shilah', 'Elan'],
+                'female': ['Aiyana', 'Kimi', 'Winona', 'Suni', 'Sequoia', 'Cheyenne', 'Tala',
+                           'Nadie', 'Kaya', 'Lomasi'],
+            },
+            'pacific_islander': {
+                'male': ['Kekai', 'Kai', 'Makoa', 'Keola', 'Koa', 'Ikaika', 'Alika'],
+                'female': ['Kalani', 'Moana', 'Leilani', 'Hina', 'Nalani', 'Mahina', 'Pua',
+                           'Mele', 'Noelani'],
+            },
+            'white': {
+                'male': ['Liam', 'Noah', 'Ethan', 'Mason', 'Logan', 'Lucas', 'Aiden',
+                         'Jackson', 'Owen', 'Sebastian'],
+                'female': ['Emma', 'Olivia', 'Ava', 'Sophia', 'Isabella', 'Mia', 'Harper',
+                           'Ella', 'Scarlett', 'Grace'],
+            },
+            'middle_eastern': {
+                'male': ['Omar', 'Khalid', 'Yousef', 'Hassan', 'Tariq', 'Ahmad', 'Kareem', 'Ziad', 'Ali'],
+                'female': ['Layla', 'Fatima', 'Amira', 'Nour', 'Sara', 'Rania', 'Yasmin', 'Hana', 'Samira'],
+            },
         }
 
         # ── Culture-specific story context ─────────────────────────────────
@@ -220,16 +225,22 @@ class ContentGenerator:
             'cultural_notes': 'Use diverse, inclusive characters representing multiple backgrounds.'
         })
 
+        default_pool_by_gender = {
+            # Default diverse pool when no identity specified. These are
+            # deliberately unisex names, split into two lists purely so a
+            # protagonist_gender pick still has a name pool to draw from.
+            'male': ['Jordan', 'Quinn', 'Morgan', 'Taylor', 'Sage', 'Phoenix', 'Skylar'],
+            'female': ['Avery', 'Riley', 'Alex', 'Cameron', 'River', 'Remy', 'Drew'],
+        }
+        pool_by_gender = name_pools.get(culture, default_pool_by_gender)
+
         return {
             'settings': cult_ctx['settings'],
             'themes': cult_ctx['themes'] + grade_ctx['themes_add'],
             'avoid': grade_ctx['avoid'],
             'cultural_notes': cult_ctx['cultural_notes'],
-            'name_pool': name_pools.get(culture, [
-                # Default diverse pool when no identity specified
-                'Jordan', 'Avery', 'Quinn', 'Riley', 'Morgan', 'Alex', 'Taylor',
-                'Cameron', 'Sage', 'River', 'Phoenix', 'Remy', 'Skylar', 'Drew'
-            ])
+            'name_pool': pool_by_gender['male'] + pool_by_gender['female'],
+            'name_pool_by_gender': pool_by_gender,
         }
     
     
@@ -280,7 +291,8 @@ class ContentGenerator:
     def generate_passage(self, topic, difficulty_level, word_count_min, word_count_max, user_interests,
                           age=None, grade_band=None, cultural_identity=None, student_name=None, used_names=None,
                           reading_track=1, genre=None, structure=None, perspective=None, interest_mode=None,
-                          text_type=None, topic_area=None, word_count_band='standard'):
+                          text_type=None, topic_area=None, word_count_band='standard',
+                          protagonist_gender=None, supporting_role=None):
         """
         Generate educational passage using GPT-4 with dynamic word count.
 
@@ -296,45 +308,59 @@ class ContentGenerator:
               INSTEAD of `topic`/interests when reading_track == 2.
           word_count_band: 'standard' (default) | 'extended' — extended nudges
               target_words toward word_count_max rather than the range midpoint.
+
+        Bug fix (protagonist gender balance): protagonist_gender/supporting_role
+        are now pre-selected by app.py's select_diversity_element() (rolling
+        last-5 history, same mechanism as genre/structure) and passed in
+        explicitly. This replaces the old name-based gender GUESS (a hardcoded,
+        incomplete first-name list that silently defaulted to 'female' for any
+        name it didn't recognize — including plenty of real male students —
+        and then handed the AI a mixed-gender name list anyway, so the
+        "PREFER {gender}" instruction was frequently ignored). That was the
+        root cause of stories skewing away from male protagonists. When
+        protagonist_gender isn't supplied (older callers, e.g. the
+        placement-test path), we now pick 50/50 at random instead of
+        guessing from the name, so we never systematically favor one gender.
         """
-        
+
         import random
         target_words = word_count_max if word_count_band == 'extended' else (word_count_min + word_count_max) // 2
         if used_names is None:
             used_names = []
 
-        # Infer student gender from first name
-        male_indicators = {'james','john','robert','michael','william','david','richard','lance',
-            'joseph','thomas','charles','christopher','daniel','matthew','anthony','mark',
-            'donald','steven','paul','andrew','joshua','kenneth','kevin','brian','george',
-            'edward','ronald','timothy','jason','jeffrey','ryan','jacob','gary','nicholas',
-            'eric','jonathan','stephen','larry','justin','scott','brandon','benjamin','samuel',
-            'raymond','gregory','frank','alexander','patrick','raymond','jack','dennis','jerry',
-            'tyler','aaron','jose','adam','henry','nathan','zachary','douglas','peter','kyle',
-            'noah','ethan','mason','liam','aiden','jayden','jamal','marcus','malik','darius',
-            'kofi','trey','andre','elijah','isaiah','jaylen','miles','xavier','cameron','devon',
-            'jesus','carlos','mateo','diego','alejandro','miguel','sebastian','rafael','luis',
-            'kenji','hiroshi','kaito','arjun','raj','sanjay','wei','jin','takeshi','min',
-            'ahmed','omar','khalid','hassan','tariq','ziad','ali','kareem','chayton','takoda',
-            'elan','waya','shilah','kai','makoa','koa','ikaika','alika'}
-
-        student_first = (student_name or '').split()[0].lower() if student_name else ''
-        is_male_student = student_first in male_indicators
-        gender_hint = 'male' if is_male_student else 'female'
+        gender_hint = protagonist_gender if protagonist_gender in ('male', 'female') else random.choice(['male', 'female'])
 
         # Get culturally-responsive context
         cultural_ctx = self._get_cultural_context_guidance(age, grade_band, cultural_identity)
         full_pool = cultural_ctx['name_pool']
+        gendered_pool = cultural_ctx['name_pool_by_gender'].get(gender_hint, full_pool)
 
-        # Filter out already-used names — student never sees the same name twice
-        available_names = [n for n in full_pool if n not in used_names]
-        # If we've used every name in the pool, reset (rare but prevents infinite loop)
+        # Filter out already-used names — student never sees the same name twice.
+        # Draw from the GENDER-MATCHED pool first so the chosen name actually
+        # agrees with gender_hint instead of the AI picking any name from a
+        # mixed-gender list and silently overriding the "PREFER" instruction.
+        available_names = [n for n in gendered_pool if n not in used_names]
         if not available_names:
-            available_names = full_pool[:]
+            # Exhausted this gender's unused names for this student — reset
+            # within that same gender rather than falling back to the whole
+            # (mixed-gender) pool, so gender_hint is still honored.
+            available_names = gendered_pool[:]
 
         random.shuffle(available_names)
-        # Give AI the full available pool to choose from freely
+        # Give AI the gender-matched available pool to choose from freely
         name_options = ', '.join(available_names)
+
+        # Supporting-character role rotation (fixes "same 4 characters
+        # repeated" — grandmother/coach/teacher — by giving the AI ONE
+        # specific, history-aware role instead of a generic open choice it
+        # kept resolving to the same handful of defaults).
+        supporting_role_pool = [
+            'older sibling', 'coach', 'teacher', 'grandmother', 'grandfather',
+            'aunt or uncle', 'neighbor', 'best friend', 'classmate', 'librarian',
+            'mentor from an after-school program', 'family friend', 'cousin',
+            'youth group leader', 'shop or business owner in the community',
+        ]
+        supporting_role_pick = supporting_role if supporting_role in supporting_role_pool else random.choice(supporting_role_pool)
 
         # Pick a random story angle to prevent the AI defaulting to the same
         # scenario (e.g. "pizza party at school") for the same topic every time
@@ -428,10 +454,11 @@ class ContentGenerator:
         - Guidelines: {' | '.join(cultural_ctx['avoid'])}
         
         CHARACTER DIVERSITY:
-        - Protagonist gender: PREFER {gender_hint} protagonist
-        - Choose ONE name from this list (these names have NEVER been used before for this student): {name_options}
+        - Protagonist gender: the protagonist MUST be {gender_hint} (this is a hard requirement, not a suggestion)
+        - Choose ONE name from this list — every name in it is {gender_hint} and NEVER been used before for this student: {name_options}
         - DO NOT use any name not in the list above
-        - Supporting characters can be from different backgrounds (friend, teacher, neighbor)
+        - Include exactly ONE significant supporting character, and make them a {supporting_role_pick}
+        - Do not default to a generic "friend" if a more specific role is given above
         
         SETTING RULES:
         - Pick a setting that fits the topic: {topic}
@@ -640,11 +667,21 @@ class ContentGenerator:
         """Return True if this grade band should get an illustration with its story."""
         return (grade_band or '').lower() in self.YOUNG_LEARNER_GRADE_BANDS
 
-    def generate_story_image(self, title, content, topic, grade_band):
+    def generate_story_image(self, title, content, topic, grade_band, cultural_identity=None):
         """
         Generate a story illustration styled to match the student's age/grade band.
         Style ranges from Pixar storybook (young kids) to graphic novel / editorial
         illustration (older teens/adults) so the art always feels age-appropriate.
+
+        Bug fix: this previously took NO cultural_identity input at all, so the
+        image prompt only ever described art STYLE (age-band) and a scene hint
+        from the text — nothing told the image model who the characters should
+        look like. Since the passage text often doesn't spell out physical
+        appearance, the model defaulted to generic (frequently white-presenting)
+        characters even for students whose story text and vocabulary were
+        generated with e.g. black_african_american cultural context. Now the
+        same cultural_identity used for the passage is passed straight through
+        to the illustration prompt.
         """
         try:
             sentences = [s.strip() for s in (content or '').replace('\n', ' ').split('.') if s.strip()]
@@ -695,9 +732,25 @@ class ContentGenerator:
                     "for adult readers."
                 )
 
+            # Character representation guidance, keyed to the student's actual
+            # cultural_identity (mirrors _get_cultural_context_guidance's text
+            # prompt) — so the illustration matches who the story is about
+            # instead of defaulting to generic/white-presenting characters.
+            representation_map = {
+                'black_african_american': "The main characters shown should be Black/African American.",
+                'hispanic_latino': "The main characters shown should be Hispanic/Latino.",
+                'asian': "The main characters shown should be Asian.",
+                'native_american': "The main characters shown should be Native American, depicted respectfully and without stereotype.",
+                'pacific_islander': "The main characters shown should be Pacific Islander.",
+                'white': "The main characters shown should be white.",
+                'middle_eastern': "The main characters shown should be Middle Eastern.",
+            }
+            representation_instruction = representation_map.get((cultural_identity or '').lower(), "")
+
             image_prompt = (
                 f"{style} "
                 f"Scene: {scene_hint}. "
+                f"{representation_instruction} "
                 f"No text, letters, words, or numbers anywhere in the image."
             )
 
@@ -847,6 +900,62 @@ class ContentGenerator:
         }
         
             
+    def _generate_vocab_distractors(self, chosen: list, passage_text: str) -> dict:
+        """
+        Asks the AI for 3 plausible-but-WRONG definitions per vocab word,
+        matched in length/style/tone to a real dictionary-style definition,
+        so a vocabulary question's wrong answers don't visibly belong to a
+        completely different, unrelated word (see the call site's comment).
+        Returns {} on any failure — callers fall back to the old method.
+        """
+        if not chosen:
+            return {}
+        try:
+            words_block = "\n".join(
+                f'- "{v["word"].strip()}" (correct definition: {v["definition"].strip()})'
+                for v in chosen
+            )
+            prompt = f"""For each vocabulary word below, write 3 WRONG but PLAUSIBLE definitions —
+the kind a student who doesn't know the word might mistakenly believe is correct.
+
+Hard rules for each wrong definition:
+- Must be FALSE for that word (not just a rephrasing of the correct definition)
+- Must be the SAME length and style as a real simple dictionary definition (one short sentence, similar detail level to the correct one)
+- Must NOT obviously belong to some other random word — it should sound like it *could* be this word's definition
+- Do not mention the word itself or any obvious form of it
+
+Words:
+{words_block}
+
+Return ONLY valid JSON in exactly this shape (no markdown fences):
+{{"word_here": ["wrong definition 1", "wrong definition 2", "wrong definition 3"], ...}}"""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You write plausible-sounding wrong multiple-choice answers for vocabulary quizzes."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.8,
+                max_tokens=500
+            )
+            content = response.choices[0].message.content.strip()
+            import re, json as _json
+            match = re.search(r'\{.*\}', content, re.DOTALL)
+            if not match:
+                return {}
+            result = _json.loads(match.group())
+            # Normalize keys to match the exact word strings we asked about
+            normalized = {}
+            for v in chosen:
+                w = v['word'].strip()
+                if w in result and isinstance(result[w], list):
+                    normalized[w] = [str(d).strip() for d in result[w] if str(d).strip()]
+            return normalized
+        except Exception as e:
+            print(f"⚠️ Vocab distractor generation failed (falling back): {e}")
+            return {}
+
     def generate_comprehension_questions(self, passage_text: str, passage_title: str, num_questions: int = 4, allow_fill_blank: bool = True, vocabulary_words: list = None):
         """
         Generate comprehension questions with optional fill-in-blank and
@@ -885,23 +994,48 @@ class ContentGenerator:
                 random.shuffle(pool)
                 chosen = pool[:2]
 
+                # Bug fix ("reading assessment answers easy to guess"): distractor
+                # definitions used to be OTHER vocab words' real definitions
+                # pulled from this same passage's list (e.g. asking what
+                # "meticulous" means but offering the definition of "gigantic"
+                # as a wrong answer). Those are instantly recognizable as
+                # belonging to a totally different, unrelated word, so the
+                # correct definition stood out by being the only one that
+                # actually fit the question — guessable without even knowing
+                # the word. Now we ask the AI for plausible-but-wrong
+                # definitions of THIS SAME word, written in matching style/
+                # length, so a guesser can't just spot the mismatched one.
+                ai_distractors = self._generate_vocab_distractors(chosen, passage_text)
+
                 for vocab_entry in chosen:
                     vocab_word = vocab_entry['word'].strip()
                     correct_def = vocab_entry['definition'].strip()
 
-                    # Build 3 distractor definitions from other vocab words in the list
-                    other_defs = [
-                        v['definition'].strip() for v in candidates
-                        if v['word'] != vocab_word and v.get('definition')
-                    ]
-                    random.shuffle(other_defs)
-                    distractors = other_defs[:3]
+                    distractors = list(ai_distractors.get(vocab_word, []))[:3]
 
-                    # Pad with generic distractors if not enough vocab words
-                    while len(distractors) < 3:
-                        distractors.append(generic[len(distractors)])
+                    if len(distractors) < 3:
+                        # Fallback: other vocab words' definitions (old
+                        # behavior) — better than nothing if the AI call
+                        # failed, but only used as a last resort now.
+                        other_defs = [
+                            v['definition'].strip() for v in candidates
+                            if v['word'] != vocab_word and v.get('definition')
+                        ]
+                        random.shuffle(other_defs)
+                        for d in other_defs:
+                            if len(distractors) >= 3:
+                                break
+                            if d not in distractors:
+                                distractors.append(d)
 
-                    options = [correct_def] + distractors
+                    # Pad with generic distractors if still not enough
+                    gi = 0
+                    while len(distractors) < 3 and gi < len(generic):
+                        if generic[gi] not in distractors:
+                            distractors.append(generic[gi])
+                        gi += 1
+
+                    options = [correct_def] + distractors[:3]
                     random.shuffle(options)
 
                     vocab_questions.append({
@@ -990,6 +1124,12 @@ class ContentGenerator:
     - Make questions age-appropriate
     - Test different comprehension skills
     - Do NOT include vocabulary definition questions — those are handled separately
+
+    AVOID MAKING ANSWERS GUESSABLE WITHOUT READING THE PASSAGE:
+    - All 4 options for a multiple-choice question must be SIMILAR in length and level of detail — never make the correct answer noticeably longer, more specific, or more "complete-sounding" than the wrong options
+    - Every wrong option must be directly related to the passage's topic/characters/setting — never a generic, silly, or obviously-unrelated filler option (a reader should have to actually recall the passage to rule it out)
+    - Never use "All of the above" or "None of the above"
+    - Do not let the correct answer be the only option written in full sentences while others are sentence fragments, or vice versa
     """
     
         try:

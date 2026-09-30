@@ -940,6 +940,12 @@ def init_db():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS interest_modes_used_recently TEXT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_types_used_recently TEXT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS track_2_topics_used TEXT",
+                # New: protagonist gender + supporting-character role rotation
+                # (fixes "passages seem to exclude males" and "same 4
+                # characters repeated in stories") — same rolling-history
+                # mechanism as genres_used_recently etc.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS protagonist_genders_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS supporting_roles_used_recently TEXT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_band VARCHAR(20) DEFAULT 'standard'",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS consecutive_scores TEXT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_type_counts TEXT",
@@ -1459,6 +1465,8 @@ def init_db():
             "ALTER TABLE users ADD COLUMN interest_modes_used_recently TEXT",
             "ALTER TABLE users ADD COLUMN text_types_used_recently TEXT",
             "ALTER TABLE users ADD COLUMN track_2_topics_used TEXT",
+            "ALTER TABLE users ADD COLUMN protagonist_genders_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN supporting_roles_used_recently TEXT",
             "ALTER TABLE users ADD COLUMN word_count_band VARCHAR(20) DEFAULT 'standard'",
             "ALTER TABLE users ADD COLUMN consecutive_scores TEXT",
             "ALTER TABLE users ADD COLUMN text_type_counts TEXT",
@@ -4203,7 +4211,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             title=passage_data.get('title', ''),
             content=passage_data.get('content', ''),
             topic=topic,
-            grade_band=grade_band
+            grade_band=grade_band,
+            cultural_identity=cultural_identity
         )
         print(f"✓ Illustration generated: {bool(image_url)}")
         
@@ -8660,6 +8669,20 @@ DIVERSITY_STRUCTURES = [
 ]
 DIVERSITY_PERSPECTIVES = ["first-person", "third-person-limited", "second-person"]
 DIVERSITY_INTEREST_MODES = ["DIRECT", "PERIPHERAL", "THEMATIC", "CULTURAL-HISTORICAL", "ADJACENT", "ABSENT"]
+# Fixes "passages seem to exclude males": protagonist gender is now rotated
+# with the same rolling-history mechanism as genre/structure (target ~50/50
+# over time) instead of being guessed from the student's first name, which
+# silently defaulted to 'female' for any unrecognized name.
+DIVERSITY_PROTAGONIST_GENDERS = ["male", "female"]
+# Fixes "same 4 characters repeated in stories (grandmother, coach, teacher
+# etc.)": rotates which ONE supporting-character role a story gets, instead
+# of leaving it to the AI's own (repetitive) default choices.
+DIVERSITY_SUPPORTING_ROLES = [
+    "older sibling", "coach", "teacher", "grandmother", "grandfather",
+    "aunt or uncle", "neighbor", "best friend", "classmate", "librarian",
+    "mentor from an after-school program", "family friend", "cousin",
+    "youth group leader", "shop or business owner in the community",
+]
 
 
 def _rolling_list(raw_json: str, new_value: str = None, max_len: int = 5) -> list:
@@ -8746,7 +8769,8 @@ def select_diversity_element(user_row: dict, field: str, pool: list) -> str:
 
 def record_generation_history(user_id: int, track: int, genre: str, structure: str,
                                perspective: str, interest_mode: str, text_type: str,
-                               topic_area: str):
+                               topic_area: str, protagonist_gender: str = None,
+                               supporting_role: str = None):
     """Post-session update (spec section 8): appends this story's rotation
     fields to the student's rolling history and increments track_counts, so
     the NEXT generation's diversity/track selection sees it. Called right
@@ -8758,10 +8782,12 @@ def record_generation_history(user_id: int, track: int, genre: str, structure: s
     try:
         cursor.execute(
             "SELECT track_counts, genres_used_recently, structures_used_recently, perspectives_used_recently, "
-            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used FROM users WHERE id = %s"
+            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used, "
+            "protagonist_genders_used_recently, supporting_roles_used_recently FROM users WHERE id = %s"
             if USE_POSTGRES else
             "SELECT track_counts, genres_used_recently, structures_used_recently, perspectives_used_recently, "
-            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used FROM users WHERE id = ?",
+            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used, "
+            "protagonist_genders_used_recently, supporting_roles_used_recently FROM users WHERE id = ?",
             (user_id,)
         )
         row = cursor.fetchone()
@@ -8779,22 +8805,28 @@ def record_generation_history(user_id: int, track: int, genre: str, structure: s
         interest_modes = _rolling_list(row.get("interest_modes_used_recently"), interest_mode, 5)
         text_types = _rolling_list(row.get("text_types_used_recently"), text_type, 5)
         track2_topics = _rolling_list(row.get("track_2_topics_used"), topic_area if track == 2 else None, 3)
+        protagonist_genders = _rolling_list(row.get("protagonist_genders_used_recently"), protagonist_gender, 5)
+        supporting_roles = _rolling_list(row.get("supporting_roles_used_recently"), supporting_role, 5)
 
         if USE_POSTGRES:
             cursor.execute(
                 """UPDATE users SET track_counts = %s, genres_used_recently = %s, structures_used_recently = %s,
                    perspectives_used_recently = %s, interest_modes_used_recently = %s,
-                   text_types_used_recently = %s, track_2_topics_used = %s WHERE id = %s""",
+                   text_types_used_recently = %s, track_2_topics_used = %s,
+                   protagonist_genders_used_recently = %s, supporting_roles_used_recently = %s WHERE id = %s""",
                 (json.dumps(track_counts), json.dumps(genres), json.dumps(structures), json.dumps(perspectives),
-                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics), user_id)
+                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics),
+                 json.dumps(protagonist_genders), json.dumps(supporting_roles), user_id)
             )
         else:
             cursor.execute(
                 """UPDATE users SET track_counts = ?, genres_used_recently = ?, structures_used_recently = ?,
                    perspectives_used_recently = ?, interest_modes_used_recently = ?,
-                   text_types_used_recently = ?, track_2_topics_used = ? WHERE id = ?""",
+                   text_types_used_recently = ?, track_2_topics_used = ?,
+                   protagonist_genders_used_recently = ?, supporting_roles_used_recently = ? WHERE id = ?""",
                 (json.dumps(track_counts), json.dumps(genres), json.dumps(structures), json.dumps(perspectives),
-                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics), user_id)
+                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics),
+                 json.dumps(protagonist_genders), json.dumps(supporting_roles), user_id)
             )
         conn.commit()
     except Exception as e:
@@ -9060,6 +9092,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
         genre_pick = select_diversity_element(user, "genres_used_recently", DIVERSITY_GENRES)
         structure_pick = select_diversity_element(user, "structures_used_recently", DIVERSITY_STRUCTURES)
         perspective_pick = select_diversity_element(user, "perspectives_used_recently", DIVERSITY_PERSPECTIVES)
+        protagonist_gender_pick = select_diversity_element(user, "protagonist_genders_used_recently", DIVERSITY_PROTAGONIST_GENDERS)
+        supporting_role_pick = select_diversity_element(user, "supporting_roles_used_recently", DIVERSITY_SUPPORTING_ROLES)
         word_count_band = select_word_count_band(user)
 
         if reading_track == 1:
@@ -9150,7 +9184,9 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                 interest_mode=interest_mode_pick,
                 text_type=text_type_pick,
                 topic_area=picked_topic if reading_track == 2 else None,
-                word_count_band=word_count_band
+                word_count_band=word_count_band,
+                protagonist_gender=protagonist_gender_pick,
+                supporting_role=supporting_role_pick
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
@@ -9199,7 +9235,9 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
             perspective=perspective_pick,
             interest_mode=interest_mode_pick,
             text_type=text_type_pick or "narrative",
-            topic_area=topic_area
+            topic_area=topic_area,
+            protagonist_gender=protagonist_gender_pick,
+            supporting_role=supporting_role_pick
         )
 
         topic = picked_topic or topic
@@ -9214,7 +9252,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
             title=passage_data.get('title', ''),
             content=passage_data.get('content', ''),
             topic=topic,
-            grade_band=lesson_grade_band
+            grade_band=lesson_grade_band,
+            cultural_identity=user.get('cultural_identity')
         )
         print(f"✓ Illustration generated: {bool(lesson_image_url)}")
 
@@ -9750,12 +9789,46 @@ def credit_wallet_from_points(user_id, points, reason, conn, cursor):
     Convert points to cents and credit the wallet.
     Called automatically by award_points — students never do this manually.
     500 points = $1 = 100 cents → 1 point = 0.2 cents
+
+    Bug fix ("points to money" mismatch): this used to floor-divide EACH
+    individual award on its own — (points * 100) // 500 — so any single
+    award under 5 points converted to 0 cents and that fractional cent was
+    thrown away for good. Most point awards on this platform are small
+    (a handful of points per correct answer, etc.), so this quietly ate a
+    large share of every student's earned points before they ever reached
+    the wallet, causing the displayed point total and the wallet dollar
+    amount to drift further and further apart the more a student played.
+    Fixed by computing cents against the student's LIFETIME total points
+    each time (target = floor(lifetime_points * 100 / 500)) and crediting
+    only the difference from what the wallet already has. No remainder is
+    ever lost — it just carries forward to the next award — and this also
+    self-heals any wallet that already drifted under the old logic, since
+    the next award always tops the wallet up to the mathematically correct
+    cumulative total instead of adding another lossy increment on top.
     """
-    cents = (points * 100) // POINTS_PER_DOLLAR
+    get_or_create_wallet(user_id, cursor, conn)
+
+    # Lifetime points already include this award — award_points() updates
+    # user_points.total_earned BEFORE calling this function.
+    if USE_POSTGRES:
+        cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+    pts_row = cursor.fetchone()
+    lifetime_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else points
+
+    target_total_cents = (lifetime_points * 100) // POINTS_PER_DOLLAR
+
+    if USE_POSTGRES:
+        cursor.execute("SELECT total_earned_cents FROM student_wallets WHERE user_id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT total_earned_cents FROM student_wallets WHERE user_id = ?", (user_id,))
+    wrow = cursor.fetchone()
+    current_total_cents = (wrow['total_earned_cents'] if hasattr(wrow, 'keys') else wrow[0]) if wrow else 0
+
+    cents = target_total_cents - current_total_cents
     if cents <= 0:
         return 0
-
-    get_or_create_wallet(user_id, cursor, conn)
 
     if USE_POSTGRES:
         cursor.execute(
@@ -9809,20 +9882,25 @@ async def get_wallet(response: Response, token: str):
         total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
         total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
 
-        # Auto-backfill: if wallet has never had any earnings but the student
-        # has points, convert their historical points to wallet balance.
-        # This handles students who earned points before the wallet system launched.
-        if total_earned == 0:
-            try:
-                if USE_POSTGRES:
-                    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s", (user_id,))
-                else:
-                    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
-                pts_row = cursor.fetchone()
-                historical_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else 0
+        # Auto-backfill / self-heal: covers two cases with the same math —
+        # (1) a wallet that's never had any earnings but the student has
+        #     points (pre-dates the wallet system), and
+        # (2) a wallet that drifted below the correct total because of the
+        #     old per-award floor-division bug in credit_wallet_from_points
+        #     (see its docstring) — any wallet whose total_earned_cents is
+        #     LESS than floor(lifetime_points * 100 / 500) gets topped up to
+        #     the correct amount here, not just when it's exactly zero.
+        try:
+            if USE_POSTGRES:
+                cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s", (user_id,))
+            else:
+                cursor.execute("SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+            pts_row = cursor.fetchone()
+            historical_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else 0
 
-                if historical_points > 0:
-                    backfill_cents = (historical_points * 100) // POINTS_PER_DOLLAR
+            correct_total_cents = (historical_points * 100) // POINTS_PER_DOLLAR
+            if historical_points > 0 and correct_total_cents > total_earned:
+                    backfill_cents = correct_total_cents - total_earned
                     if backfill_cents > 0:
                         if USE_POSTGRES:
                             cursor.execute(
@@ -9863,9 +9941,9 @@ async def get_wallet(response: Response, token: str):
                         balance_cents = wallet['balance_cents'] if hasattr(wallet, 'keys') else wallet[0]
                         total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
                         total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
-            except Exception as backfill_err:
-                print(f"⚠️ Wallet backfill skipped: {backfill_err}")
-                conn.rollback()
+        except Exception as backfill_err:
+            print(f"⚠️ Wallet backfill skipped: {backfill_err}")
+            conn.rollback()
 
         # Recent transactions (last 10) — item #15: only genuine cash events
         # (admin credits, gift-card redemptions) are shown here. Per-task
