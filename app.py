@@ -11336,6 +11336,55 @@ class SeedWordBankRequest(BaseModel):
     count: int = 40
 
 
+@app.post("/api/superadmin/clear-lesson-reserve")
+async def clear_lesson_reserve(user_id: int = None, admin=Depends(require_super_admin)):
+    """
+    Debug/ops tool: marks a student's (or, if user_id is omitted, EVERY
+    student's) unconsumed pre-generated reserve lessons as consumed, WITHOUT
+    touching the underlying passages/questions rows (those are just left
+    orphaned — harmless).
+
+    Why this exists: reserve lessons are pre-generated ahead of time
+    (RESERVE_TARGET_SIZE = 5 per student) and served instantly from that
+    stockpile before anything is freshly generated. So whenever a change is
+    shipped to how NEW lessons are generated (e.g. the protagonist-gender /
+    supporting-character-role rotation, or a cultural-identity fix to
+    illustrations), students can keep seeing the OLD behavior for up to 5
+    more lessons — because they're actually seeing lessons that were
+    generated and saved to the `passages` table BEFORE the fix went out,
+    not freshly generated ones. This looked like "the fix isn't working"
+    but was really just stale pre-generated inventory. Clearing the reserve
+    forces the next `/api/lessons/next` call to generate fresh (picking up
+    whatever the current code does), and the background replenish task
+    will then refill the reserve using that same current code.
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if user_id is not None:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE user_id = %s AND consumed = FALSE",
+                    (user_id,)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE user_id = ? AND consumed = 0",
+                    (user_id,)
+                )
+        else:
+            if USE_POSTGRES:
+                cursor.execute("UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE consumed = FALSE")
+            else:
+                cursor.execute("UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE consumed = 0")
+        cleared = cursor.rowcount
+        conn.commit()
+        return {"success": True, "cleared": cleared, "scope": f"user_id={user_id}" if user_id is not None else "all students"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.post("/api/superadmin/seed-word-bank")
 async def seed_word_bank(body: SeedWordBankRequest, admin=Depends(require_super_admin)):
     """
