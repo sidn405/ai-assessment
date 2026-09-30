@@ -7464,14 +7464,40 @@
                 const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
                 
                 // Calculate score - validate fill-in-blank answers
+                // Bug fix: fill-in-blank grading required an EXACT string match
+                // against the AI-generated accept_answers list, so a perfectly
+                // reasonable paraphrase (e.g. "telling their stories" when the
+                // list only had "telling stories") was marked wrong just
+                // because that one exact wording wasn't anticipated. Now we
+                // normalize punctuation/whitespace, then also strip common
+                // filler words (articles/possessives) before comparing, so an
+                // inserted/omitted "a", "the", "their" etc. doesn't fail an
+                // otherwise-correct answer, while still requiring every
+                // meaningful word to match (so genuinely wrong answers still
+                // get marked wrong).
+                const FILL_BLANK_FILLER_WORDS = new Set(['a', 'an', 'the', 'their', 'his', 'her', 'its', 'my', 'your', 'our']);
+                const normalizeForGrading = (s) => (s || '')
+                    .toLowerCase()
+                    .replace(/[.,!?;:'"]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                const coreWordsForGrading = (s) => normalizeForGrading(s)
+                    .split(' ')
+                    .filter(w => w && !FILL_BLANK_FILLER_WORDS.has(w))
+                    .join(' ');
                 lessonAnswers.forEach((answer, index) => {
                     if (answer && answer.is_fill_blank) {
-                        // Validate fill-in-blank answer
-                        const userAnswer = answer.selected.toLowerCase().trim();
+                        const userAnswer = normalizeForGrading(answer.selected);
+                        const userCore = coreWordsForGrading(answer.selected);
                         const acceptAnswers = answer.accept_answers || [answer.correct];
-                        const isCorrect = acceptAnswers.some(accepted => 
-                            accepted.toLowerCase().trim() === userAnswer
-                        );
+                        const isCorrect = acceptAnswers.some(raw => {
+                            const accepted = normalizeForGrading(raw);
+                            const acceptedCore = coreWordsForGrading(raw);
+                            if (!accepted || !userAnswer) return false;
+                            if (accepted === userAnswer) return true;
+                            if (acceptedCore && userCore && acceptedCore === userCore) return true;
+                            return false;
+                        });
                         answer.is_correct = isCorrect;
                     }
                 });
