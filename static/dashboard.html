@@ -7465,19 +7465,21 @@
                 
                 // Calculate score - validate fill-in-blank answers
                 // Bug fix: fill-in-blank grading required an EXACT string match
-                // against the AI-generated accept_answers list, so a perfectly
-                // reasonable paraphrase (e.g. "telling their stories" when the
-                // list only had "telling stories") was marked wrong just
-                // because that one exact wording wasn't anticipated. Now we
-                // normalize punctuation/whitespace, then also strip common
-                // filler words (articles/possessives) before comparing, so an
-                // inserted/omitted "a", "the", "their" etc. doesn't fail an
-                // otherwise-correct answer, while still requiring every
-                // meaningful word to match (so genuinely wrong answers still
-                // get marked wrong).
+                // against the AI-generated accept_answers list, so reasonable
+                // variations were marked wrong just because that one exact
+                // wording wasn't anticipated:
+                //   - "telling their stories" vs accepted "telling stories"
+                //   - "clean ups" (space) vs accepted "clean-ups" (hyphen)
+                // Now we normalize punctuation AND treat hyphens/underscores as
+                // word separators, strip common filler words (articles/
+                // possessives), and also compare with all separators fully
+                // collapsed (so "clean ups" / "clean-ups" / "cleanups" are all
+                // treated the same) — while still requiring every meaningful
+                // word to match, so genuinely wrong answers still fail.
                 const FILL_BLANK_FILLER_WORDS = new Set(['a', 'an', 'the', 'their', 'his', 'her', 'its', 'my', 'your', 'our']);
                 const normalizeForGrading = (s) => (s || '')
                     .toLowerCase()
+                    .replace(/[-_]/g, ' ')
                     .replace(/[.,!?;:'"]/g, '')
                     .replace(/\s+/g, ' ')
                     .trim();
@@ -7485,17 +7487,21 @@
                     .split(' ')
                     .filter(w => w && !FILL_BLANK_FILLER_WORDS.has(w))
                     .join(' ');
+                const collapsedForGrading = (s) => coreWordsForGrading(s).replace(/\s+/g, '');
                 lessonAnswers.forEach((answer, index) => {
                     if (answer && answer.is_fill_blank) {
                         const userAnswer = normalizeForGrading(answer.selected);
                         const userCore = coreWordsForGrading(answer.selected);
+                        const userCollapsed = collapsedForGrading(answer.selected);
                         const acceptAnswers = answer.accept_answers || [answer.correct];
                         const isCorrect = acceptAnswers.some(raw => {
                             const accepted = normalizeForGrading(raw);
                             const acceptedCore = coreWordsForGrading(raw);
+                            const acceptedCollapsed = collapsedForGrading(raw);
                             if (!accepted || !userAnswer) return false;
                             if (accepted === userAnswer) return true;
                             if (acceptedCore && userCore && acceptedCore === userCore) return true;
+                            if (acceptedCollapsed && userCollapsed && acceptedCollapsed === userCollapsed) return true;
                             return false;
                         });
                         answer.is_correct = isCorrect;
