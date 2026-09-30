@@ -9682,6 +9682,84 @@ async def _replenish_reserve_task(user_id: int):
             cursor.close()
             conn.close()
 
+        # Self-heal: before generating anything new, check whether any of
+        # this student's still-unconsumed reserve lessons got saved with no
+        # illustration (image_url NULL) — e.g. hit the OpenAI 5-images/min
+        # cap during a busy burst and exhausted retries. There was
+        # previously no retry path for an already-saved passage, so a
+        # student could be served a lesson with no picture indefinitely.
+        # Try up to 2 per replenishment pass so this heals quietly over time
+        # without adding a large image-generation burst of its own.
+        try:
+            heal_conn = get_db()
+            heal_cursor = get_cursor(heal_conn)
+            try:
+                if USE_POSTGRES:
+                    heal_cursor.execute(
+                        """SELECT p.id, p.title, p.content, p.topic_tags, p.grade_band
+                           FROM lesson_reserve lr JOIN passages p ON p.id = lr.passage_id
+                           WHERE lr.user_id = %s AND lr.consumed = FALSE
+                             AND (p.image_url IS NULL OR p.image_url = '')
+                           ORDER BY lr.created_at ASC LIMIT 2""",
+                        (user_id,)
+                    )
+                else:
+                    heal_cursor.execute(
+                        """SELECT p.id, p.title, p.content, p.topic_tags, p.grade_band
+                           FROM lesson_reserve lr JOIN passages p ON p.id = lr.passage_id
+                           WHERE lr.user_id = ? AND lr.consumed = 0
+                             AND (p.image_url IS NULL OR p.image_url = '')
+                           ORDER BY lr.created_at ASC LIMIT 2""",
+                        (user_id,)
+                    )
+                stuck_rows = heal_cursor.fetchall()
+            finally:
+                heal_cursor.close()
+                heal_conn.close()
+
+            if stuck_rows:
+                cur_conn = get_db()
+                cur_cursor = get_cursor(cur_conn)
+                try:
+                    cur_cursor.execute(
+                        "SELECT cultural_identity FROM users WHERE id = %s" if USE_POSTGRES
+                        else "SELECT cultural_identity FROM users WHERE id = ?", (user_id,)
+                    )
+                    urow = cur_cursor.fetchone()
+                    cultural_identity = (urow['cultural_identity'] if hasattr(urow, 'keys') else urow[0]) if urow else None
+                finally:
+                    cur_cursor.close()
+                    cur_conn.close()
+
+                for srow in stuck_rows:
+                    srow = dict(srow) if hasattr(srow, 'keys') else {
+                        'id': srow[0], 'title': srow[1], 'content': srow[2], 'topic_tags': srow[3], 'grade_band': srow[4]
+                    }
+                    try:
+                        healed_url = await asyncio.to_thread(
+                            content_generator.generate_story_image,
+                            title=srow.get('title', ''),
+                            content=srow.get('content', ''),
+                            topic=(json.loads(srow['topic_tags'])[0] if srow.get('topic_tags') else ''),
+                            grade_band=srow.get('grade_band', ''),
+                            cultural_identity=cultural_identity
+                        )
+                        if healed_url:
+                            heal_upd_conn = get_db()
+                            heal_upd_cursor = get_cursor(heal_upd_conn)
+                            if USE_POSTGRES:
+                                heal_upd_cursor.execute("UPDATE passages SET image_url = %s WHERE id = %s", (healed_url, srow['id']))
+                            else:
+                                heal_upd_cursor.execute("UPDATE passages SET image_url = ? WHERE id = ?", (healed_url, srow['id']))
+                            heal_upd_conn.commit()
+                            heal_upd_cursor.close()
+                            heal_upd_conn.close()
+                            print(f"✓ Healed missing illustration for passage {srow['id']} (user {user_id})")
+                    except Exception as heal_err:
+                        print(f"⚠️ Image backfill failed for passage {srow.get('id')}: {heal_err}")
+        except Exception as heal_outer_err:
+            print(f"⚠️ Image backfill sweep failed (non-fatal) for user {user_id}: {heal_outer_err}")
+
         needed = RESERVE_TARGET_SIZE - current_count
         if needed <= 0:
             return
