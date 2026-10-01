@@ -14020,6 +14020,14 @@ async def delete_school_code(code_id: int, admin=Depends(require_admin)):
 # WORD GAMES ENDPOINTS
 # ========================================
 
+def _re_word_boundary_present(text: str, word: str) -> bool:
+    """True if `word` (whole word, case-insensitive) appears anywhere in `text`."""
+    import re as _re
+    if not text or not word:
+        return False
+    return _re.search(r'\b' + _re.escape(word.strip()) + r'\b', text, _re.IGNORECASE) is not None
+
+
 def _mask_target_word(text: str, word: str, blank: str = "_____") -> str:
     """
     Replace `word` and its common inflections in `text` with a blank.
@@ -14047,6 +14055,42 @@ def _mask_target_word(text: str, word: str, blank: str = "_____") -> str:
     if len(w) <= 5 and _re.search(r"[^aeiou][aeiou][^aeiouwxy]$", w):
         stems.add(w + w[-1])              # stop      -> stopp(ed/ing)
 
+    # Bug fix: the block above only derives inflected forms FROM a base word
+    # (e.g. given "depict", also catch "depicts"/"depicted"). It never
+    # handled the reverse — `word` itself already being the inflected form
+    # while the definition naturally uses the bare root, e.g. word
+    # "brainstormed" with a definition reading "When you brainstorm, you
+    # sit down with others..." — so "brainstorm" stayed fully visible and
+    # gave the Word Tower answer away. Now also strip common suffixes off
+    # `word` itself to recover likely root forms and mask those too.
+    def _add_root(root):
+        if len(root) >= 3:
+            stems.add(root)
+
+    if w.endswith("ied") and len(w) > 4:
+        _add_root(w[:-3] + "y")           # amplified -> amplify
+    if w.endswith("ies") and len(w) > 4:
+        _add_root(w[:-3] + "y")           # amplifies -> amplify
+    if w.endswith("ing"):
+        _add_root(w[:-3])                 # jumping   -> jump
+        _add_root(w[:-3] + "e")           # making    -> make
+    if w.endswith("ed"):
+        _add_root(w[:-2])                 # jumped    -> jump
+        _add_root(w[:-1])                 # decided   -> decide
+        stripped = w[:-2]
+        if len(stripped) >= 2 and stripped[-1] == stripped[-2] and stripped[-1] not in "aeiou":
+            _add_root(stripped[:-1])      # stopped   -> stop
+    if w.endswith("es") and len(w) > 4:
+        _add_root(w[:-2])                 # watches   -> watch
+    if w.endswith("s") and not w.endswith("ss") and len(w) > 3:
+        _add_root(w[:-1])                 # jumps     -> jump
+    if w.endswith("ly") and len(w) > 4:
+        _add_root(w[:-2])                 # quickly   -> quick
+    if w.endswith("er") and len(w) > 4:
+        _add_root(w[:-2])                 # faster    -> fast
+    if w.endswith("ment") and len(w) > 6:
+        _add_root(w[:-4])                 # enjoyment -> enjoy
+
     if len(w) >= 5:
         suffix = r"(?:s|es|ed|d|ing|ings|ly|er|ers|ment|ments|ion|ions|ation|ations|ies|ied)?"
     else:
@@ -14060,11 +14104,21 @@ def _mask_target_word(text: str, word: str, blank: str = "_____") -> str:
 # Item #17 game-specific word count / minimum length constraints, per
 # Achieve365_WordGames_DeveloperInstruction section 2.
 GAME_WORD_REQUIREMENTS = {
-    "word-scramble": {"words_needed": 1, "min_length": 4},
+    # Bug fix: the frontend always runs a fixed 10 rounds per game session
+    # (gameState.totalRounds = 10, same vocabulary array indexed by
+    # round-1 for every round) regardless of game type. word-scramble was
+    # requesting only 1 word and word-match/word-fits only 8, so once the
+    # round index ran past the fetched array length, the same last word
+    # kept getting displayed (the generate function silently failed on an
+    # out-of-range/undefined vocab entry, leaving the previous round's
+    # question on screen) — this is what produced "captain" stuck for the
+    # last 3 rounds of Word Match and Word Scramble never advancing past
+    # round 1. All round-based games now request the full 10.
+    "word-scramble": {"words_needed": 10, "min_length": 4},
     "word-tower": {"words_needed": 10, "min_length": 4},
     "word-search": {"words_needed": 12, "min_length": 4},
-    "word-match": {"words_needed": 8, "min_length": 4},
-    "word-fits": {"words_needed": 8, "min_length": 4},
+    "word-match": {"words_needed": 10, "min_length": 4},
+    "word-fits": {"words_needed": 10, "min_length": 4},
 }
 DEFAULT_GAME_WORD_REQUIREMENTS = {"words_needed": 10, "min_length": 4}
 
@@ -14108,17 +14162,21 @@ def select_game_words(student_id: int, game_type: str, words_needed: int = None,
         last_words = set(w.lower() for w in history.get(history_key, []))
 
         # ── Tier 1: student's own WordBank Word List ──
+        # Also pull swl.context_sentence — the REAL sentence this word
+        # appeared in in the student's own passage — so Word Fits can show
+        # genuine context instead of a fake template (see the call site's
+        # comment on the "sentence" field).
         cursor.execute(
-            """SELECT DISTINCT wbw.word, wbw.definition FROM student_word_list swl
+            """SELECT DISTINCT wbw.word, wbw.definition, swl.context_sentence FROM student_word_list swl
                JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
                WHERE swl.student_id = %s""" if USE_POSTGRES else
-            """SELECT DISTINCT wbw.word, wbw.definition FROM student_word_list swl
+            """SELECT DISTINCT wbw.word, wbw.definition, swl.context_sentence FROM student_word_list swl
                JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
                WHERE swl.student_id = ?""",
             (student_id,)
         )
         tier1_candidates = [
-            {"word": r["word"], "definition": r.get("definition") or ""}
+            {"word": r["word"], "definition": r.get("definition") or "", "context_sentence": r.get("context_sentence") or ""}
             for r in (dict(x) for x in cursor.fetchall())
             if len(r["word"]) >= min_length and r["word"].lower() not in last_words
         ]
@@ -14135,7 +14193,10 @@ def select_game_words(student_id: int, game_type: str, words_needed: int = None,
                 (grade_band, min_length)
             )
             tier2_candidates = [
-                {"word": r["word"], "definition": r.get("definition") or ""}
+                # No stored context_sentence for grade-level bank words — the
+                # /vocabulary endpoint falls back to a definition-based cloze
+                # sentence for these.
+                {"word": r["word"], "definition": r.get("definition") or "", "context_sentence": ""}
                 for r in (dict(x) for x in cursor.fetchall())
                 if r["word"].lower() not in last_words and r["word"].lower() not in already_picked
             ]
@@ -14175,6 +14236,28 @@ async def get_game_vocabulary(game_type: str = "word-tower", user: dict = Depend
     try:
         selected = select_game_words(user_id, game_type)
 
+        def _build_fits_sentence(w):
+            """
+            Word Fits' "sentence" field used to be a fake template —
+            f"Example sentence with {word}." — which (a) never actually
+            contained the "____" blank marker the frontend looks for, so no
+            blank was ever shown, and (b) spelled the target word out in
+            plain text right next to the answer options, giving the answer
+            away outright. Now we use the REAL sentence this word appeared
+            in in the student's own passage (stored as context_sentence on
+            their WordBank entry) with the word masked out to "____". For
+            grade-level fill words with no stored sentence, we fall back to
+            a definition-based cloze that still never names the word.
+            """
+            word = w["word"]
+            context = (w.get("context_sentence") or "").strip()
+            if context and _re_word_boundary_present(context, word):
+                return _mask_target_word(context, word, blank="____")
+            definition = (w.get("definition") or "").strip()
+            if definition:
+                return f'Something that means "{definition}" is ____.'
+            return "The missing word here is ____."
+
         vocabulary = [
             {
                 "word": w["word"],
@@ -14182,7 +14265,7 @@ async def get_game_vocabulary(game_type: str = "word-tower", user: dict = Depend
                 # in Word Tower the correct option was the only one containing
                 # the target word, so it gave the answer away.
                 "definition": _mask_target_word(w["definition"], w["word"]),
-                "sentence": f"Example sentence with {w['word'].lower()}."
+                "sentence": _build_fits_sentence(w)
             }
             for w in selected
         ]

@@ -10272,8 +10272,17 @@
             
             if (data.vocabulary && data.vocabulary.length > 0) {
                 gameState.vocabulary = data.vocabulary;
+                // Bug fix: totalRounds was hardcoded to 10 regardless of how
+                // many words actually came back. If a student's WordBank +
+                // grade-level fill ever comes up short of 10 (small vocab
+                // pool, new account, etc.), rounds beyond the array length
+                // indexed into undefined and the game silently froze on the
+                // last successfully-rendered question instead of ending
+                // cleanly. Now the round count never exceeds what was
+                // actually loaded.
+                gameState.totalRounds = Math.min(10, data.vocabulary.length);
                 console.log(`✓ Loaded ${data.count} words from your lessons`);
-                
+
                 // Load used words for this game
                 await loadUsedWordsFromBackend();
                 return;
