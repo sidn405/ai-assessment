@@ -946,6 +946,11 @@ def init_db():
                 # mechanism as genres_used_recently etc.
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS protagonist_genders_used_recently TEXT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS supporting_roles_used_recently TEXT",
+                # Supporting-character NAME history (separate from used_character_names,
+                # which is protagonist-only) — fixes "Mr. Johnson" recurring under
+                # different supporting roles, since nothing was tracking supporting
+                # character names at all before this.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS used_supporting_names TEXT DEFAULT '[]'",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_band VARCHAR(20) DEFAULT 'standard'",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS consecutive_scores TEXT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_type_counts TEXT",
@@ -1467,6 +1472,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN track_2_topics_used TEXT",
             "ALTER TABLE users ADD COLUMN protagonist_genders_used_recently TEXT",
             "ALTER TABLE users ADD COLUMN supporting_roles_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN used_supporting_names TEXT DEFAULT '[]'",
             "ALTER TABLE users ADD COLUMN word_count_band VARCHAR(20) DEFAULT 'standard'",
             "ALTER TABLE users ADD COLUMN consecutive_scores TEXT",
             "ALTER TABLE users ADD COLUMN text_type_counts TEXT",
@@ -9186,7 +9192,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                 topic_area=picked_topic if reading_track == 2 else None,
                 word_count_band=word_count_band,
                 protagonist_gender=protagonist_gender_pick,
-                supporting_role=supporting_role_pick
+                supporting_role=supporting_role_pick,
+                used_supporting_names=json.loads(user.get('used_supporting_names') or '[]')
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
@@ -9239,6 +9246,46 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
             protagonist_gender=protagonist_gender_pick,
             supporting_role=supporting_role_pick
         )
+
+        # Bug fix: this function (the one that generates every real lesson,
+        # not just the placement test) read used_character_names to avoid
+        # repeat protagonist names, but never WROTE it back — so the list
+        # never grew past whatever the placement test happened to leave in
+        # it, and names could repeat indefinitely. Also tracks supporting
+        # character names for the first time (previously untracked entirely,
+        # which is why "Mr. Johnson" kept recurring under different roles).
+        try:
+            name_conn = get_db()
+            name_cursor = get_cursor(name_conn)
+            try:
+                used_names_list = json.loads(user.get('used_character_names') or '[]')
+                protagonist_name = passage_data.get('protagonist_name')
+                if protagonist_name and protagonist_name not in used_names_list:
+                    used_names_list.append(protagonist_name)
+                    used_names_list = used_names_list[-30:]
+
+                used_supporting_list = json.loads(user.get('used_supporting_names') or '[]')
+                supporting_name = passage_data.get('supporting_character_name')
+                if supporting_name and supporting_name not in used_supporting_list:
+                    used_supporting_list.append(supporting_name)
+                    used_supporting_list = used_supporting_list[-30:]
+
+                if USE_POSTGRES:
+                    name_cursor.execute(
+                        "UPDATE users SET used_character_names = %s, used_supporting_names = %s WHERE id = %s",
+                        (json.dumps(used_names_list), json.dumps(used_supporting_list), user_id)
+                    )
+                else:
+                    name_cursor.execute(
+                        "UPDATE users SET used_character_names = ?, used_supporting_names = ? WHERE id = ?",
+                        (json.dumps(used_names_list), json.dumps(used_supporting_list), user_id)
+                    )
+                name_conn.commit()
+            finally:
+                name_cursor.close()
+                name_conn.close()
+        except Exception as name_track_err:
+            print(f"⚠️ Character name history tracking failed (non-fatal): {name_track_err}")
 
         topic = picked_topic or topic
         passage_data = normalize_passage(passage_data, topic, difficulty)

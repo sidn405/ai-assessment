@@ -292,7 +292,7 @@ class ContentGenerator:
                           age=None, grade_band=None, cultural_identity=None, student_name=None, used_names=None,
                           reading_track=1, genre=None, structure=None, perspective=None, interest_mode=None,
                           text_type=None, topic_area=None, word_count_band='standard',
-                          protagonist_gender=None, supporting_role=None):
+                          protagonist_gender=None, supporting_role=None, used_supporting_names=None):
         """
         Generate educational passage using GPT-4 with dynamic word count.
 
@@ -361,6 +361,25 @@ class ContentGenerator:
             'youth group leader', 'shop or business owner in the community',
         ]
         supporting_role_pick = supporting_role if supporting_role in supporting_role_pool else random.choice(supporting_role_pool)
+
+        # Bug fix ("Mr. Johnson" recurring under different roles): the role
+        # now rotates, but nothing ever constrained or tracked the supporting
+        # character's NAME, so the AI kept defaulting to the same familiar
+        # name regardless of role. Give it a specific, history-aware name
+        # pool the same way the protagonist gets one — drawn from the full
+        # (both-gender) cultural name pool, minus the protagonist's own name
+        # and minus names already used as a supporting character for this
+        # student.
+        if used_supporting_names is None:
+            used_supporting_names = []
+        supporting_name_candidates = [
+            n for n in full_pool
+            if n not in used_supporting_names and n not in available_names
+        ]
+        if not supporting_name_candidates:
+            supporting_name_candidates = [n for n in full_pool if n not in available_names] or full_pool[:]
+        random.shuffle(supporting_name_candidates)
+        supporting_name_options = ', '.join(supporting_name_candidates[:10])
 
         # Pick a random story angle to prevent the AI defaulting to the same
         # scenario (e.g. "pizza party at school") for the same topic every time
@@ -459,6 +478,8 @@ class ContentGenerator:
         - DO NOT use any name not in the list above
         - Include exactly ONE significant supporting character, and make them a {supporting_role_pick}
         - Do not default to a generic "friend" if a more specific role is given above
+        - Supporting character's name: choose ONE name from this list — NEVER used before for this student, and different from the protagonist's name: {supporting_name_options}
+        - DO NOT name the supporting character "Mr. Johnson," "Ms. Lee," or any other name not in the list above — those defaults have been overused
         
         SETTING RULES:
         - Pick a setting that fits the topic: {topic}
@@ -494,6 +515,7 @@ class ContentGenerator:
         {{
             "title": "Engaging title about {topic}",
             "protagonist_name": "The exact first name you chose for the protagonist",
+            "supporting_character_name": "The exact first name you chose for the supporting character",
             "content": "The full story (EXACTLY {target_words} words)",
             "key_concepts": ["concept1", "concept2", "concept3"],
             "vocabulary_words": [
@@ -554,29 +576,50 @@ class ContentGenerator:
                         - Show positive outcomes through effort, creativity, or community support where the text type allows it
                         - NO articles, definitions, or lectures written in a flat textbook voice — bring the subject to life"""
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_message
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.35,
-                max_tokens=2500,
-                timeout=60
-            )
-            
-            content = response.choices[0].message.content
-            
-            # Extract JSON
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            
-            passage_data = json.loads(content)
+            # Bug fix (silent fallback on long passages): max_tokens was a flat
+            # 2500 regardless of target length. A 1055-1085 word Track 2/3
+            # passage (word_count_band='extended' pushes toward word_count_max)
+            # plus its JSON wrapper (title, key_concepts, 6-10 vocabulary words
+            # with definitions) routinely exceeds that, so the model's JSON got
+            # cut off mid-structure, json.loads() raised, and generate_passage()
+            # silently returned the generic "[AI generation unavailable]"
+            # placeholder passage instead — with no error surfaced to the
+            # student or teacher. Scale the budget with word_count_max instead,
+            # capped at gpt-4o's completion limit.
+            dynamic_max_tokens = min(4096, max(2500, int(word_count_max * 2.2) + 1000))
+
+            def _call_and_parse(max_tokens_budget):
+                resp = self.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_message
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.35,
+                    max_tokens=max_tokens_budget,
+                    timeout=60
+                )
+                raw = resp.choices[0].message.content
+
+                if "```json" in raw:
+                    raw = raw.split("```json")[1].split("```")[0].strip()
+                elif "```" in raw:
+                    raw = raw.split("```")[1].split("```")[0].strip()
+
+                return json.loads(raw)
+
+            try:
+                passage_data = _call_and_parse(dynamic_max_tokens)
+            except json.JSONDecodeError as parse_err:
+                # One retry at the max completion budget before giving up —
+                # a truncated response is usually a token-budget problem, not
+                # a content problem, so retrying with the same prompt at a
+                # larger budget resolves it without changing what gets asked for.
+                print(f"⚠️ Passage JSON parse failed ({parse_err}); retrying once at max token budget...")
+                passage_data = _call_and_parse(4096)
             
             # ========== VALIDATE & ENHANCE VOCABULARY ==========
             vocab_words = passage_data.get('vocabulary_words', [])
