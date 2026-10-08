@@ -9741,9 +9741,14 @@ async def _replenish_reserve_task(user_id: int):
             heal_conn = get_db()
             heal_cursor = get_cursor(heal_conn)
             try:
+                # Bug fix: passages has no grade_band column (it only has
+                # difficulty_level) — grade_band lives on `users`. The old
+                # query referenced p.grade_band and raised "column does not
+                # exist" on every single run, so this sweep never actually
+                # healed anything; it just failed silently every time.
                 if USE_POSTGRES:
                     heal_cursor.execute(
-                        """SELECT p.id, p.title, p.content, p.topic_tags, p.grade_band
+                        """SELECT p.id, p.title, p.content, p.topic_tags
                            FROM lesson_reserve lr JOIN passages p ON p.id = lr.passage_id
                            WHERE lr.user_id = %s AND lr.consumed = FALSE
                              AND (p.image_url IS NULL OR p.image_url = '')
@@ -9752,7 +9757,7 @@ async def _replenish_reserve_task(user_id: int):
                     )
                 else:
                     heal_cursor.execute(
-                        """SELECT p.id, p.title, p.content, p.topic_tags, p.grade_band
+                        """SELECT p.id, p.title, p.content, p.topic_tags
                            FROM lesson_reserve lr JOIN passages p ON p.id = lr.passage_id
                            WHERE lr.user_id = ? AND lr.consumed = 0
                              AND (p.image_url IS NULL OR p.image_url = '')
@@ -9769,18 +9774,22 @@ async def _replenish_reserve_task(user_id: int):
                 cur_cursor = get_cursor(cur_conn)
                 try:
                     cur_cursor.execute(
-                        "SELECT cultural_identity FROM users WHERE id = %s" if USE_POSTGRES
-                        else "SELECT cultural_identity FROM users WHERE id = ?", (user_id,)
+                        "SELECT cultural_identity, grade_band FROM users WHERE id = %s" if USE_POSTGRES
+                        else "SELECT cultural_identity, grade_band FROM users WHERE id = ?", (user_id,)
                     )
                     urow = cur_cursor.fetchone()
-                    cultural_identity = (urow['cultural_identity'] if hasattr(urow, 'keys') else urow[0]) if urow else None
+                    urow = dict(urow) if urow and hasattr(urow, 'keys') else (
+                        {'cultural_identity': urow[0], 'grade_band': urow[1]} if urow else {}
+                    )
+                    cultural_identity = urow.get('cultural_identity')
+                    heal_grade_band = urow.get('grade_band') or ''
                 finally:
                     cur_cursor.close()
                     cur_conn.close()
 
                 for srow in stuck_rows:
                     srow = dict(srow) if hasattr(srow, 'keys') else {
-                        'id': srow[0], 'title': srow[1], 'content': srow[2], 'topic_tags': srow[3], 'grade_band': srow[4]
+                        'id': srow[0], 'title': srow[1], 'content': srow[2], 'topic_tags': srow[3]
                     }
                     try:
                         healed_url = await asyncio.to_thread(
@@ -9788,7 +9797,7 @@ async def _replenish_reserve_task(user_id: int):
                             title=srow.get('title', ''),
                             content=srow.get('content', ''),
                             topic=(json.loads(srow['topic_tags'])[0] if srow.get('topic_tags') else ''),
-                            grade_band=srow.get('grade_band', ''),
+                            grade_band=heal_grade_band,
                             cultural_identity=cultural_identity
                         )
                         if healed_url:
