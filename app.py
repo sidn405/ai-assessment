@@ -5600,6 +5600,91 @@ def _generate_wordbank_images_background(word_normalized: str, grade_band: str, 
         print(f"⚠️ WordBank background image generation failed entirely for '{word_normalized}': {e}")
 
 
+def _concepts_leak_word(word: str, concepts: list) -> bool:
+    """True if any picture-concept text contains the target word (or an
+    inflection of it) — which hands the student the answer, since the
+    WordBank answer options ARE these concept strings."""
+    return any(c and _mask_target_word(c, word) != c for c in concepts)
+
+
+def _rewrite_leaky_concepts(word: str, correct: str, distractors: list):
+    """Returns (correct, distractors) with the target word removed from any
+    concept that contained it. One small AI rewrite keeps the meaning; if
+    that fails or still leaks, falls back to swapping the word for 'item'."""
+    distractors = list(distractors or [])
+    if not _concepts_leak_word(word, [correct] + distractors):
+        return correct, distractors
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You rewrite short picture descriptions for a vocabulary quiz."},
+                {"role": "user", "content": (
+                    f'The vocabulary word is "{word}". Rewrite each description below so it keeps the same meaning '
+                    f'and picture but NEVER uses the word "{word}" or any form of it (plural, past tense, -ing, etc.). '
+                    f'Descriptions that don\'t contain the word should be returned unchanged.\n\n'
+                    f'Correct: {correct}\nDistractors: {json.dumps(distractors)}\n\n'
+                    f'Return ONLY JSON: {{"correct": "...", "distractors": ["...", "..."]}}'
+                )}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(resp.choices[0].message.content)
+        new_correct = data.get("correct") or correct
+        new_distractors = data.get("distractors") or distractors
+        if len(new_distractors) == len(distractors):
+            correct, distractors = new_correct, list(new_distractors)
+    except Exception as e:
+        print(f"⚠️ WordBank concept rewrite failed for '{word}': {e}")
+
+    # Safety net — never ship a concept that still contains the word.
+    if _concepts_leak_word(word, [correct] + distractors):
+        correct = _mask_target_word(correct, word, blank="item")
+        distractors = [_mask_target_word(d, word, blank="item") for d in distractors]
+    return correct, distractors
+
+
+def _sanitize_cached_wordbank_word(word: str, grade_band: str):
+    """Repairs an already-cached word_bank_words row whose picture concepts
+    leak the word (cached before this check existed). Answer matching compares
+    against the stored correct concept, so the fix must be made in the row."""
+    word_normalized = word.strip().lower()
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT correct_image_concept, distractor_image_concepts FROM word_bank_words WHERE word = %s AND grade_band = %s"
+            if USE_POSTGRES else
+            "SELECT correct_image_concept, distractor_image_concepts FROM word_bank_words WHERE word = ? AND grade_band = ?",
+            (word_normalized, grade_band)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        row = dict(row)
+        correct = row.get("correct_image_concept") or ""
+        distractors = json.loads(row.get("distractor_image_concepts") or "[]")
+        if not _concepts_leak_word(word_normalized, [correct] + distractors):
+            return
+        new_correct, new_distractors = _rewrite_leaky_concepts(word_normalized, correct, distractors)
+        cursor.execute(
+            "UPDATE word_bank_words SET correct_image_concept = %s, distractor_image_concepts = %s WHERE word = %s AND grade_band = %s"
+            if USE_POSTGRES else
+            "UPDATE word_bank_words SET correct_image_concept = ?, distractor_image_concepts = ? WHERE word = ? AND grade_band = ?",
+            (new_correct, json.dumps(new_distractors), word_normalized, grade_band)
+        )
+        conn.commit()
+        print(f"✓ Repaired leaking WordBank concepts for '{word_normalized}' ({grade_band})")
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ WordBank concept repair failed for '{word}': {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def enrich_vocabulary_word(word: str, grade_band: str, context_sentence: str = "") -> dict:
     """
     Returns {word, definition, correct_image_concept, distractor_image_concepts,
@@ -5647,6 +5732,8 @@ For the word "{word_normalized}" (grade band: {grade_band}{context_clause}), pro
 2. A short visual concept (a few words) describing an image that clearly represents this word's meaning — concrete and unambiguous.
 3. Two distractor visual concepts — plausible, same general category as the correct concept, but clearly distinct in meaning, so a student who knows the word can tell them apart from the correct one.
 
+IMPORTANT: The visual concepts are shown to the student as answer choices. NEVER use the word "{word_normalized}" (or any form of it) inside the correct concept or the distractors — that would give the answer away. Describe it without naming it (e.g. for "canvas": "a blank surface stretched on a frame, ready for painting").
+
 Return ONLY valid JSON in exactly this format:
 {{"definition": "...", "correct_image_concept": "...", "distractor_image_concepts": ["...", "..."]}}"""
 
@@ -5665,6 +5752,8 @@ Return ONLY valid JSON in exactly this format:
         definition = data.get("definition", "")
         correct_concept = data.get("correct_image_concept", "")
         distractor_concepts = data.get("distractor_image_concepts", [])
+        # Prompt asks the model not to name the word, but enforce it too.
+        correct_concept, distractor_concepts = _rewrite_leaky_concepts(word_normalized, correct_concept, distractor_concepts)
 
         if USE_POSTGRES:
             cursor.execute(
@@ -5793,6 +5882,11 @@ async def start_wordbank_session(body: WordBankSessionStart, user=Depends(get_cu
 
         if not vocab_words:
             return {"words": [], "message": "No vocabulary words available for this passage."}
+
+        # Repair any cached picture concepts that name the word (the answer
+        # options are these concepts) before they're served to the student.
+        for _vw in vocab_words:
+            _sanitize_cached_wordbank_word(_vw, grade_band)
 
         # Already started for this student+passage? Return the existing rows
         # instead of creating duplicates (covers refresh/re-entry).
