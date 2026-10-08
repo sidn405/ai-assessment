@@ -600,6 +600,14 @@ class ContentGenerator:
                     ],
                     temperature=temperature,
                     max_tokens=max_tokens_budget,
+                    # JSON mode: the API itself guarantees the reply is a
+                    # single valid JSON object, so the model can't prepend
+                    # prose ("Here is your passage:") or wrap/refuse in text —
+                    # the cause of "Expecting value: line 1 column 1 (char 0)"
+                    # on a non-empty response. (The prompt already says
+                    # "Return your response as a JSON object", which JSON
+                    # mode requires.)
+                    response_format={"type": "json_object"},
                     timeout=60
                 )
                 choice = resp.choices[0]
@@ -621,7 +629,22 @@ class ContentGenerator:
                 elif "```" in raw:
                     raw = raw.split("```")[1].split("```")[0].strip()
 
-                return json.loads(raw)
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    # Salvage: if there's a JSON object buried in surrounding
+                    # text, pull out the outermost {...} before giving up.
+                    start, end = raw.find("{"), raw.rfind("}")
+                    if start != -1 and end > start:
+                        try:
+                            return json.loads(raw[start:end + 1])
+                        except json.JSONDecodeError:
+                            pass
+                    # Show what the model actually sent, so the next failure
+                    # is diagnosable from the logs instead of a bare error.
+                    print(f"⚠️ Unparseable passage response — finish_reason={choice.finish_reason!r}, "
+                          f"length={len(raw)}, starts with: {raw[:300]!r}")
+                    raise
 
             try:
                 passage_data = _call_and_parse(dynamic_max_tokens)
