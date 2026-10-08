@@ -10012,6 +10012,23 @@ def get_or_create_wallet(user_id, cursor, conn):
     return cursor.fetchone()
 
 
+def _points_credited_cents(cursor, user_id) -> int:
+    """Cents already credited to the wallet FROM POINTS (type 'credit' rows,
+    which includes earning credits and the pre-launch backfill). Deliberately
+    excludes admin credits and Stripe parent deposits — those also bump
+    student_wallets.total_earned_cents, so comparing the points-based target
+    against that column made any student with a deposit/admin credit look
+    "already topped up" and silently stopped their earnings from crediting."""
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount_cents), 0) AS s FROM wallet_transactions WHERE user_id = %s AND type = 'credit'"
+        if USE_POSTGRES else
+        "SELECT COALESCE(SUM(amount_cents), 0) AS s FROM wallet_transactions WHERE user_id = ? AND type = 'credit'",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    return int((row['s'] if hasattr(row, 'keys') else row[0]) or 0)
+
+
 def credit_wallet_from_points(user_id, points, reason, conn, cursor):
     """
     Convert points to cents and credit the wallet.
@@ -10047,12 +10064,7 @@ def credit_wallet_from_points(user_id, points, reason, conn, cursor):
 
     target_total_cents = (lifetime_points * 100) // POINTS_PER_DOLLAR
 
-    if USE_POSTGRES:
-        cursor.execute("SELECT total_earned_cents FROM student_wallets WHERE user_id = %s", (user_id,))
-    else:
-        cursor.execute("SELECT total_earned_cents FROM student_wallets WHERE user_id = ?", (user_id,))
-    wrow = cursor.fetchone()
-    current_total_cents = (wrow['total_earned_cents'] if hasattr(wrow, 'keys') else wrow[0]) if wrow else 0
+    current_total_cents = _points_credited_cents(cursor, user_id)
 
     cents = target_total_cents - current_total_cents
     if cents <= 0:
@@ -10127,8 +10139,9 @@ async def get_wallet(response: Response, token: str):
             historical_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else 0
 
             correct_total_cents = (historical_points * 100) // POINTS_PER_DOLLAR
-            if historical_points > 0 and correct_total_cents > total_earned:
-                    backfill_cents = correct_total_cents - total_earned
+            points_credited = _points_credited_cents(cursor, user_id)
+            if historical_points > 0 and correct_total_cents > points_credited:
+                    backfill_cents = correct_total_cents - points_credited
                     if backfill_cents > 0:
                         if USE_POSTGRES:
                             cursor.execute(
