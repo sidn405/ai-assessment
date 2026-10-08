@@ -31,7 +31,7 @@ import requests
 
 # Import our new utilities
 from readability import analyze_readability, get_difficulty_for_user, flesch_kincaid_grade_to_lexile, calculate_student_lexile
-from content_generator import ContentGenerator
+from content_generator import ContentGenerator, randomize_question_set
 
 # Initialize FastAPI
 app = FastAPI(title="Achieve 365 - Phase 2")
@@ -432,6 +432,26 @@ def init_db():
             """)
             conn.commit()
             print("✓ wordwise_challenges table ready")
+
+            # Item #17: grade-level word bank — Tier 2 fill source for all
+            # word games (see Achieve365_WordGames_DeveloperInstruction
+            # section 5). Tier 1 is the student's own WordBank word list
+            # (student_word_list, already exists, no changes needed).
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS grade_level_word_bank (
+                    id SERIAL PRIMARY KEY,
+                    word VARCHAR(100) NOT NULL,
+                    grade_band VARCHAR(20) NOT NULL,
+                    lexile INTEGER,
+                    pos VARCHAR(20),
+                    definition TEXT,
+                    length INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(word, grade_band)
+                )
+            """)
+            conn.commit()
+            print("✓ grade_level_word_bank table ready")
 
             # User sessions (login tracking)
             cursor.execute("""
@@ -908,6 +928,36 @@ def init_db():
                 "ALTER TABLE school_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE student_subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE passages ADD COLUMN IF NOT EXISTS vocabulary_words TEXT",
+                # Item #8: story generation diversity/track-rotation fields (see
+                # Achieve365_Developer_QuickReference — Story Generation Prompt
+                # System v3.1). Rolling-history arrays and track counters that
+                # drive genre/structure/perspective/topic rotation so stories
+                # stop repeating the same handful of interest-based patterns.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS track_counts TEXT DEFAULT '{\"1\":0,\"2\":0,\"3\":0}'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS genres_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS structures_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS perspectives_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS interest_modes_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_types_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS track_2_topics_used TEXT",
+                # New: protagonist gender + supporting-character role rotation
+                # (fixes "passages seem to exclude males" and "same 4
+                # characters repeated in stories") — same rolling-history
+                # mechanism as genres_used_recently etc.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS protagonist_genders_used_recently TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS supporting_roles_used_recently TEXT",
+                # Supporting-character NAME history (separate from used_character_names,
+                # which is protagonist-only) — fixes "Mr. Johnson" recurring under
+                # different supporting roles, since nothing was tracking supporting
+                # character names at all before this.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS used_supporting_names TEXT DEFAULT '[]'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_count_band VARCHAR(20) DEFAULT 'standard'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS consecutive_scores TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS text_type_counts TEXT",
+                # Item #17: per-game rolling word history (see
+                # Achieve365_WordGames_DeveloperInstruction section 3) — avoids
+                # repeating the same words back-to-back within a game type.
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS word_game_history TEXT",
             ]
             for sql in migrations:
                 try:
@@ -1076,6 +1126,20 @@ def init_db():
                 attempt_2_completed_at TIMESTAMP,
                 points_deposited INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS grade_level_word_bank (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word TEXT NOT NULL,
+                grade_band TEXT NOT NULL,
+                lexile INTEGER,
+                pos TEXT,
+                definition TEXT,
+                length INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(word, grade_band)
             )
         """)
 
@@ -1399,6 +1463,20 @@ def init_db():
             "ALTER TABLE school_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
             "ALTER TABLE student_subscriptions ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT 0",
             "ALTER TABLE passages ADD COLUMN vocabulary_words TEXT",
+            "ALTER TABLE users ADD COLUMN track_counts TEXT DEFAULT '{\"1\":0,\"2\":0,\"3\":0}'",
+            "ALTER TABLE users ADD COLUMN genres_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN structures_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN perspectives_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN interest_modes_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN text_types_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN track_2_topics_used TEXT",
+            "ALTER TABLE users ADD COLUMN protagonist_genders_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN supporting_roles_used_recently TEXT",
+            "ALTER TABLE users ADD COLUMN used_supporting_names TEXT DEFAULT '[]'",
+            "ALTER TABLE users ADD COLUMN word_count_band VARCHAR(20) DEFAULT 'standard'",
+            "ALTER TABLE users ADD COLUMN consecutive_scores TEXT",
+            "ALTER TABLE users ADD COLUMN text_type_counts TEXT",
+            "ALTER TABLE users ADD COLUMN word_game_history TEXT",
         ]
         for sql in sqlite_migrations:
             try:
@@ -4139,7 +4217,8 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             title=passage_data.get('title', ''),
             content=passage_data.get('content', ''),
             topic=topic,
-            grade_band=grade_band
+            grade_band=grade_band,
+            cultural_identity=cultural_identity
         )
         print(f"✓ Illustration generated: {bool(image_url)}")
         
@@ -4205,7 +4284,7 @@ async def get_reading_sample(token: str, challenge: str = "appropriate"):
             content_generator.generate_comprehension_questions,
             passage_text=passage_data['content'],
             passage_title=passage_data['title'],
-            num_questions=4, 
+            num_questions=5,  # item #2: 5 total (2 vocabulary + 3 comprehension)
             allow_fill_blank=False,  # ✅ No fill-in-blank
             vocabulary_words=passage_data.get('vocabulary_words', [])
         )
@@ -5441,6 +5520,16 @@ WEEKLY_GOAL_TYPES = {
 # session logic, endpoints, and frontend are later phases.
 # ============================================================
 
+# Item #6: WordBank is words-only for now. Pictures were only ever generated for
+# some options (the wrong-answer images kept failing on the image rate limit),
+# so when one option showed a picture it was the CORRECT one — a giveaway that
+# also broke the card layout. While False: no image jobs are started (saves
+# API cost and rate-limit budget for the story illustrations), and no image
+# URLs are sent to the browser. Flip to True only once every option reliably
+# gets an image.
+WORDBANK_IMAGES_ENABLED = False
+
+
 def _generate_wordbank_images_background(word_normalized: str, grade_band: str, correct_concept: str, distractor_concepts: list):
     """
     Runs in a background thread — generates one image per concept (1 correct +
@@ -5453,19 +5542,35 @@ def _generate_wordbank_images_background(word_normalized: str, grade_band: str, 
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
 
-        def _gen_one(concept: str):
-            try:
-                prompt = (
-                    f"A simple, clear, friendly illustration for a K-12 educational vocabulary app, "
-                    f"depicting: {concept}. Style: clean flat digital illustration, bright colors, "
-                    f"no text or letters anywhere in the image, culturally inclusive, age-appropriate "
-                    f"for {grade_band} students. Single clear subject, uncluttered background."
-                )
-                response = client.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
-                return response.data[0].url
-            except Exception as img_err:
-                print(f"⚠️ WordBank image generation failed for concept '{concept}': {img_err}")
-                return None
+        def _gen_one(concept: str, max_retries: int = 2):
+            import time
+            for attempt in range(max_retries + 1):
+                try:
+                    prompt = (
+                        f"A simple, clear, friendly illustration for a K-12 educational vocabulary app, "
+                        f"depicting: {concept}. Style: clean flat digital illustration, bright colors, "
+                        f"no text or letters anywhere in the image, culturally inclusive, age-appropriate "
+                        f"for {grade_band} students. Single clear subject, uncluttered background."
+                    )
+                    response = client.images.generate(model="gpt-image-1", prompt=prompt, size="1024x1024", quality="medium", n=1)
+                    b64_data = response.data[0].b64_json
+                    if not b64_data:
+                        return None
+                    return f"data:image/png;base64,{b64_data}"
+                except Exception as img_err:
+                    is_rate_limit = "rate_limit" in str(img_err).lower() or "429" in str(img_err)
+                    if is_rate_limit and attempt < max_retries:
+                        # This account's cap is 5 images/min — the API itself
+                        # suggests ~12s; wait a bit longer to be safe, since
+                        # other words' background threads may also be
+                        # generating images concurrently right now.
+                        wait_seconds = 15
+                        print(f"⏳ WordBank image rate-limited for '{concept}' — waiting {wait_seconds}s before retry {attempt + 1}/{max_retries}")
+                        time.sleep(wait_seconds)
+                        continue
+                    print(f"⚠️ WordBank image generation failed for concept '{concept}': {img_err}")
+                    return None
+            return None
 
         correct_url = _gen_one(correct_concept) if correct_concept else None
         distractor_urls = [u for u in (_gen_one(c) for c in (distractor_concepts or [])) if u]
@@ -5484,12 +5589,100 @@ def _generate_wordbank_images_background(word_normalized: str, grade_band: str, 
                     (correct_url, json.dumps(distractor_urls), word_normalized, grade_band)
                 )
             conn.commit()
-            print(f"✓ WordBank images ready for '{word_normalized}' ({grade_band})")
+            if correct_url or distractor_urls:
+                print(f"✓ WordBank images ready for '{word_normalized}' ({grade_band}) — correct: {bool(correct_url)}, distractors: {len(distractor_urls)}/2")
+            else:
+                print(f"⚠️ WordBank images all failed for '{word_normalized}' ({grade_band}) — falling back to text concept cards")
         finally:
             cursor.close()
             conn.close()
     except Exception as e:
         print(f"⚠️ WordBank background image generation failed entirely for '{word_normalized}': {e}")
+
+
+def _concepts_leak_word(word: str, concepts: list) -> bool:
+    """True if any picture-concept text contains the target word (or an
+    inflection of it) — which hands the student the answer, since the
+    WordBank answer options ARE these concept strings."""
+    return any(c and _mask_target_word(c, word) != c for c in concepts)
+
+
+def _rewrite_leaky_concepts(word: str, correct: str, distractors: list):
+    """Returns (correct, distractors) with the target word removed from any
+    concept that contained it. One small AI rewrite keeps the meaning; if
+    that fails or still leaks, falls back to swapping the word for 'item'."""
+    distractors = list(distractors or [])
+    if not _concepts_leak_word(word, [correct] + distractors):
+        return correct, distractors
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You rewrite short picture descriptions for a vocabulary quiz."},
+                {"role": "user", "content": (
+                    f'The vocabulary word is "{word}". Rewrite each description below so it keeps the same meaning '
+                    f'and picture but NEVER uses the word "{word}" or any form of it (plural, past tense, -ing, etc.). '
+                    f'Descriptions that don\'t contain the word should be returned unchanged.\n\n'
+                    f'Correct: {correct}\nDistractors: {json.dumps(distractors)}\n\n'
+                    f'Return ONLY JSON: {{"correct": "...", "distractors": ["...", "..."]}}'
+                )}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(resp.choices[0].message.content)
+        new_correct = data.get("correct") or correct
+        new_distractors = data.get("distractors") or distractors
+        if len(new_distractors) == len(distractors):
+            correct, distractors = new_correct, list(new_distractors)
+    except Exception as e:
+        print(f"⚠️ WordBank concept rewrite failed for '{word}': {e}")
+
+    # Safety net — never ship a concept that still contains the word.
+    if _concepts_leak_word(word, [correct] + distractors):
+        correct = _mask_target_word(correct, word, blank="item")
+        distractors = [_mask_target_word(d, word, blank="item") for d in distractors]
+    return correct, distractors
+
+
+def _sanitize_cached_wordbank_word(word: str, grade_band: str):
+    """Repairs an already-cached word_bank_words row whose picture concepts
+    leak the word (cached before this check existed). Answer matching compares
+    against the stored correct concept, so the fix must be made in the row."""
+    word_normalized = word.strip().lower()
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT correct_image_concept, distractor_image_concepts FROM word_bank_words WHERE word = %s AND grade_band = %s"
+            if USE_POSTGRES else
+            "SELECT correct_image_concept, distractor_image_concepts FROM word_bank_words WHERE word = ? AND grade_band = ?",
+            (word_normalized, grade_band)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        row = dict(row)
+        correct = row.get("correct_image_concept") or ""
+        distractors = json.loads(row.get("distractor_image_concepts") or "[]")
+        if not _concepts_leak_word(word_normalized, [correct] + distractors):
+            return
+        new_correct, new_distractors = _rewrite_leaky_concepts(word_normalized, correct, distractors)
+        cursor.execute(
+            "UPDATE word_bank_words SET correct_image_concept = %s, distractor_image_concepts = %s WHERE word = %s AND grade_band = %s"
+            if USE_POSTGRES else
+            "UPDATE word_bank_words SET correct_image_concept = ?, distractor_image_concepts = ? WHERE word = ? AND grade_band = ?",
+            (new_correct, json.dumps(new_distractors), word_normalized, grade_band)
+        )
+        conn.commit()
+        print(f"✓ Repaired leaking WordBank concepts for '{word_normalized}' ({grade_band})")
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ WordBank concept repair failed for '{word}': {e}")
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def enrich_vocabulary_word(word: str, grade_band: str, context_sentence: str = "") -> dict:
@@ -5539,6 +5732,8 @@ For the word "{word_normalized}" (grade band: {grade_band}{context_clause}), pro
 2. A short visual concept (a few words) describing an image that clearly represents this word's meaning — concrete and unambiguous.
 3. Two distractor visual concepts — plausible, same general category as the correct concept, but clearly distinct in meaning, so a student who knows the word can tell them apart from the correct one.
 
+IMPORTANT: The visual concepts are shown to the student as answer choices. NEVER use the word "{word_normalized}" (or any form of it) inside the correct concept or the distractors — that would give the answer away. Describe it without naming it (e.g. for "canvas": "a blank surface stretched on a frame, ready for painting").
+
 Return ONLY valid JSON in exactly this format:
 {{"definition": "...", "correct_image_concept": "...", "distractor_image_concepts": ["...", "..."]}}"""
 
@@ -5557,6 +5752,8 @@ Return ONLY valid JSON in exactly this format:
         definition = data.get("definition", "")
         correct_concept = data.get("correct_image_concept", "")
         distractor_concepts = data.get("distractor_image_concepts", [])
+        # Prompt asks the model not to name the word, but enforce it too.
+        correct_concept, distractor_concepts = _rewrite_leaky_concepts(word_normalized, correct_concept, distractor_concepts)
 
         if USE_POSTGRES:
             cursor.execute(
@@ -5580,12 +5777,13 @@ Return ONLY valid JSON in exactly this format:
             )
         conn.commit()
 
-        import threading
-        threading.Thread(
-            target=_generate_wordbank_images_background,
-            args=(word_normalized, grade_band, correct_concept, distractor_concepts),
-            daemon=True
-        ).start()
+        if WORDBANK_IMAGES_ENABLED:
+            import threading
+            threading.Thread(
+                target=_generate_wordbank_images_background,
+                args=(word_normalized, grade_band, correct_concept, distractor_concepts),
+                daemon=True
+            ).start()
 
         return {
             "word": word_normalized,
@@ -5675,9 +5873,20 @@ async def start_wordbank_session(body: WordBankSessionStart, user=Depends(get_cu
         passage = dict(passage)
         content = passage.get("content") or ""
         vocab_words = json.loads(passage.get("vocabulary_words") or "[]")
+        # content_generator may return vocabulary_words as plain strings OR as
+        # {"word": ..., "definition": ...} objects (the latter is what the
+        # passage's own "Key Vocabulary" panel already uses) -- WordBank only
+        # needs the word itself.
+        vocab_words = [w.get("word", "") if isinstance(w, dict) else w for w in vocab_words]
+        vocab_words = [w for w in vocab_words if w]
 
         if not vocab_words:
             return {"words": [], "message": "No vocabulary words available for this passage."}
+
+        # Repair any cached picture concepts that name the word (the answer
+        # options are these concepts) before they're served to the student.
+        for _vw in vocab_words:
+            _sanitize_cached_wordbank_word(_vw, grade_band)
 
         # Already started for this student+passage? Return the existing rows
         # instead of creating duplicates (covers refresh/re-entry).
@@ -5786,9 +5995,11 @@ def _format_wordbank_word(row: dict) -> dict:
         distractor_urls = json.loads(distractor_urls or "[]")
     distractor_urls = distractor_urls or []
 
-    options = [{"concept": row["correct_image_concept"], "image_url": row.get("correct_image_url")}]
+    options = [{"concept": row["correct_image_concept"],
+                "image_url": row.get("correct_image_url") if WORDBANK_IMAGES_ENABLED else None}]
     for i, concept in enumerate(distractors or []):
-        options.append({"concept": concept, "image_url": distractor_urls[i] if i < len(distractor_urls) else None})
+        options.append({"concept": concept,
+                        "image_url": (distractor_urls[i] if i < len(distractor_urls) else None) if WORDBANK_IMAGES_ENABLED else None})
     random.shuffle(options)
 
     return {
@@ -6152,7 +6363,7 @@ async def get_wordwise_study_list(user=Depends(get_current_user)):
                 "word": word,
                 "definition": wrow.get("definition"),
                 "context_sentence": context_sentence,
-                "image_url": wrow.get("correct_image_url")
+                "image_url": wrow.get("correct_image_url") if WORDBANK_IMAGES_ENABLED else None
             })
         return {"words": words}
     finally:
@@ -6172,6 +6383,17 @@ class WordWiseAnswerSubmit(BaseModel):
 
 class WordWiseCompleteRequest(BaseModel):
     challenge_id: int
+
+
+def _mask_word_in_sentence(sentence: str, word: str) -> str:
+    """WW-06: the target word must never be visible on screen during a
+    challenge — only heard. The context sentence is otherwise a direct
+    giveaway, since it naturally contains the word in its original spelling."""
+    if not sentence or not word:
+        return sentence
+    # Shared word-boundary/inflection-aware masker (was a plain substring
+    # replace, which also chopped up unrelated words containing the target).
+    return _mask_target_word(sentence, word)
 
 
 @app.post("/api/wordwise/start")
@@ -6227,6 +6449,7 @@ async def start_wordwise_attempt(body: WordWiseStartRequest, user=Depends(get_cu
             )
             wrow = cursor.fetchone()
             definition = dict(wrow).get("definition") if wrow else ""
+            definition = _mask_word_in_sentence(definition, word)
             cursor.execute(
                 """SELECT swl.context_sentence FROM student_word_list swl
                    JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
@@ -6238,7 +6461,7 @@ async def start_wordwise_attempt(body: WordWiseStartRequest, user=Depends(get_cu
             )
             srow = cursor.fetchone()
             context_sentence = dict(srow).get("context_sentence") if srow else ""
-            words_payload.append({"word": word, "definition": definition, "context_sentence": context_sentence})
+            words_payload.append({"word": word, "definition": definition, "context_sentence": _mask_word_in_sentence(context_sentence, word)})
 
         words_col = f"attempt_{attempt_number}_words"
         if USE_POSTGRES:
@@ -6285,7 +6508,7 @@ async def submit_wordwise_answer(body: WordWiseAnswerSubmit, user=Depends(get_cu
         words = json.loads(challenge.get(f"attempt_{attempt_number}_words") or "[]")
         if body.word_index < 0 or body.word_index >= len(words):
             raise HTTPException(status_code=400, detail="Invalid word index")
-        correct_word = words[body.word_index]["word"]
+        correct_word = words[body.word_index]
         is_correct = body.submitted_spelling.strip().lower() == correct_word.strip().lower()
 
         results = json.loads(challenge.get(f"attempt_{attempt_number}_results") or "[]")
@@ -6375,6 +6598,55 @@ async def complete_wordwise_attempt(body: WordWiseCompleteRequest, user=Depends(
             "status": new_status,
             "can_retry": new_status == "attempt_1_done"
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+class WordWiseAcceptRequest(BaseModel):
+    challenge_id: int
+
+
+@app.post("/api/wordwise/accept")
+async def accept_wordwise_score(body: WordWiseAcceptRequest, user=Depends(get_current_user)):
+    """
+    Item #11: a third option alongside "Study List" and "Retry" on the
+    post-attempt-1 screen — accept the current score and close the
+    challenge without taking attempt 2. Doesn't change points_deposited
+    (attempt 1's points were already awarded); just moves status straight
+    to 'completed' so the retry offer stops showing.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    student_id = user["user_id"]
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT student_id, status FROM wordwise_challenges WHERE id = %s" if USE_POSTGRES
+            else "SELECT student_id, status FROM wordwise_challenges WHERE id = ?",
+            (body.challenge_id,)
+        )
+        challenge = cursor.fetchone()
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        challenge = dict(challenge)
+        if challenge["student_id"] != student_id:
+            raise HTTPException(status_code=403, detail="Not your challenge")
+        if challenge["status"] != "attempt_1_done":
+            raise HTTPException(status_code=400, detail=f"Challenge is {challenge['status']} — nothing to accept")
+
+        if USE_POSTGRES:
+            cursor.execute("UPDATE wordwise_challenges SET status = 'completed' WHERE id = %s", (body.challenge_id,))
+        else:
+            cursor.execute("UPDATE wordwise_challenges SET status = 'completed' WHERE id = ?", (body.challenge_id,))
+        conn.commit()
+        return {"status": "completed"}
     except HTTPException:
         raise
     except Exception as e:
@@ -6526,6 +6798,49 @@ def _generate_mission_background(mission_id: int, reader_role: str, grade_level:
             conn.close()
 
 
+MISSION_POINT_ACTIVITY = "mission_unlocked"  # activity_type on every award made inside a mission
+
+
+def _mission_eligible_points(user_id: int, cursor) -> int:
+    """
+    Lifetime points that count toward unlocking missions: everything EXCEPT
+    the points earned inside missions themselves (stage rewards plus the
+    completion bonus). A mission pays ~550 points, more than the 500 needed for
+    the next one — if those counted, every mission would instantly fund the
+    next and a completed mission would never lock out. Computed as
+    total_earned minus mission points so any points that never got a history
+    row still count.
+    """
+    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s" if USE_POSTGRES
+                   else "SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    total = ((row['total_earned'] if hasattr(row, 'keys') else row[0]) if row else 0) or 0
+    cursor.execute("SELECT COALESCE(SUM(points), 0) AS s FROM points_history WHERE user_id = %s AND activity_type = %s"
+                   if USE_POSTGRES else
+                   "SELECT COALESCE(SUM(points), 0) AS s FROM points_history WHERE user_id = ? AND activity_type = ?",
+                   (user_id, MISSION_POINT_ACTIVITY))
+    row = cursor.fetchone()
+    mission_pts = ((row['s'] if hasattr(row, 'keys') else row[0]) if row else 0) or 0
+    return max(0, total - mission_pts)
+
+
+def _missions_earned(user_id: int, cursor) -> int:
+    """How many missions the student has earned so far (one per threshold)."""
+    return _mission_eligible_points(user_id, cursor) // MISSION_UNLOCK_THRESHOLD
+
+
+def _missions_started(user_id: int, cursor) -> int:
+    """Missions that have used up an earned unlock: in progress or finished.
+    A mission whose content failed to generate (generation_failed) never
+    reached the student, so it doesn't count — they're still owed one."""
+    cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status IN ('role_pending', 'generating', 'active', 'completed')"
+                   if USE_POSTGRES else
+                   "SELECT COUNT(*) AS c FROM missions WHERE student_id = ? AND status IN ('role_pending', 'generating', 'active', 'completed')",
+                   (user_id,))
+    row = cursor.fetchone()
+    return ((row['c'] if hasattr(row, 'keys') else row[0]) if row else 0) or 0
+
+
 def _activate_next_mission_if_needed(student_id: int):
     """
     Promote the oldest queued mission to 'role_pending' if the student has no
@@ -6546,6 +6861,13 @@ def _activate_next_mission_if_needed(student_id: int):
             )
         if cursor.fetchone():
             return  # already has one in progress
+
+        # Item #2: a mission may only START if the student has EARNED it — one
+        # per MISSION_UNLOCK_THRESHOLD points of non-mission activity. Without
+        # this gate, finishing a mission immediately promoted the next queued
+        # one, so a mission was never "locked out" after completion.
+        if _missions_started(student_id, cursor) >= _missions_earned(student_id, cursor):
+            return
 
         if USE_POSTGRES:
             cursor.execute(
@@ -6573,7 +6895,7 @@ def _activate_next_mission_if_needed(student_id: int):
         conn.close()
 
 
-MISSION_UNLOCK_THRESHOLD = 1000
+MISSION_UNLOCK_THRESHOLD = 500
 
 
 def _check_and_queue_mission_unlocks(user_id: int, cursor):
@@ -6592,18 +6914,26 @@ def _check_and_queue_mission_unlocks(user_id: int, cursor):
         if not role_row or (role_row['role'] if hasattr(role_row, 'keys') else role_row[0]) != 'student':
             return
 
-        cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s" if USE_POSTGRES else "SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
-        pts_row = cursor.fetchone()
-        total_earned = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) or 0
+        # Item #2: count only points earned OUTSIDE missions (see
+        # _mission_eligible_points) so a mission's own reward can't unlock the next.
+        total_earned = _mission_eligible_points(user_id, cursor)
         thresholds_crossed = total_earned // MISSION_UNLOCK_THRESHOLD
 
-        cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s" if USE_POSTGRES else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ?", (user_id,))
+        # Rows that failed to generate never reached the student, so they don't
+        # count as "created" — otherwise a failure would permanently burn an unlock.
+        cursor.execute("SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status != 'generation_failed'" if USE_POSTGRES else "SELECT COUNT(*) AS c FROM missions WHERE student_id = ? AND status != 'generation_failed'", (user_id,))
         count_row = cursor.fetchone()
         missions_ever_created = (count_row['c'] if hasattr(count_row, 'keys') else count_row[0]) or 0
 
         new_missions_needed = thresholds_crossed - missions_ever_created
         if new_missions_needed <= 0:
             return
+        # Cap to one new mission per check, no matter how many thresholds
+        # have technically been crossed — missions release one at a time as
+        # each prior one is completed, never as a retroactive batch. Any
+        # extra crossed thresholds simply produce the next mission on a
+        # later check instead of flooding the queue all at once.
+        new_missions_needed = min(new_missions_needed, 1)
 
         cursor.execute("SELECT grade_band, lexile_score FROM users WHERE id = %s" if USE_POSTGRES else "SELECT grade_band, lexile_score FROM users WHERE id = ?", (user_id,))
         student_row = cursor.fetchone()
@@ -6621,7 +6951,7 @@ def _check_and_queue_mission_unlocks(user_id: int, cursor):
                     "INSERT INTO missions (student_id, status, grade_level, lexile_level) VALUES (?, 'queued', ?, ?)",
                     (user_id, grade_level, lexile_level)
                 )
-        print(f"🎁 {new_missions_needed} new Mission: Unlocked queued for student {user_id} (total_earned={total_earned})")
+        print(f"🎁 {new_missions_needed} new Mission: Unlocked queued for student {user_id} (non-mission points={total_earned})")
     except Exception as e:
         print(f"⚠️ Mission unlock check failed (non-fatal): {e}")
 
@@ -7251,6 +7581,14 @@ async def save_lesson_progress(request: Request, background_tasks: BackgroundTas
                 (user_id,)
             )
         
+        # WW-01: check whether this completion pushes the student past the
+        # 3-session threshold for a new WordWise Challenge. This is the real
+        # completion path for regular lessons (unlike /api/read/feedback,
+        # which is placement-test only) — the trigger was previously only
+        # wired into that endpoint and so had no real path to fire.
+        if completed:
+            _check_and_trigger_wordwise_challenge(user_id, cursor)
+
         conn.commit()
         conn.close()
         
@@ -8409,6 +8747,196 @@ async def retake_placement(request: Request):
 
 
 # ============================================
+# STORY GENERATION — TRACK SYSTEM (item #8)
+# See Achieve365_Developer_QuickReference (Story Generation Prompt System v3.1)
+# ============================================
+# TRACK_2_TOPICS is the standards-aligned topic pool for Track 2 — student
+# interests are NOT the driver here; standards coverage is.
+TRACK_2_TOPICS = [
+    "life-science", "physical-science-technology", "history-us", "history-world-culture",
+    "civics-government-economics", "arts-humanities", "health-human-body",
+    "environmental-science", "biography-memoir"
+]
+TRACK_2_TEXT_TYPES = ["narrative", "informational", "historical", "biographical", "argumentative", "scientific", "literary"]
+TRACK_3_TEXT_TYPES = ["argumentative", "scientific"]  # spec: prioritize for assessment readiness
+DIVERSITY_GENRES = [
+    "realistic-fiction", "mystery-suspense", "humor-comedy", "historical-fiction", "science-fiction",
+    "documentary-nonfiction", "adventure", "dialogue-driven", "epistolary", "day-in-the-life"
+]
+DIVERSITY_STRUCTURES = [
+    "discovery", "reversal", "collaboration", "consequence", "observation",
+    "misunderstanding-resolution", "goal-pursuit", "unexpected-connection", "humor-and-mishap", "challenge-overcome"
+]
+DIVERSITY_PERSPECTIVES = ["first-person", "third-person-limited", "second-person"]
+DIVERSITY_INTEREST_MODES = ["DIRECT", "PERIPHERAL", "THEMATIC", "CULTURAL-HISTORICAL", "ADJACENT", "ABSENT"]
+# Fixes "passages seem to exclude males": protagonist gender is now rotated
+# with the same rolling-history mechanism as genre/structure (target ~50/50
+# over time) instead of being guessed from the student's first name, which
+# silently defaulted to 'female' for any unrecognized name.
+DIVERSITY_PROTAGONIST_GENDERS = ["male", "female"]
+# Fixes "same 4 characters repeated in stories (grandmother, coach, teacher
+# etc.)": rotates which ONE supporting-character role a story gets, instead
+# of leaving it to the AI's own (repetitive) default choices.
+DIVERSITY_SUPPORTING_ROLES = [
+    "older sibling", "coach", "teacher", "grandmother", "grandfather",
+    "aunt or uncle", "neighbor", "best friend", "classmate", "librarian",
+    "mentor from an after-school program", "family friend", "cousin",
+    "youth group leader", "shop or business owner in the community",
+]
+
+
+def _rolling_list(raw_json: str, new_value: str = None, max_len: int = 5) -> list:
+    """Reads a JSON-encoded rolling-history array; if new_value is given,
+    appends it and trims to the last max_len entries (oldest dropped first)."""
+    try:
+        items = json.loads(raw_json or "[]")
+        if not isinstance(items, list):
+            items = []
+    except Exception:
+        items = []
+    if new_value is not None:
+        items.append(new_value)
+        items = items[-max_len:]
+    return items
+
+
+def select_reading_track(user_row: dict) -> int:
+    """
+    Spec section 3 (selectTrack): 1=Interest-Connected, 2=Standards-Aligned,
+    3=Cold Reading, targeting a 40/40/20 split over the student's history.
+    Always starts a brand-new student on Track 1 so their very first lessons
+    stay firmly interest-connected before other tracks are introduced.
+    """
+    try:
+        track_counts = json.loads(user_row.get("track_counts") or '{"1":0,"2":0,"3":0}')
+    except Exception:
+        track_counts = {"1": 0, "2": 0, "3": 0}
+    total = sum(track_counts.get(str(k), 0) for k in (1, 2, 3))
+    if total == 0:
+        return 1
+    gaps = [
+        (1, 0.40 - track_counts.get("1", 0) / total),
+        (2, 0.40 - track_counts.get("2", 0) / total),
+        (3, 0.20 - track_counts.get("3", 0) / total),
+    ]
+    gaps.sort(key=lambda g: g[1], reverse=True)
+    return gaps[0][0]
+
+
+def select_word_count_band(user_row: dict) -> str:
+    """
+    Spec section 3 (selectWordCountBand): 'extended' once the rolling last-5
+    comprehension average hits 80%+, steps back down to 'standard' below
+    60%. This is layered as a modifier on the EXISTING word_count_min/max
+    range (not a replacement for it) — see the note on why the platform
+    keeps its current beginner/intermediate/advanced word-count system
+    rather than switching to the spec's separate per-grade table.
+    """
+    try:
+        scores = json.loads(user_row.get("consecutive_scores") or "[]")
+    except Exception:
+        scores = []
+    if len(scores) < 5:
+        return "standard"
+    avg = sum(scores) / len(scores)
+    if avg >= 80:
+        return "extended"
+    if avg < 60:
+        return "standard"
+    return user_row.get("word_count_band") or "standard"
+
+
+def select_track2_topic(user_row: dict) -> str:
+    """Picks a Track 2 topic not in the student's last-3 used (rolling)."""
+    used = _rolling_list(user_row.get("track_2_topics_used"), max_len=3)
+    candidates = [t for t in TRACK_2_TOPICS if t not in used]
+    if not candidates:
+        candidates = TRACK_2_TOPICS
+    return random.choice(candidates)
+
+
+def select_diversity_element(user_row: dict, field: str, pool: list) -> str:
+    """Picks an element from `pool` not in the student's rolling last-5
+    history for that field (genre, structure, perspective, interest_mode,
+    text_type) — the core mechanism that stops stories from repeating the
+    same handful of patterns even within Track 1."""
+    used = _rolling_list(user_row.get(field), max_len=5)
+    candidates = [p for p in pool if p not in used]
+    if not candidates:
+        candidates = pool
+    return random.choice(candidates)
+
+
+def record_generation_history(user_id: int, track: int, genre: str, structure: str,
+                               perspective: str, interest_mode: str, text_type: str,
+                               topic_area: str, protagonist_gender: str = None,
+                               supporting_role: str = None):
+    """Post-session update (spec section 8): appends this story's rotation
+    fields to the student's rolling history and increments track_counts, so
+    the NEXT generation's diversity/track selection sees it. Called right
+    after a passage is generated — self-contained (opens its own
+    connection) since the caller's own connection is typically already
+    closed by the time generation succeeds."""
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute(
+            "SELECT track_counts, genres_used_recently, structures_used_recently, perspectives_used_recently, "
+            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used, "
+            "protagonist_genders_used_recently, supporting_roles_used_recently FROM users WHERE id = %s"
+            if USE_POSTGRES else
+            "SELECT track_counts, genres_used_recently, structures_used_recently, perspectives_used_recently, "
+            "interest_modes_used_recently, text_types_used_recently, track_2_topics_used, "
+            "protagonist_genders_used_recently, supporting_roles_used_recently FROM users WHERE id = ?",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        row = dict(row) if row else {}
+
+        try:
+            track_counts = json.loads(row.get("track_counts") or '{"1":0,"2":0,"3":0}')
+        except Exception:
+            track_counts = {"1": 0, "2": 0, "3": 0}
+        track_counts[str(track)] = track_counts.get(str(track), 0) + 1
+
+        genres = _rolling_list(row.get("genres_used_recently"), genre, 5)
+        structures = _rolling_list(row.get("structures_used_recently"), structure, 5)
+        perspectives = _rolling_list(row.get("perspectives_used_recently"), perspective, 5)
+        interest_modes = _rolling_list(row.get("interest_modes_used_recently"), interest_mode, 5)
+        text_types = _rolling_list(row.get("text_types_used_recently"), text_type, 5)
+        track2_topics = _rolling_list(row.get("track_2_topics_used"), topic_area if track == 2 else None, 3)
+        protagonist_genders = _rolling_list(row.get("protagonist_genders_used_recently"), protagonist_gender, 5)
+        supporting_roles = _rolling_list(row.get("supporting_roles_used_recently"), supporting_role, 5)
+
+        if USE_POSTGRES:
+            cursor.execute(
+                """UPDATE users SET track_counts = %s, genres_used_recently = %s, structures_used_recently = %s,
+                   perspectives_used_recently = %s, interest_modes_used_recently = %s,
+                   text_types_used_recently = %s, track_2_topics_used = %s,
+                   protagonist_genders_used_recently = %s, supporting_roles_used_recently = %s WHERE id = %s""",
+                (json.dumps(track_counts), json.dumps(genres), json.dumps(structures), json.dumps(perspectives),
+                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics),
+                 json.dumps(protagonist_genders), json.dumps(supporting_roles), user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE users SET track_counts = ?, genres_used_recently = ?, structures_used_recently = ?,
+                   perspectives_used_recently = ?, interest_modes_used_recently = ?,
+                   text_types_used_recently = ?, track_2_topics_used = ?,
+                   protagonist_genders_used_recently = ?, supporting_roles_used_recently = ? WHERE id = ?""",
+                (json.dumps(track_counts), json.dumps(genres), json.dumps(structures), json.dumps(perspectives),
+                 json.dumps(interest_modes), json.dumps(text_types), json.dumps(track2_topics),
+                 json.dumps(protagonist_genders), json.dumps(supporting_roles), user_id)
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️ record_generation_history failed (non-fatal): {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================
 # LESSONS ENDPOINTS (Phase 2 - AI Generated)
 # ============================================
 
@@ -8653,57 +9181,79 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
         print(f"✓ Difficulty: {difficulty}")
         print(f"✓ Word count range: {word_count_min}-{word_count_max} words")
 
-        # Step 6: Select topic with ROTATION (not random)
-        print("Step 6: Selecting topic with rotation...")
-        
-        # ✅ Get last used interest index for rotation
-        last_index = user.get('last_interest_index') or 0
-        
-        # ✅ Rotate through interests instead of random selection
-        current_index = last_index % len(interests)
-        topic = interests[current_index]
-        
-        # ✅ Update index for next lesson
-        next_index = (current_index + 1) % len(interests)
-        
-        print(f"✓ Selected topic: {topic} (interest {current_index + 1}/{len(interests)})")
-        print(f"✓ Next lesson will use: {interests[next_index]}")
-        
-        # ✅ Save the updated index back to database
-        conn_update = get_db()
-        cursor_update = get_cursor(conn_update)
-        try:
-            if USE_POSTGRES:
-                cursor_update.execute(
-                    "UPDATE users SET last_interest_index = %s WHERE id = %s",
-                    (next_index, user_id)
-                )
-            else:
-                cursor_update.execute(
-                    "UPDATE users SET last_interest_index = ? WHERE id = ?",
-                    (next_index, user_id)
-                )
-            conn_update.commit()
-            print(f"✓ Updated last_interest_index to {next_index}")
-        except Exception as e:
-            print(f"Warning: Could not update interest index: {e}")
-        finally:
-            conn_update.close()
+        # Step 6: Select reading track + topic (item #8 — was always
+        # interest-rotation; now branches to Track 2/3 so stories stop being
+        # restricted to the student's 10 interests).
+        print("Step 6: Selecting reading track + topic...")
+
+        reading_track = select_reading_track(user)
+        print(f"✓ Reading track: {reading_track}")
+
+        genre_pick = select_diversity_element(user, "genres_used_recently", DIVERSITY_GENRES)
+        structure_pick = select_diversity_element(user, "structures_used_recently", DIVERSITY_STRUCTURES)
+        perspective_pick = select_diversity_element(user, "perspectives_used_recently", DIVERSITY_PERSPECTIVES)
+        protagonist_gender_pick = select_diversity_element(user, "protagonist_genders_used_recently", DIVERSITY_PROTAGONIST_GENDERS)
+        supporting_role_pick = select_diversity_element(user, "supporting_roles_used_recently", DIVERSITY_SUPPORTING_ROLES)
+        word_count_band = select_word_count_band(user)
+
+        if reading_track == 1:
+            # ── Existing interest-rotation logic, unchanged ──
+            last_index = user.get('last_interest_index') or 0
+            current_index = last_index % len(interests)
+            topic = interests[current_index]
+            next_index = (current_index + 1) % len(interests)
+
+            print(f"✓ Selected topic: {topic} (interest {current_index + 1}/{len(interests)})")
+            print(f"✓ Next lesson will use: {interests[next_index]}")
+
+            conn_update = get_db()
+            cursor_update = get_cursor(conn_update)
+            try:
+                if USE_POSTGRES:
+                    cursor_update.execute("UPDATE users SET last_interest_index = %s WHERE id = %s", (next_index, user_id))
+                else:
+                    cursor_update.execute("UPDATE users SET last_interest_index = ? WHERE id = ?", (next_index, user_id))
+                conn_update.commit()
+                print(f"✓ Updated last_interest_index to {next_index}")
+            except Exception as e:
+                print(f"Warning: Could not update interest index: {e}")
+            finally:
+                conn_update.close()
+
+            topic_area = None
+            interest_mode_pick = select_diversity_element(user, "interest_modes_used_recently", DIVERSITY_INTEREST_MODES)
+            text_type_pick = None  # Track 1 stays narrative, matching current behavior
+
+            topics_to_try = available_interests[:]
+            random.shuffle(topics_to_try)
+            if topic in topics_to_try:
+                topics_to_try.remove(topic)
+            topics_to_try = [topic] + topics_to_try
+            topics_to_try = topics_to_try[:3]
+
+        elif reading_track == 2:
+            topic_area = select_track2_topic(user)
+            text_type_pick = select_diversity_element(user, "text_types_used_recently", TRACK_2_TEXT_TYPES)
+            interest_mode_pick = None
+            # The student's current rotating interest, offered only as an
+            # OPTIONAL unforced bridge in the Track 2 prompt — not the subject.
+            topic = interests[(user.get('last_interest_index') or 0) % len(interests)]
+            print(f"✓ Track 2 (Standards-Aligned) topic area: {topic_area} | text type: {text_type_pick}")
+            topics_to_try = [topic_area]
+
+        else:  # Track 3 — Cold Reading
+            topic_area = None
+            topic = ""
+            text_type_pick = select_diversity_element(user, "text_types_used_recently", TRACK_3_TEXT_TYPES)
+            interest_mode_pick = None
+            print(f"✓ Track 3 (Cold Reading) | text type: {text_type_pick}")
+            topics_to_try = ["cold-reading"]
 
         # Done with DB reads
         conn.close()
 
         # Step 7: Generate passage (duplicates-only retries)
         print("Step 7: Generating passage...")
-
-        # Try up to 3 topics max (duplicates only). No word-count retry storms here.
-        topics_to_try = available_interests[:]
-        random.shuffle(topics_to_try)
-
-        if topic in topics_to_try:
-            topics_to_try.remove(topic)
-        topics_to_try = [topic] + topics_to_try
-        topics_to_try = topics_to_try[:3]
 
         passage_data = None
         picked_topic = None
@@ -8717,19 +9267,38 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
 
             candidate = await asyncio.to_thread(
                 content_generator.generate_passage,
-                topic=picked_topic,
+                topic=(picked_topic if reading_track == 1 else topic),
                 difficulty_level=difficulty,
                 word_count_min=word_count_min,
                 word_count_max=word_count_max,
-                user_interests=[picked_topic],
+                user_interests=[picked_topic] if reading_track == 1 else interests,
                 age=user.get('age'),
                 grade_band=user.get('grade_band') or 'elementary',
                 cultural_identity=user.get('cultural_identity'),
                 student_name=user.get('full_name'),
-                used_names=json.loads(user.get('used_character_names') or '[]')
+                used_names=json.loads(user.get('used_character_names') or '[]'),
+                reading_track=reading_track,
+                genre=genre_pick,
+                structure=structure_pick,
+                perspective=perspective_pick,
+                interest_mode=interest_mode_pick,
+                text_type=text_type_pick,
+                topic_area=picked_topic if reading_track == 2 else None,
+                word_count_band=word_count_band,
+                protagonist_gender=protagonist_gender_pick,
+                supporting_role=supporting_role_pick,
+                used_supporting_names=json.loads(user.get('used_supporting_names') or '[]')
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
+
+            # generate_passage() returns a placeholder when the AI call fails.
+            # That must never be saved as a lesson — treat it as a failed
+            # attempt and move on (the reserve task simply retries later).
+            if candidate.get("source") == "fallback" or "[AI generation unavailable" in (candidate.get("content") or ""):
+                print("⚠️ Passage generation failed (placeholder returned) — not saving it")
+                continue
+
             last_candidate = candidate
 
             title_l = (candidate.get("title") or "").strip().lower()
@@ -8761,8 +9330,64 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
         if not passage_data:
             passage_data = last_candidate
             if not passage_data:
-                raise HTTPException(status_code=500, detail="Failed to generate lesson content.")
+                raise HTTPException(status_code=503, detail="We couldn't generate your lesson just now. Please try again in a moment.")
             print("⚠️ Could not find a non-duplicate quickly; accepting last candidate.")
+
+        # Item #8: record this generation's track/diversity picks so the
+        # NEXT call to select_reading_track()/select_diversity_element() for
+        # this student sees them and avoids repeating the same pattern.
+        record_generation_history(
+            user_id=user_id,
+            track=reading_track,
+            genre=genre_pick,
+            structure=structure_pick,
+            perspective=perspective_pick,
+            interest_mode=interest_mode_pick,
+            text_type=text_type_pick or "narrative",
+            topic_area=topic_area,
+            protagonist_gender=protagonist_gender_pick,
+            supporting_role=supporting_role_pick
+        )
+
+        # Bug fix: this function (the one that generates every real lesson,
+        # not just the placement test) read used_character_names to avoid
+        # repeat protagonist names, but never WROTE it back — so the list
+        # never grew past whatever the placement test happened to leave in
+        # it, and names could repeat indefinitely. Also tracks supporting
+        # character names for the first time (previously untracked entirely,
+        # which is why "Mr. Johnson" kept recurring under different roles).
+        try:
+            name_conn = get_db()
+            name_cursor = get_cursor(name_conn)
+            try:
+                used_names_list = json.loads(user.get('used_character_names') or '[]')
+                protagonist_name = passage_data.get('protagonist_name')
+                if protagonist_name and protagonist_name not in used_names_list:
+                    used_names_list.append(protagonist_name)
+                    used_names_list = used_names_list[-30:]
+
+                used_supporting_list = json.loads(user.get('used_supporting_names') or '[]')
+                supporting_name = passage_data.get('supporting_character_name')
+                if supporting_name and supporting_name not in used_supporting_list:
+                    used_supporting_list.append(supporting_name)
+                    used_supporting_list = used_supporting_list[-30:]
+
+                if USE_POSTGRES:
+                    name_cursor.execute(
+                        "UPDATE users SET used_character_names = %s, used_supporting_names = %s WHERE id = %s",
+                        (json.dumps(used_names_list), json.dumps(used_supporting_list), user_id)
+                    )
+                else:
+                    name_cursor.execute(
+                        "UPDATE users SET used_character_names = ?, used_supporting_names = ? WHERE id = ?",
+                        (json.dumps(used_names_list), json.dumps(used_supporting_list), user_id)
+                    )
+                name_conn.commit()
+            finally:
+                name_cursor.close()
+                name_conn.close()
+        except Exception as name_track_err:
+            print(f"⚠️ Character name history tracking failed (non-fatal): {name_track_err}")
 
         topic = picked_topic or topic
         passage_data = normalize_passage(passage_data, topic, difficulty)
@@ -8776,7 +9401,8 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
             title=passage_data.get('title', ''),
             content=passage_data.get('content', ''),
             topic=topic,
-            grade_band=lesson_grade_band
+            grade_band=lesson_grade_band,
+            cultural_identity=user.get('cultural_identity')
         )
         print(f"✓ Illustration generated: {bool(lesson_image_url)}")
 
@@ -8860,7 +9486,7 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
                 content_generator.generate_comprehension_questions,
                 passage_text=passage_data.get('content', ''),
                 passage_title=passage_data.get('title', topic),
-                num_questions=4, 
+                num_questions=5,  # item #2: 5 total (2 vocabulary + 3 comprehension)
                 allow_fill_blank=True,  # ✅ Include fill-in-blank
                 vocabulary_words=passage_data.get('vocabulary_words', [])
             )
@@ -9099,6 +9725,21 @@ def _consume_reserved_lesson(user_id: int):
             return None
         p = dict(p) if hasattr(p, 'keys') else None
 
+        # A failed AI generation used to be saved and queued like a real
+        # lesson, so students were later served the "[AI generation
+        # unavailable]" placeholder straight from their reserve. Never serve
+        # one: retire it and move on to the next reserved lesson.
+        if p and (p.get('source') == 'fallback' or '[AI generation unavailable' in (p.get('content') or '')):
+            if USE_POSTGRES:
+                cursor.execute("UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE id = %s", (reserve_id,))
+            else:
+                cursor.execute("UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE id = ?", (reserve_id,))
+            conn.commit()
+            print(f"⚠️ Skipped placeholder lesson {passage_id} in reserve for user {user_id}")
+            cursor.close()
+            conn.close()
+            return _consume_reserved_lesson(user_id)
+
         if USE_POSTGRES:
             cursor.execute(
                 """SELECT question_text, question_type, correct_answer, options, explanation, difficulty
@@ -9130,6 +9771,11 @@ def _consume_reserved_lesson(user_id: int):
                 "explanation": q['explanation'],
                 "difficulty": q.get('difficulty', 1)
             })
+
+        # Item #3: lessons generated before the randomizer existed are stored in
+        # story order with the correct answer first — mix them at serve time too.
+        # (Safe here: the dashboard grades by option TEXT, not position.)
+        questions = randomize_question_set(questions)
 
         # Mark this reserve slot consumed
         if USE_POSTGRES:
@@ -9199,6 +9845,93 @@ async def _replenish_reserve_task(user_id: int):
         finally:
             cursor.close()
             conn.close()
+
+        # Self-heal: before generating anything new, check whether any of
+        # this student's still-unconsumed reserve lessons got saved with no
+        # illustration (image_url NULL) — e.g. hit the OpenAI 5-images/min
+        # cap during a busy burst and exhausted retries. There was
+        # previously no retry path for an already-saved passage, so a
+        # student could be served a lesson with no picture indefinitely.
+        # Try up to 2 per replenishment pass so this heals quietly over time
+        # without adding a large image-generation burst of its own.
+        try:
+            heal_conn = get_db()
+            heal_cursor = get_cursor(heal_conn)
+            try:
+                # Bug fix: passages has no grade_band column (it only has
+                # difficulty_level) — grade_band lives on `users`. The old
+                # query referenced p.grade_band and raised "column does not
+                # exist" on every single run, so this sweep never actually
+                # healed anything; it just failed silently every time.
+                if USE_POSTGRES:
+                    heal_cursor.execute(
+                        """SELECT p.id, p.title, p.content, p.topic_tags
+                           FROM lesson_reserve lr JOIN passages p ON p.id = lr.passage_id
+                           WHERE lr.user_id = %s AND lr.consumed = FALSE
+                             AND (p.image_url IS NULL OR p.image_url = '')
+                           ORDER BY lr.created_at ASC LIMIT 2""",
+                        (user_id,)
+                    )
+                else:
+                    heal_cursor.execute(
+                        """SELECT p.id, p.title, p.content, p.topic_tags
+                           FROM lesson_reserve lr JOIN passages p ON p.id = lr.passage_id
+                           WHERE lr.user_id = ? AND lr.consumed = 0
+                             AND (p.image_url IS NULL OR p.image_url = '')
+                           ORDER BY lr.created_at ASC LIMIT 2""",
+                        (user_id,)
+                    )
+                stuck_rows = heal_cursor.fetchall()
+            finally:
+                heal_cursor.close()
+                heal_conn.close()
+
+            if stuck_rows:
+                cur_conn = get_db()
+                cur_cursor = get_cursor(cur_conn)
+                try:
+                    cur_cursor.execute(
+                        "SELECT cultural_identity, grade_band FROM users WHERE id = %s" if USE_POSTGRES
+                        else "SELECT cultural_identity, grade_band FROM users WHERE id = ?", (user_id,)
+                    )
+                    urow = cur_cursor.fetchone()
+                    urow = dict(urow) if urow and hasattr(urow, 'keys') else (
+                        {'cultural_identity': urow[0], 'grade_band': urow[1]} if urow else {}
+                    )
+                    cultural_identity = urow.get('cultural_identity')
+                    heal_grade_band = urow.get('grade_band') or ''
+                finally:
+                    cur_cursor.close()
+                    cur_conn.close()
+
+                for srow in stuck_rows:
+                    srow = dict(srow) if hasattr(srow, 'keys') else {
+                        'id': srow[0], 'title': srow[1], 'content': srow[2], 'topic_tags': srow[3]
+                    }
+                    try:
+                        healed_url = await asyncio.to_thread(
+                            content_generator.generate_story_image,
+                            title=srow.get('title', ''),
+                            content=srow.get('content', ''),
+                            topic=(json.loads(srow['topic_tags'])[0] if srow.get('topic_tags') else ''),
+                            grade_band=heal_grade_band,
+                            cultural_identity=cultural_identity
+                        )
+                        if healed_url:
+                            heal_upd_conn = get_db()
+                            heal_upd_cursor = get_cursor(heal_upd_conn)
+                            if USE_POSTGRES:
+                                heal_upd_cursor.execute("UPDATE passages SET image_url = %s WHERE id = %s", (healed_url, srow['id']))
+                            else:
+                                heal_upd_cursor.execute("UPDATE passages SET image_url = ? WHERE id = ?", (healed_url, srow['id']))
+                            heal_upd_conn.commit()
+                            heal_upd_cursor.close()
+                            heal_upd_conn.close()
+                            print(f"✓ Healed missing illustration for passage {srow['id']} (user {user_id})")
+                    except Exception as heal_err:
+                        print(f"⚠️ Image backfill failed for passage {srow.get('id')}: {heal_err}")
+        except Exception as heal_outer_err:
+            print(f"⚠️ Image backfill sweep failed (non-fatal) for user {user_id}: {heal_outer_err}")
 
         needed = RESERVE_TARGET_SIZE - current_count
         if needed <= 0:
@@ -9302,17 +10035,63 @@ def get_or_create_wallet(user_id, cursor, conn):
     return cursor.fetchone()
 
 
+def _points_credited_cents(cursor, user_id) -> int:
+    """Cents already credited to the wallet FROM POINTS (type 'credit' rows,
+    which includes earning credits and the pre-launch backfill). Deliberately
+    excludes admin credits and Stripe parent deposits — those also bump
+    student_wallets.total_earned_cents, so comparing the points-based target
+    against that column made any student with a deposit/admin credit look
+    "already topped up" and silently stopped their earnings from crediting."""
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount_cents), 0) AS s FROM wallet_transactions WHERE user_id = %s AND type = 'credit'"
+        if USE_POSTGRES else
+        "SELECT COALESCE(SUM(amount_cents), 0) AS s FROM wallet_transactions WHERE user_id = ? AND type = 'credit'",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    return int((row['s'] if hasattr(row, 'keys') else row[0]) or 0)
+
+
 def credit_wallet_from_points(user_id, points, reason, conn, cursor):
     """
     Convert points to cents and credit the wallet.
     Called automatically by award_points — students never do this manually.
     500 points = $1 = 100 cents → 1 point = 0.2 cents
+
+    Bug fix ("points to money" mismatch): this used to floor-divide EACH
+    individual award on its own — (points * 100) // 500 — so any single
+    award under 5 points converted to 0 cents and that fractional cent was
+    thrown away for good. Most point awards on this platform are small
+    (a handful of points per correct answer, etc.), so this quietly ate a
+    large share of every student's earned points before they ever reached
+    the wallet, causing the displayed point total and the wallet dollar
+    amount to drift further and further apart the more a student played.
+    Fixed by computing cents against the student's LIFETIME total points
+    each time (target = floor(lifetime_points * 100 / 500)) and crediting
+    only the difference from what the wallet already has. No remainder is
+    ever lost — it just carries forward to the next award — and this also
+    self-heals any wallet that already drifted under the old logic, since
+    the next award always tops the wallet up to the mathematically correct
+    cumulative total instead of adding another lossy increment on top.
     """
-    cents = (points * 100) // POINTS_PER_DOLLAR
+    get_or_create_wallet(user_id, cursor, conn)
+
+    # Lifetime points already include this award — award_points() updates
+    # user_points.total_earned BEFORE calling this function.
+    if USE_POSTGRES:
+        cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+    pts_row = cursor.fetchone()
+    lifetime_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else points
+
+    target_total_cents = (lifetime_points * 100) // POINTS_PER_DOLLAR
+
+    current_total_cents = _points_credited_cents(cursor, user_id)
+
+    cents = target_total_cents - current_total_cents
     if cents <= 0:
         return 0
-
-    get_or_create_wallet(user_id, cursor, conn)
 
     if USE_POSTGRES:
         cursor.execute(
@@ -9366,20 +10145,26 @@ async def get_wallet(response: Response, token: str):
         total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
         total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
 
-        # Auto-backfill: if wallet has never had any earnings but the student
-        # has points, convert their historical points to wallet balance.
-        # This handles students who earned points before the wallet system launched.
-        if total_earned == 0:
-            try:
-                if USE_POSTGRES:
-                    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s", (user_id,))
-                else:
-                    cursor.execute("SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
-                pts_row = cursor.fetchone()
-                historical_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else 0
+        # Auto-backfill / self-heal: covers two cases with the same math —
+        # (1) a wallet that's never had any earnings but the student has
+        #     points (pre-dates the wallet system), and
+        # (2) a wallet that drifted below the correct total because of the
+        #     old per-award floor-division bug in credit_wallet_from_points
+        #     (see its docstring) — any wallet whose total_earned_cents is
+        #     LESS than floor(lifetime_points * 100 / 500) gets topped up to
+        #     the correct amount here, not just when it's exactly zero.
+        try:
+            if USE_POSTGRES:
+                cursor.execute("SELECT total_earned FROM user_points WHERE user_id = %s", (user_id,))
+            else:
+                cursor.execute("SELECT total_earned FROM user_points WHERE user_id = ?", (user_id,))
+            pts_row = cursor.fetchone()
+            historical_points = (pts_row['total_earned'] if hasattr(pts_row, 'keys') else pts_row[0]) if pts_row else 0
 
-                if historical_points > 0:
-                    backfill_cents = (historical_points * 100) // POINTS_PER_DOLLAR
+            correct_total_cents = (historical_points * 100) // POINTS_PER_DOLLAR
+            points_credited = _points_credited_cents(cursor, user_id)
+            if historical_points > 0 and correct_total_cents > points_credited:
+                    backfill_cents = correct_total_cents - points_credited
                     if backfill_cents > 0:
                         if USE_POSTGRES:
                             cursor.execute(
@@ -9420,22 +10205,27 @@ async def get_wallet(response: Response, token: str):
                         balance_cents = wallet['balance_cents'] if hasattr(wallet, 'keys') else wallet[0]
                         total_earned = wallet['total_earned_cents'] if hasattr(wallet, 'keys') else wallet[1]
                         total_redeemed = wallet['total_redeemed_cents'] if hasattr(wallet, 'keys') else wallet[2]
-            except Exception as backfill_err:
-                print(f"⚠️ Wallet backfill skipped: {backfill_err}")
-                conn.rollback()
+        except Exception as backfill_err:
+            print(f"⚠️ Wallet backfill skipped: {backfill_err}")
+            conn.rollback()
 
-        # Recent transactions (last 10)
+        # Recent transactions (last 10) — item #15: only genuine cash events
+        # (admin credits, gift-card redemptions) are shown here. Per-task
+        # earning credits are excluded entirely (not just hidden client-side)
+        # so a student inspecting the raw API response can't see which
+        # actions/tasks earn how much and start optimizing for money instead
+        # of learning.
         if USE_POSTGRES:
             cursor.execute(
                 """SELECT type, amount_cents, points_converted, description, created_at
-                   FROM wallet_transactions WHERE user_id = %s
+                   FROM wallet_transactions WHERE user_id = %s AND type IN ('admin_credit', 'redemption')
                    ORDER BY created_at DESC LIMIT 10""",
                 (user_id,)
             )
         else:
             cursor.execute(
                 """SELECT type, amount_cents, points_converted, description, created_at
-                   FROM wallet_transactions WHERE user_id = ?
+                   FROM wallet_transactions WHERE user_id = ? AND type IN ('admin_credit', 'redemption')
                    ORDER BY created_at DESC LIMIT 10""",
                 (user_id,)
             )
@@ -10718,6 +11508,138 @@ async def resync_school_subscription_quantity(admin=Depends(require_admin)):
 class SchoolAccessActivateBody(BaseModel):
     contract_end_date: Optional[str] = None  # 'YYYY-MM-DD' — omit if lifetime
     lifetime: bool = False
+
+
+VALID_GRADE_BANDS = [
+    'pre-k', 'kindergarten', '1st', '2nd', '3rd', '4th', '5th', 'elementary',
+    '6th', '7th', '8th', 'middle', '9th', '10th', '11th', '12th', 'high',
+    'adult', 'college', 'professional'
+]
+
+
+class SeedWordBankRequest(BaseModel):
+    grade_band: str
+    count: int = 40
+
+
+@app.post("/api/superadmin/clear-lesson-reserve")
+async def clear_lesson_reserve(user_id: int = None, admin=Depends(require_super_admin)):
+    """
+    Debug/ops tool: marks a student's (or, if user_id is omitted, EVERY
+    student's) unconsumed pre-generated reserve lessons as consumed, WITHOUT
+    touching the underlying passages/questions rows (those are just left
+    orphaned — harmless).
+
+    Why this exists: reserve lessons are pre-generated ahead of time
+    (RESERVE_TARGET_SIZE = 5 per student) and served instantly from that
+    stockpile before anything is freshly generated. So whenever a change is
+    shipped to how NEW lessons are generated (e.g. the protagonist-gender /
+    supporting-character-role rotation, or a cultural-identity fix to
+    illustrations), students can keep seeing the OLD behavior for up to 5
+    more lessons — because they're actually seeing lessons that were
+    generated and saved to the `passages` table BEFORE the fix went out,
+    not freshly generated ones. This looked like "the fix isn't working"
+    but was really just stale pre-generated inventory. Clearing the reserve
+    forces the next `/api/lessons/next` call to generate fresh (picking up
+    whatever the current code does), and the background replenish task
+    will then refill the reserve using that same current code.
+    """
+    conn = get_db()
+    cursor = get_cursor(conn)
+    try:
+        if user_id is not None:
+            if USE_POSTGRES:
+                cursor.execute(
+                    "UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE user_id = %s AND consumed = FALSE",
+                    (user_id,)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE user_id = ? AND consumed = 0",
+                    (user_id,)
+                )
+        else:
+            if USE_POSTGRES:
+                cursor.execute("UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE consumed = FALSE")
+            else:
+                cursor.execute("UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE consumed = 0")
+        cleared = cursor.rowcount
+        conn.commit()
+        return {"success": True, "cleared": cleared, "scope": f"user_id={user_id}" if user_id is not None else "all students"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/superadmin/seed-word-bank")
+async def seed_word_bank(body: SeedWordBankRequest, admin=Depends(require_super_admin)):
+    """
+    Item #17 (spec section 5) — one-time setup action to populate
+    grade_level_word_bank, the Tier 2 fill source for word games. Safe to
+    re-run for the same grade_band: UNIQUE(word, grade_band) means any
+    words already present are just skipped, not duplicated, so this can be
+    called repeatedly to grow the bank over time rather than needing one
+    giant seeding run.
+    """
+    if body.grade_band not in VALID_GRADE_BANDS:
+        raise HTTPException(status_code=400, detail=f"grade_band must be one of {VALID_GRADE_BANDS}")
+    if body.count < 1 or body.count > 100:
+        raise HTTPException(status_code=400, detail="count must be between 1 and 100 per call")
+
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        prompt = f"""Generate {body.count} vocabulary words appropriate for a student in grade band "{body.grade_band}" on a K-12 reading platform.
+For each word, provide: the word itself, its part of speech (noun/verb/adjective/adverb), an approximate Lexile value for the word, and a short, conversational, grade-appropriate definition (not dictionary language).
+Prefer high-utility, concrete, image-representable words over overly abstract ones. No duplicates.
+Return ONLY valid JSON in exactly this format:
+{{"words": [{{"word": "...", "pos": "...", "lexile": 000, "definition": "..."}}, ...]}}"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are building a grade-level vocabulary bank for a K-12 reading platform."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(response.choices[0].message.content)
+        words = data.get("words", [])
+
+        conn = get_db()
+        cursor = get_cursor(conn)
+        inserted = 0
+        try:
+            for w in words:
+                word = (w.get("word") or "").strip().lower()
+                if not word:
+                    continue
+                if USE_POSTGRES:
+                    cursor.execute(
+                        """INSERT INTO grade_level_word_bank (word, grade_band, lexile, pos, definition, length)
+                           VALUES (%s, %s, %s, %s, %s, %s)
+                           ON CONFLICT (word, grade_band) DO NOTHING""",
+                        (word, body.grade_band, w.get("lexile"), w.get("pos"), w.get("definition"), len(word))
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO grade_level_word_bank (word, grade_band, lexile, pos, definition, length)
+                           VALUES (?, ?, ?, ?, ?, ?)
+                           ON CONFLICT (word, grade_band) DO NOTHING""",
+                        (word, body.grade_band, w.get("lexile"), w.get("pos"), w.get("definition"), len(word))
+                    )
+                if cursor.rowcount and cursor.rowcount > 0:
+                    inserted += 1
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+
+        return {"grade_band": body.grade_band, "requested": body.count, "generated": len(words), "inserted": inserted}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/superadmin/schools")
@@ -12769,6 +13691,11 @@ async def get_my_missions(user=Depends(get_current_user)):
         )
         queued_row = cursor.fetchone()
         queued_count = (queued_row['c'] if hasattr(queued_row, 'keys') else queued_row[0]) or 0
+        # Item #2: only advertise missions the student has actually earned. Older
+        # accounts hold a backlog of queued rows created under the old counting
+        # (mission points funding more missions); those stay locked, not "waiting".
+        earned_waiting = max(0, _missions_earned(student_id, cursor) - _missions_started(student_id, cursor))
+        queued_count = min(queued_count, earned_waiting)
 
         cursor.execute(
             "SELECT COUNT(*) AS c FROM missions WHERE student_id = %s AND status = 'completed'" if USE_POSTGRES
@@ -13279,45 +14206,262 @@ async def delete_school_code(code_id: int, admin=Depends(require_admin)):
 # WORD GAMES ENDPOINTS
 # ========================================
 
-@router.get("/vocabulary")
-async def get_game_vocabulary(user: dict = Depends(get_current_user)):
-    """Get vocabulary for word games"""
-    user_id = user['user_id']
-    print(f"🎮 Getting vocabulary for user {user_id}")
-    
+def _re_word_boundary_present(text: str, word: str) -> bool:
+    """True if `word` (whole word, case-insensitive) appears anywhere in `text`."""
+    import re as _re
+    if not text or not word:
+        return False
+    return _re.search(r'\b' + _re.escape(word.strip()) + r'\b', text, _re.IGNORECASE) is not None
+
+
+def _mask_target_word(text: str, word: str, blank: str = "_____") -> str:
+    """
+    Replace `word` and its common inflections in `text` with a blank.
+
+    Definitions here are written in a natural style that reuses the word
+    ("When you depict something, you show it clearly"), which is great when
+    the word is shown alongside its definition (WordBank) but hands over the
+    answer when the definition IS the question or the hint (Word Tower, Word
+    Match, Word Scramble, WordWise). Matches whole words only, so masking
+    "art" leaves "start" alone, and covers -s/-ed/-ing, e->-ing, y->-ied,
+    doubled consonants and (for longer words) -ment/-ly/-er/-ation forms.
+    """
+    import re as _re
+    if not text or not word:
+        return text
+    w = word.strip().lower()
+    if not w:
+        return text
+
+    stems = {w}
+    if w.endswith("e"):
+        stems.add(w[:-1])                 # encourage -> encourag(ing)
+    if w.endswith("y") and len(w) > 2:
+        stems.add(w[:-1] + "i")           # amplify   -> amplifi(ed/es)
+    if len(w) <= 5 and _re.search(r"[^aeiou][aeiou][^aeiouwxy]$", w):
+        stems.add(w + w[-1])              # stop      -> stopp(ed/ing)
+
+    # Bug fix: the block above only derives inflected forms FROM a base word
+    # (e.g. given "depict", also catch "depicts"/"depicted"). It never
+    # handled the reverse — `word` itself already being the inflected form
+    # while the definition naturally uses the bare root, e.g. word
+    # "brainstormed" with a definition reading "When you brainstorm, you
+    # sit down with others..." — so "brainstorm" stayed fully visible and
+    # gave the Word Tower answer away. Now also strip common suffixes off
+    # `word` itself to recover likely root forms and mask those too.
+    def _add_root(root):
+        if len(root) >= 3:
+            stems.add(root)
+
+    if w.endswith("ied") and len(w) > 4:
+        _add_root(w[:-3] + "y")           # amplified -> amplify
+    if w.endswith("ies") and len(w) > 4:
+        _add_root(w[:-3] + "y")           # amplifies -> amplify
+    if w.endswith("ing"):
+        _add_root(w[:-3])                 # jumping   -> jump
+        _add_root(w[:-3] + "e")           # making    -> make
+    if w.endswith("ed"):
+        _add_root(w[:-2])                 # jumped    -> jump
+        _add_root(w[:-1])                 # decided   -> decide
+        stripped = w[:-2]
+        if len(stripped) >= 2 and stripped[-1] == stripped[-2] and stripped[-1] not in "aeiou":
+            _add_root(stripped[:-1])      # stopped   -> stop
+    if w.endswith("es") and len(w) > 4:
+        _add_root(w[:-2])                 # watches   -> watch
+    if w.endswith("s") and not w.endswith("ss") and len(w) > 3:
+        _add_root(w[:-1])                 # jumps     -> jump
+    if w.endswith("ly") and len(w) > 4:
+        _add_root(w[:-2])                 # quickly   -> quick
+    if w.endswith("er") and len(w) > 4:
+        _add_root(w[:-2])                 # faster    -> fast
+    if w.endswith("ment") and len(w) > 6:
+        _add_root(w[:-4])                 # enjoyment -> enjoy
+
+    if len(w) >= 5:
+        suffix = r"(?:s|es|ed|d|ing|ings|ly|er|ers|ment|ments|ion|ions|ation|ations|ies|ied)?"
+    else:
+        suffix = r"(?:s|es|ed|d|ing)?"     # short words: keep it tight ("rat" != "ration")
+
+    alternatives = "|".join(_re.escape(x) for x in sorted(stems, key=len, reverse=True))
+    pattern = _re.compile(r"\b(?:" + alternatives + r")" + suffix + r"\b", _re.IGNORECASE)
+    return pattern.sub(blank, text)
+
+
+# Item #17 game-specific word count / minimum length constraints, per
+# Achieve365_WordGames_DeveloperInstruction section 2.
+GAME_WORD_REQUIREMENTS = {
+    # Bug fix: the frontend always runs a fixed 10 rounds per game session
+    # (gameState.totalRounds = 10, same vocabulary array indexed by
+    # round-1 for every round) regardless of game type. word-scramble was
+    # requesting only 1 word and word-match/word-fits only 8, so once the
+    # round index ran past the fetched array length, the same last word
+    # kept getting displayed (the generate function silently failed on an
+    # out-of-range/undefined vocab entry, leaving the previous round's
+    # question on screen) — this is what produced "captain" stuck for the
+    # last 3 rounds of Word Match and Word Scramble never advancing past
+    # round 1. All round-based games now request the full 10.
+    "word-scramble": {"words_needed": 10, "min_length": 4},
+    "word-tower": {"words_needed": 10, "min_length": 4},
+    "word-search": {"words_needed": 12, "min_length": 4},
+    "word-match": {"words_needed": 10, "min_length": 4},
+    "word-fits": {"words_needed": 10, "min_length": 4},
+}
+DEFAULT_GAME_WORD_REQUIREMENTS = {"words_needed": 10, "min_length": 4}
+
+
+def select_game_words(student_id: int, game_type: str, words_needed: int = None, min_length: int = None) -> list:
+    """
+    Two-tier word selection for word games (spec section 4's selectGameWords,
+    ported to this platform's schema). Tier 1: the student's own WordBank
+    Word List (student_word_list) — already grade-appropriate since it's
+    drawn from THEIR OWN generated passages. Tier 2 (fill): grade_level_word_bank,
+    filtered to the student's grade band. This replaces the old vocabulary
+    endpoint, which pulled randomly from vocabulary_tracker across ALL
+    students platform-wide with no grade filtering at all — the direct cause
+    of games serving words well above a student's level.
+
+    Returns a list of {word, definition} dicts, length up to words_needed.
+    Also updates word_game_history[game_type] so the same words don't repeat
+    back-to-back in this game type for this student.
+    """
+    reqs = GAME_WORD_REQUIREMENTS.get(game_type, DEFAULT_GAME_WORD_REQUIREMENTS)
+    words_needed = words_needed or reqs["words_needed"]
+    min_length = min_length or reqs["min_length"]
+
     conn = get_db()
-    cursor = conn.cursor()
-    
+    cursor = get_cursor(conn)
     try:
-        # Get ALL vocabulary regardless of user
-        cursor.execute("""
-            SELECT word, definition
-            FROM vocabulary_tracker
-            ORDER BY RANDOM()
-            LIMIT 200
-        """)
-        
-        rows = cursor.fetchall()
-        print(f"🎮 Found {len(rows)} total words in vocabulary_tracker")
-        
+        cursor.execute(
+            "SELECT grade_band, word_game_history FROM users WHERE id = %s" if USE_POSTGRES
+            else "SELECT grade_band, word_game_history FROM users WHERE id = ?",
+            (student_id,)
+        )
+        row = cursor.fetchone()
+        row = dict(row) if row else {}
+        grade_band = row.get("grade_band") or "elementary"
+
+        try:
+            history = json.loads(row.get("word_game_history") or "{}")
+        except Exception:
+            history = {}
+        history_key = f"{game_type}_last_words"
+        last_words = set(w.lower() for w in history.get(history_key, []))
+
+        # ── Tier 1: student's own WordBank Word List ──
+        # Also pull swl.context_sentence — the REAL sentence this word
+        # appeared in in the student's own passage — so Word Fits can show
+        # genuine context instead of a fake template (see the call site's
+        # comment on the "sentence" field).
+        cursor.execute(
+            """SELECT DISTINCT wbw.word, wbw.definition, swl.context_sentence FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = %s""" if USE_POSTGRES else
+            """SELECT DISTINCT wbw.word, wbw.definition, swl.context_sentence FROM student_word_list swl
+               JOIN word_bank_words wbw ON wbw.id = swl.word_bank_word_id
+               WHERE swl.student_id = ?""",
+            (student_id,)
+        )
+        tier1_candidates = [
+            {"word": r["word"], "definition": r.get("definition") or "", "context_sentence": r.get("context_sentence") or ""}
+            for r in (dict(x) for x in cursor.fetchall())
+            if len(r["word"]) >= min_length and r["word"].lower() not in last_words
+        ]
+        random.shuffle(tier1_candidates)
+        selected = tier1_candidates[:words_needed]
+
+        # ── Tier 2: grade-level word bank fill ──
+        if len(selected) < words_needed:
+            remaining = words_needed - len(selected)
+            already_picked = set(w["word"].lower() for w in selected)
+            cursor.execute(
+                "SELECT word, definition FROM grade_level_word_bank WHERE grade_band = %s AND length >= %s" if USE_POSTGRES
+                else "SELECT word, definition FROM grade_level_word_bank WHERE grade_band = ? AND length >= ?",
+                (grade_band, min_length)
+            )
+            tier2_candidates = [
+                # No stored context_sentence for grade-level bank words — the
+                # /vocabulary endpoint falls back to a definition-based cloze
+                # sentence for these.
+                {"word": r["word"], "definition": r.get("definition") or "", "context_sentence": ""}
+                for r in (dict(x) for x in cursor.fetchall())
+                if r["word"].lower() not in last_words and r["word"].lower() not in already_picked
+            ]
+            random.shuffle(tier2_candidates)
+            selected += tier2_candidates[:remaining]
+
+        # ── Update rolling history for this game type ──
+        history[history_key] = [w["word"] for w in selected]
+        if USE_POSTGRES:
+            cursor.execute("UPDATE users SET word_game_history = %s WHERE id = %s", (json.dumps(history), student_id))
+        else:
+            cursor.execute("UPDATE users SET word_game_history = ? WHERE id = ?", (json.dumps(history), student_id))
+        conn.commit()
+
+        return selected
+    except Exception as e:
+        print(f"⚠️ select_game_words failed: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/vocabulary")
+async def get_game_vocabulary(game_type: str = "word-tower", user: dict = Depends(get_current_user)):
+    """
+    Get vocabulary for word games — item #17: was previously pulling randomly
+    from ALL students' vocabulary platform-wide with no grade filtering at
+    all (the direct cause of games serving words well above a student's
+    level). Now uses select_game_words()'s two-tier system: the student's
+    own WordBank Word List first, grade-level word bank as fill, scoped to
+    game_type's word count/length requirements and rotation history.
+    """
+    user_id = user['user_id']
+    print(f"🎮 Getting {game_type} vocabulary for user {user_id}")
+
+    try:
+        selected = select_game_words(user_id, game_type)
+
+        def _build_fits_sentence(w):
+            """
+            Word Fits' "sentence" field used to be a fake template —
+            f"Example sentence with {word}." — which (a) never actually
+            contained the "____" blank marker the frontend looks for, so no
+            blank was ever shown, and (b) spelled the target word out in
+            plain text right next to the answer options, giving the answer
+            away outright. Now we use the REAL sentence this word appeared
+            in in the student's own passage (stored as context_sentence on
+            their WordBank entry) with the word masked out to "____". For
+            grade-level fill words with no stored sentence, we fall back to
+            a definition-based cloze that still never names the word.
+            """
+            word = w["word"]
+            context = (w.get("context_sentence") or "").strip()
+            if context and _re_word_boundary_present(context, word):
+                return _mask_target_word(context, word, blank="____")
+            definition = (w.get("definition") or "").strip()
+            if definition:
+                return f'Something that means "{definition}" is ____.'
+            return "The missing word here is ____."
+
         vocabulary = [
             {
-                "word": row[0], 
-                "definition": row[1], 
-                "sentence": f"Example sentence with {row[0].lower()}."
+                "word": w["word"],
+                # Item #4: never send a definition that contains its own word —
+                # in Word Tower the correct option was the only one containing
+                # the target word, so it gave the answer away.
+                "definition": _mask_target_word(w["definition"], w["word"]),
+                "sentence": _build_fits_sentence(w)
             }
-            for row in rows
+            for w in selected
         ]
-        
-        print(f"✅ Returning {len(vocabulary)} words")
+
+        print(f"✅ Returning {len(vocabulary)} words for {game_type}")
         return {"vocabulary": vocabulary, "count": len(vocabulary)}
         
     except Exception as e:
         print(f"❌ Vocabulary error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
 
 @router.get("/used-words")
 async def get_used_words(game_type: str, user: dict = Depends(get_current_user)):

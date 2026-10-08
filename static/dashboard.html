@@ -2203,7 +2203,6 @@
 
             <div class="user-info">
                 <div class="user-name" id="userName">Loading...</div>
-                <div class="user-level" id="userLevel">Getting started</div>
             </div>
             
             <!-- Rest of sidebar content -->
@@ -2224,8 +2223,8 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('ebooks', event); return false;">
-                        <span>📖</span> eBooks Library
+                    <a href="#" class="nav-link" style="opacity: 0.5; cursor: default;" onclick="return false;" title="Coming soon">
+                        <span>📖</span> eBooks Library <span style="font-size: 0.75rem;">(Coming Soon)</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -2254,6 +2253,12 @@
                     <a href="#" class="nav-link" onclick="showSection('missions', event); return false;">
                         <span>🧳</span> Missions
                         <span id="missionQueueBadge" class="mission-queue-badge hidden">0</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="openWordWiseFromNav(); return false;">
+                        <span>🎙️</span> WordWise
+                        <span id="wordwiseNavBadge" class="mission-queue-badge hidden">0</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -2672,7 +2677,7 @@
                         <strong>🎉 Great Job!</strong>
                         <p id="resultsMessage" style="margin-top: 0.5rem;"></p>
                     </div>
-                    <button class="btn btn-primary" onclick="handleNextLesson()">Next Lesson</button>
+                    <button class="btn btn-primary" onclick="handleNextLesson()">Next</button>
                 </div>
                 
                 <!-- No Lessons Yet -->
@@ -3102,7 +3107,7 @@
                         </div>
                     </div>
                     <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-gray);">
-                        1000 points = $1.00 &nbsp;·&nbsp; Minimum redemption: $10.00
+                        500 points = $1.00 &nbsp;·&nbsp; Minimum redemption: $10.00
                     </div>
                 </div>
 
@@ -3223,7 +3228,7 @@
                     <div style="text-align:center; padding:1rem;">
                         <div style="font-size:2.5rem;">🔒</div>
                         <h3 style="margin:0.5rem 0;">No mission unlocked yet</h3>
-                        <p style="color:var(--text-gray);">Keep reading and earning points — every 800 points unlocks a new Mission!</p>
+                        <p style="color:var(--text-gray);">Keep reading and earning points — every 500 points unlocks a new Mission!</p>
                     </div>
                 </div>
 
@@ -3251,7 +3256,7 @@
                     <li><a href="#" onclick="showSection('overview', event); return false;">Dashboard</a></li>
                     <li><a href="#" onclick="showSection('lessons', event); return false;">My Lessons</a></li>
                     <li><a href="#" onclick="showSection('word games', event); return false;">Word Games</a></li>
-                    <li><a href="#" onclick="showSection('ebooks library', event); return false;">eBooks Library</a></li>
+                    <li><a href="#" style="opacity: 0.5; cursor: default;" onclick="return false;" title="Coming soon">eBooks Library (Coming Soon)</a></li>
                     <li><a href="#" onclick="showSection('messages', event); return false;">Messages</a></li>
                     <li><a href="#" onclick="showSection('progress', event); return false;">Progress</a></li>
                 </ul>
@@ -3362,12 +3367,15 @@
         .mission-unlock-sub { color: #cfd3f5; margin-top: 0.5rem; }
         .mission-wallet-confirm { margin-top: 1.25rem; font-weight: 700; color: var(--gold-accent); }
 
-        /* Role select */
+        /* Role select — item #14: fixed 3-per-row so 5 roles wrap as 3+2
+           rather than "however many fit" (was 4 then 1). Flexbox (not Grid)
+           so the shorter second row centers itself naturally. */
         .mission-role-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            display: flex; flex-wrap: wrap; justify-content: center;
             gap: 1rem; margin-top: 1.5rem;
         }
         .mission-role-card {
+            flex: 0 1 170px; min-width: 150px;
             background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.1);
             border-radius: 16px; padding: 1.25rem 0.75rem; cursor: pointer;
             transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
@@ -3450,6 +3458,182 @@
             .mission-overlay-inner { max-width: 100%; }
             .mission-unlock-title { font-size: 1.5rem; }
             .mission-visual-wrap { max-width: 200px; font-size: 4rem; }
+        }
+
+        /* ============================================================
+           WORDBANK — warm amber/gold theme (see feature spec section 5)
+        ============================================================ */
+        .wordbank-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            /* Item #5: was a light cream/gold background — switched to navy
+               (matching --navy-primary, the same blue already used for the
+               word text on the card) with gold accents kept for contrast. */
+            background: radial-gradient(ellipse at center, #1e2a6b 0%, #0d1440 100%);
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 3rem 1.5rem; overflow-y: auto;
+        }
+        .wordbank-overlay-inner { width: 100%; max-width: 600px; text-align: center; }
+        .wb-launch-icon { font-size: 4.5rem; animation: wbCoinBounce 1.2s ease-in-out infinite; }
+        @keyframes wbCoinBounce {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(8deg); }
+        }
+        .wb-title {
+            font-size: 1.9rem; font-weight: 900; margin-top: 1rem;
+            background: linear-gradient(90deg, var(--gold-accent), #fff, var(--gold-accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .wb-sub { color: #c7cdf0; margin-top: 0.5rem; font-size: 1.05rem; }
+        .wb-word-card {
+            background: white; border-radius: 20px; padding: 2rem;
+            box-shadow: 0 10px 40px rgba(212,175,55,0.25); margin-top: 1.5rem;
+        }
+        .wb-word-progress {
+            font-size: 0.85rem; color: #a67c00; font-weight: 700; margin-bottom: 1rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .wb-word-text { font-size: 2.6rem; font-weight: 900; color: var(--navy-primary); margin-bottom: 1.25rem; }
+        .wb-hear-btn {
+            background: #D4AF37; color: white; border: none; border-radius: 999px;
+            padding: 0.7rem 1.5rem; font-size: 1rem; font-weight: 700; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem;
+        }
+        .wb-hear-btn:hover { background: #c49c2e; }
+        .wb-definition {
+            background: #fff8e6; border-left: 4px solid #D4AF37; border-radius: 10px;
+            padding: 1rem 1.25rem; text-align: left; font-size: 1.05rem; color: #444;
+            margin-bottom: 1.5rem; display: none;
+        }
+        .wb-definition.visible { display: block; animation: wbFadeIn 0.4s ease; }
+        @keyframes wbFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .wb-options { display: none; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .wb-options.visible { display: grid; animation: wbFadeIn 0.4s ease; }
+        .wb-option-card {
+            background: #fffdf5; border: 3px solid #f0dca0; border-radius: 16px;
+            padding: 1.5rem 0.75rem; cursor: pointer; font-weight: 700; color: #6b5300;
+            font-size: 1rem; transition: all 0.15s ease; min-height: 90px;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+        }
+        .wb-option-card:hover:not(:disabled) {
+            border-color: #D4AF37; transform: translateY(-3px); box-shadow: 0 6px 16px rgba(212,175,55,0.3);
+        }
+        .wb-option-card:disabled { cursor: default; opacity: 0.6; }
+        .wb-option-card.correct { border-color: #28A745; background: rgba(40,167,69,0.12); opacity: 1; }
+        .wb-option-card.incorrect { border-color: #dc3545; background: rgba(220,53,69,0.12); opacity: 1; }
+        .wb-feedback { margin-top: 1.25rem; font-size: 1rem; border-radius: 10px; padding: 0.9rem 1.1rem; text-align: left; }
+        .wb-feedback.correct { background: rgba(40,167,69,0.12); border-left: 4px solid #28A745; color: #1b5e29; }
+        .wb-feedback.hint { background: rgba(255,193,7,0.15); border-left: 4px solid #ffc107; color: #7a5c00; }
+        .wb-feedback.reveal { background: #fff8e6; border-left: 4px solid #D4AF37; color: #6b5300; }
+        .wb-points-badge {
+            display: inline-block; background: #D4AF37; color: white; border-radius: 999px;
+            padding: 0.2rem 0.7rem; font-weight: 800; font-size: 0.85rem; margin-left: 0.4rem;
+        }
+        .wb-complete-points { font-size: 2.2rem; font-weight: 900; color: #D4AF37; margin: 0.75rem 0; }
+        .wb-btn {
+            margin-top: 1rem; background: #D4AF37; border: none; color: white; font-weight: 700;
+            padding: 0.7rem 1.75rem; border-radius: 999px; cursor: pointer; font-size: 1rem;
+        }
+        .wb-btn:hover { background: #c49c2e; }
+
+        /* WB-05: word strip along the bottom of the story screen */
+        .wb-word-strip {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 500;
+            background: #fff8e6; border-top: 2px solid #D4AF37; padding: 0.6rem 1rem;
+            display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+        }
+        .wb-word-strip.hidden { display: none; }
+        .wb-strip-label { font-size: 0.8rem; font-weight: 700; color: #a67c00; margin-right: 0.3rem; }
+        .wb-strip-chip {
+            background: white; border: 2px solid #D4AF37; border-radius: 999px;
+            padding: 0.3rem 0.9rem; font-size: 0.85rem; font-weight: 700; color: #6b5300; cursor: pointer;
+        }
+        .wb-strip-chip:hover { background: #fff8e6; }
+        .wb-strip-dismiss { margin-left: auto; background: none; border: none; color: #a67c00; cursor: pointer; font-size: 1.1rem; }
+
+        .wb-strip-popup {
+            position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+            background: white; border: 3px solid #D4AF37; border-radius: 16px;
+            padding: 1rem 1.25rem; max-width: 320px; z-index: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        .wb-strip-popup.hidden { display: none; }
+        .wb-strip-popup-word { font-weight: 900; font-size: 1.2rem; color: var(--navy-primary); margin-bottom: 0.4rem; }
+        .wb-strip-popup-def { font-size: 0.95rem; color: #444; margin-bottom: 0.6rem; }
+
+        @media (max-width: 600px) {
+            .wb-options { grid-template-columns: 1fr; }
+            .wb-word-text { font-size: 2rem; }
+        }
+
+        /* ============================================================
+           WORDWISE — warm teal theme (see feature spec section 12)
+        ============================================================ */
+        .wordwise-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: radial-gradient(ellipse at center, #0d3b3e 0%, #06181a 100%);
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 3rem 1.5rem; overflow-y: auto;
+        }
+        .wordwise-overlay-inner { width: 100%; max-width: 600px; text-align: center; color: white; }
+        .ww-overlay-close {
+            position: fixed; top: 18px; right: 18px; z-index: 10000;
+            background: rgba(255,255,255,0.1); border: none; color: #fff;
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 1.1rem;
+        }
+        .ww-overlay-close:hover { background: rgba(255,255,255,0.2); }
+        .ww-launch-icon { font-size: 4.5rem; }
+        .ww-title {
+            font-size: 1.9rem; font-weight: 900; margin-top: 1rem;
+            background: linear-gradient(90deg, #2dd4bf, #fff, #2dd4bf);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .ww-sub { color: #a0e8e0; margin-top: 0.5rem; font-size: 1.05rem; }
+        .ww-countdown { font-size: 4rem; font-weight: 900; color: #2dd4bf; margin: 1.5rem 0; }
+        .ww-word-card { background: rgba(255,255,255,0.06); border-radius: 20px; padding: 2rem; margin-top: 1.5rem; }
+        .ww-progress {
+            font-size: 0.85rem; color: #7fd8d0; font-weight: 700; margin-bottom: 1rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .ww-mic-pulse { font-size: 3rem; animation: wwPulse 1.2s ease-in-out infinite; }
+        @keyframes wwPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+        }
+        .ww-hear-again-btn {
+            background: #2dd4bf; color: #06181a; border: none; border-radius: 999px;
+            padding: 0.6rem 1.4rem; font-weight: 700; cursor: pointer; margin-top: 1rem; font-size: 0.95rem;
+        }
+        .ww-hear-again-btn:hover { background: #23b3a1; }
+        .ww-definition {
+            background: rgba(255,255,255,0.08); border-left: 4px solid #2dd4bf; border-radius: 10px;
+            padding: 1rem 1.25rem; text-align: left; margin: 1.5rem 0; color: #e0f7f5;
+        }
+        .ww-sentence { font-style: italic; margin-top: 0.5rem; }
+        .ww-spell-input {
+            width: 100%; max-width: 320px; padding: 0.8rem 1rem; font-size: 1.3rem; border-radius: 10px;
+            border: 2px solid #2dd4bf; text-align: center; margin: 1rem 0; background: white; color: #06181a;
+        }
+        .ww-feedback { margin-top: 1rem; border-radius: 10px; padding: 1rem; text-align: left; }
+        .ww-feedback.correct { background: rgba(45,212,191,0.15); border-left: 4px solid #2dd4bf; color: #c9fff8; }
+        .ww-feedback.incorrect { background: rgba(220,53,69,0.15); border-left: 4px solid #dc3545; color: #ffd9dd; }
+        .ww-spelling-compare { display: flex; gap: 1.5rem; margin-top: 0.5rem; }
+        .ww-spelling-compare div { flex: 1; }
+        .ww-spelling-label { font-size: 0.75rem; text-transform: uppercase; opacity: 0.7; }
+        .ww-btn {
+            margin-top: 1rem; background: #2dd4bf; border: none; color: #06181a; font-weight: 700;
+            padding: 0.7rem 1.75rem; border-radius: 999px; cursor: pointer; font-size: 1rem;
+        }
+        .ww-btn:hover { background: #23b3a1; }
+        .ww-btn.secondary { background: transparent; color: #2dd4bf; border: 2px solid #2dd4bf; }
+        .ww-score { font-size: 2.5rem; font-weight: 900; color: #2dd4bf; margin: 1rem 0; }
+        .ww-study-item { background: rgba(255,255,255,0.06); border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem; text-align: left; }
+        .ww-study-word { font-weight: 900; font-size: 1.2rem; color: #2dd4bf; }
+        .ww-study-def { color: #e0f7f5; margin-top: 0.3rem; }
+        .ww-study-sentence { font-style: italic; color: #a0e8e0; margin-top: 0.3rem; font-size: 0.9rem; }
+
+        @media (max-width: 600px) {
+            .ww-title { font-size: 1.5rem; }
+            .ww-word-card { padding: 1.25rem; }
         }
     </style>
 
@@ -3926,11 +4110,6 @@
                     if (userNameEl) {
                         userNameEl.textContent = data.user.name || data.user.email;
                     }
-                    
-                    const userLevelEl = document.getElementById('userLevel');
-                    if (userLevelEl) {
-                        userLevelEl.textContent = data.user.reading_level ? capitalizeFirst(data.user.reading_level) : 'Not Set';
-                    }
                 }
 
                 if (data.stats) {
@@ -4203,6 +4382,13 @@
         // school's default).
         let lessonReadAloudAudio = null;
         let lessonReadSpeed = 1;
+        // Item #7: every start/cancel bumps this token. A speech request that was
+        // already in flight remembers the token it started with and throws its
+        // result away if the token has moved on — otherwise a request started for
+        // story A could finish after story B loaded and start reading A over B.
+        let lessonReadAloudToken = 0;
+        let lessonReadAloudLoading = false;
+
         function updateLessonReadSpeed(value) {
             lessonReadSpeed = parseFloat(value);
             document.getElementById('lessonReadSpeedValue').textContent = lessonReadSpeed.toFixed(1) + 'x';
@@ -4210,28 +4396,58 @@
             // doesn't have to stop and restart to hear the new speed.
             if (lessonReadAloudAudio) lessonReadAloudAudio.playbackRate = lessonReadSpeed;
         }
-        async function toggleLessonReadAloud() {
+
+        function setLessonReadAloudButton(state) {
             const icon = document.getElementById('lessonReadAloudIcon');
             const label = document.getElementById('lessonReadAloudLabel');
+            if (!icon || !label) return;
+            if (state === 'loading') { icon.textContent = '⏳'; label.textContent = 'Loading...'; }
+            else if (state === 'playing') { icon.textContent = '⏹️'; label.textContent = 'Stop'; }
+            else { icon.textContent = '🔊'; label.textContent = 'Read Aloud'; }
+        }
 
-            // Stop if currently playing (either Polly audio or browser fallback)
-            if (lessonReadAloudAudio || window.speechSynthesis.speaking) {
-                if (lessonReadAloudAudio) {
-                    try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
-                    lessonReadAloudAudio = null;
-                }
-                if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-                icon.textContent = '🔊';
-                label.textContent = 'Read Aloud';
+        // Stops everything read-aloud related — audio that's playing, browser
+        // speech, AND a request that's still loading — and resets the button.
+        // Called when the student presses Stop, when a new lesson starts loading,
+        // when a lesson is displayed, and when they leave the lessons page.
+        function cancelLessonReadAloud() {
+            lessonReadAloudToken++;
+            lessonReadAloudLoading = false;
+            if (lessonReadAloudAudio) {
+                try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
+                lessonReadAloudAudio = null;
+            }
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            setLessonReadAloudButton('idle');
+        }
+
+        async function toggleLessonReadAloud() {
+            // Pressing the button while it's loading, playing, or speaking = Stop.
+            // (Loading used to be ignored here, so "stop" during the few seconds
+            // it takes to generate the speech did nothing and the audio still
+            // started afterwards.)
+            if (lessonReadAloudLoading || lessonReadAloudAudio || window.speechSynthesis.speaking) {
+                cancelLessonReadAloud();
                 return;
             }
 
             const textEl = document.getElementById('lessonText');
-            const text = textEl ? textEl.textContent : '';
+            // Each paragraph is its own <p>, joined with no separator when the HTML
+            // is built (`.map(p => \`<p>${p}</p>\`).join('')`). Reading .textContent
+            // on the container collapses that into "...park.One day..." with zero
+            // space at every paragraph boundary -- which Polly (and browser speech)
+            // reads as "park DOT One day", since a period glued directly to the next
+            // word looks like a domain/filename ("site.com") rather than a sentence
+            // end. Reading each <p> separately and joining with a space keeps the
+            // gap TTS needs.
+            const text = textEl
+                ? Array.from(textEl.querySelectorAll('p')).map(p => p.textContent.trim()).filter(Boolean).join(' ') || textEl.textContent
+                : '';
             if (!text || !text.trim()) return;
 
-            icon.textContent = '⏳';
-            label.textContent = 'Loading...';
+            const myToken = ++lessonReadAloudToken;
+            lessonReadAloudLoading = true;
+            setLessonReadAloudButton('loading');
 
             if (awsReady && polly) {
                 try {
@@ -4243,33 +4459,40 @@
                         LanguageCode: 'en-US'
                     }).promise();
 
+                    // Stopped, or a different story loaded, while this was generating.
+                    if (myToken !== lessonReadAloudToken) return;
+                    lessonReadAloudLoading = false;
+
                     const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
                     const audioUrl = URL.createObjectURL(audioBlob);
 
-                    lessonReadAloudAudio = new Audio(audioUrl);
-                    lessonReadAloudAudio.playbackRate = lessonReadSpeed;
-                    lessonReadAloudAudio.onended = () => {
+                    const thisAudio = new Audio(audioUrl);
+                    lessonReadAloudAudio = thisAudio;
+                    thisAudio.playbackRate = lessonReadSpeed;
+                    const finished = () => {
                         URL.revokeObjectURL(audioUrl);
-                        lessonReadAloudAudio = null;
-                        icon.textContent = '🔊';
-                        label.textContent = 'Read Aloud';
+                        // Only reset the UI if this is still the current audio.
+                        if (lessonReadAloudAudio === thisAudio) {
+                            lessonReadAloudAudio = null;
+                            setLessonReadAloudButton('idle');
+                        }
                     };
-                    lessonReadAloudAudio.onerror = () => {
-                        URL.revokeObjectURL(audioUrl);
-                        lessonReadAloudAudio = null;
-                        icon.textContent = '🔊';
-                        label.textContent = 'Read Aloud';
-                    };
+                    thisAudio.onended = finished;
+                    thisAudio.onerror = finished;
 
-                    icon.textContent = '⏹️';
-                    label.textContent = 'Stop';
-                    await lessonReadAloudAudio.play();
+                    setLessonReadAloudButton('playing');
+                    await thisAudio.play();
                     return;
                 } catch (error) {
+                    if (myToken !== lessonReadAloudToken) return;
                     console.error('❌ Polly error reading lesson aloud, falling back to browser speech:', error);
                     lessonReadAloudAudio = null;
+                    lessonReadAloudLoading = false;
                 }
             }
+
+            if (myToken !== lessonReadAloudToken) return;
+            lessonReadAloudLoading = false;
 
             // Fallback: browser speech synthesis, using the same voice-matching
             // heuristic as the tutor's own fallback so it stays as close to the
@@ -4282,12 +4505,10 @@
             const preferred = voices.find(v => /Google US English|Samantha|Female/i.test(v.name));
             if (preferred) utterance.voice = preferred;
             utterance.onend = () => {
-                icon.textContent = '🔊';
-                label.textContent = 'Read Aloud';
+                if (myToken === lessonReadAloudToken) setLessonReadAloudButton('idle');
             };
 
-            icon.textContent = '⏹️';
-            label.textContent = 'Stop';
+            setLessonReadAloudButton('playing');
             window.speechSynthesis.speak(utterance);
         }
 
@@ -5138,7 +5359,6 @@
             document.getElementById('welcomeName').textContent = user.full_name.split(' ')[0];
             
             if (user.reading_level) {
-                document.getElementById('userLevel').textContent = `Reading Level: ${user.reading_level}`;
                 document.getElementById('currentLevel').textContent = user.reading_level;
             }
             
@@ -5212,8 +5432,11 @@
 
             // Stop tutor speech when navigating away from lessons
             if (sectionName !== 'lessons') {
+                cancelLessonReadAloud();
                 if (window.speechSynthesis) window.speechSynthesis.cancel();
                 if (window._tutorInterval) { clearInterval(window._tutorInterval); window._tutorInterval = null; }
+                document.getElementById('wordbankStrip')?.classList.add('hidden');
+                document.getElementById('wbStripPopup')?.classList.add('hidden');
             }
 
             if (event) event.preventDefault();
@@ -5698,7 +5921,6 @@
             `;
             
             // Update UI
-            document.getElementById('userLevel').textContent = `Reading Level: ${formatReadingLevel(analysis.reading_level)}`;
             document.getElementById('currentLevel').textContent = formatReadingLevel(analysis.reading_level);
             document.getElementById('gettingStarted').classList.add('hidden');
             
@@ -5997,6 +6219,9 @@
                 }
                 if (typeof checkForMissionUpdates === 'function') {
                     checkForMissionUpdates();
+                }
+                if (typeof checkForWordWiseUpdates === 'function') {
+                    checkForWordWiseUpdates();
                 }
                 if (document.getElementById('userLevel')) {
                     document.getElementById('userLevel').textContent = data.points.level;
@@ -6528,7 +6753,22 @@
         dashLoadingAudio.load();
 
         // ── Lesson Loading Animation ───────────────────────────────────────
+        // Item #4: the loading graphic + music must stay visible for at least
+        // 10 seconds before the vocabulary activity (or the story, if a passage
+        // has no WordBank words) appears — even when the lesson is served
+        // instantly from the pre-generated reserve, so it doesn't flash by and
+        // give away that nothing was actually "generated" this time.
+        let dashLoadingStartedAt = 0;
+        const DASH_MIN_LOADING_MS = 10000;
+        async function waitForMinimumLoadingTime() {
+            const remaining = DASH_MIN_LOADING_MS - (Date.now() - dashLoadingStartedAt);
+            if (remaining > 0) {
+                await new Promise(resolve => setTimeout(resolve, remaining));
+            }
+        }
+
         function startDashLoadingAnimation() {
+            dashLoadingStartedAt = Date.now();
             // Safety net: preload here too in case this runs before DOMContentLoaded
             preloadDashAnimations();
 
@@ -6576,6 +6816,11 @@
 
         async function loadNextLesson() {            
             console.log('=== loadNextLesson START ===');
+
+            // Item #7: silence the previous story right away. The loading screen
+            // holds for 10+ seconds, and a speech request started for the old
+            // story could otherwise finish during that time and play over the new one.
+            cancelLessonReadAloud();
             
             const token = localStorage.getItem('token');
             if (!token) {
@@ -6596,7 +6841,6 @@
             startDashLoadingAnimation();
             
             lessonStartTime = Date.now();
-            startTutorForLesson();
             
             try {
                 console.log('Fetching lesson from API...');
@@ -6652,8 +6896,8 @@
                     recentTopics = recentTopics.slice(-5);
                 }
                 
-                displayLesson(lesson);
-                requestAnimationFrame(() => startTutorForLesson());
+                wordbankWordsForStrip = [];  // reset from any prior lesson
+                await startWordBankThenDisplay(lesson);
                 
             } catch (error) {
                 console.error('Error loading lesson:', error);
@@ -6724,14 +6968,131 @@
             }
         }
 
-        function displayLesson(lesson) {
+        // ------------------------------------------------------------------
+        // Sentence splitting for paragraph layout (client item #8).
+        //
+        // The old splitter treated every ". ! ?" followed by a space as the end
+        // of a sentence, so "Mr. Johnson" became two "sentences" and a
+        // paragraph break could land between "Mr." and "Johnson"; likewise a
+        // "?" inside a quotation split the quote across two paragraphs.
+        //
+        // This one won't end a sentence on:
+        //   - an abbreviation ("Mr.", "Mrs.", "Dr.", "St.", initials like "J.")
+        //   - punctuation inside an open quotation
+        //   - a dialogue tag after a quote:  "Where are you?" Mom asked.
+        //   - a period followed by a lowercase word ("...", "p.m. today") or
+        //     glued to a digit/letter ("3.50", "e.g.,")
+        // When unsure it errs toward NOT splitting — a slightly longer paragraph
+        // is harmless; a break in the middle of a sentence is the bug.
+        // ------------------------------------------------------------------
+        const SENTENCE_ABBREVIATIONS = new Set(['mr','mrs','ms','mx','dr','prof','sr','jr','st','mt','vs','etc','inc','ltd','co','gen','sen','rep','gov','capt','col','lt','sgt','rev','hon','fig','dept','approx']);
+        const SPEECH_TAG = new RegExp('^(?:(?:Mr|Mrs|Ms|Mx|Dr|Miss)\\.?\\s+)?[A-Z][a-z]+(?:\\s[A-Z][a-z]+)?\\s+(?:said|asked|replied|called|shouted|whispered|exclaimed|cried|answered|added|yelled|laughed|sighed|cheered|announced|suggested|explained|continued|mumbled|muttered|offered|wondered|declared|urged|insisted|thought|smiled|grinned|nodded)\\b');
+
+        function splitIntoSentences(text) {
+            const src = (text || '').replace(/\s+/g, ' ').trim();
+            if (!src) return [];
+
+            const run = (quoteAware) => {
+                const out = [];
+                let start = 0;
+                let inQuote = false;
+                for (let i = 0; i < src.length; i++) {
+                    const ch = src[i];
+                    if (quoteAware) {
+                        if (ch === '"') inQuote = !inQuote;
+                        else if (ch === '\u201C') inQuote = true;
+                        else if (ch === '\u201D') inQuote = false;
+                    }
+                    if (ch !== '.' && ch !== '!' && ch !== '?') continue;
+
+                    // Take the whole terminator run ("?!", "...") plus any closing quote/bracket.
+                    let j = i + 1;
+                    while (j < src.length && /[.!?]/.test(src[j])) j++;
+                    const runEnd = j;
+                    let closedQuote = false;
+                    while (j < src.length && /["\u201D'\u2019)\]]/.test(src[j])) {
+                        if (quoteAware && src[j] === '"') { inQuote = !inQuote; closedQuote = true; }
+                        else if (quoteAware && src[j] === '\u201D') { inQuote = false; closedQuote = true; }
+                        else if (src[j] === '"' || src[j] === '\u201D') closedQuote = true;
+                        j++;
+                    }
+
+                    let boundary = true;
+                    if (j < src.length && src[j] !== ' ') boundary = false;          // "3.50", "e.g.,"
+                    if (boundary && quoteAware && inQuote) boundary = false;         // still inside a quotation
+
+                    // Abbreviations / initials ("Mr.", "Dr.", "J.") — single period only.
+                    if (boundary && ch === '.' && runEnd === i + 1) {
+                        const m = src.slice(Math.max(0, i - 12), i).match(/([A-Za-z][A-Za-z.]*)$/);
+                        if (m) {
+                            const tok = m[1];
+                            if (SENTENCE_ABBREVIATIONS.has(tok.toLowerCase())) boundary = false;
+                            else if (/^[B-HJ-Z]$/.test(tok)) boundary = false;       // initial (not "I"/"A", which can end a sentence)
+                        }
+                    }
+
+                    if (boundary && j < src.length) {
+                        let k = j;
+                        while (k < src.length && src[k] === ' ') k++;
+                        const rest = src.slice(k);
+                        if (/^[a-z]/.test(rest)) boundary = false;                   // continues in lowercase: '" he asked', '... maybe'
+                        else if (closedQuote && SPEECH_TAG.test(rest)) boundary = false; // '" Mom asked.'
+                    }
+
+                    if (boundary) {
+                        const piece = src.slice(start, j).trim();
+                        if (piece) out.push(piece);
+                        start = j;
+                    }
+                    i = j - 1;
+                }
+                const tail = src.slice(start).trim();
+                if (tail) out.push(tail);
+                return { out, endedInQuote: inQuote };
+            };
+
+            let res = run(true);
+            if (res.endedInQuote) res = run(false);   // odd number of quote marks: don't trust quote tracking
+            return res.out;
+        }
+
+        // True if `str` ends at a real sentence boundary (not after "Mr.", not
+        // inside an open quotation) — used by the single-newline path.
+        function endsAtSentenceBoundary(str) {
+            const s = (str || '').trim();
+            if (!s) return false;
+            // An odd number of quote marks means this fragment ends inside a quotation.
+            // (splitIntoSentences ignores quote tracking for a whole story with a stray
+            // quote mark, but for a fragment "open quote" is exactly what we must respect.)
+            const straight = (s.match(/"/g) || []).length;
+            const opens = (s.match(/\u201C/g) || []).length, closes = (s.match(/\u201D/g) || []).length;
+            if (straight % 2 === 1 || opens > closes) return false;
+            const parts = splitIntoSentences(s + ' Next');
+            return parts.length > 0 && parts[parts.length - 1] === 'Next';
+        }
+
+        async function displayLesson(lesson) {
             console.log('=== displayLesson START ===', lesson);
             
             try {
+                // Item #4: guarantee at least 10s of visible loading (with music)
+                // before content appears, even on an instant reserve-hit. No-op
+                // if we've already been "loading" this long or longer.
+                await waitForMinimumLoadingTime();
+
                 // Hide loading
                 const loading = document.getElementById('lessonLoading');
                 if (loading) loading.classList.add('hidden');
                 stopDashLoadingAnimation();
+
+                // Item #3: fire the tutor's "time to read" message exactly
+                // when the passage actually appears — displayLesson() is the
+                // single place that's true regardless of whether WordBank ran
+                // first. (Previously called from the outer loadNextLesson()
+                // caller, but that await resolved as soon as the WordBank
+                // overlay OPENED, not when the student actually finished it,
+                // so the tutor was speaking over the WordBank screen.)
+                requestAnimationFrame(() => startTutorForLesson());
                 
                 // Show content card
                 const contentCard = document.getElementById('lessonContentCard');
@@ -6770,15 +7131,7 @@
                 // A new lesson is loading — stop any read-aloud left over from
                 // the previous one and reset the button so it doesn't look
                 // like it's still reading stale content.
-                if (lessonReadAloudAudio) {
-                    try { lessonReadAloudAudio.pause(); lessonReadAloudAudio.currentTime = 0; } catch (e) {}
-                    lessonReadAloudAudio = null;
-                }
-                if (speechSynthesis.speaking) speechSynthesis.cancel();
-                const readAloudIcon = document.getElementById('lessonReadAloudIcon');
-                const readAloudLabel = document.getElementById('lessonReadAloudLabel');
-                if (readAloudIcon) readAloudIcon.textContent = '🔊';
-                if (readAloudLabel) readAloudLabel.textContent = 'Read Aloud';
+                cancelLessonReadAloud();
 
                 // Display content
                 const contentEl = document.getElementById('lessonText');
@@ -6797,8 +7150,8 @@
                         let current = '';
                         lines.forEach(line => {
                             current = current ? current + ' ' + line : line;
-                            // Only break paragraph at sentence-ending punctuation
-                            if (/[.!?]["']?\s*$/.test(line)) {
+                            // Only break paragraph at a REAL sentence end (not after "Mr.", not mid-quote)
+                            if (endsAtSentenceBoundary(current)) {
                                 paragraphs.push(current);
                                 current = '';
                             }
@@ -6806,11 +7159,10 @@
                         if (current) paragraphs.push(current);
                     } else {
                         // One big block — split into ~4-sentence chunks on proper sentence boundaries
-                        const sentenceRegex = /[^.!?]*[.!?]["']?(?:\s|$)/g;
-                        const sentences = content.match(sentenceRegex) || [content];
+                        const sentences = splitIntoSentences(content);
                         const chunkSize = Math.max(3, Math.ceil(sentences.length / 4));
                         for (let i = 0; i < sentences.length; i += chunkSize) {
-                            const chunk = sentences.slice(i, i + chunkSize).join('').trim();
+                            const chunk = sentences.slice(i, i + chunkSize).join(' ').trim();
                             if (chunk) paragraphs.push(chunk);
                         }
                     }
@@ -6819,10 +7171,10 @@
                     const final = [];
                     paragraphs.forEach(p => {
                         if (p.length > 500) {
-                            const sents = p.match(/[^.!?]*[.!?]["']?(?:\s|$)/g) || [p];
+                            const sents = splitIntoSentences(p);
                             const mid = Math.ceil(sents.length / 2);
-                            final.push(sents.slice(0, mid).join('').trim());
-                            if (sents.length > mid) final.push(sents.slice(mid).join('').trim());
+                            final.push(sents.slice(0, mid).join(' ').trim());
+                            if (sents.length > mid) final.push(sents.slice(mid).join(' ').trim());
                         } else {
                             final.push(p);
                         }
@@ -6921,8 +7273,8 @@
                 alert('Error displaying lesson: ' + error.message);
             }
 
-            
-            
+            renderWordBankStrip();
+
             console.log('=== displayLesson END ===');
         }
 
@@ -7112,14 +7464,46 @@
                 const timeSpent = Math.floor((Date.now() - lessonStartTime) / 1000);
                 
                 // Calculate score - validate fill-in-blank answers
+                // Bug fix: fill-in-blank grading required an EXACT string match
+                // against the AI-generated accept_answers list, so reasonable
+                // variations were marked wrong just because that one exact
+                // wording wasn't anticipated:
+                //   - "telling their stories" vs accepted "telling stories"
+                //   - "clean ups" (space) vs accepted "clean-ups" (hyphen)
+                // Now we normalize punctuation AND treat hyphens/underscores as
+                // word separators, strip common filler words (articles/
+                // possessives), and also compare with all separators fully
+                // collapsed (so "clean ups" / "clean-ups" / "cleanups" are all
+                // treated the same) — while still requiring every meaningful
+                // word to match, so genuinely wrong answers still fail.
+                const FILL_BLANK_FILLER_WORDS = new Set(['a', 'an', 'the', 'their', 'his', 'her', 'its', 'my', 'your', 'our']);
+                const normalizeForGrading = (s) => (s || '')
+                    .toLowerCase()
+                    .replace(/[-_]/g, ' ')
+                    .replace(/[.,!?;:'"]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                const coreWordsForGrading = (s) => normalizeForGrading(s)
+                    .split(' ')
+                    .filter(w => w && !FILL_BLANK_FILLER_WORDS.has(w))
+                    .join(' ');
+                const collapsedForGrading = (s) => coreWordsForGrading(s).replace(/\s+/g, '');
                 lessonAnswers.forEach((answer, index) => {
                     if (answer && answer.is_fill_blank) {
-                        // Validate fill-in-blank answer
-                        const userAnswer = answer.selected.toLowerCase().trim();
+                        const userAnswer = normalizeForGrading(answer.selected);
+                        const userCore = coreWordsForGrading(answer.selected);
+                        const userCollapsed = collapsedForGrading(answer.selected);
                         const acceptAnswers = answer.accept_answers || [answer.correct];
-                        const isCorrect = acceptAnswers.some(accepted => 
-                            accepted.toLowerCase().trim() === userAnswer
-                        );
+                        const isCorrect = acceptAnswers.some(raw => {
+                            const accepted = normalizeForGrading(raw);
+                            const acceptedCore = coreWordsForGrading(raw);
+                            const acceptedCollapsed = collapsedForGrading(raw);
+                            if (!accepted || !userAnswer) return false;
+                            if (accepted === userAnswer) return true;
+                            if (acceptedCore && userCore && acceptedCore === userCore) return true;
+                            if (acceptedCollapsed && userCollapsed && acceptedCollapsed === userCollapsed) return true;
+                            return false;
+                        });
                         answer.is_correct = isCorrect;
                     }
                 });
@@ -8139,7 +8523,7 @@
             // NEW (CORRECT):
             console.log('🔊 Speaking congratulatory message...');
             if (typeof displayTutorMessage === 'function') {
-                const congratsMessage = `${userName}, now that you have completed a lesson and your essay, let's take a break. You can explore your dashboard and check your progress, set a goal, play a game, or find and read an ebook.`;
+                const congratsMessage = `${userName}, you've completed a lesson. What would you like to do next?`;
                 displayTutorMessage(congratsMessage, 'excited');
                 console.log('✅ Tutor speech triggered with name:', userName);
             } else {
@@ -9874,7 +10258,7 @@
                 throw new Error('No auth token');
             }
             
-            const response = await fetch('/api/word-games/vocabulary', {
+            const response = await fetch(`/api/word-games/vocabulary?game_type=${encodeURIComponent(currentGame || 'word-tower')}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -9888,8 +10272,17 @@
             
             if (data.vocabulary && data.vocabulary.length > 0) {
                 gameState.vocabulary = data.vocabulary;
+                // Bug fix: totalRounds was hardcoded to 10 regardless of how
+                // many words actually came back. If a student's WordBank +
+                // grade-level fill ever comes up short of 10 (small vocab
+                // pool, new account, etc.), rounds beyond the array length
+                // indexed into undefined and the game silently froze on the
+                // last successfully-rendered question instead of ending
+                // cleanly. Now the round count never exceeds what was
+                // actually loaded.
+                gameState.totalRounds = Math.min(10, data.vocabulary.length);
                 console.log(`✓ Loaded ${data.count} words from your lessons`);
-                
+
                 // Load used words for this game
                 await loadUsedWordsFromBackend();
                 return;
@@ -10144,6 +10537,20 @@
                 generateWordScrambleQuestion(vocab);
                 break;
         }
+    }
+
+    // Item #16: lets a student move past a word they don't know instead of
+    // being stuck with only "Check Answer" (which just keeps failing) or
+    // exiting the game entirely. No points awarded; breaks the streak the
+    // same way a wrong answer would, then advances like a normal round.
+    function skipWordScrambleWord() {
+        if (wordScrambleTimer) {
+            clearInterval(wordScrambleTimer);
+            wordScrambleTimer = null;
+        }
+        gameState.streak = 0;
+        gameState.round++;
+        nextGameRound();
     }
 
     function generateWordMatchQuestion(vocab) {
@@ -11000,6 +11407,7 @@
                 <div style="text-align: center; margin-top: 2rem;">
                     <button class="btn btn-primary" onclick="checkWordScrambleAnswer()" style="font-size: 1.2rem; padding: 1rem 2rem;">Check Answer</button>
                     <button class="btn btn-secondary" onclick="resetWordScramble()" style="font-size: 1rem; padding: 0.75rem 1.5rem; margin-left: 1rem;">Reset</button>
+                    <button class="btn btn-secondary" onclick="skipWordScrambleWord()" style="font-size: 1rem; padding: 0.75rem 1.5rem; margin-left: 1rem;">Skip →</button>
                 </div>
             </div>
         `;
@@ -11876,13 +12284,36 @@
             updateMissionBannerAndBadge(status);
         }
 
+        // The banner should announce a mission unlocking once, then go away —
+        // not sit in the corner for as long as the mission stays role_pending.
+        // Tracked per mission_id in sessionStorage so a genuinely new unlock
+        // still gets announced, but re-checking status (which happens often)
+        // doesn't keep resurfacing the same one.
+        const MISSION_BANNER_DISPLAY_MS = 8000;
+        let missionBannerAutoHideTimer = null;
+
         function updateMissionBannerAndBadge(status) {
             const banner = document.getElementById('missionUnlockBanner');
             const badge = document.getElementById('missionQueueBadge');
             const overlayOpen = !document.getElementById('missionOverlay').classList.contains('hidden');
 
             const isPending = status.current_mission && status.current_mission.status === 'role_pending';
-            if (banner) banner.classList.toggle('hidden', !(isPending && !overlayOpen));
+            const missionId = isPending ? status.current_mission.id : null;
+
+            if (banner) {
+                if (isPending && !overlayOpen) {
+                    const seenKey = `missionBannerShown_${missionId}`;
+                    if (!sessionStorage.getItem(seenKey)) {
+                        sessionStorage.setItem(seenKey, 'true');
+                        banner.classList.remove('hidden');
+                        clearTimeout(missionBannerAutoHideTimer);
+                        missionBannerAutoHideTimer = setTimeout(() => banner.classList.add('hidden'), MISSION_BANNER_DISPLAY_MS);
+                    }
+                    // else: already announced this mission this session — stay hidden/as-is
+                } else {
+                    banner.classList.add('hidden');
+                }
+            }
 
             if (badge) {
                 const count = status.queued_count || 0;
@@ -12006,8 +12437,7 @@
                 el.innerHTML = `
                     <div class="mission-unlock-box">🧳</div>
                     <div class="mission-unlock-title">Mission: Unlocked</div>
-                    <div class="mission-unlock-sub">Your new mission awaits.</div>
-                    <div class="mission-wallet-confirm">💰 $1.00 deposited to your School Bucks Wallet</div>`;
+                    <div class="mission-unlock-sub">Your new mission awaits.</div>`;
                 setTimeout(() => renderMissionView('roleSelect', payload), 4000);
             } else if (view === 'roleSelect') {
                 el.innerHTML = `
@@ -12275,6 +12705,532 @@
         document.addEventListener('DOMContentLoaded', function() {
             checkForMissionUpdates();
         });
+
+        // ============================================================
+        // WORDBANK — pre-reading vocabulary warm-up (WB-01 through WB-07)
+        // ============================================================
+        let wordbankWords = [];
+        let wordbankIndex = 0;
+        let wordbankTotalPoints = 0;
+        let wordbankOnComplete = null;
+        let wordbankWordsForStrip = [];
+
+        function wordbankAuthHeaders() {
+            return { Authorization: `Bearer ${localStorage.getItem('token') || ''}` };
+        }
+
+        // Called from loadNextLesson() right after a passage is fetched, in
+        // place of calling displayLesson() directly. Gates the story behind
+        // the warm-up (WB-01: "cannot be skipped") when there are unanswered
+        // words for it; otherwise falls straight through to the story with
+        // no visible change in behavior.
+        async function startWordBankThenDisplay(lesson) {
+            if (!lesson || !lesson.id) { displayLesson(lesson); return; }
+            try {
+                const resp = await fetch('/api/wordbank/session/start', {
+                    method: 'POST',
+                    headers: { ...wordbankAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ passage_id: lesson.id })
+                });
+                if (!resp.ok) { displayLesson(lesson); return; }
+                const data = await resp.json();
+                const words = (data.words || []).filter(w => !w.already_answered);
+                if (words.length === 0) {
+                    wordbankWordsForStrip = data.words || [];
+                    displayLesson(lesson);
+                    return;
+                }
+
+                wordbankWords = words;
+                wordbankIndex = 0;
+                wordbankTotalPoints = 0;
+                wordbankOnComplete = () => {
+                    wordbankWordsForStrip = words;
+                    displayLesson(lesson);
+                };
+                await waitForMinimumLoadingTime();
+                document.getElementById('lessonLoading')?.classList.add('hidden');
+                stopDashLoadingAnimation();  // graphic AND music stop together — was previously only hiding the graphic here, leaving the music looping through the whole WordBank session
+                openWordBankOverlay();
+            } catch (e) {
+                console.warn('WordBank unavailable — loading story directly:', e);
+                displayLesson(lesson);
+            }
+        }
+
+        function openWordBankOverlay() {
+            document.getElementById('wordbankOverlay').classList.remove('hidden');
+            renderWordBankLaunch();
+        }
+        function closeWordBankOverlay() {
+            document.getElementById('wordbankOverlay').classList.add('hidden');
+        }
+
+        function renderWordBankLaunch() {
+            const el = document.getElementById('wordbankOverlayContent');
+            el.innerHTML = `
+                <div class="wb-launch-icon">🪙</div>
+                <div class="wb-title">WordBank</div>
+                <div class="wb-sub">Before you read — let's meet a few words from today's story.</div>
+                <button class="wb-btn" onclick="renderWordBankWord()">Start</button>
+            `;
+        }
+
+        const WORDBANK_SHOW_IMAGES = false;
+
+        function renderWordBankWord() {
+            const word = wordbankWords[wordbankIndex];
+            const el = document.getElementById('wordbankOverlayContent');
+            el.innerHTML = `
+                <div class="wb-word-card">
+                    <div class="wb-word-progress">Word ${wordbankIndex + 1} of ${wordbankWords.length}</div>
+                    <div class="wb-word-text">${word.word}</div>
+                    <button class="wb-hear-btn" onclick="playWordBankAudio('${word.word.replace(/'/g, "\\'")}')">🔊 Tap to hear this word</button>
+                    <div class="wb-definition" id="wbDefinition"></div>
+                    <div class="wb-options" id="wbOptions"></div>
+                    <div id="wbFeedback"></div>
+                </div>
+            `;
+            // Word shown alone for a beat before the definition/options appear (spec 3.2).
+            setTimeout(() => {
+                const defEl = document.getElementById('wbDefinition');
+                if (!defEl) return;
+                defEl.textContent = word.definition;
+                defEl.classList.add('visible');
+                const optsEl = document.getElementById('wbOptions');
+                optsEl.innerHTML = word.options.map(opt => {
+                    const concept = opt.concept || opt;  // supports both {concept,image_url} and plain-string fallback
+                    // Item #6: words-only for now (see WORDBANK_IMAGES_ENABLED in app.py). A picture
+                    // on just one option was always the correct one — an answer giveaway.
+                    const inner = (WORDBANK_SHOW_IMAGES && opt.image_url)
+                        ? `<img src="${opt.image_url}" alt="${concept}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:10px; margin-bottom:0.5rem;"><span style="font-size:0.8rem;">${concept}</span>`
+                        : concept;
+                    return `<button class="wb-option-card" onclick="answerWordBankOption(this, '${concept.replace(/'/g, "\\'")}')">${inner}</button>`;
+                }).join('');
+                optsEl.classList.add('visible');
+            }, 900);
+        }
+
+        function playWordBankAudio(word) {
+            // Reuses the same tutor voice (Polly) already used for lesson
+            // read-aloud, per WB-03's "platform's existing text-to-speech system".
+            if (typeof speakTutorMessage === 'function') {
+                speakTutorMessage(word);
+            } else if (window.speechSynthesis) {
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(word));
+            }
+        }
+
+        const WB_CELEBRATIONS = ["You got it!", "Nice work!", "That's the one!"];
+
+        async function answerWordBankOption(btnEl, selectedConcept) {
+            const word = wordbankWords[wordbankIndex];
+            const allBtns = document.querySelectorAll('#wbOptions .wb-option-card');
+            allBtns.forEach(b => b.disabled = true);
+            const feedbackEl = document.getElementById('wbFeedback');
+
+            let data;
+            try {
+                const resp = await fetch('/api/wordbank/answer', {
+                    method: 'POST',
+                    headers: { ...wordbankAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ word_list_id: word.word_list_id, selected_concept: selectedConcept })
+                });
+                data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Failed to submit answer');
+            } catch (e) {
+                feedbackEl.innerHTML = `<div class="wb-feedback hint">Something went wrong — try again.</div>`;
+                allBtns.forEach(b => b.disabled = false);
+                return;
+            }
+
+            if (data.correct && data.done) {
+                btnEl.classList.add('correct');
+                wordbankTotalPoints += data.points_awarded;
+                const celebration = WB_CELEBRATIONS[Math.floor(Math.random() * WB_CELEBRATIONS.length)];
+                feedbackEl.innerHTML = `<div class="wb-feedback correct">${celebration} <span class="wb-points-badge">+${data.points_awarded} pts</span></div>
+                    <button class="wb-btn" onclick="advanceWordBank()">Continue →</button>`;
+            } else if (!data.correct && !data.done) {
+                btnEl.classList.add('incorrect');
+                allBtns.forEach(b => { if (b !== btnEl) b.disabled = false; });
+                feedbackEl.innerHTML = `<div class="wb-feedback hint">${data.hint}</div>`;
+            } else {
+                // Second attempt, correct or not — reveal and move on either way.
+                btnEl.classList.add(data.correct ? 'correct' : 'incorrect');
+                allBtns.forEach(b => { if (b.textContent.trim() === data.correct_image_concept) b.classList.add('correct'); });
+                feedbackEl.innerHTML = `<div class="wb-feedback reveal">The answer was <strong>${data.correct_image_concept}</strong> — ${data.definition}</div>
+                    <button class="wb-btn" onclick="advanceWordBank()">Continue →</button>`;
+            }
+        }
+
+        function advanceWordBank() {
+            wordbankIndex++;
+            if (wordbankIndex >= wordbankWords.length) {
+                renderWordBankComplete();
+            } else {
+                renderWordBankWord();
+            }
+        }
+
+        function renderWordBankComplete() {
+            const el = document.getElementById('wordbankOverlayContent');
+            el.innerHTML = `
+                <div class="wb-launch-icon">🎉</div>
+                <div class="wb-title">WordBank complete — you're ready to read!</div>
+                <div class="wb-complete-points">+${wordbankTotalPoints} pts</div>
+                <button class="wb-btn" onclick="finishWordBank()">Start Reading →</button>
+            `;
+        }
+
+        function finishWordBank() {
+            closeWordBankOverlay();
+            if (wordbankOnComplete) {
+                const cb = wordbankOnComplete;
+                wordbankOnComplete = null;
+                cb();
+            }
+        }
+
+        // WB-05: persistent tappable word strip along the bottom of the story screen.
+        function renderWordBankStrip() {
+            const strip = document.getElementById('wordbankStrip');
+            if (!strip) return;
+            if (!wordbankWordsForStrip || wordbankWordsForStrip.length === 0) {
+                strip.classList.add('hidden');
+                return;
+            }
+            strip.innerHTML = `
+                <span class="wb-strip-label">📖 Words from this story:</span>
+                ${wordbankWordsForStrip.map(w =>
+                    `<button class="wb-strip-chip" onclick="showWordStripDefinition('${w.word.replace(/'/g, "\\'")}', '${(w.definition || '').replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${w.word}</button>`
+                ).join('')}
+                <button class="wb-strip-dismiss" onclick="document.getElementById('wordbankStrip').classList.add('hidden')" title="Hide">✕</button>
+            `;
+            strip.classList.remove('hidden');
+        }
+
+        function showWordStripDefinition(word, definition) {
+            document.getElementById('wbStripPopupWord').textContent = word;
+            document.getElementById('wbStripPopupDef').textContent = definition;
+            document.getElementById('wbStripPopup').classList.remove('hidden');
+        }
+
+        // ============================================================
+        // WORDWISE — periodic spelling challenge (WW-01 through WW-08)
+        // ============================================================
+        let wordwiseChallengeId = null;
+        let wordwiseAttemptNumber = 1;
+        let wordwiseWords = [];
+        let wordwiseIndex = 0;
+        let wordwiseCorrectCount = 0;
+
+        function wordwiseAuthHeaders() {
+            return { Authorization: `Bearer ${localStorage.getItem('token') || ''}` };
+        }
+
+        // Called on page load and after point-earning actions (same trigger
+        // points as checkForMissionUpdates). Keeps the nav badge current and
+        // auto-opens the full announcement once per login when a challenge is
+        // newly announced (WW-01: "displayed at the start of the student's
+        // next login following the trigger").
+        async function checkForWordWiseUpdates() {
+            try {
+                const resp = await fetch('/api/wordwise/status', { headers: wordwiseAuthHeaders() });
+                if (!resp.ok) return;
+                const status = await resp.json();
+
+                const badge = document.getElementById('wordwiseNavBadge');
+                if (!status.has_challenge || !['announced', 'attempt_1_done'].includes(status.status)) {
+                    if (badge) badge.classList.add('hidden');
+                    return;
+                }
+
+                wordwiseChallengeId = status.challenge_id;
+                const daysLeft = Math.max(0, Math.ceil((new Date(status.expires_at) - new Date()) / (1000 * 60 * 60 * 24)));
+                if (badge) {
+                    badge.textContent = daysLeft;
+                    badge.classList.remove('hidden');
+                }
+
+                if (status.status === 'announced' && !status.attempt_1_score) {
+                    const seenKey = `wordwiseAnnounced_${status.challenge_id}`;
+                    if (!sessionStorage.getItem(seenKey)) {
+                        sessionStorage.setItem(seenKey, 'true');
+                        openWordWiseOverlay('announcement', status);
+                    }
+                }
+            } catch (e) { /* non-critical — nav badge just won't update this cycle */ }
+        }
+
+        function openWordWiseFromNav() {
+            if (!wordwiseChallengeId) {
+                checkForWordWiseUpdates().then(() => {
+                    if (wordwiseChallengeId) openWordWiseOverlay('announcement');
+                });
+                return;
+            }
+            openWordWiseOverlay('announcement');
+        }
+
+        function openWordWiseOverlay(view, payload) {
+            document.getElementById('wordwiseOverlay').classList.remove('hidden');
+            document.getElementById('wordwiseOverlayClose').classList.remove('hidden');
+            renderWordWiseView(view, payload);
+        }
+        function closeWordWiseOverlay() {
+            document.getElementById('wordwiseOverlay').classList.add('hidden');
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+        }
+
+        function renderWordWiseView(view, payload) {
+            if (view === 'announcement') renderWordWiseAnnouncement(payload);
+            else if (view === 'studyList') renderWordWiseStudyList();
+            else if (view === 'launch') renderWordWiseLaunch();
+            else if (view === 'word') renderWordWiseWord();
+            else if (view === 'complete') renderWordWiseComplete(payload);
+        }
+
+        async function renderWordWiseAnnouncement(status) {
+            let s = status;
+            if (!s) {
+                const resp = await fetch('/api/wordwise/status', { headers: wordwiseAuthHeaders() });
+                s = await resp.json();
+            }
+            if (!s.has_challenge) {
+                closeWordWiseOverlay();
+                return;
+            }
+            wordwiseChallengeId = s.challenge_id;
+            const isRetry = s.status === 'attempt_1_done';
+            const expiresDate = new Date(s.expires_at).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+            const el = document.getElementById('wordwiseOverlayContent');
+            el.innerHTML = `
+                <div class="ww-mic-pulse">🎙️</div>
+                <div class="ww-title">${isRetry ? 'Ready to try again?' : 'You now have access to a WordWise Spelling Challenge!'}</div>
+                <div class="ww-sub">
+                    ${isRetry
+                        ? `You scored ${s.attempt_1_score} points on your first try. Study your words and try again for up to 50% of full points.`
+                        : `You have until <strong>${expiresDate}</strong> to study and take the challenge. The challenge will include 10 words drawn from your recent Word List — study them all, you won't know which 10 will be selected until it begins.`}
+                </div>
+                <button class="ww-btn secondary" onclick="renderWordWiseView('studyList')">📖 View Study List</button>
+                <button class="ww-btn" onclick="renderWordWiseView('launch')">🎙️ Begin Challenge</button>
+                ${isRetry ? `<button class="ww-btn secondary" onclick="acceptWordWiseScore()">✅ Accept ${s.attempt_1_score} pts &amp; End</button>` : ''}
+            `;
+        }
+
+        // Item #11: lets the student keep their attempt-1 score and close the
+        // challenge out instead of being funneled into either studying or
+        // retaking it — so they can move on if they choose to.
+        async function acceptWordWiseScore() {
+            try {
+                await fetch('/api/wordwise/accept', {
+                    method: 'POST',
+                    headers: { ...wordwiseAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ challenge_id: wordwiseChallengeId })
+                });
+            } catch (e) {
+                console.warn('WordWise accept failed:', e);
+            }
+            closeWordWiseOverlay();
+            checkForWordWiseUpdates();
+        }
+
+        async function renderWordWiseStudyList() {
+            const el = document.getElementById('wordwiseOverlayContent');
+            el.innerHTML = `<div class="ww-title" style="font-size:1.4rem;">📖 Study for WordWise</div><div class="ww-sub">Loading your words…</div>`;
+            try {
+                const resp = await fetch('/api/wordwise/study-list', { headers: wordwiseAuthHeaders() });
+                const data = await resp.json();
+                const words = data.words || [];
+                el.innerHTML = `
+                    <div class="ww-title" style="font-size:1.4rem;">📖 Study for WordWise</div>
+                    <div class="ww-sub" style="margin-bottom:1.25rem;">Review every word — you won't know which 10 are chosen until the challenge begins.</div>
+                    ${words.map(w => `
+                        <div class="ww-study-item">
+                            <div class="ww-study-word">${w.word}</div>
+                            <div class="ww-study-def">${w.definition || ''}</div>
+                            ${w.context_sentence ? `<div class="ww-study-sentence">"${w.context_sentence}"</div>` : ''}
+                        </div>
+                    `).join('')}
+                    <button class="ww-btn" onclick="renderWordWiseView('announcement')">Back</button>
+                `;
+            } catch (e) {
+                el.innerHTML = `<div class="ww-sub">Couldn't load your study list — try again in a moment.</div>
+                    <button class="ww-btn" onclick="renderWordWiseView('announcement')">Back</button>`;
+            }
+        }
+
+        function renderWordWiseLaunch() {
+            const el = document.getElementById('wordwiseOverlayContent');
+            el.innerHTML = `
+                <div class="ww-mic-pulse">🎤</div>
+                <div class="ww-title">WordWise Challenge — 10 words</div>
+                <div class="ww-sub">Listen carefully. Type what you hear.</div>
+                <div class="ww-countdown" id="wwCountdown">10</div>
+            `;
+            let n = 10;
+            const countdownEl = document.getElementById('wwCountdown');
+            const tick = setInterval(() => {
+                n--;
+                if (n <= 0) {
+                    clearInterval(tick);
+                    startWordWiseAttempt();
+                } else if (countdownEl) {
+                    countdownEl.textContent = n;
+                }
+            }, 1000);
+        }
+
+        async function startWordWiseAttempt() {
+            const el = document.getElementById('wordwiseOverlayContent');
+            el.innerHTML = `<div class="ww-mic-pulse">🎙️</div><div class="ww-sub">Preparing your challenge…</div>`;
+            try {
+                const resp = await fetch('/api/wordwise/start', {
+                    method: 'POST',
+                    headers: { ...wordwiseAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ challenge_id: wordwiseChallengeId })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Could not start challenge');
+                wordwiseAttemptNumber = data.attempt_number;
+                wordwiseWords = data.words;
+                wordwiseIndex = 0;
+                wordwiseCorrectCount = 0;
+                renderWordWiseView('word');
+            } catch (e) {
+                el.innerHTML = `<div class="ww-sub">${e.message}</div><button class="ww-btn" onclick="closeWordWiseOverlay()">Close</button>`;
+            }
+        }
+
+        function renderWordWiseWord() {
+            const word = wordwiseWords[wordwiseIndex];
+            const el = document.getElementById('wordwiseOverlayContent');
+            // Word text is deliberately never shown on screen (WW-06) — only heard.
+            el.innerHTML = `
+                <div class="ww-word-card">
+                    <div class="ww-progress">Word ${wordwiseIndex + 1} of ${wordwiseWords.length}</div>
+                    <div class="ww-mic-pulse" id="wwMicIcon">🔊</div>
+                    <button class="ww-hear-again-btn" onclick="replayWordWiseAudio()">🔁 Hear it again</button>
+                    <div class="ww-definition">
+                        ${word.definition || ''}
+                    </div>
+                    <input type="text" class="ww-spell-input" id="wwSpellInput" placeholder="Type the spelling…"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                           onkeypress="if(event.key==='Enter') submitWordWiseSpelling()">
+                    <br>
+                    <button class="ww-btn" onclick="submitWordWiseSpelling()">Submit</button>
+                    <div id="wwFeedback"></div>
+                </div>
+            `;
+            playWordWiseAudio(word.word);
+            document.getElementById('wwSpellInput')?.focus();
+        }
+
+        let wordwiseReplayUsed = false;
+        function playWordWiseAudio(word) {
+            wordwiseReplayUsed = false;
+            if (typeof speakTutorMessage === 'function') {
+                speakTutorMessage(word);
+            } else if (window.speechSynthesis) {
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(word));
+            }
+        }
+        function replayWordWiseAudio() {
+            // WW-06: one replay per word, mirroring standard spelling-bee protocol.
+            if (wordwiseReplayUsed) return;
+            wordwiseReplayUsed = true;
+            const word = wordwiseWords[wordwiseIndex];
+            if (typeof speakTutorMessage === 'function') {
+                speakTutorMessage(word.word);
+            } else if (window.speechSynthesis) {
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(word.word));
+            }
+        }
+
+        async function submitWordWiseSpelling() {
+            const input = document.getElementById('wwSpellInput');
+            const submitted = (input?.value || '').trim();
+            if (!submitted) { input?.focus(); return; }
+            input.disabled = true;
+            const feedbackEl = document.getElementById('wwFeedback');
+
+            try {
+                const resp = await fetch('/api/wordwise/answer', {
+                    method: 'POST',
+                    headers: { ...wordwiseAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ challenge_id: wordwiseChallengeId, word_index: wordwiseIndex, submitted_spelling: submitted })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Could not submit answer');
+
+                if (data.correct) {
+                    wordwiseCorrectCount++;
+                    feedbackEl.innerHTML = `<div class="ww-feedback correct">✅ Correct! <strong>${data.correct_spelling}</strong></div>
+                        <button class="ww-btn" onclick="advanceWordWiseWord()">Continue →</button>`;
+                } else {
+                    feedbackEl.innerHTML = `
+                        <div class="ww-feedback incorrect">
+                            Almost! Here's the correct spelling.
+                            <div class="ww-spelling-compare">
+                                <div><div class="ww-spelling-label">You typed</div>${submitted}</div>
+                                <div><div class="ww-spelling-label">Correct spelling</div><strong>${data.correct_spelling}</strong></div>
+                            </div>
+                        </div>
+                        <button class="ww-btn" onclick="advanceWordWiseWord()">Continue →</button>`;
+                }
+            } catch (e) {
+                feedbackEl.innerHTML = `<div class="ww-feedback incorrect">Something went wrong submitting that.</div>
+                    <button class="ww-btn" onclick="advanceWordWiseWord()">Continue →</button>`;
+            }
+        }
+
+        function advanceWordWiseWord() {
+            wordwiseIndex++;
+            if (wordwiseIndex >= wordwiseWords.length) {
+                finishWordWiseAttempt();
+            } else {
+                renderWordWiseView('word');
+            }
+        }
+
+        async function finishWordWiseAttempt() {
+            const el = document.getElementById('wordwiseOverlayContent');
+            el.innerHTML = `<div class="ww-mic-pulse">🎙️</div><div class="ww-sub">Scoring your challenge…</div>`;
+            try {
+                const resp = await fetch('/api/wordwise/complete', {
+                    method: 'POST',
+                    headers: { ...wordwiseAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ challenge_id: wordwiseChallengeId })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Could not score challenge');
+                renderWordWiseView('complete', data);
+            } catch (e) {
+                el.innerHTML = `<div class="ww-sub">${e.message}</div><button class="ww-btn" onclick="closeWordWiseOverlay()">Close</button>`;
+            }
+        }
+
+        function renderWordWiseComplete(result) {
+            const el = document.getElementById('wordwiseOverlayContent');
+            el.innerHTML = `
+                <div class="ww-launch-icon">${result.correct_count === result.total_words ? '🌟' : '🎉'}</div>
+                <div class="ww-title">Challenge Complete!</div>
+                <div class="ww-sub">${result.correct_count} of ${result.total_words} words spelled correctly</div>
+                <div class="ww-score">+${result.points_awarded} pts</div>
+                ${result.can_retry
+                    ? `<div class="ww-sub" style="margin-bottom:0.5rem;">Study your words and try again for up to 50% of full points.</div>
+                       <button class="ww-btn secondary" onclick="closeWordWiseOverlay()">Maybe Later</button>
+                       <button class="ww-btn" onclick="renderWordWiseView('studyList')">Study &amp; Retry</button>
+                       <button class="ww-btn secondary" onclick="acceptWordWiseScore()">✅ Accept ${result.score} pts &amp; End</button>`
+                    : `<button class="ww-btn" onclick="closeWordWiseOverlay()">Done</button>`}
+            `;
+            checkForWordWiseUpdates();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            checkForWordWiseUpdates();
+        });
     </script>
 
     <!-- Raise Hand -->
@@ -12335,6 +13291,34 @@
         <button class="mission-sound-toggle hidden" id="missionSoundToggle" onclick="toggleMissionSound()" aria-label="Toggle mission sound">🔇</button>
         <div class="mission-overlay-inner" id="missionOverlayContent">
             <!-- JS injects one of: unlockAnim | roleSelect | generating | stage(1-8) | reveal -->
+        </div>
+    </div>
+
+    <!-- ============================================================
+         WORDBANK — pre-reading vocabulary warm-up (mandatory, WB-01)
+    ============================================================ -->
+    <div id="wordbankOverlay" class="wordbank-overlay hidden" role="dialog" aria-modal="true" aria-label="WordBank">
+        <div class="wordbank-overlay-inner" id="wordbankOverlayContent">
+            <!-- JS injects one of: launch | word(N) | complete -->
+        </div>
+    </div>
+
+    <!-- WB-05: persistent tappable word strip, shown at the bottom of the
+         story screen throughout reading. Populated after WordBank completes. -->
+    <div id="wordbankStrip" class="wb-word-strip hidden"></div>
+    <div id="wbStripPopup" class="wb-strip-popup hidden">
+        <div class="wb-strip-popup-word" id="wbStripPopupWord"></div>
+        <div class="wb-strip-popup-def" id="wbStripPopupDef"></div>
+        <button class="btn" style="margin-top:0.5rem; padding:0.4rem 1rem;" onclick="document.getElementById('wbStripPopup').classList.add('hidden')">Close</button>
+    </div>
+
+    <!-- ============================================================
+         WORDWISE — periodic spelling challenge (WW-01 through WW-08)
+    ============================================================ -->
+    <div id="wordwiseOverlay" class="wordwise-overlay hidden" role="dialog" aria-modal="true" aria-label="WordWise Challenge">
+        <button class="ww-overlay-close hidden" id="wordwiseOverlayClose" onclick="closeWordWiseOverlay()" aria-label="Close">✕</button>
+        <div class="wordwise-overlay-inner" id="wordwiseOverlayContent">
+            <!-- JS injects one of: announcement | studyList | launch | word(N) | feedback | complete -->
         </div>
     </div>
 

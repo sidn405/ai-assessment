@@ -810,7 +810,7 @@
         <!-- Placement Test Setup Progress -->
         <div id="placementProgressContainer" class="placement-progress hidden">
             <div class="placement-progress-label">
-                <span>📋 Reading Placement Test</span>
+                <span>📋 Reading Placement Assessment</span>
                 <span id="placementProgressText">Passage 1 of 3</span>
             </div>
             <div class="placement-progress-track">
@@ -1679,6 +1679,109 @@
             }
         }
 
+        // ------------------------------------------------------------------
+        // Sentence splitting for paragraph layout (client item #8).
+        //
+        // The old splitter treated every ". ! ?" followed by a space as the end
+        // of a sentence, so "Mr. Johnson" became two "sentences" and a
+        // paragraph break could land between "Mr." and "Johnson"; likewise a
+        // "?" inside a quotation split the quote across two paragraphs.
+        //
+        // This one won't end a sentence on:
+        //   - an abbreviation ("Mr.", "Mrs.", "Dr.", "St.", initials like "J.")
+        //   - punctuation inside an open quotation
+        //   - a dialogue tag after a quote:  "Where are you?" Mom asked.
+        //   - a period followed by a lowercase word ("...", "p.m. today") or
+        //     glued to a digit/letter ("3.50", "e.g.,")
+        // When unsure it errs toward NOT splitting — a slightly longer paragraph
+        // is harmless; a break in the middle of a sentence is the bug.
+        // ------------------------------------------------------------------
+        const SENTENCE_ABBREVIATIONS = new Set(['mr','mrs','ms','mx','dr','prof','sr','jr','st','mt','vs','etc','inc','ltd','co','gen','sen','rep','gov','capt','col','lt','sgt','rev','hon','fig','dept','approx']);
+        const SPEECH_TAG = new RegExp('^(?:(?:Mr|Mrs|Ms|Mx|Dr|Miss)\\.?\\s+)?[A-Z][a-z]+(?:\\s[A-Z][a-z]+)?\\s+(?:said|asked|replied|called|shouted|whispered|exclaimed|cried|answered|added|yelled|laughed|sighed|cheered|announced|suggested|explained|continued|mumbled|muttered|offered|wondered|declared|urged|insisted|thought|smiled|grinned|nodded)\\b');
+
+        function splitIntoSentences(text) {
+            const src = (text || '').replace(/\s+/g, ' ').trim();
+            if (!src) return [];
+
+            const run = (quoteAware) => {
+                const out = [];
+                let start = 0;
+                let inQuote = false;
+                for (let i = 0; i < src.length; i++) {
+                    const ch = src[i];
+                    if (quoteAware) {
+                        if (ch === '"') inQuote = !inQuote;
+                        else if (ch === '\u201C') inQuote = true;
+                        else if (ch === '\u201D') inQuote = false;
+                    }
+                    if (ch !== '.' && ch !== '!' && ch !== '?') continue;
+
+                    // Take the whole terminator run ("?!", "...") plus any closing quote/bracket.
+                    let j = i + 1;
+                    while (j < src.length && /[.!?]/.test(src[j])) j++;
+                    const runEnd = j;
+                    let closedQuote = false;
+                    while (j < src.length && /["\u201D'\u2019)\]]/.test(src[j])) {
+                        if (quoteAware && src[j] === '"') { inQuote = !inQuote; closedQuote = true; }
+                        else if (quoteAware && src[j] === '\u201D') { inQuote = false; closedQuote = true; }
+                        else if (src[j] === '"' || src[j] === '\u201D') closedQuote = true;
+                        j++;
+                    }
+
+                    let boundary = true;
+                    if (j < src.length && src[j] !== ' ') boundary = false;          // "3.50", "e.g.,"
+                    if (boundary && quoteAware && inQuote) boundary = false;         // still inside a quotation
+
+                    // Abbreviations / initials ("Mr.", "Dr.", "J.") — single period only.
+                    if (boundary && ch === '.' && runEnd === i + 1) {
+                        const m = src.slice(Math.max(0, i - 12), i).match(/([A-Za-z][A-Za-z.]*)$/);
+                        if (m) {
+                            const tok = m[1];
+                            if (SENTENCE_ABBREVIATIONS.has(tok.toLowerCase())) boundary = false;
+                            else if (/^[B-HJ-Z]$/.test(tok)) boundary = false;       // initial (not "I"/"A", which can end a sentence)
+                        }
+                    }
+
+                    if (boundary && j < src.length) {
+                        let k = j;
+                        while (k < src.length && src[k] === ' ') k++;
+                        const rest = src.slice(k);
+                        if (/^[a-z]/.test(rest)) boundary = false;                   // continues in lowercase: '" he asked', '... maybe'
+                        else if (closedQuote && SPEECH_TAG.test(rest)) boundary = false; // '" Mom asked.'
+                    }
+
+                    if (boundary) {
+                        const piece = src.slice(start, j).trim();
+                        if (piece) out.push(piece);
+                        start = j;
+                    }
+                    i = j - 1;
+                }
+                const tail = src.slice(start).trim();
+                if (tail) out.push(tail);
+                return { out, endedInQuote: inQuote };
+            };
+
+            let res = run(true);
+            if (res.endedInQuote) res = run(false);   // odd number of quote marks: don't trust quote tracking
+            return res.out;
+        }
+
+        // True if `str` ends at a real sentence boundary (not after "Mr.", not
+        // inside an open quotation) — used by the single-newline path.
+        function endsAtSentenceBoundary(str) {
+            const s = (str || '').trim();
+            if (!s) return false;
+            // An odd number of quote marks means this fragment ends inside a quotation.
+            // (splitIntoSentences ignores quote tracking for a whole story with a stray
+            // quote mark, but for a fragment "open quote" is exactly what we must respect.)
+            const straight = (s.match(/"/g) || []).length;
+            const opens = (s.match(/\u201C/g) || []).length, closes = (s.match(/\u201D/g) || []).length;
+            if (straight % 2 === 1 || opens > closes) return false;
+            const parts = splitIntoSentences(s + ' Next');
+            return parts.length > 0 && parts[parts.length - 1] === 'Next';
+        }
+
         function displayPassage(data) {
             document.getElementById('passageTitle').textContent = data.title;
             document.getElementById('wordCount').textContent = data.word_count;
@@ -1711,7 +1814,7 @@
                 paragraphs = content.split('\n').map(p => p.trim()).filter(Boolean);
             } else {
                 // One big block — auto-split into ~3-4 sentence chunks
-                const sentences = content.match(/[^.!?]+[.!?]+["']?/g) || [content];
+                const sentences = splitIntoSentences(content);
                 const chunkSize = Math.ceil(sentences.length / Math.max(2, Math.ceil(sentences.length / 4)));
                 for (let i = 0; i < sentences.length; i += chunkSize) {
                     const chunk = sentences.slice(i, i + chunkSize).join(' ').trim();
@@ -1721,7 +1824,7 @@
 
             // Safety: if we somehow ended up with one huge paragraph, split it
             if (paragraphs.length === 1 && paragraphs[0].length > 400) {
-                const sentences = paragraphs[0].match(/[^.!?]+[.!?]+["']?/g) || [paragraphs[0]];
+                const sentences = splitIntoSentences(paragraphs[0]);
                 const chunkSize = Math.ceil(sentences.length / Math.max(2, Math.ceil(sentences.length / 4)));
                 paragraphs = [];
                 for (let i = 0; i < sentences.length; i += chunkSize) {
@@ -2214,7 +2317,16 @@
 
         // Text-to-Speech Functions
         function readAloud() {
-            const text = document.getElementById('passageContent').textContent;
+            // See the matching fix in dashboard.html: each paragraph is its own <p>
+            // joined with no separator, so .textContent on the container collapses
+            // "...park.One day..." with zero space at every paragraph boundary --
+            // which speech synthesis reads as "park DOT One day" (a spaceless period
+            // looks like a domain/filename, not a sentence end). Read each <p>
+            // separately and join with a space to keep the gap.
+            const passageEl = document.getElementById('passageContent');
+            const text = passageEl
+                ? Array.from(passageEl.querySelectorAll('p')).map(p => p.textContent.trim()).filter(Boolean).join(' ') || passageEl.textContent
+                : '';
             const speed = document.getElementById('readingSpeed').value;
 
             if (utterance) {
