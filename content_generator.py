@@ -588,7 +588,7 @@ class ContentGenerator:
             # capped at gpt-4o's completion limit.
             dynamic_max_tokens = min(4096, max(2500, int(word_count_max * 2.2) + 1000))
 
-            def _call_and_parse(max_tokens_budget):
+            def _call_and_parse(max_tokens_budget, temperature=0.35, extra_instruction=""):
                 resp = self.client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
@@ -596,13 +596,25 @@ class ContentGenerator:
                             "role": "system",
                             "content": system_message
                         },
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt + extra_instruction}
                     ],
-                    temperature=0.35,
+                    temperature=temperature,
                     max_tokens=max_tokens_budget,
                     timeout=60
                 )
-                raw = resp.choices[0].message.content
+                choice = resp.choices[0]
+                raw = choice.message.content or ""
+
+                if not raw.strip():
+                    # Diagnostics for the empty-content case (distinct from a
+                    # truncated-but-present response): a flat retry at a
+                    # bigger token budget doesn't fix this, since a genuinely
+                    # EMPTY response isn't a truncation problem. Surface
+                    # finish_reason and any structured refusal so the real
+                    # cause (content filter, API hiccup, etc.) is visible in
+                    # the logs instead of just "JSONDecodeError".
+                    refusal = getattr(choice.message, "refusal", None)
+                    print(f"⚠️ Empty passage response — finish_reason={choice.finish_reason!r}, refusal={refusal!r}")
 
                 if "```json" in raw:
                     raw = raw.split("```json")[1].split("```")[0].strip()
@@ -614,12 +626,20 @@ class ContentGenerator:
             try:
                 passage_data = _call_and_parse(dynamic_max_tokens)
             except json.JSONDecodeError as parse_err:
-                # One retry at the max completion budget before giving up —
-                # a truncated response is usually a token-budget problem, not
-                # a content problem, so retrying with the same prompt at a
-                # larger budget resolves it without changing what gets asked for.
-                print(f"⚠️ Passage JSON parse failed ({parse_err}); retrying once at max token budget...")
-                passage_data = _call_and_parse(4096)
+                # One retry before giving up. A truncated-but-nonempty
+                # response is a token-budget problem, fixed by the larger
+                # budget alone. A genuinely EMPTY response (the common case
+                # in practice) isn't fixed by budget at all — identical
+                # inputs tend to reproduce it — so the retry also nudges
+                # temperature up and adds an explicit anti-empty-response
+                # instruction to actually change the outcome instead of
+                # repeating the same failed call.
+                print(f"⚠️ Passage JSON parse failed ({parse_err}); retrying once with adjusted params...")
+                passage_data = _call_and_parse(
+                    4096,
+                    temperature=0.6,
+                    extra_instruction="\n\nCRITICAL: You MUST return a non-empty JSON object as specified above. Do not return an empty response."
+                )
             
             # ========== VALIDATE & ENHANCE VOCABULARY ==========
             vocab_words = passage_data.get('vocabulary_words', [])
