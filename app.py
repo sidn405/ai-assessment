@@ -9291,6 +9291,14 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
             )
 
             candidate = normalize_passage(candidate, picked_topic, difficulty)
+
+            # generate_passage() returns a placeholder when the AI call fails.
+            # That must never be saved as a lesson — treat it as a failed
+            # attempt and move on (the reserve task simply retries later).
+            if candidate.get("source") == "fallback" or "[AI generation unavailable" in (candidate.get("content") or ""):
+                print("⚠️ Passage generation failed (placeholder returned) — not saving it")
+                continue
+
             last_candidate = candidate
 
             title_l = (candidate.get("title") or "").strip().lower()
@@ -9322,7 +9330,7 @@ async def _generate_lesson_core(user_id: int, exclude_topics: str = None):
         if not passage_data:
             passage_data = last_candidate
             if not passage_data:
-                raise HTTPException(status_code=500, detail="Failed to generate lesson content.")
+                raise HTTPException(status_code=503, detail="We couldn't generate your lesson just now. Please try again in a moment.")
             print("⚠️ Could not find a non-duplicate quickly; accepting last candidate.")
 
         # Item #8: record this generation's track/diversity picks so the
@@ -9716,6 +9724,21 @@ def _consume_reserved_lesson(user_id: int):
             conn.commit()
             return None
         p = dict(p) if hasattr(p, 'keys') else None
+
+        # A failed AI generation used to be saved and queued like a real
+        # lesson, so students were later served the "[AI generation
+        # unavailable]" placeholder straight from their reserve. Never serve
+        # one: retire it and move on to the next reserved lesson.
+        if p and (p.get('source') == 'fallback' or '[AI generation unavailable' in (p.get('content') or '')):
+            if USE_POSTGRES:
+                cursor.execute("UPDATE lesson_reserve SET consumed = TRUE, consumed_at = NOW() WHERE id = %s", (reserve_id,))
+            else:
+                cursor.execute("UPDATE lesson_reserve SET consumed = 1, consumed_at = datetime('now') WHERE id = ?", (reserve_id,))
+            conn.commit()
+            print(f"⚠️ Skipped placeholder lesson {passage_id} in reserve for user {user_id}")
+            cursor.close()
+            conn.close()
+            return _consume_reserved_lesson(user_id)
 
         if USE_POSTGRES:
             cursor.execute(
